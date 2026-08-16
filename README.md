@@ -1,12 +1,12 @@
-# LVOVD
-
+# LVOVD  
 ## Landon's Very Own Video Downloader
 
-**A Locally Hosted Video Downloader Which You'll Use Responsibly**
+***"A Locally Hosted Video Downloader Which You'll Use Responsibly"***  
+You're here because you don't trust any of those browser extensions or sketchy sites right? Well I'm sure you have the good sense to trust yourself, right? *Oh you don't*? Well allow me to further your plight. Anywho, here's some **SLOP** that I made.
 
-![LVOVD in use](example.png)
+![LVOVD in use](example.png)  
 
-LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL, preview what the source exposes, choose your download options, and let your own computer do the work.
+LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL, preview what the source exposes, choose your download options, and **let your own computer do the work**.
 
 > Use LVOVD only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
@@ -31,7 +31,7 @@ Close and reopen your terminal after installation.
 brew install node ffmpeg
 ```
 
-No Homebrew? Get it from https://brew.sh/ or install Node.js LTS from https://nodejs.org/en/download and FFmpeg from https://ffmpeg.org/download.html.
+No Homebrew? Get it from https://brew.sh/. Alternatively, install Node.js LTS from https://nodejs.org/en/download and FFmpeg from https://ffmpeg.org/download.html.
 
 **Linux — Debian/Ubuntu example**
 
