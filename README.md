@@ -63,48 +63,77 @@ If you do not already have Node.js or FFmpeg set up, continue with [Requirements
 
 ## Requirements
 
+On Windows 10/11, the easiest setup is to install both dependencies with **WinGet** from Windows Terminal, PowerShell, or Command Prompt:
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
+winget install --id Gyan.FFmpeg.Essentials -e
+```
+
+After both commands finish, close and reopen your terminal before verifying the installations.
+
 ### Node.js 22 or newer
 
-Download Node.js from the official site:
+LVOVD requires **Node.js 22 or newer**. A current LTS release is recommended.
 
-https://nodejs.org/en/download
+#### Windows — easiest method
 
-Node 22 is the minimum because current yt-dlp can use Node as its external JavaScript runtime for sites that require JavaScript challenge solving, including current YouTube extraction. Using a current Node LTS release is recommended.
+Install the current Node.js LTS release with WinGet:
 
-The standard Node installers normally add both `node` and `npm` to PATH. Verify them in a new terminal:
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
+```
 
-```bash
+Then close and reopen your terminal and verify both Node and npm:
+
+```powershell
 node --version
 npm --version
 ```
 
+If you prefer a normal graphical installer, download the **LTS** Windows installer from the official Node.js site:
+
+https://nodejs.org/en/download
+
+The standard Node installer normally adds both `node` and `npm` to PATH for you.
+
+Node 22 is the minimum because current yt-dlp can use Node as its external JavaScript runtime for sites that require JavaScript challenge solving, including current YouTube extraction.
+
 ### FFmpeg on PATH
 
-Official FFmpeg download page:
+LVOVD needs FFmpeg available as the `ffmpeg` command on your PATH.
 
-https://ffmpeg.org/download.html
+#### Windows — easiest method
 
-FFmpeg publishes source code itself and links to ready-to-run builds for Windows, macOS, and Linux.
+Install the **Gyan FFmpeg Essentials Build** with WinGet:
 
-#### Windows
+```powershell
+winget install --id Gyan.FFmpeg.Essentials -e
+```
 
-The official FFmpeg download page currently links Windows users to compiled builds from **gyan.dev** and **BtbN**.
+Gyan also documents this equivalent command:
 
-A normal portable Windows setup is:
+```powershell
+winget install "FFmpeg (Essentials Build)"
+```
 
-1. Open https://ffmpeg.org/download.html and choose one of the linked Windows builds.
-2. Download a compiled build/archive.
-3. Extract it somewhere permanent, for example `C:\ffmpeg`.
-4. Find the folder containing `ffmpeg.exe`, normally something like `C:\ffmpeg\bin`.
-5. Add that **bin folder** to your Windows `Path` environment variable.
-6. Close and reopen your terminal.
-7. Verify:
+The package-ID form is shown first here because it identifies the exact WinGet package. The **Essentials Build is enough for LVOVD**; the larger Full build is not required for LVOVD's current download, merge, remux, and audio-conversion features.
+
+After installation, close and reopen your terminal, then verify:
 
 ```powershell
 ffmpeg -version
 ```
 
-If that prints the FFmpeg version, LVOVD can use it.
+If that prints FFmpeg version/build information, LVOVD can use it.
+
+#### Windows — manual fallback
+
+If WinGet is unavailable or you prefer a portable installation, FFmpeg's official download page links Windows users to ready-to-run builds from **gyan.dev** and **BtbN**:
+
+https://ffmpeg.org/download.html
+
+For LVOVD, choose a compiled **release essentials** build, extract it somewhere permanent, find the folder containing `ffmpeg.exe` (usually the build's `bin` folder), and add that folder to your Windows `Path` environment variable. Then open a new terminal and run `ffmpeg -version`.
 
 #### macOS / Linux
 
