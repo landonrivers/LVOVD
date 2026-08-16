@@ -21,6 +21,13 @@ test('compatible AV prefers H.264 + AAC and respects a resolution cap', () => {
   assert.match(selector, /height<=\?1080/);
 });
 
+test('maximum AV falls back to a combined best format when separate streams are unavailable', () => {
+  const options = normalizeOptions({ content: 'av', profile: 'maximum', maxHeight: 1080 });
+  const selector = formatSelector(options);
+  assert.match(selector, /bestvideo\[height<=\?1080\]\+bestaudio/);
+  assert.match(selector, /\/best\[height<=\?1080\]$/);
+});
+
 test('video only maximum quality requests a video-only stream', () => {
   const options = normalizeOptions({ content: 'video', profile: 'maximum' });
   assert.equal(formatSelector(options), 'bestvideo');
@@ -97,8 +104,8 @@ test('capability discovery describes a generic Instagram-style media item from y
     webpage_url: 'https://www.instagram.com/reel/example/',
     thumbnail: 'https://cdn.example/thumb.jpg',
     formats: [
-      { format_id: 'v1', vcodec: 'avc1.640028', acodec: 'none', height: 1080, fps: 30 },
-      { format_id: 'a1', vcodec: 'none', acodec: 'mp4a.40.2' }
+      { format_id: 'v1', url: 'https://cdn.example/video.mp4', vcodec: 'avc1.640028', acodec: 'none', height: 1080, fps: 30 },
+      { format_id: 'a1', url: 'https://cdn.example/audio.m4a', vcodec: 'none', acodec: 'mp4a.40.2' }
     ]
   };
   const caps = capabilitySummary(info, info.webpage_url);
@@ -117,7 +124,7 @@ test('audio-only sources disable video capabilities but retain metadata and audi
     extractor_key: 'Soundcloud',
     webpage_url: 'https://soundcloud.com/example/track',
     formats: [
-      { format_id: 'http_mp3', vcodec: 'none', acodec: 'mp3' }
+      { format_id: 'http_mp3', url: 'https://cdn.example/audio.mp3', vcodec: 'none', acodec: 'mp3' }
     ]
   };
   const caps = capabilitySummary(info, info.webpage_url);
@@ -144,7 +151,7 @@ test('combined-only media is recognized for normal playback without claiming nat
     extractor_key: 'Facebook',
     webpage_url: 'https://facebook.example/reel/1',
     formats: [
-      { format_id: 'sd', height: 720, vcodec: 'avc1.4d401f', acodec: 'mp4a.40.2' }
+      { format_id: 'sd', url: 'https://cdn.example/reel.mp4', height: 720, vcodec: 'avc1.4d401f', acodec: 'mp4a.40.2' }
     ]
   };
   const caps = capabilitySummary(info, info.webpage_url);
@@ -154,4 +161,46 @@ test('combined-only media is recognized for normal playback without claiming nat
   assert.equal(caps.media.videoOnly, false);
   assert.equal(caps.media.audioOnly, false);
   assert.equal(caps.media.compatibleAv, true);
+});
+
+test('Twitch-style direct video qualities remain downloadable when codec fields are omitted', () => {
+  const info = {
+    extractor: 'twitch:clips',
+    extractor_key: 'TwitchClips',
+    webpage_url: 'https://www.twitch.tv/example/clip/ExampleSlug',
+    formats: [
+      { format_id: '1080', url: 'https://clips-media-assets.example/1080.mp4', height: 1080, fps: 30 },
+      { format_id: '720', url: 'https://clips-media-assets.example/720.mp4', height: 720, fps: 30 }
+    ]
+  };
+  const caps = capabilitySummary(info, info.webpage_url);
+  assert.equal(caps.source.name, 'Twitch');
+  assert.equal(caps.media.video, true);
+  assert.equal(caps.media.audio, null);
+  assert.equal(caps.media.combined, null);
+  assert.equal(caps.media.videoOnly, false);
+  assert.equal(caps.media.audioOnly, false);
+  assert.equal(caps.media.directMedia, true);
+  assert.equal(caps.media.compatibleAv, false);
+  assert.equal(caps.media.compatibleVideo, false);
+  assert.equal(caps.media.nativeAac, null);
+  assert.deepEqual(caps.media.heights, [1080, 720]);
+  assert.equal(caps.range.custom, true);
+  assert.match(caps.note, /did not identify every codec/i);
+});
+
+test('an omitted audio codec is unknown, not proof that a known video stream is video-only', () => {
+  const info = {
+    extractor_key: 'Example',
+    webpage_url: 'https://example.com/watch/1',
+    formats: [
+      { format_id: '720', url: 'https://cdn.example/media.mp4', height: 720, vcodec: 'avc1.4d401f' }
+    ]
+  };
+  const caps = capabilitySummary(info, info.webpage_url);
+  assert.equal(caps.media.video, true);
+  assert.equal(caps.media.audio, null);
+  assert.equal(caps.media.videoOnly, false);
+  assert.equal(caps.media.compatibleVideo, false);
+  assert.deepEqual(caps.media.h264Heights, [720]);
 });
