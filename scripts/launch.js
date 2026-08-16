@@ -22,6 +22,14 @@ function localhostUrl(url) {
   return String(url).replace('://127.0.0.1:', '://localhost:');
 }
 
+function readyMessage(url) {
+  return [
+    'LVOVD is ready.',
+    `Open LVOVD: ${url}`,
+    `Or: ${localhostUrl(url)}`
+  ].join('\n');
+}
+
 function npmInvocation(args = [], platform = process.platform, comspec = process.env.ComSpec) {
   if (platform === 'win32') {
     return {
@@ -85,9 +93,7 @@ function announceWhenReady(url, serverChild) {
       response.resume();
       if (response.statusCode && response.statusCode < 500) {
         console.log('');
-        console.log('LVOVD is ready.');
-        console.log(`Open LVOVD: ${url}`);
-        console.log(`Or: ${localhostUrl(url)}`);
+        console.log(readyMessage(url));
         console.log('');
         return;
       }
@@ -104,7 +110,7 @@ function announceWhenReady(url, serverChild) {
 function fail(message) {
   console.error('');
   console.error(`LVOVD could not start: ${message}`);
-  console.error('See the Requirements section in README.md for setup help.');
+  console.error('See the Quick Start section in README.md for setup help.');
 }
 
 function main() {
@@ -172,5 +178,6 @@ module.exports = {
   nodeMajor,
   npmInvocation,
   npmWorks,
-  packageDependenciesReady
+  packageDependenciesReady,
+  readyMessage
 };
