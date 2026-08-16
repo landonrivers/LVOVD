@@ -708,8 +708,6 @@ function buildYtdlpArgs(task, options, outputTemplate, progressTemplate) {
       args.push('--merge-output-format', 'mp4', '--remux-video', 'mp4');
     } else if (options.content === 'video') {
       args.push('--remux-video', 'mp4');
-    } else if (options.content === 'audio' && options.audioFormat !== 'source') {
-      args.push('--extract-audio', '--audio-format', options.audioFormat, '--audio-quality', '0');
     }
   }
 
@@ -848,6 +846,87 @@ function classifyOutput(filePath) {
     return { kind: 'media', label: 'Media' };
   }
   return null;
+}
+
+function audioConversionArgs(inputPath, outputPath, format) {
+  const base = ['-y', '-hide_banner', '-loglevel', 'error', '-i', inputPath, '-map', '0:a:0', '-vn'];
+  if (format === 'm4a') return [...base, '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart', outputPath];
+  if (format === 'mp3') return [...base, '-c:a', 'libmp3lame', '-q:a', '0', outputPath];
+  if (format === 'opus') return [...base, '-c:a', 'libopus', '-b:a', '192k', '-vbr', 'on', outputPath];
+  if (format === 'flac') return [...base, '-c:a', 'flac', outputPath];
+  if (format === 'wav') return [...base, '-c:a', 'pcm_s16le', outputPath];
+  throw new Error(`Unsupported audio conversion format: ${format}`);
+}
+
+async function findDownloadedMediaFile(taskDir) {
+  const files = await walkFiles(taskDir);
+  const mediaFiles = files.filter((filePath) => {
+    const name = path.basename(filePath);
+    if (/\.(part|ytdl|temp)$/i.test(name)) return false;
+    return classifyOutput(filePath)?.kind === 'media';
+  });
+  if (mediaFiles.length === 1) return mediaFiles[0];
+  if (!mediaFiles.length) throw new Error('yt-dlp completed but did not produce a source audio file.');
+  throw new Error('yt-dlp produced multiple media files, so LVOVD could not safely choose which one to convert.');
+}
+
+async function convertDownloadedAudio(job, taskDir, format) {
+  const sourcePath = await findDownloadedMediaFile(taskDir);
+  const sourceExt = path.extname(sourcePath);
+  const stem = path.basename(sourcePath, sourceExt);
+  const finalPath = path.join(path.dirname(sourcePath), `${stem}.${format}`);
+  const tempPath = path.join(path.dirname(sourcePath), `${stem}.lvovd-converting.${format}`);
+  const formatNames = {
+    m4a: 'M4A / AAC',
+    mp3: 'MP3',
+    opus: 'Opus',
+    flac: 'FLAC',
+    wav: 'WAV'
+  };
+
+  updateJob(job, {
+    status: 'running',
+    phase: 'processing',
+    message: `Converting source audio to ${formatNames[format] || format} with FFmpeg…`,
+    streamLabel: null,
+    percent: null,
+    speed: null,
+    eta: null
+  });
+
+  await new Promise((resolve, reject) => {
+    const child = spawn('ffmpeg', audioConversionArgs(sourcePath, tempPath, format), {
+      windowsHide: true,
+      shell: false
+    });
+    job.child = child;
+    const stderr = [];
+    let stderrBytes = 0;
+
+    child.stderr.on('data', (chunk) => {
+      stderrBytes += chunk.length;
+      if (stderrBytes <= 512 * 1024) stderr.push(chunk);
+    });
+
+    child.on('error', (error) => {
+      job.child = null;
+      reject(error.code === 'ENOENT'
+        ? new Error('FFmpeg is not installed or is not on PATH.')
+        : error);
+    });
+
+    child.on('close', (code) => {
+      job.child = null;
+      if (code === 0) return resolve();
+      const detail = Buffer.concat(stderr).toString('utf8').trim().split(/\r?\n/).filter(Boolean).slice(-1)[0];
+      reject(new Error(detail || `FFmpeg audio conversion exited with code ${code}.`));
+    });
+  });
+
+  await fsp.rm(sourcePath, { force: true });
+  if (finalPath !== sourcePath) await fsp.rm(finalPath, { force: true });
+  await fsp.rename(tempPath, finalPath);
+  return finalPath;
 }
 
 function outputMime(filename) {
@@ -1038,6 +1117,10 @@ async function runTask(job, task, taskIndex, options) {
         : (lastErrorLine || `yt-dlp exited with code ${code}.`)));
     });
   });
+
+  if (options.content === 'audio' && options.audioFormat !== 'source') {
+    await convertDownloadedAudio(job, taskDir, options.audioFormat);
+  }
 
   const outputs = await collectTaskOutputs(taskDir, task.label);
   if (!outputs.length) throw new Error('yt-dlp completed but did not produce a downloadable file.');
@@ -1298,6 +1381,7 @@ module.exports = {
   normalizeSelection,
   formatSelector,
   buildYtdlpArgs,
+  audioConversionArgs,
   resolveTasks,
   startDownload,
   publicJob,
