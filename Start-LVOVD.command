@@ -10,7 +10,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-node launch.js
+node scripts/launch.js
 status=$?
 
 if [ "$status" -ne 0 ]; then

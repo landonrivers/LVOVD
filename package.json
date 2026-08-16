@@ -5,7 +5,7 @@
   "description": "A Locally Hosted Video Downloader Which You'll Use Responsibly",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check launch.js && node --check public/app.js && node --test test/*.test.js",
+    "check": "node --check server.js && node --check scripts/launch.js && node --check public/app.js && node --test test/*.test.js",
     "update-ytdlp": "ytdlp update",
     "test": "node --test test/*.test.js"
   },

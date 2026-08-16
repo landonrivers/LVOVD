@@ -16,7 +16,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-node launch.js
+node scripts\launch.js
 set "LVOVD_EXIT=%ERRORLEVEL%"
 
 if not "%LVOVD_EXIT%"=="0" (

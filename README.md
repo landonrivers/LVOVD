@@ -526,12 +526,13 @@ lvovd/
 │   ├── app.js
 │   ├── index.html
 │   └── styles.css
+├── scripts/
+│   └── launch.js
 ├── test/
 │   ├── launcher.test.js
 │   ├── options.test.js
 │   └── security.test.js
 ├── app-server.js
-├── launch.js
 ├── server.js
 ├── Start-LVOVD.bat
 ├── Start-LVOVD.command
@@ -545,7 +546,7 @@ lvovd/
 └── package-lock.json
 ```
 
-The application intentionally has no front-end framework and only one runtime npm dependency. The UI is plain HTML/CSS/JavaScript. `server.js` provides the localhost request-security boundary, while `app-server.js` contains the application server and invokes yt-dlp / FFmpeg as subprocesses. `launch.js` is a small cross-platform convenience launcher used by the Windows/macOS/Linux start files; it does not change the server's bind or security model.
+The application intentionally has no front-end framework and only one runtime npm dependency. The UI is plain HTML/CSS/JavaScript. `server.js` provides the localhost request-security boundary, while `app-server.js` contains the application server and invokes yt-dlp / FFmpeg as subprocesses. `scripts/launch.js` is internal cross-platform convenience plumbing used by the Windows/macOS/Linux start files; normal users should launch the OS-specific files at the project root instead.
 
 ## AI-generated project
 

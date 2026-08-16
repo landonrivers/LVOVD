@@ -5,7 +5,7 @@ const http = require('node:http');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-const ROOT = __dirname;
+const ROOT = path.join(__dirname, '..');
 const MIN_NODE_MAJOR = 22;
 
 function nodeMajor(version = process.versions.node) {

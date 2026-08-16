@@ -8,7 +8,7 @@ const {
   localUrl,
   nodeMajor,
   npmCommand
-} = require('../launch');
+} = require('../scripts/launch');
 
 test('launcher enforces the documented Node minimum', () => {
   assert.equal(MIN_NODE_MAJOR, 22);
