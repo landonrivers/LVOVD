@@ -95,7 +95,7 @@ The launcher runs `npm install` only when LVOVD's project dependency is missing 
 
 ### 4. Open LVOVD
 
-The launcher normally opens your browser automatically. If it does not, visit either:
+Once the server is ready, the launcher prints both local addresses in the terminal. Click one if your terminal supports clickable links, or copy/paste it into your browser:
 
 ```text
 http://127.0.0.1:3000
