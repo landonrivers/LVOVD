@@ -7,7 +7,8 @@ const {
   browserLaunchCommand,
   localUrl,
   nodeMajor,
-  npmInvocation
+  npmInvocation,
+  npmWorks
 } = require('../scripts/launch');
 
 test('launcher enforces the documented Node minimum', () => {
@@ -35,6 +36,10 @@ test('launcher uses platform-appropriate npm invocation', () => {
     command: 'C:\\Windows\\System32\\cmd.exe',
     args: ['/d', '/s', '/c', 'npm.cmd install --no-audit --no-fund']
   });
+});
+
+test('Windows launcher can actually execute npm through cmd.exe', { skip: process.platform !== 'win32' }, () => {
+  assert.equal(npmWorks(), true);
 });
 
 test('launcher uses platform-appropriate browser commands', () => {

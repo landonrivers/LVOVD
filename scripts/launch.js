@@ -189,5 +189,6 @@ module.exports = {
   localUrl,
   nodeMajor,
   npmInvocation,
+  npmWorks,
   packageDependenciesReady
 };
