@@ -4,7 +4,7 @@ cd "$(dirname "$0")" || exit 1
 if ! command -v node >/dev/null 2>&1; then
   echo
   echo "LVOVD needs Node.js 22 or newer before it can start."
-  echo "Install the current Node.js LTS release, then run Start-LVOVD.command again."
+  echo "Install the current Node.js LTS release, then run Mac-Start-LVOVD.command again."
   echo
   read -r -p "Press Return to close..."
   exit 1

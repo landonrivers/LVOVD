@@ -10,7 +10,7 @@ if errorlevel 1 (
   echo Easiest Windows install:
   echo   winget install --id OpenJS.NodeJS.LTS -e
   echo.
-  echo After Node finishes installing, close this window and double-click Start-LVOVD.bat again.
+  echo After Node finishes installing, close this window and double-click Windows-Start-LVOVD.bat again.
   echo.
   pause
   exit /b 1

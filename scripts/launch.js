@@ -18,8 +18,14 @@ function localUrl(portValue = process.env.PORT || 3000) {
   return `http://127.0.0.1:${port}`;
 }
 
-function npmCommand(platform = process.platform) {
-  return platform === 'win32' ? 'npm.cmd' : 'npm';
+function npmInvocation(args = [], platform = process.platform, comspec = process.env.ComSpec) {
+  if (platform === 'win32') {
+    return {
+      command: comspec || 'cmd.exe',
+      args: ['/d', '/s', '/c', ['npm.cmd', ...args].join(' ')]
+    };
+  }
+  return { command: 'npm', args };
 }
 
 function browserLaunchCommand(platform, url) {
@@ -40,6 +46,11 @@ function commandWorks(command, args) {
   return !result.error && result.status === 0;
 }
 
+function npmWorks() {
+  const invocation = npmInvocation(['--version']);
+  return commandWorks(invocation.command, invocation.args);
+}
+
 function packageDependenciesReady() {
   try {
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
@@ -56,7 +67,8 @@ function packageDependenciesReady() {
 
 function installDependencies() {
   console.log('LVOVD dependencies are not installed yet. Installing them now...');
-  const result = spawnSync(npmCommand(), ['install', '--no-audit', '--no-fund'], {
+  const invocation = npmInvocation(['install', '--no-audit', '--no-fund']);
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: ROOT,
     stdio: 'inherit',
     windowsHide: false,
@@ -120,18 +132,19 @@ function main() {
     return 1;
   }
 
-  if (!commandWorks(npmCommand(), ['--version'])) {
-    fail('npm is not available. Reinstall a current Node.js LTS release.');
-    return 1;
-  }
-
   if (!commandWorks('ffmpeg', ['-version'])) {
     fail('FFmpeg is not installed or is not available on PATH.');
     return 1;
   }
 
   try {
-    if (!packageDependenciesReady()) installDependencies();
+    if (!packageDependenciesReady()) {
+      if (!npmWorks()) {
+        fail('npm is not available. Reinstall a current Node.js LTS release.');
+        return 1;
+      }
+      installDependencies();
+    }
   } catch (error) {
     fail(error.message);
     return 1;
@@ -175,6 +188,6 @@ module.exports = {
   browserLaunchCommand,
   localUrl,
   nodeMajor,
-  npmCommand,
+  npmInvocation,
   packageDependenciesReady
 };

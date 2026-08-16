@@ -7,7 +7,7 @@ const {
   browserLaunchCommand,
   localUrl,
   nodeMajor,
-  npmCommand
+  npmInvocation
 } = require('../scripts/launch');
 
 test('launcher enforces the documented Node minimum', () => {
@@ -22,9 +22,22 @@ test('launcher always opens the loopback UI and validates the port', () => {
   assert.equal(localUrl('not-a-port'), 'http://127.0.0.1:3000');
 });
 
-test('launcher uses platform-appropriate npm and browser commands', () => {
-  assert.equal(npmCommand('win32'), 'npm.cmd');
-  assert.equal(npmCommand('linux'), 'npm');
+test('launcher uses platform-appropriate npm invocation', () => {
+  assert.deepEqual(npmInvocation(['--version'], 'linux'), {
+    command: 'npm',
+    args: ['--version']
+  });
+  assert.deepEqual(npmInvocation(['--version'], 'win32', 'cmd.exe'), {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', 'npm.cmd --version']
+  });
+  assert.deepEqual(npmInvocation(['install', '--no-audit', '--no-fund'], 'win32', 'C:\\Windows\\System32\\cmd.exe'), {
+    command: 'C:\\Windows\\System32\\cmd.exe',
+    args: ['/d', '/s', '/c', 'npm.cmd install --no-audit --no-fund']
+  });
+});
+
+test('launcher uses platform-appropriate browser commands', () => {
   assert.equal(browserLaunchCommand('darwin', 'http://127.0.0.1:3000').command, 'open');
   assert.equal(browserLaunchCommand('linux', 'http://127.0.0.1:3000').command, 'xdg-open');
   assert.equal(browserLaunchCommand('win32', 'http://127.0.0.1:3000').command, 'cmd.exe');

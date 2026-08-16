@@ -30,7 +30,7 @@ You do **not** need Git or GitHub Desktop to use LVOVD.
 Double-click:
 
 ```text
-Start-LVOVD.bat
+Windows-Start-LVOVD.bat
 ```
 
 ### macOS
@@ -38,13 +38,13 @@ Start-LVOVD.bat
 Double-click:
 
 ```text
-Start-LVOVD.command
+Mac-Start-LVOVD.command
 ```
 
 If macOS will not launch it directly, open Terminal in the LVOVD folder and run:
 
 ```bash
-bash Start-LVOVD.command
+bash Mac-Start-LVOVD.command
 ```
 
 ### Linux
@@ -52,16 +52,16 @@ bash Start-LVOVD.command
 From a terminal in the LVOVD folder, run:
 
 ```bash
-./Start-LVOVD.sh
+./Linux-Start-LVOVD.sh
 ```
 
 If your archive tool did not preserve the executable bit, this works too:
 
 ```bash
-sh Start-LVOVD.sh
+sh Linux-Start-LVOVD.sh
 ```
 
-The launcher checks that Node and FFmpeg are available, installs LVOVD's npm dependency automatically when needed, starts the local server, and opens `http://127.0.0.1:3000` in your default browser when the server is ready.
+The launcher checks that Node and FFmpeg are available. If LVOVD's project dependencies are missing or out of date, it runs `npm install` automatically; otherwise it skips npm and starts the local server directly. It then opens `http://127.0.0.1:3000` in your default browser when the server is ready.
 
 **Keep the launcher terminal window open while using LVOVD.** Closing it stops the local server.
 
@@ -125,7 +125,7 @@ npm --version
 ffmpeg -version
 ```
 
-If those commands print version information, you are ready to double-click `Start-LVOVD.bat`.
+If those commands print version information, you are ready to double-click `Windows-Start-LVOVD.bat`.
 
 #### Windows alternatives
 
@@ -167,7 +167,7 @@ npm --version
 ffmpeg -version
 ```
 
-Then use `Start-LVOVD.command` from the extracted LVOVD folder.
+Then use `Mac-Start-LVOVD.command` from the extracted LVOVD folder.
 
 If you do not want Homebrew, FFmpeg's official download page also links to compiled macOS builds, but a manual install may require placing the executable somewhere on PATH:
 
@@ -208,17 +208,17 @@ npm --version
 ffmpeg -version
 ```
 
-Then run `./Start-LVOVD.sh` from the extracted LVOVD folder.
+Then run `./Linux-Start-LVOVD.sh` from the extracted LVOVD folder.
 
 ## Starting LVOVD
 
 The included launchers are intended to be the normal way to start LVOVD after Node and FFmpeg are installed:
 
-- **Windows:** double-click `Start-LVOVD.bat`.
-- **macOS:** double-click `Start-LVOVD.command` or run `bash Start-LVOVD.command`.
-- **Linux:** run `./Start-LVOVD.sh` or `sh Start-LVOVD.sh`.
+- **Windows:** double-click `Windows-Start-LVOVD.bat`.
+- **macOS:** double-click `Mac-Start-LVOVD.command` or run `bash Mac-Start-LVOVD.command`.
+- **Linux:** run `./Linux-Start-LVOVD.sh` or `sh Linux-Start-LVOVD.sh`.
 
-On the first run—or after LVOVD's npm dependency changes—the launcher runs `npm install` for you. It then starts the local Node server and attempts to open your default browser to:
+On a fresh download—or after LVOVD's npm dependency changes—the launcher runs `npm install` for you. Once the required dependency is already installed at the expected version, future launches skip npm and start the local Node server directly. The launcher then attempts to open your default browser to:
 
 ```text
 http://127.0.0.1:3000
@@ -251,7 +251,7 @@ Git is **not required to run LVOVD**. Developers who want to contribute or keep 
 
 You do **not** need to install yt-dlp globally.
 
-LVOVD uses the npm package `ytdlp-nodejs`. When the launcher runs `npm install`, that package manages a project-local yt-dlp executable under `node_modules`. The server invokes that managed copy directly.
+LVOVD uses the npm package `ytdlp-nodejs`. When the launcher needs to run `npm install`, that package manages a project-local yt-dlp executable under `node_modules`. The server invokes that managed copy directly.
 
 To update the project-local yt-dlp later:
 
@@ -534,9 +534,9 @@ lvovd/
 │   └── security.test.js
 ├── app-server.js
 ├── server.js
-├── Start-LVOVD.bat
-├── Start-LVOVD.command
-├── Start-LVOVD.sh
+├── Windows-Start-LVOVD.bat
+├── Mac-Start-LVOVD.command
+├── Linux-Start-LVOVD.sh
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── LICENSE
