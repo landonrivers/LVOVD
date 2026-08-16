@@ -190,6 +190,7 @@
           <details id="extras-details" class="advanced-panel">
             <summary>Extras</summary>
             <div class="advanced-content">
+              <p class="help">Optional companion files from the source: a thumbnail image, yt-dlp's metadata JSON, and subtitles/captions when available.</p>
               <div class="check-grid">
                 <label class="check-option"><input id="extra-thumbnail" type="checkbox" /> Thumbnail (JPG)</label>
                 <label class="check-option"><input id="extra-metadata" type="checkbox" /> Metadata (.info.json)</label>
@@ -205,37 +206,39 @@
                   </select>
                 </label>
                 <label class="field">
-                  <span>Language code</span>
+                  <span>Language</span>
                   <input id="subtitle-language" type="text" value="en" maxlength="80" list="subtitle-language-list" />
                   <datalist id="subtitle-language-list"></datalist>
+                  <small>Type a language code such as <code>en</code>; available languages appear as suggestions when reported by yt-dlp.</small>
                 </label>
               </div>
-              <p id="subtitle-availability" class="help"></p>
+              <p id="subtitle-availability" class="help" hidden></p>
             </div>
           </details>
 
           <details id="sponsor-details" class="advanced-panel">
-            <summary>SponsorBlock</summary>
+            <summary>SponsorBlock (optional)</summary>
             <div class="advanced-content">
+              <p class="help">LVOVD uses yt-dlp's built-in SponsorBlock integration. SponsorBlock is a community database of timestamps for sponsor reads, intros, outros, self-promotion, and similar segments. With Action set to Off, nothing is changed and SponsorBlock is not contacted.</p>
               <div class="field-row">
                 <label class="field">
                   <span>Action</span>
                   <select id="sponsor-mode">
-                    <option value="off">Off</option>
-                    <option value="mark">Mark matching segments as chapters</option>
-                    <option value="remove">Remove matching segments</option>
+                    <option value="off">Off — leave video unchanged</option>
+                    <option value="mark">Mark as chapters — keep the segments</option>
+                    <option value="remove">Remove from video — cut the segments</option>
                   </select>
                 </label>
               </div>
               <div id="sponsor-categories" class="check-grid subdued">
-                <label class="check-option"><input type="checkbox" value="sponsor" checked /> Sponsor</label>
+                <label class="check-option"><input type="checkbox" value="sponsor" checked /> Sponsor (paid promotion)</label>
                 <label class="check-option"><input type="checkbox" value="intro" /> Intro</label>
                 <label class="check-option"><input type="checkbox" value="outro" /> Outro</label>
                 <label class="check-option"><input type="checkbox" value="selfpromo" /> Self-promo</label>
-                <label class="check-option"><input type="checkbox" value="interaction" /> Interaction</label>
-                <label class="check-option"><input type="checkbox" value="preview" /> Preview</label>
+                <label class="check-option"><input type="checkbox" value="interaction" /> Interaction (like / subscribe)</label>
+                <label class="check-option"><input type="checkbox" value="preview" /> Preview / recap</label>
               </div>
-              <p class="help">SponsorBlock data comes from the SponsorBlock service when this option is enabled.</p>
+              <p class="help">Choose which community-identified segment types to mark or remove. These controls are shown only where LVOVD knows yt-dlp's SponsorBlock support applies.</p>
             </div>
           </details>
 
