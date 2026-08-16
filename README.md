@@ -16,33 +16,65 @@ LVOVD is a local web interface for yt-dlp + FFmpeg. Paste an HTTP/HTTPS media UR
 
 > Use this tool only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
-## Quick start
+## Quick start — no Git required
 
-Already have **Node.js 22+** and **FFmpeg on PATH**? You can be running LVOVD in a minute:
+You do **not** need Git or GitHub Desktop to use LVOVD.
 
-```bash
-git clone https://github.com/landonrivers/LVOVD.git
-cd LVOVD
-npm i
-npm start
-```
+1. [Download LVOVD as a ZIP](https://github.com/landonrivers/LVOVD/archive/refs/heads/master.zip).
+2. Extract the ZIP somewhere permanent, such as your Documents folder.
+3. Install **Node.js 22+** and **FFmpeg** using the instructions for your operating system below.
+4. Start LVOVD with the launcher for your operating system.
 
-Then open:
+### Windows
+
+Double-click:
 
 ```text
-http://127.0.0.1:3000
+Start-LVOVD.bat
 ```
 
-If you do not already have Node.js or FFmpeg set up, continue with [Requirements](#requirements) and [Install and run](#install-and-run) below.
+### macOS
+
+Double-click:
+
+```text
+Start-LVOVD.command
+```
+
+If macOS will not launch it directly, open Terminal in the LVOVD folder and run:
+
+```bash
+bash Start-LVOVD.command
+```
+
+### Linux
+
+From a terminal in the LVOVD folder, run:
+
+```bash
+./Start-LVOVD.sh
+```
+
+If your archive tool did not preserve the executable bit, this works too:
+
+```bash
+sh Start-LVOVD.sh
+```
+
+The launcher checks that Node and FFmpeg are available, installs LVOVD's npm dependency automatically when needed, starts the local server, and opens `http://127.0.0.1:3000` in your default browser when the server is ready.
+
+**Keep the launcher terminal window open while using LVOVD.** Closing it stops the local server.
 
 ## Table of contents
 
-- [Quick start](#quick-start)
+- [Quick start — no Git required](#quick-start--no-git-required)
 - [Requirements](#requirements)
-  - [Node.js 22 or newer](#nodejs-22-or-newer)
-  - [FFmpeg on PATH](#ffmpeg-on-path)
-- [Install and run](#install-and-run)
-- [What `npm i` installs](#what-npm-i-installs)
+  - [Windows](#windows-1)
+  - [macOS](#macos-1)
+  - [Linux](#linux-1)
+- [Starting LVOVD](#starting-lvovd)
+- [Manual start](#manual-start)
+- [What the first launch installs](#what-the-first-launch-installs)
 - [What it can do](#what-it-can-do)
 - [Source services](#source-services)
 - [Generic source capability discovery](#generic-source-capability-discovery)
@@ -63,64 +95,146 @@ If you do not already have Node.js or FFmpeg set up, continue with [Requirements
 
 ## Requirements
 
-### Node.js 22 or newer
+LVOVD needs two things installed on the computer:
 
-Download Node.js from the official site:
+- **Node.js 22 or newer** — a current LTS release is recommended.
+- **FFmpeg on PATH** — the normal/Essentials builds are enough; LVOVD does not require an oversized “Full” FFmpeg build.
+
+Once those are installed, the LVOVD launcher handles the project-local npm/yt-dlp setup for you.
+
+### Windows
+
+The easiest Windows 10/11 setup is **WinGet**. Open Windows Terminal, PowerShell, or Command Prompt and run:
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
+winget install --id Gyan.FFmpeg.Essentials -e
+```
+
+Gyan also documents this equivalent FFmpeg command:
+
+```powershell
+winget install "FFmpeg (Essentials Build)"
+```
+
+After both installs finish, **close and reopen your terminal**. Verify everything with:
+
+```powershell
+node --version
+npm --version
+ffmpeg -version
+```
+
+If those commands print version information, you are ready to double-click `Start-LVOVD.bat`.
+
+#### Windows alternatives
+
+If you prefer a graphical Node installer, download the current **LTS** installer from:
 
 https://nodejs.org/en/download
 
-Node 22 is the minimum because current yt-dlp can use Node as its external JavaScript runtime for sites that require JavaScript challenge solving, including current YouTube extraction. Using a current Node LTS release is recommended.
+The standard Node installer normally adds both `node` and `npm` to PATH.
 
-The standard Node installers normally add both `node` and `npm` to PATH. Verify them in a new terminal:
+If WinGet is unavailable for FFmpeg, the official FFmpeg download page links Windows users to compiled builds from **gyan.dev** and **BtbN**:
+
+https://ffmpeg.org/download.html
+
+For LVOVD, Gyan's **Essentials** build is sufficient. A manual portable install must have the folder containing `ffmpeg.exe` added to Windows `Path`.
+
+### macOS
+
+For Node.js, the easiest route for most people is the official **LTS macOS installer** from:
+
+https://nodejs.org/en/download
+
+For FFmpeg, Homebrew provides a ready-to-run build:
+
+```bash
+brew install ffmpeg
+```
+
+If you do not already have Homebrew, install it from:
+
+https://brew.sh/
+
+The regular Homebrew `ffmpeg` formula is enough for LVOVD; `ffmpeg-full` is not required.
+
+After installation, open a new Terminal window and verify:
 
 ```bash
 node --version
 npm --version
+ffmpeg -version
 ```
 
-### FFmpeg on PATH
+Then use `Start-LVOVD.command` from the extracted LVOVD folder.
 
-Official FFmpeg download page:
+If you do not want Homebrew, FFmpeg's official download page also links to compiled macOS builds, but a manual install may require placing the executable somewhere on PATH:
 
 https://ffmpeg.org/download.html
 
-FFmpeg publishes source code itself and links to ready-to-run builds for Windows, macOS, and Linux.
+### Linux
 
-#### Windows
+Linux distributions differ, so there is not one universal installer command. The goal is the same: a **Node.js 22+ LTS release** and an `ffmpeg` command available on PATH.
 
-The official FFmpeg download page currently links Windows users to compiled builds from **gyan.dev** and **BtbN**.
-
-A normal portable Windows setup is:
-
-1. Open https://ffmpeg.org/download.html and choose one of the linked Windows builds.
-2. Download a compiled build/archive.
-3. Extract it somewhere permanent, for example `C:\ffmpeg`.
-4. Find the folder containing `ffmpeg.exe`, normally something like `C:\ffmpeg\bin`.
-5. Add that **bin folder** to your Windows `Path` environment variable.
-6. Close and reopen your terminal.
-7. Verify:
-
-```powershell
-ffmpeg -version
-```
-
-If that prints the FFmpeg version, LVOVD can use it.
-
-#### macOS / Linux
-
-You can use the platform/package-manager options linked from the official FFmpeg download page. The only requirement for LVOVD is that this succeeds in a terminal:
+The official Node.js download page currently recommends **nvm** for Linux. The current nvm installer can be installed with:
 
 ```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
+```
+
+Close and reopen the terminal, then install the current Node LTS release:
+
+```bash
+nvm install --lts
+```
+
+On Debian or Ubuntu, FFmpeg is normally available through apt:
+
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+For Fedora, Arch, and other distributions, use the FFmpeg package provided by your distribution or follow the package links from:
+
+https://ffmpeg.org/download.html
+
+Verify before starting LVOVD:
+
+```bash
+node --version
+npm --version
 ffmpeg -version
 ```
 
-## Install and run
+Then run `./Start-LVOVD.sh` from the extracted LVOVD folder.
 
-Clone or download this repository, open a terminal in the project folder, and run:
+## Starting LVOVD
+
+The included launchers are intended to be the normal way to start LVOVD after Node and FFmpeg are installed:
+
+- **Windows:** double-click `Start-LVOVD.bat`.
+- **macOS:** double-click `Start-LVOVD.command` or run `bash Start-LVOVD.command`.
+- **Linux:** run `./Start-LVOVD.sh` or `sh Start-LVOVD.sh`.
+
+On the first run—or after LVOVD's npm dependency changes—the launcher runs `npm install` for you. It then starts the local Node server and attempts to open your default browser to:
+
+```text
+http://127.0.0.1:3000
+```
+
+If the browser does not open automatically, open that address yourself.
+
+Keep the terminal window open while using LVOVD. To stop LVOVD, close that terminal or press `Ctrl+C`.
+
+## Manual start
+
+If you prefer the terminal or are developing LVOVD, the launchers are optional. From the project folder:
 
 ```bash
 npm i
-node server.js
+npm start
 ```
 
 Then open:
@@ -129,21 +243,15 @@ Then open:
 http://127.0.0.1:3000
 ```
 
-You can also use:
+`npm start` is simply an npm shortcut for `node server.js`.
 
-```bash
-npm start
-```
+Git is **not required to run LVOVD**. Developers who want to contribute or keep a working clone can use Git normally; see [Development](#development).
 
-which is simply an npm shortcut for `node server.js`.
-
-There is no required Windows `.bat` launcher. Node, npm, and FFmpeg being available on PATH is enough.
-
-## What `npm i` installs
+## What the first launch installs
 
 You do **not** need to install yt-dlp globally.
 
-LVOVD uses the npm package `ytdlp-nodejs`. During installation it manages a project-local yt-dlp executable under `node_modules`. The server invokes that managed copy directly.
+LVOVD uses the npm package `ytdlp-nodejs`. When the launcher runs `npm install`, that package manages a project-local yt-dlp executable under `node_modules`. The server invokes that managed copy directly.
 
 To update the project-local yt-dlp later:
 
@@ -418,11 +526,17 @@ lvovd/
 │   ├── app.js
 │   ├── index.html
 │   └── styles.css
+├── scripts/
+│   └── launch.js
 ├── test/
+│   ├── launcher.test.js
 │   ├── options.test.js
 │   └── security.test.js
 ├── app-server.js
 ├── server.js
+├── Start-LVOVD.bat
+├── Start-LVOVD.command
+├── Start-LVOVD.sh
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── LICENSE
@@ -432,7 +546,7 @@ lvovd/
 └── package-lock.json
 ```
 
-The application intentionally has no front-end framework and only one runtime npm dependency. The UI is plain HTML/CSS/JavaScript. `server.js` provides the localhost request-security boundary, while `app-server.js` contains the application server and invokes yt-dlp / FFmpeg as subprocesses.
+The application intentionally has no front-end framework and only one runtime npm dependency. The UI is plain HTML/CSS/JavaScript. `server.js` provides the localhost request-security boundary, while `app-server.js` contains the application server and invokes yt-dlp / FFmpeg as subprocesses. `scripts/launch.js` is internal cross-platform convenience plumbing used by the Windows/macOS/Linux start files; normal users should launch the OS-specific files at the project root instead.
 
 ## AI-generated project
 
@@ -443,6 +557,18 @@ It is intentionally open for experimentation and expansion. Pull requests, clean
 AI-generated code should be reviewed like any other code. Contributions that improve correctness, security, maintainability, accessibility, and documentation are especially welcome.
 
 ## Development
+
+For normal use, download the ZIP and use the launchers above. Git is only needed if you want a development clone or plan to contribute.
+
+Developer setup:
+
+```bash
+git clone https://github.com/landonrivers/LVOVD.git
+cd LVOVD
+npm i
+npm run check
+npm start
+```
 
 Run syntax checks and tests:
 
