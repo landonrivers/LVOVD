@@ -12,81 +12,54 @@ You're here because you don't trust any of those browser extensions or sketchy s
 
 Locally hosted. No middleman. Paste in a URL from a site with a video in it. This lets you configure a download in many ways.
 
-## Summary
-
 LVOVD is a local web interface for yt-dlp + FFmpeg. Paste an HTTP/HTTPS media URL and LVOVD asks yt-dlp to identify it, discovers what that particular source exposes, builds the download controls from those capabilities, and lets your own computer do the downloading and processing.
 
 > Use this tool only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
-## What it can do
+## Quick start
 
-- Paste a URL without choosing a service first: LVOVD lets **yt-dlp detect the source/extractor**.
-- Build the preview UI from the capabilities yt-dlp actually reports for that URL.
-- Show the detected source, extractor, media availability, H.264/AAC availability, thumbnails, subtitles, chapters, metadata, and source-specific features.
-- Disable options that the inspected source does not actually expose instead of assuming every service behaves like YouTube.
-- Distinguish common preview failures such as unsupported URLs, sign-in/authentication requirements, unavailable media, region restrictions, request blocking, and DRM-protected media.
-- Download **Video + Audio**.
-- Download **Video Only (No Audio)**.
-- Download **Audio Only (No Video)**.
-- Download **Extras Only** such as thumbnails, subtitles, or metadata.
-- Prefer **Compatible MP4** using native H.264 video + AAC audio when the source service offers it.
-- Choose **Maximum Quality** when resolution matters more than codec compatibility.
-- Cap video output to a selected maximum resolution.
-- Export audio as M4A/AAC, MP3, Opus, FLAC, WAV, or keep the **Source Audio** without conversion.
-- Download a custom time range.
-- Download one or more detected chapters as separate files.
-- Download creator subtitles and/or automatic captions as SRT when the source exposes them.
-- Download thumbnails as JPG.
-- Download yt-dlp's `.info.json` metadata.
-- Preview playlists or collections, select individual entries, or select the whole previewed batch when yt-dlp exposes usable entry URLs.
-- Use SponsorBlock to mark or remove selected segment categories where supported.
-- See real yt-dlp download percentage, byte counts, speed, ETA, and processing stages.
+Already have **Node.js 22+** and **FFmpeg on PATH**? You can be running LVOVD in a minute:
 
-## Source services
-
-LVOVD itself does not implement site-specific download logic. It passes supported HTTP/HTTPS URLs to **yt-dlp**, which contains extractors for many video services.
-
-The current yt-dlp supported-sites list includes extractors for services such as:
-
-- YouTube
-- Vimeo
-- TikTok
-- Instagram
-- Facebook, including Facebook Reels
-- Twitch
-- many other video and media sites
-
-See yt-dlp's current supported-sites list:
-
-https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
-
-**Important:** a site appearing in yt-dlp's supported list does not guarantee that every URL will always work. Video services change frequently, some features differ by service, and some media requires authentication or browser cookies. The yt-dlp project itself recommends trying the URL as the reliable way to determine whether it currently works.
-
-LVOVD's earliest development and most hands-on download testing was done with YouTube URLs, but the application no longer has a YouTube-specific preview gate. **Preview is the compatibility test:** paste the URL and LVOVD asks the installed yt-dlp build to inspect it. If extraction succeeds, LVOVD uses the returned metadata to decide which controls to expose.
-
-Other services should still be considered best-effort because extractors can break when sites change. Authentication/cookie support is a natural future expansion, particularly for Facebook and Instagram content that is not anonymously accessible.
-
-## Generic source capability discovery
-
-LVOVD 2.2 treats yt-dlp as the source-service intelligence layer. There is no maintained LVOVD table that says “Facebook supports these buttons” or “Vimeo supports those buttons.” Instead, a preview follows this model:
-
-```text
-Paste URL
-   ↓
-yt-dlp chooses a dedicated or generic extractor
-   ↓
-yt-dlp returns formats + metadata
-   ↓
-LVOVD discovers capabilities
-   ↓
-LVOVD enables only the controls that make sense
+```bash
+git clone https://github.com/landonrivers/LVOVD.git
+cd LVOVD
+npm i
+npm start
 ```
 
-For a single media item, LVOVD currently derives capabilities from the returned formats, thumbnails, subtitles, chapters, live state, and extractor identity. For a playlist/collection, individual item capabilities can differ, so the UI marks those capabilities as variable and applies the selected settings to each chosen entry.
+Then open:
 
-A source can expose combined media without exposing native video-only or audio-only formats. LVOVD does not claim those modes are available unless the metadata reports separable streams. This avoids presenting controls that are likely to fail on combined-only services.
+```text
+http://127.0.0.1:3000
+```
 
-Preview failures are also classified into useful local messages. LVOVD does **not** bypass DRM, region restrictions, or access controls. Authentication/browser-cookie integration is not included yet.
+If you do not already have Node.js or FFmpeg set up, continue with [Requirements](#requirements) and [Install and run](#install-and-run) below.
+
+## Table of contents
+
+- [Quick start](#quick-start)
+- [Requirements](#requirements)
+  - [Node.js 22 or newer](#nodejs-22-or-newer)
+  - [FFmpeg on PATH](#ffmpeg-on-path)
+- [Install and run](#install-and-run)
+- [What `npm i` installs](#what-npm-i-installs)
+- [What it can do](#what-it-can-do)
+- [Source services](#source-services)
+- [Generic source capability discovery](#generic-source-capability-discovery)
+- [Does everything run locally?](#does-everything-run-locally)
+- [Privacy, networking, and limitations](#privacy-networking-and-limitations)
+- [Download modes](#download-modes)
+- [Resolution selection](#resolution-selection)
+- [Time ranges and chapters](#time-ranges-and-chapters)
+- [Subtitles](#subtitles)
+- [SponsorBlock](#sponsorblock)
+- [Playlists and collections](#playlists-and-collections)
+- [Temporary files](#temporary-files)
+- [Project structure](#project-structure)
+- [AI-generated project](#ai-generated-project)
+- [Development](#development)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
 
 ## Requirements
 
@@ -177,6 +150,76 @@ To update the project-local yt-dlp later:
 ```bash
 npm run update-ytdlp
 ```
+
+## What it can do
+
+- Paste a URL without choosing a service first: LVOVD lets **yt-dlp detect the source/extractor**.
+- Build the preview UI from the capabilities yt-dlp actually reports for that URL.
+- Show the detected source, extractor, media availability, H.264/AAC availability, thumbnails, subtitles, chapters, metadata, and source-specific features.
+- Disable options that the inspected source does not actually expose instead of assuming every service behaves like YouTube.
+- Distinguish common preview failures such as unsupported URLs, sign-in/authentication requirements, unavailable media, region restrictions, request blocking, and DRM-protected media.
+- Download **Video + Audio**.
+- Download **Video Only (No Audio)**.
+- Download **Audio Only (No Video)**.
+- Download **Extras Only** such as thumbnails, subtitles, or metadata.
+- Prefer **Compatible MP4** using native H.264 video + AAC audio when the source service offers it.
+- Choose **Maximum Quality** when resolution matters more than codec compatibility.
+- Cap video output to a selected maximum resolution.
+- Export audio as M4A/AAC, MP3, Opus, FLAC, WAV, or keep the **Source Audio** without conversion.
+- Download a custom time range.
+- Download one or more detected chapters as separate files.
+- Download creator subtitles and/or automatic captions as SRT when the source exposes them.
+- Download thumbnails as JPG.
+- Download yt-dlp's `.info.json` metadata.
+- Preview playlists or collections, select individual entries, or select the whole previewed batch when yt-dlp exposes usable entry URLs.
+- Use SponsorBlock to mark or remove selected segment categories where supported.
+- See real yt-dlp download percentage, byte counts, speed, ETA, and processing stages.
+
+## Source services
+
+LVOVD itself does not implement site-specific download logic. It passes supported HTTP/HTTPS URLs to **yt-dlp**, which contains extractors for many video services.
+
+The current yt-dlp supported-sites list includes extractors for services such as:
+
+- YouTube
+- Vimeo
+- TikTok
+- Instagram
+- Facebook, including Facebook Reels
+- Twitch
+- many other video and media sites
+
+See yt-dlp's current supported-sites list:
+
+https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
+
+**Important:** a site appearing in yt-dlp's supported list does not guarantee that every URL will always work. Video services change frequently, some features differ by service, and some media requires authentication or browser cookies. The yt-dlp project itself recommends trying the URL as the reliable way to determine whether it currently works.
+
+LVOVD's earliest development and most hands-on download testing was done with YouTube URLs, but the application no longer has a YouTube-specific preview gate. **Preview is the compatibility test:** paste the URL and LVOVD asks the installed yt-dlp build to inspect it. If extraction succeeds, LVOVD uses the returned metadata to decide which controls to expose.
+
+Other services should still be considered best-effort because extractors can break when sites change. Authentication/cookie support is a natural future expansion, particularly for Facebook and Instagram content that is not anonymously accessible.
+
+## Generic source capability discovery
+
+LVOVD 2.2 treats yt-dlp as the source-service intelligence layer. There is no maintained LVOVD table that says “Facebook supports these buttons” or “Vimeo supports those buttons.” Instead, a preview follows this model:
+
+```text
+Paste URL
+   ↓
+yt-dlp chooses a dedicated or generic extractor
+   ↓
+yt-dlp returns formats + metadata
+   ↓
+LVOVD discovers capabilities
+   ↓
+LVOVD enables only the controls that make sense
+```
+
+For a single media item, LVOVD currently derives capabilities from the returned formats, thumbnails, subtitles, chapters, live state, and extractor identity. For a playlist/collection, individual item capabilities can differ, so the UI marks those capabilities as variable and applies the selected settings to each chosen entry.
+
+A source can expose combined media without exposing native video-only or audio-only formats. LVOVD does not claim those modes are available unless the metadata reports separable streams. This avoids presenting controls that are likely to fail on combined-only services.
+
+Preview failures are also classified into useful local messages. LVOVD does **not** bypass DRM, region restrictions, or access controls. Authentication/browser-cookie integration is not included yet.
 
 ## Does everything run locally?
 
@@ -367,20 +410,29 @@ For very large media, make sure your system temporary drive has enough free spac
 
 ```text
 lvovd/
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   ├── workflows/
+│   └── pull_request_template.md
 ├── public/
 │   ├── app.js
 │   ├── index.html
 │   └── styles.css
 ├── test/
-│   └── options.test.js
+│   ├── options.test.js
+│   └── security.test.js
+├── app-server.js
+├── server.js
 ├── CONTRIBUTING.md
+├── SECURITY.md
 ├── LICENSE
 ├── README.md
+├── example.png
 ├── package.json
-└── server.js
+└── package-lock.json
 ```
 
-The application intentionally has no front-end framework and only one runtime npm dependency. The UI is plain HTML/CSS/JavaScript; the Node server uses built-in Node modules and invokes yt-dlp / FFmpeg as subprocesses.
+The application intentionally has no front-end framework and only one runtime npm dependency. The UI is plain HTML/CSS/JavaScript. `server.js` provides the localhost request-security boundary, while `app-server.js` contains the application server and invokes yt-dlp / FFmpeg as subprocesses.
 
 ## AI-generated project
 
