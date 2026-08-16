@@ -32,3 +32,20 @@ jobs:
 
       - name: Run checks and tests
         run: npm run check
+
+  windows-launcher:
+    name: Windows launcher
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify Windows launcher npm invocation
+        run: node --test test/launcher.test.js
