@@ -10,6 +10,21 @@ LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL, preview 
 
 > Use LVOVD only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [What it can do](#what-it-can-do)
+- [Source compatibility](#source-compatibility)
+- [Download options](#download-options)
+- [Privacy and networking](#privacy-and-networking)
+- [Authentication and cookies](#authentication-and-cookies)
+- [Temporary files](#temporary-files)
+- [Manual start](#manual-start)
+- [Development](#development)
+- [AI-generated project](#ai-generated-project)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
 ## Quick Start
 
 ### 1. Install Node.js 22+ and FFmpeg
@@ -25,26 +40,26 @@ winget install --id Gyan.FFmpeg.Essentials -e
 
 Close and reopen your terminal after installation.
 
-**macOS with Homebrew**
+**macOS — Homebrew recommended**
+
+Homebrew is the simplest way to install both requirements. If you do not already have Homebrew, install it from https://brew.sh/, then run:
 
 ```bash
 brew install node ffmpeg
 ```
 
-No Homebrew? Get it from https://brew.sh/. Alternatively, install Node.js LTS from https://nodejs.org/en/download and FFmpeg from https://ffmpeg.org/download.html.
+You can use Node.js's normal macOS installer instead if you prefer, but Homebrew is still the easiest path for FFmpeg.
 
 **Linux — Debian/Ubuntu example**
 
+The first command adds NodeSource's Node.js 24 LTS package repository. The second installs Node.js (including npm) and FFmpeg:
+
 ```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm install --lts
-sudo apt update
-sudo apt install ffmpeg
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt install -y nodejs ffmpeg
 ```
 
-Other Linux distributions can use their normal package manager for FFmpeg. Node.js must be version 22 or newer.
+Other Linux distributions can install **Node.js 22+** and **FFmpeg** with their normal package manager. LVOVD does not require nvm or any particular Node installer.
 
 Optional check:
 
