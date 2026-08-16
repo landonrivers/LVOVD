@@ -18,6 +18,10 @@ function localUrl(portValue = process.env.PORT || 3000) {
   return `http://127.0.0.1:${port}`;
 }
 
+function localhostUrl(url) {
+  return String(url).replace('://127.0.0.1:', '://localhost:');
+}
+
 function npmInvocation(args = [], platform = process.platform, comspec = process.env.ComSpec) {
   if (platform === 'win32') {
     return {
@@ -26,14 +30,6 @@ function npmInvocation(args = [], platform = process.platform, comspec = process
     };
   }
   return { command: 'npm', args };
-}
-
-function browserLaunchCommand(platform, url) {
-  if (platform === 'win32') {
-    return { command: 'cmd.exe', args: ['/d', '/s', '/c', `start "" "${url}"`] };
-  }
-  if (platform === 'darwin') return { command: 'open', args: [url] };
-  return { command: 'xdg-open', args: [url] };
 }
 
 function commandWorks(command, args) {
@@ -81,31 +77,18 @@ function installDependencies() {
   console.log('');
 }
 
-function openBrowser(url) {
-  const launch = browserLaunchCommand(process.platform, url);
-  try {
-    const child = spawn(launch.command, launch.args, {
-      cwd: ROOT,
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-      shell: false
-    });
-    child.on('error', () => {});
-    child.unref();
-  } catch {
-    // The server is still usable if the OS cannot open a browser automatically.
-  }
-}
-
-function openWhenReady(url, serverChild) {
+function announceWhenReady(url, serverChild) {
   const deadline = Date.now() + 15000;
   const probe = () => {
     if (serverChild.exitCode !== null || serverChild.signalCode) return;
     const request = http.get(url, (response) => {
       response.resume();
       if (response.statusCode && response.statusCode < 500) {
-        openBrowser(url);
+        console.log('');
+        console.log('LVOVD is ready.');
+        console.log(`Open LVOVD: ${url}`);
+        console.log(`Or: ${localhostUrl(url)}`);
+        console.log('');
         return;
       }
       if (Date.now() < deadline) setTimeout(probe, 250);
@@ -152,7 +135,6 @@ function main() {
 
   const url = localUrl();
   console.log('Starting LVOVD...');
-  console.log(`Your browser should open to ${url}`);
   console.log('Keep this terminal window open while using LVOVD. Closing it stops the server.');
   console.log('Press Ctrl+C to stop LVOVD.');
   console.log('');
@@ -174,7 +156,7 @@ function main() {
     else process.exitCode = Number.isInteger(code) ? code : 1;
   });
 
-  openWhenReady(url, serverChild);
+  announceWhenReady(url, serverChild);
   return 0;
 }
 
@@ -185,8 +167,8 @@ if (require.main === module) {
 
 module.exports = {
   MIN_NODE_MAJOR,
-  browserLaunchCommand,
   localUrl,
+  localhostUrl,
   nodeMajor,
   npmInvocation,
   npmWorks,
