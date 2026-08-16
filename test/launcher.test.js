@@ -4,8 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   MIN_NODE_MAJOR,
-  browserLaunchCommand,
   localUrl,
+  localhostUrl,
   nodeMajor,
   npmInvocation,
   npmWorks
@@ -17,10 +17,12 @@ test('launcher enforces the documented Node minimum', () => {
   assert.equal(nodeMajor('24.18.0'), 24);
 });
 
-test('launcher always opens the loopback UI and validates the port', () => {
+test('launcher uses loopback URLs and validates the port', () => {
   assert.equal(localUrl('3000'), 'http://127.0.0.1:3000');
   assert.equal(localUrl('4567'), 'http://127.0.0.1:4567');
   assert.equal(localUrl('not-a-port'), 'http://127.0.0.1:3000');
+  assert.equal(localhostUrl('http://127.0.0.1:3000'), 'http://localhost:3000');
+  assert.equal(localhostUrl('http://127.0.0.1:4567'), 'http://localhost:4567');
 });
 
 test('launcher uses platform-appropriate npm invocation', () => {
@@ -40,10 +42,4 @@ test('launcher uses platform-appropriate npm invocation', () => {
 
 test('Windows launcher can actually execute npm through cmd.exe', { skip: process.platform !== 'win32' }, () => {
   assert.equal(npmWorks(), true);
-});
-
-test('launcher uses platform-appropriate browser commands', () => {
-  assert.equal(browserLaunchCommand('darwin', 'http://127.0.0.1:3000').command, 'open');
-  assert.equal(browserLaunchCommand('linux', 'http://127.0.0.1:3000').command, 'xdg-open');
-  assert.equal(browserLaunchCommand('win32', 'http://127.0.0.1:3000').command, 'cmd.exe');
 });
