@@ -61,8 +61,9 @@ sudo apt install -y nodejs ffmpeg
 
 Other Linux distributions can install **Node.js 22+** and **FFmpeg** with their normal package manager. LVOVD does not require nvm or any particular Node installer.
 
-Optional check:
+**Check to see if everything is installed correctly:**
 
+In a terminal, see that these return without errors
 ```bash
 node --version
 npm --version
@@ -79,6 +80,10 @@ ffmpeg -version
 git clone https://github.com/landonrivers/LVOVD.git
 cd LVOVD
 ```
+
+The benefit of git is that you'll always have access to the most up-to-date release.
+For beginners, I recommend GitHub Desktop as an easy way to clone, manage, and update this project:  
+*Github Desktop:* https://desktop.github.com/download/
 
 ### 3. Start LVOVD
 
