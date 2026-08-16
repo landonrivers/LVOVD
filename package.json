@@ -1,0 +1,19 @@
+{
+  "name": "lvovd",
+  "version": "2.2.0",
+  "private": true,
+  "description": "A Locally Hosted Video Downloader Which You'll Use Responsibly",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js && node --test test/*.test.js",
+    "update-ytdlp": "ytdlp update",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ytdlp-nodejs": "3.4.5"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

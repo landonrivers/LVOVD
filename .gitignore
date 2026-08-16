@@ -1,0 +1,31 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local environment / package-manager credentials
+.env
+.env.*
+!.env.example
+.npmrc
+
+# Browser/session exports and request captures
+cookies.txt
+cookies*.txt
+*.cookies
+*.har
+
+# Private keys / certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local media/output folders
+/downloads/
+/output/
+/outputs/
+
+# Editor / local tooling
+.vscode/
+.idea/

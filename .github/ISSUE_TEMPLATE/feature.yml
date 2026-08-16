@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a focused improvement to LVOVD.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. LVOVD is intentionally open to expansion, but please keep requests focused on responsible local media workflows.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would this improve?
+      description: Describe the workflow or limitation you want to improve.
+      placeholder: I would like to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe what you think LVOVD should do.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Optional. What do you do today instead?
+  - type: checkboxes
+    id: responsible-use
+    attributes:
+      label: Responsible-use check
+      options:
+        - label: This request is not asking LVOVD to bypass DRM, authentication, paywalls, or other access controls.
+          required: true

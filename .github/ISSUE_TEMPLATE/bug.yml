@@ -1,0 +1,89 @@
+name: Bug report
+description: Report a reproducible problem with LVOVD.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Do not paste cookies, tokens, passwords, private URLs, or other credentials.** Security vulnerabilities should be reported privately according to `SECURITY.md`.
+  - type: input
+    id: version
+    attributes:
+      label: LVOVD version / commit
+      placeholder: v2.2.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: v24.x.x
+    validations:
+      required: true
+  - type: input
+    id: ffmpeg
+    attributes:
+      label: FFmpeg version
+      placeholder: Output from ffmpeg -version (first line is enough)
+    validations:
+      required: true
+  - type: input
+    id: ytdlp
+    attributes:
+      label: yt-dlp version
+      placeholder: Version shown by LVOVD
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source/service and URL shape
+      description: Name the service and, if safe/public, provide a sample URL. Do not post private or authenticated URLs.
+      placeholder: Instagram Reel / https://www.instagram.com/reel/...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start LVOVD
+        2. Paste...
+        3. Click...
+        4. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / error
+      description: Paste only non-sensitive error text. Remove usernames, local paths, cookies, tokens, and other private data.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I confirmed this report does not contain cookies, tokens, passwords, or other secrets.
+          required: true
+        - label: This is a normal bug report, not a security vulnerability that should be reported privately.
+          required: true
+        - label: I am using LVOVD only with media I am authorized to access/download.
+          required: true

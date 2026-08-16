@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>LVOVD — Landon's Very Own Video Downloader</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <header class="brand-row">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path class="logo-ring" d="M6 3h20a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z"/><path class="logo-arrow" d="M15 7h2v11.2l3.8-3.8 1.4 1.4-6.2 6.2-6.2-6.2 1.4-1.4 3.8 3.8V7Zm-6 17h14v2H9v-2Z"/></svg>
+        </div>
+        <div>
+          <p class="eyebrow">LOCAL MEDIA TOOL</p>
+          <h1>LVOVD</h1>
+          <p class="brand-subtitle">Landon's Very Own Video Downloader</p>
+        </div>
+      </header>
+
+      <p class="intro">A Locally Hosted Video Downloader Which You'll Use Responsibly</p>
+
+      <form id="lookup-form" class="lookup-form">
+        <label for="video-url">Video URL</label>
+        <div class="input-row">
+          <input id="video-url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://example.com/video/..." />
+          <button id="preview-button" class="button secondary" type="submit">Preview</button>
+        </div>
+      </form>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+
+      <section id="preview-error" class="preview-error" hidden>
+        <div>
+          <p class="eyebrow">PREVIEW RESULT</p>
+          <h3 id="preview-error-title">Could not preview this URL</h3>
+          <p id="preview-error-message" class="error-message"></p>
+          <p id="preview-error-hint" class="help"></p>
+        </div>
+      </section>
+
+      <section id="preview" class="preview" hidden>
+        <div class="thumb-wrap">
+          <img id="thumbnail" alt="Video or playlist thumbnail" />
+          <span id="duration" class="duration"></span>
+        </div>
+
+        <div class="preview-main">
+          <p id="channel" class="channel"></p>
+          <h2 id="title"></h2>
+          <div id="meta-row" class="meta-row"></div>
+
+          <section id="source-capabilities" class="capability-panel">
+            <div class="capability-head">
+              <div>
+                <p class="eyebrow">DETECTED SOURCE</p>
+                <strong id="source-name">Source</strong>
+                <span id="source-detail" class="source-detail"></span>
+              </div>
+              <span id="source-mode" class="tag"></span>
+            </div>
+            <div id="capability-list" class="capability-list"></div>
+            <p id="capability-note" class="help"></p>
+          </section>
+
+          <section id="playlist-panel" class="playlist-panel" hidden>
+            <div class="section-head compact">
+              <div>
+                <h3>Playlist videos</h3>
+                <p id="playlist-summary" class="help"></p>
+              </div>
+              <div class="inline-actions">
+                <button id="playlist-all" class="text-button" type="button">All</button>
+                <button id="playlist-none" class="text-button" type="button">None</button>
+              </div>
+            </div>
+            <div id="playlist-list" class="playlist-list"></div>
+          </section>
+
+          <section class="option-section">
+            <div class="section-head">
+              <div>
+                <p class="step">1</p>
+                <div>
+                  <h3>Content</h3>
+                  <p class="help">Choose whether the finished download contains video, audio, or only companion files.</p>
+                </div>
+              </div>
+            </div>
+            <div class="choice-grid four" id="content-choices">
+              <label class="choice-card selected">
+                <input type="radio" name="content" value="av" checked />
+                <strong>Video + Audio</strong>
+                <span>Normal finished media</span>
+              </label>
+              <label class="choice-card">
+                <input type="radio" name="content" value="video" />
+                <strong>Video Only</strong>
+                <span>No audio stream</span>
+              </label>
+              <label class="choice-card">
+                <input type="radio" name="content" value="audio" />
+                <strong>Audio Only</strong>
+                <span>No video stream</span>
+              </label>
+              <label class="choice-card">
+                <input type="radio" name="content" value="extras" />
+                <strong>Extras Only</strong>
+                <span>Subtitles / thumbnail / metadata</span>
+              </label>
+            </div>
+          </section>
+
+          <section id="video-options" class="option-section">
+            <div class="section-head">
+              <div>
+                <p class="step">2</p>
+                <div>
+                  <h3>Video format</h3>
+                  <p class="help">Compatible favors H.264 for editors. Maximum keeps the source service's highest-quality codec.</p>
+                </div>
+              </div>
+            </div>
+            <div class="choice-grid two" id="profile-choices">
+              <label class="choice-card selected recommended">
+                <input type="radio" name="profile" value="compatible" checked />
+                <div class="choice-heading"><strong>Compatible MP4</strong><span class="tag recommended-tag">Recommended</span></div>
+                <span id="compatible-summary">H.264 + AAC when available</span>
+              </label>
+              <label class="choice-card">
+                <input type="radio" name="profile" value="maximum" />
+                <div class="choice-heading"><strong>Maximum Quality</strong><span class="tag">Source codec</span></div>
+                <span id="maximum-summary">Highest resolution available</span>
+              </label>
+            </div>
+            <div class="field-row">
+              <label class="field">
+                <span>Resolution</span>
+                <select id="resolution-select"></select>
+                <small>Downloads the best available stream at or below this height.</small>
+              </label>
+            </div>
+          </section>
+
+          <section id="audio-options" class="option-section" hidden>
+            <div class="section-head">
+              <div>
+                <p class="step">2</p>
+                <div>
+                  <h3>Audio format</h3>
+                  <p class="help">M4A/AAC is broadly compatible. Source Audio keeps the source service's native audio codec without conversion.</p>
+                </div>
+              </div>
+            </div>
+            <div class="field-row">
+              <label class="field">
+                <span>Output</span>
+                <select id="audio-format">
+                  <option value="m4a">M4A / AAC — compatible</option>
+                  <option value="mp3">MP3</option>
+                  <option value="source">Source Audio — no conversion</option>
+                  <option value="opus">Opus</option>
+                  <option value="flac">FLAC</option>
+                  <option value="wav">WAV</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <details id="range-details" class="advanced-panel">
+            <summary>Time range & chapters</summary>
+            <div class="advanced-content">
+              <div class="radio-row">
+                <label><input type="radio" name="range" value="full" checked /> Full video</label>
+                <label id="custom-range-option"><input type="radio" name="range" value="custom" /> Custom range</label>
+                <label id="chapter-range-option"><input type="radio" name="range" value="chapters" /> Selected chapters</label>
+              </div>
+              <div id="custom-range-fields" class="field-row" hidden>
+                <label class="field"><span>Start</span><input id="range-start" type="text" inputmode="numeric" placeholder="00:03:20" /></label>
+                <label class="field"><span>End</span><input id="range-end" type="text" inputmode="numeric" placeholder="00:08:45" /></label>
+              </div>
+              <div id="chapter-list" class="chapter-list" hidden></div>
+              <p id="range-help" class="help">Time ranges use FFmpeg and may take a little additional processing.</p>
+            </div>
+          </details>
+
+          <details id="extras-details" class="advanced-panel">
+            <summary>Extras</summary>
+            <div class="advanced-content">
+              <div class="check-grid">
+                <label class="check-option"><input id="extra-thumbnail" type="checkbox" /> Thumbnail (JPG)</label>
+                <label class="check-option"><input id="extra-metadata" type="checkbox" /> Metadata (.info.json)</label>
+                <label class="check-option"><input id="extra-subtitles" type="checkbox" /> Subtitles / captions (SRT)</label>
+              </div>
+              <div id="subtitle-options" class="field-row" hidden>
+                <label class="field">
+                  <span>Subtitle source</span>
+                  <select id="subtitle-mode">
+                    <option value="both">Manual, then automatic</option>
+                    <option value="manual">Manual subtitles only</option>
+                    <option value="auto">Automatic captions only</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Language code</span>
+                  <input id="subtitle-language" type="text" value="en" maxlength="80" list="subtitle-language-list" />
+                  <datalist id="subtitle-language-list"></datalist>
+                </label>
+              </div>
+              <p id="subtitle-availability" class="help"></p>
+            </div>
+          </details>
+
+          <details id="sponsor-details" class="advanced-panel">
+            <summary>SponsorBlock</summary>
+            <div class="advanced-content">
+              <div class="field-row">
+                <label class="field">
+                  <span>Action</span>
+                  <select id="sponsor-mode">
+                    <option value="off">Off</option>
+                    <option value="mark">Mark matching segments as chapters</option>
+                    <option value="remove">Remove matching segments</option>
+                  </select>
+                </label>
+              </div>
+              <div id="sponsor-categories" class="check-grid subdued">
+                <label class="check-option"><input type="checkbox" value="sponsor" checked /> Sponsor</label>
+                <label class="check-option"><input type="checkbox" value="intro" /> Intro</label>
+                <label class="check-option"><input type="checkbox" value="outro" /> Outro</label>
+                <label class="check-option"><input type="checkbox" value="selfpromo" /> Self-promo</label>
+                <label class="check-option"><input type="checkbox" value="interaction" /> Interaction</label>
+                <label class="check-option"><input type="checkbox" value="preview" /> Preview</label>
+              </div>
+              <p class="help">SponsorBlock data comes from the SponsorBlock service when this option is enabled.</p>
+            </div>
+          </details>
+
+          <button id="download-button" class="button primary big" type="button">Download video + audio</button>
+          <p class="download-note">Prepared files live only in your local temporary folder and are automatically cleaned up after about an hour while the server is running.</p>
+
+          <section id="download-progress" class="download-progress" aria-live="polite" hidden>
+            <div class="progress-head">
+              <div>
+                <strong id="progress-stage">Preparing…</strong>
+                <span id="progress-item" class="progress-item"></span>
+              </div>
+              <span id="progress-percent"></span>
+            </div>
+            <div class="progress-track" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div></div>
+            <div class="progress-copy">
+              <span id="progress-stream"></span>
+              <span id="progress-details"></span>
+            </div>
+            <div class="stage-row">
+              <span id="stage-download" class="stage"><i></i>Download</span>
+              <span id="stage-process" class="stage"><i></i>Process</span>
+              <span id="stage-ready" class="stage"><i></i>Ready</span>
+            </div>
+            <div id="output-list" class="output-list" hidden></div>
+            <button id="clear-job" class="text-button clear-button" type="button" hidden>Clear prepared files now</button>
+          </section>
+        </div>
+      </section>
+
+      <section class="requirements">
+        <div class="req-head">
+          <span>Runtime status</span>
+          <button id="recheck" class="text-button" type="button">Recheck</button>
+        </div>
+        <div class="checks">
+          <span id="node-check" class="check pending">Node: checking…</span>
+          <span id="yt-check" class="check pending">yt-dlp (project): checking…</span>
+          <span id="ffmpeg-check" class="check pending">FFmpeg: checking…</span>
+        </div>
+      </section>
+
+      <p class="legal">Use this only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service’s terms and applicable copyright law.</p>
+    </section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
