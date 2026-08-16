@@ -189,18 +189,40 @@ function isAacCodec(codec) {
   return typeof codec === 'string' && /^(mp4a|aac)/i.test(codec);
 }
 
+function codecState(codec) {
+  if (typeof codec !== 'string' || !codec.trim() || /^NA$/i.test(codec.trim())) return null;
+  return codec.trim().toLowerCase() === 'none' ? false : true;
+}
+
+function hasVisualEvidence(format) {
+  if (!format || typeof format !== 'object') return false;
+  if (!format.url && !format.manifest_url) return false;
+  return [format.height, format.width, format.fps, format.aspect_ratio]
+    .some((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+}
+
 function uniqueSortedNumbers(values) {
   return [...new Set(values.filter((value) => Number.isFinite(value) && value > 0))].sort((a, b) => b - a);
 }
 
 function resolutionSummary(info) {
-  const formats = Array.isArray(info.formats) && info.formats.length ? info.formats : ((info?.vcodec || info?.acodec) ? [info] : []);
+  const formats = Array.isArray(info.formats) && info.formats.length
+    ? info.formats
+    : ((info?.url || info?.vcodec || info?.acodec) ? [info] : []);
+  const hasKnownAudioCodec = formats.some((format) => codecState(format?.acodec) === true);
+  const hasPossibleUnknownAudio = formats.some((format) => hasVisualEvidence(format) && codecState(format?.acodec) === null);
   return {
     heights: uniqueSortedNumbers(formats.map((format) => Number(format.height))),
     h264Heights: uniqueSortedNumbers(formats.filter((format) => isH264Codec(format?.vcodec)).map((format) => Number(format.height))),
-    nativeAacAvailable: formats.some((format) => isAacCodec(format?.acodec)),
+    nativeAacAvailable: formats.some((format) => isAacCodec(format?.acodec))
+      ? true
+      : hasKnownAudioCodec
+        ? false
+        : hasPossibleUnknownAudio
+          ? null
+          : false,
     audioCodecs: [...new Set(formats
-      .filter((format) => format?.vcodec === 'none' && format?.acodec && format.acodec !== 'none')
+      .filter((format) => codecState(format?.vcodec) === false && codecState(format?.acodec) === true)
       .map((format) => format.acodec))].sort(),
     maxFps: Math.max(0, ...formats.map((format) => Number(format.fps) || 0)) || null
   };
@@ -292,16 +314,25 @@ function sourceSummary(info, requestedUrl) {
 function capabilitySummary(info, requestedUrl) {
   const formats = Array.isArray(info?.formats) && info.formats.length
     ? info.formats.filter(Boolean)
-    : ((info?.vcodec || info?.acodec) ? [info] : []);
-  const isVideo = (format) => format?.vcodec && format.vcodec !== 'none';
-  const isAudio = (format) => format?.acodec && format.acodec !== 'none';
-  const isVideoOnly = (format) => isVideo(format) && !isAudio(format);
-  const isAudioOnly = (format) => isAudio(format) && !isVideo(format);
-  const hasVideo = formats.some(isVideo);
+    : ((info?.url || info?.vcodec || info?.acodec) ? [info] : []);
+  const videoState = (format) => codecState(format?.vcodec);
+  const audioState = (format) => codecState(format?.acodec);
+  const isVideo = (format) => videoState(format) === true;
+  const isAudio = (format) => audioState(format) === true;
+  const isVideoOnly = (format) => isVideo(format) && audioState(format) === false;
+  const isAudioOnly = (format) => isAudio(format) && videoState(format) === false;
+  const visualFormats = formats.filter((format) => videoState(format) !== false && hasVisualEvidence(format));
+  const hasVideo = formats.some(isVideo) || visualFormats.length > 0;
   const hasAudio = formats.some(isAudio);
+  const hasPossibleAudio = visualFormats.some((format) => audioState(format) === null);
+  const audioCapability = hasAudio ? true : hasPossibleAudio ? null : false;
   const hasVideoOnly = formats.some(isVideoOnly);
   const hasAudioOnly = formats.some(isAudioOnly);
   const hasCombined = formats.some((format) => isVideo(format) && isAudio(format));
+  const hasPossibleCombined = visualFormats.some((format) =>
+    (videoState(format) === null && audioState(format) !== false) ||
+    (videoState(format) !== false && audioState(format) === null));
+  const combinedCapability = hasCombined ? true : hasPossibleCombined ? null : false;
   const h264VideoOnlyHeights = uniqueSortedNumbers(formats.filter((format) => isVideoOnly(format) && isH264Codec(format?.vcodec)).map((format) => Number(format.height)));
   const videoOnlyHeights = uniqueSortedNumbers(formats.filter(isVideoOnly).map((format) => Number(format.height)));
   const compatibleCombined = formats.some((format) => isVideo(format) && isAudio(format) && isH264Codec(format?.vcodec) && isAacCodec(format?.acodec));
@@ -315,15 +346,17 @@ function capabilitySummary(info, requestedUrl) {
   const liveStatus = info?.live_status || null;
   const isLive = liveStatus === 'is_live' || Boolean(info?.is_live);
   const isYouTube = /youtube/i.test(`${source.extractorKey || ''} ${source.extractor || ''}`);
+  const hasUnknownDirectMedia = visualFormats.some((format) => videoState(format) === null || audioState(format) === null);
 
   return {
     source,
     media: {
       video: hasVideo,
-      audio: hasAudio,
+      audio: audioCapability,
       videoOnly: hasVideoOnly,
       audioOnly: hasAudioOnly,
-      combined: hasCombined,
+      combined: combinedCapability,
+      directMedia: hasUnknownDirectMedia,
       heights: resolution.heights,
       videoOnlyHeights,
       h264Heights: resolution.h264Heights,
@@ -343,13 +376,16 @@ function capabilitySummary(info, requestedUrl) {
       sponsorBlock: isYouTube
     },
     range: {
-      custom: (hasVideo || hasAudio) && !isLive,
+      custom: (hasVideo || hasAudio || hasPossibleAudio) && !isLive,
       chapters: chapters.length > 0 && !isLive
     },
     live: {
       status: liveStatus,
       isLive
-    }
+    },
+    note: hasUnknownDirectMedia
+      ? 'yt-dlp reported downloadable visual media but did not identify every codec. Maximum Quality is available; codec-specific compatibility and separate-stream modes remain conservative.'
+      : undefined
   };
 }
 
