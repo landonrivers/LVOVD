@@ -8,7 +8,8 @@ const {
   localhostUrl,
   nodeMajor,
   npmInvocation,
-  npmWorks
+  npmWorks,
+  readyMessage
 } = require('../scripts/launch');
 
 test('launcher enforces the documented Node minimum', () => {
@@ -23,6 +24,13 @@ test('launcher uses loopback URLs and validates the port', () => {
   assert.equal(localUrl('not-a-port'), 'http://127.0.0.1:3000');
   assert.equal(localhostUrl('http://127.0.0.1:3000'), 'http://localhost:3000');
   assert.equal(localhostUrl('http://127.0.0.1:4567'), 'http://localhost:4567');
+});
+
+test('launcher prints both local addresses when ready', () => {
+  assert.equal(
+    readyMessage('http://127.0.0.1:3000'),
+    'LVOVD is ready.\nOpen LVOVD: http://127.0.0.1:3000\nOr: http://localhost:3000'
+  );
 });
 
 test('launcher uses platform-appropriate npm invocation', () => {
