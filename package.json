@@ -1,6 +1,6 @@
 {
   "name": "lvovd",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "description": "A Locally Hosted Video Downloader Which You'll Use Responsibly",
   "scripts": {

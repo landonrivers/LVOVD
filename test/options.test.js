@@ -10,7 +10,8 @@ const {
   normalizeOptions,
   normalizeSelection,
   formatSelector,
-  buildYtdlpArgs
+  buildYtdlpArgs,
+  audioConversionArgs
 } = require('../server');
 
 test('compatible AV prefers H.264 + AAC and respects a resolution cap', () => {
@@ -204,3 +205,30 @@ test('an omitted audio codec is unknown, not proof that a known video stream is 
   assert.equal(caps.media.compatibleVideo, false);
   assert.deepEqual(caps.media.h264Heights, [720]);
 });
+
+test('audio conversion choices keep yt-dlp acquisition identical to Source Audio', () => {
+  for (const audioFormat of ['m4a', 'mp3', 'opus', 'flac', 'wav']) {
+    const options = normalizeOptions({ content: 'audio', audioFormat });
+    assert.equal(formatSelector(options), 'bestaudio');
+    const args = buildYtdlpArgs(
+      { url: 'https://video.example/watch/ABCDEFGHIJK' },
+      options,
+      '/tmp/%(title)s.%(ext)s',
+      'download:test'
+    );
+    assert.equal(args.includes('--extract-audio'), false);
+    assert.equal(args.includes('--audio-format'), false);
+    assert.equal(args.includes('--audio-quality'), false);
+  }
+});
+
+test('local FFmpeg conversion uses high-quality MP3 and compatible AAC settings', () => {
+  const mp3 = audioConversionArgs('/tmp/source.webm', '/tmp/output.mp3', 'mp3');
+  assert.deepEqual(mp3.slice(-5), ['-c:a', 'libmp3lame', '-q:a', '0', '/tmp/output.mp3']);
+
+  const m4a = audioConversionArgs('/tmp/source.webm', '/tmp/output.m4a', 'm4a');
+  assert.ok(m4a.includes('aac'));
+  assert.ok(m4a.includes('256k'));
+  assert.equal(m4a.at(-1), '/tmp/output.m4a');
+});
+
