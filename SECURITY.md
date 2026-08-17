@@ -37,6 +37,16 @@ These controls are defense in depth. They are not a promise that LVOVD is safe t
 
 If you deliberately bind LVOVD to a LAN or wildcard address, you are changing its security model. Use `LVOVD_ALLOWED_HOSTS` to explicitly list hostnames that should be accepted and put appropriate authentication/reverse-proxy protections in front of the application if other people can reach it.
 
+## yt-dlp binary supply chain
+
+LVOVD does not depend on a third-party Node wrapper to install or invoke yt-dlp. The project has no third-party Node runtime dependencies.
+
+On first use, LVOVD downloads the platform-appropriate standalone binary from the official yt-dlp GitHub release infrastructure. It also downloads that same release's `SHA2-256SUMS`, requires the requested binary to be present in the checksum list, computes SHA-256 locally, and installs the binary only when the hashes match. Redirects are restricted to HTTPS and expected GitHub release-asset hosts, downloads are size-limited, and replacement is performed through a temporary file so a failed update does not intentionally replace a known-good binary.
+
+The verified executable and a small checksum manifest are cached in `.lvovd-bin/`. Normal startup hashes the cached executable and reuses it without contacting GitHub when it still matches. LVOVD downloads again only when the managed executable is missing or fails that integrity check, or when the user explicitly runs the updater.
+
+This checksum validation detects corruption and mismatched release assets, but it is not an independent chain of trust: both the executable and published checksum ultimately come from GitHub/yt-dlp release infrastructure. A user-supplied `YTDLP_PATH` override is outside LVOVD's managed verification because LVOVD cannot know which custom build the user intended.
+
 ## Secrets and session data
 
 Do not commit `.env` files, npm credentials, exported browser cookies, HAR captures, private keys, or other session material. The repository `.gitignore` includes common patterns as a safety net, but contributors are still responsible for reviewing what they commit.
