@@ -30,7 +30,7 @@ jobs:
         run: npm run check
 
   windows-launcher:
-    name: Windows launcher
+    name: Windows launcher and yt-dlp manager
     runs-on: windows-latest
     timeout-minutes: 10
 
@@ -43,5 +43,5 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Verify Windows launcher behavior
-        run: node --test test/launcher.test.js
+      - name: Verify Windows launcher and yt-dlp manager behavior
+        run: node --test test/launcher.test.js test/ytdlp-manager.test.js
