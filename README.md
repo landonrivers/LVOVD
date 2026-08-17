@@ -19,6 +19,7 @@ LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL, preview 
 - [Privacy and networking](#privacy-and-networking)
 - [Authentication and cookies](#authentication-and-cookies)
 - [Temporary files](#temporary-files)
+- [yt-dlp binary management](#yt-dlp-binary-management)
 - [Manual start](#manual-start)
 - [Development](#development)
 - [AI-generated project](#ai-generated-project)
@@ -52,7 +53,7 @@ You can use Node.js's normal macOS installer instead if you prefer, but Homebrew
 
 **Linux — Debian/Ubuntu example**
 
-The first command adds NodeSource's Node.js 24 LTS package repository. The second installs Node.js (including npm) and FFmpeg:
+The first command adds NodeSource's Node.js 24 LTS package repository. The second installs Node.js and FFmpeg:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
@@ -63,10 +64,10 @@ Other Linux distributions can install **Node.js 22+** and **FFmpeg** with their 
 
 **Check to see if everything is installed correctly:**
 
-In a terminal, see that these return without errors
+In a terminal, see that these return without errors:
+
 ```bash
 node --version
-npm --version
 ffmpeg -version
 ```
 
@@ -91,7 +92,7 @@ For beginners, I recommend GitHub Desktop as an easy way to clone, manage, and u
 - **macOS:** double-click `Start-LVOVD-Mac.command`
 - **Linux:** run `./Start-LVOVD-Linux.sh`
 
-The launcher runs `npm install` only when LVOVD's project dependency is missing or needs updating, then starts the server. Keep the launcher terminal open while using LVOVD.
+On the first run, LVOVD downloads the appropriate **official yt-dlp standalone binary** from the yt-dlp project's GitHub release, verifies it against that release's published SHA-256 checksum, and stores it under the local `.lvovd-bin` folder. Later starts verify and reuse that cached copy without downloading yt-dlp again. Keep the launcher terminal open while using LVOVD.
 
 ### 4. Open LVOVD
 
@@ -184,36 +185,56 @@ LVOVD prepares media under your operating system's temporary directory. Ready fi
 
 Large downloads may require enough free space for both intermediate and finished files.
 
+## yt-dlp binary management
+
+LVOVD has **no third-party Node runtime dependencies**. It invokes the official yt-dlp executable directly.
+
+By default LVOVD uses yt-dlp's **nightly** release channel, which the yt-dlp project recommends for regular users because source websites can change faster than stable releases. Startup does not check GitHub for a newer build every time. Once the cached executable has been downloaded and verified, normal startup hashes the local file against LVOVD's saved verified checksum and reuses it without network traffic.
+
+LVOVD downloads yt-dlp again only when the managed binary is missing or fails its local integrity check, or when you explicitly request an update:
+
+```bash
+npm run update-ytdlp
+```
+
+To explicitly use the stable channel for an update:
+
+```bash
+npm run update-ytdlp -- stable
+```
+
+A custom executable can still be supplied with `YTDLP_PATH`. LVOVD does not checksum a user-supplied override because it does not know what release or build you intended to provide.
+
+SHA-256 verification protects against a corrupted or mismatched release download. The checksum is retrieved from the same official GitHub release infrastructure as the binary, so this still ultimately trusts GitHub and the yt-dlp release account; it is not an independent signature-verification system.
+
 ## Manual start
 
 If you prefer the terminal:
 
 ```bash
-npm i
+node server.js
+```
+
+Or, equivalently:
+
+```bash
 npm start
 ```
 
 Then open `http://127.0.0.1:3000`.
 
-You do **not** need to install yt-dlp globally. The `ytdlp-nodejs` dependency manages LVOVD's project-local yt-dlp executable.
-
-To update that managed yt-dlp later:
-
-```bash
-npm run update-ytdlp
-```
+You do **not** need to install yt-dlp globally or run `npm install` for LVOVD itself.
 
 ## Development
 
 ```bash
 git clone https://github.com/landonrivers/LVOVD.git
 cd LVOVD
-npm i
 npm run check
 npm start
 ```
 
-LVOVD uses Node.js 22+, plain HTML/CSS/JavaScript in `public/`, `server.js` as the localhost security gate, and `app-server.js` for application/download logic. `scripts/launch.js` is shared launcher plumbing behind the three OS-specific start files.
+LVOVD uses Node.js 22+, plain HTML/CSS/JavaScript in `public/`, `server.js` as the localhost security gate, `app-server.js` for application/download logic, and `ytdlp-manager.js` for verified project-local yt-dlp binary management. `scripts/launch.js` is shared launcher plumbing behind the three OS-specific start files.
 
 Useful environment variables:
 
@@ -221,6 +242,7 @@ Useful environment variables:
 PORT=3000
 HOST=127.0.0.1
 YTDLP_PATH=/optional/custom/path/to/yt-dlp
+LVOVD_YTDLP_CHANNEL=nightly
 ```
 
 Keep `HOST=127.0.0.1` unless you intentionally want to change LVOVD's network exposure.
@@ -239,5 +261,4 @@ LVOVD is a small UI/orchestration layer around:
 
 - yt-dlp: https://github.com/yt-dlp/yt-dlp
 - FFmpeg: https://ffmpeg.org/
-- ytdlp-nodejs: https://github.com/iqbal-rashed/ytdlp-nodejs
 - SponsorBlock: https://sponsor.ajay.app/
