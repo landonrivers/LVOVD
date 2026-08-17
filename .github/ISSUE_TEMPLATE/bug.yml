@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. **Do not paste cookies, tokens, passwords, private URLs, or other credentials.** Security vulnerabilities should be reported privately according to `SECURITY.md`.
+        Thanks for reporting a bug. **Do not paste cookies, tokens, passwords, private URLs, real media URLs or titles, channel/account names, post/video IDs, or other identifiable source-content details.** Security vulnerabilities should be reported privately according to `SECURITY.md`.
   - type: input
     id: version
     attributes:
@@ -48,8 +48,8 @@ body:
     id: source
     attributes:
       label: Source/service and URL shape
-      description: Name the service and, if safe/public, provide a sample URL. Do not post private or authenticated URLs.
-      placeholder: Instagram Reel / https://www.instagram.com/reel/...
+      description: Name the service and describe only the generic URL shape if useful. Never post the real media URL, title, account/channel name, or media identifier.
+      placeholder: Example service / https://service.example/media/...
     validations:
       required: true
   - type: textarea
@@ -58,9 +58,9 @@ body:
       label: Steps to reproduce
       placeholder: |
         1. Start LVOVD
-        2. Paste...
-        3. Click...
-        4. Observe...
+        2. Paste an authorized test URL
+        3. Choose the relevant options
+        4. Observe the error
     validations:
       required: true
   - type: textarea
@@ -73,7 +73,7 @@ body:
     id: actual
     attributes:
       label: Actual behavior / error
-      description: Paste only non-sensitive error text. Remove usernames, local paths, cookies, tokens, and other private data.
+      description: Paste only non-sensitive error text. Remove usernames, local paths, cookies, tokens, real media titles/URLs/IDs, account/channel names, and other identifying source details.
     validations:
       required: true
   - type: checkboxes
@@ -82,6 +82,8 @@ body:
       label: Before submitting
       options:
         - label: I confirmed this report does not contain cookies, tokens, passwords, or other secrets.
+          required: true
+        - label: I confirmed this report does not identify the specific source media or account through a real title, URL, ID, channel/account name, screenshot, or log excerpt.
           required: true
         - label: This is a normal bug report, not a security vulnerability that should be reported privately.
           required: true

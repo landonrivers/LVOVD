@@ -83,7 +83,7 @@ test('custom sections and SponsorBlock removal become yt-dlp arguments', () => {
 });
 
 test('media URL validation accepts arbitrary http/https source services', () => {
-  assert.equal(parseMediaUrl('https://vimeo.com/12345'), 'https://vimeo.com/12345');
+  assert.equal(parseMediaUrl('https://media.example/video/12345'), 'https://media.example/video/12345');
   assert.throws(() => parseMediaUrl('file:///tmp/video.mp4'), /http\/https/);
 });
 
@@ -102,7 +102,7 @@ test('capability discovery describes a generic Instagram-style media item from y
   const info = {
     extractor: 'Instagram',
     extractor_key: 'Instagram',
-    webpage_url: 'https://www.instagram.com/reel/example/',
+    webpage_url: 'https://instagram.example/reel/example/',
     thumbnail: 'https://cdn.example/thumb.jpg',
     formats: [
       { format_id: 'v1', url: 'https://cdn.example/video.mp4', vcodec: 'avc1.640028', acodec: 'none', height: 1080, fps: 30 },
@@ -123,7 +123,7 @@ test('capability discovery describes a generic Instagram-style media item from y
 test('audio-only sources disable video capabilities but retain metadata and audio', () => {
   const info = {
     extractor_key: 'Soundcloud',
-    webpage_url: 'https://soundcloud.com/example/track',
+    webpage_url: 'https://soundcloud.example/example/track',
     formats: [
       { format_id: 'http_mp3', url: 'https://cdn.example/audio.mp3', vcodec: 'none', acodec: 'mp3' }
     ]
@@ -168,7 +168,7 @@ test('Twitch-style direct video qualities remain downloadable when codec fields 
   const info = {
     extractor: 'twitch:clips',
     extractor_key: 'TwitchClips',
-    webpage_url: 'https://www.twitch.tv/example/clip/ExampleSlug',
+    webpage_url: 'https://twitch.example/example/clip/ExampleSlug',
     formats: [
       { format_id: '1080', url: 'https://clips-media-assets.example/1080.mp4', height: 1080, fps: 30 },
       { format_id: '720', url: 'https://clips-media-assets.example/720.mp4', height: 720, fps: 30 }

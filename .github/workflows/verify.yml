@@ -25,16 +25,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Run checks and tests
         run: npm run check
 
   windows-launcher:
-    name: Windows launcher
+    name: Windows launcher and yt-dlp manager
     runs-on: windows-latest
     timeout-minutes: 10
 
@@ -47,5 +43,5 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Verify Windows launcher npm invocation
-        run: node --test test/launcher.test.js
+      - name: Verify Windows launcher and yt-dlp manager behavior
+        run: node --test test/launcher.test.js test/ytdlp-manager.test.js

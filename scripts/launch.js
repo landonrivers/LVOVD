@@ -1,12 +1,12 @@
 'use strict';
 
-const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
 const MIN_NODE_MAJOR = 22;
+const STARTUP_TIMEOUT_MS = 120000;
 
 function nodeMajor(version = process.versions.node) {
   return Number(String(version || '').split('.')[0]);
@@ -30,16 +30,6 @@ function readyMessage(url) {
   ].join('\n');
 }
 
-function npmInvocation(args = [], platform = process.platform, comspec = process.env.ComSpec) {
-  if (platform === 'win32') {
-    return {
-      command: comspec || 'cmd.exe',
-      args: ['/d', '/s', '/c', ['npm.cmd', ...args].join(' ')]
-    };
-  }
-  return { command: 'npm', args };
-}
-
 function commandWorks(command, args) {
   const result = spawnSync(command, args, {
     cwd: ROOT,
@@ -50,43 +40,8 @@ function commandWorks(command, args) {
   return !result.error && result.status === 0;
 }
 
-function npmWorks() {
-  const invocation = npmInvocation(['--version']);
-  return commandWorks(invocation.command, invocation.args);
-}
-
-function packageDependenciesReady() {
-  try {
-    const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
-    const wanted = lock.packages?.['node_modules/ytdlp-nodejs']?.version;
-    const installed = JSON.parse(fs.readFileSync(
-      path.join(ROOT, 'node_modules', 'ytdlp-nodejs', 'package.json'),
-      'utf8'
-    )).version;
-    return Boolean(wanted && installed && wanted === installed);
-  } catch {
-    return false;
-  }
-}
-
-function installDependencies() {
-  console.log('LVOVD dependencies are not installed yet. Installing them now...');
-  const invocation = npmInvocation(['install', '--no-audit', '--no-fund']);
-  const result = spawnSync(invocation.command, invocation.args, {
-    cwd: ROOT,
-    stdio: 'inherit',
-    windowsHide: false,
-    shell: false
-  });
-  if (result.error || result.status !== 0) {
-    throw new Error('npm install did not complete successfully.');
-  }
-  console.log('LVOVD dependencies are ready.');
-  console.log('');
-}
-
 function announceWhenReady(url, serverChild) {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   const probe = () => {
     if (serverChild.exitCode !== null || serverChild.signalCode) return;
     const request = http.get(url, (response) => {
@@ -126,21 +81,9 @@ function main() {
     return 1;
   }
 
-  try {
-    if (!packageDependenciesReady()) {
-      if (!npmWorks()) {
-        fail('npm is not available. Reinstall a current Node.js LTS release.');
-        return 1;
-      }
-      installDependencies();
-    }
-  } catch (error) {
-    fail(error.message);
-    return 1;
-  }
-
   const url = localUrl();
   console.log('Starting LVOVD...');
+  console.log('On first run, LVOVD downloads and verifies the official yt-dlp binary. Later starts reuse the verified local copy.');
   console.log('Keep this terminal window open while using LVOVD. Closing it stops the server.');
   console.log('Press Ctrl+C to stop LVOVD.');
   console.log('');
@@ -173,11 +116,9 @@ if (require.main === module) {
 
 module.exports = {
   MIN_NODE_MAJOR,
+  STARTUP_TIMEOUT_MS,
   localUrl,
   localhostUrl,
   nodeMajor,
-  npmInvocation,
-  npmWorks,
-  packageDependenciesReady,
   readyMessage
 };

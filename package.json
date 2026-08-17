@@ -1,16 +1,13 @@
 {
   "name": "lvovd",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "private": true,
   "description": "A Locally Hosted Video Downloader Which You'll Use Responsibly",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check scripts/launch.js && node --check public/app.js && node --test test/*.test.js",
-    "update-ytdlp": "ytdlp update",
+    "check": "node --check server.js && node --check app-server.js && node --check ytdlp-manager.js && node --check scripts/launch.js && node --check scripts/update-ytdlp.js && node --check public/app.js && node --test test/*.test.js",
+    "update-ytdlp": "node scripts/update-ytdlp.js",
     "test": "node --test test/*.test.js"
-  },
-  "dependencies": {
-    "ytdlp-nodejs": "3.4.5"
   },
   "engines": {
     "node": ">=22"

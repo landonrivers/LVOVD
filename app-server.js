@@ -6,6 +6,12 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { URL } = require('node:url');
+const {
+  createSerialTaskQueue,
+  courtesyDelayMs,
+  wait,
+  classifyDownloadError
+} = require('./request-safety');
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
@@ -18,6 +24,7 @@ const STALE_WORK_MS = 24 * 60 * 60 * 1000;
 const MAX_PLAYLIST_PREVIEW = 100;
 const MAX_PLAYLIST_SELECTION = 100;
 const jobs = new Map();
+const remoteDownloadQueue = createSerialTaskQueue();
 let ytdlpLoadError = null;
 
 const CONTENT_MODES = new Set(['av', 'video', 'audio', 'extras']);
@@ -29,7 +36,6 @@ const SPONSOR_MODES = new Set(['off', 'mark', 'remove']);
 const SPONSOR_CATEGORIES = new Set([
   'sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'preview', 'filler', 'music_offtopic', 'hook'
 ]);
-
 
 function resolveYtdlpPath() {
   if (process.env.YTDLP_PATH) return process.env.YTDLP_PATH;
@@ -997,7 +1003,8 @@ function publicJob(job) {
     itemLabel: job.itemLabel || null,
     outputs,
     autoDownloadUrl: job.autoDownloadUrl || null,
-    error: job.error || null
+    error: job.error || null,
+    errorCategory: job.errorCategory || null
   };
 }
 
@@ -1051,6 +1058,7 @@ async function runTask(job, task, taskIndex, options) {
     const child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
     job.child = child;
     let lastErrorLine = '';
+    const recentErrorLines = [];
 
     const handleStdout = (line) => {
       if (!line.startsWith('__YTDLP_PROGRESS__')) return;
@@ -1081,7 +1089,12 @@ async function runTask(job, task, taskIndex, options) {
     };
 
     const handleStderr = (line) => {
-      if (line.trim()) lastErrorLine = line.trim();
+      const trimmed = line.trim();
+      if (trimmed) {
+        lastErrorLine = trimmed;
+        recentErrorLines.push(trimmed);
+        if (recentErrorLines.length > 8) recentErrorLines.shift();
+      }
       if (/\[(Merger|VideoRemuxer|VideoConvertor|ExtractAudio|Metadata|EmbedThumbnail|EmbedSubtitle|SubtitleConvertor|ThumbnailsConvertor|SponsorBlock|ModifyChapters|Fixup[^\]]*|MoveFiles)\]/i.test(line)) {
         updateJob(job, {
           status: 'running',
@@ -1112,9 +1125,11 @@ async function runTask(job, task, taskIndex, options) {
       job.child = null;
       if (code === 0) return resolve();
       const compatibilityFailure = options.profile === 'compatible' && /requested format|format.*not available/i.test(lastErrorLine);
-      reject(new Error(compatibilityFailure
+      const failure = new Error(compatibilityFailure
         ? 'A requested native H.264/AAC format was not available. Try Maximum Quality or a lower resolution.'
-        : (lastErrorLine || `yt-dlp exited with code ${code}.`)));
+        : (lastErrorLine || `yt-dlp exited with code ${code}.`));
+      failure.diagnostic = recentErrorLines.join('\n');
+      reject(failure);
     });
   });
 
@@ -1136,6 +1151,19 @@ async function prepareDownloadJob(job, videoUrl, options, selection) {
   job.itemCount = tasks.length;
 
   for (let i = 0; i < tasks.length; i += 1) {
+    if (i > 0) {
+      const delayMs = courtesyDelayMs();
+      updateJob(job, {
+        status: 'running',
+        phase: 'waiting',
+        message: `Giving the source a short break before item ${i + 1} of ${tasks.length}…`,
+        streamLabel: null,
+        percent: null,
+        speed: null,
+        eta: Math.ceil(delayMs / 1000)
+      });
+      await wait(delayMs);
+    }
     await runTask(job, tasks[i], i, options);
   }
 
@@ -1161,11 +1189,12 @@ async function startDownload(videoUrl, rawOptions, rawSelection) {
   const options = normalizeOptions(rawOptions);
   const selection = normalizeSelection(rawSelection);
   const id = crypto.randomUUID();
+  const waitingBehindAnotherJob = remoteDownloadQueue.size > 0;
   const job = {
     id,
     status: 'queued',
     phase: 'queued',
-    message: 'Queued…',
+    message: waitingBehindAnotherJob ? 'Waiting for another download to finish…' : 'Queued…',
     percent: null,
     downloadedBytes: null,
     totalBytes: null,
@@ -1177,6 +1206,7 @@ async function startDownload(videoUrl, rawOptions, rawSelection) {
     outputs: [],
     autoDownloadUrl: null,
     error: null,
+    errorCategory: null,
     listeners: new Set(),
     tempDir: null,
     child: null,
@@ -1185,19 +1215,32 @@ async function startDownload(videoUrl, rawOptions, rawSelection) {
   };
   jobs.set(id, job);
 
-  prepareDownloadJob(job, videoUrl, options, selection).catch(async (error) => {
-    if (job.tempDir) await fsp.rm(job.tempDir, { recursive: true, force: true }).catch(() => {});
-    job.tempDir = null;
-    updateJob(job, {
-      status: 'error',
-      phase: 'error',
-      message: 'Download failed.',
-      error: error.message,
-      percent: null,
-      speed: null,
-      eta: null
-    });
-  });
+  remoteDownloadQueue.enqueue(async () => {
+    if (jobs.get(job.id) !== job) return;
+    try {
+      await prepareDownloadJob(job, videoUrl, options, selection);
+    } catch (error) {
+      if (job.tempDir) await fsp.rm(job.tempDir, { recursive: true, force: true }).catch(() => {});
+      job.tempDir = null;
+      const classified = classifyDownloadError(error);
+      updateJob(job, {
+        status: 'error',
+        phase: 'error',
+        message: classified.category === 'rate_limited'
+          ? 'The source is limiting requests.'
+          : classified.category === 'access_rejected'
+            ? 'The source rejected the download request.'
+            : classified.category === 'extra_rejected'
+              ? 'The selected extra could not be downloaded.'
+              : 'Download failed.',
+        error: classified.userMessage,
+        errorCategory: classified.category,
+        percent: null,
+        speed: null,
+        eta: null
+      });
+    }
+  }).catch(() => {});
 
   return job;
 }
