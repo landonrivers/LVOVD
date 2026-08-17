@@ -47,23 +47,24 @@ function wait(ms) {
 function classifyDownloadError(error) {
   const original = String(error?.message || error || 'Download failed.').trim();
   const diagnostic = String(error?.diagnostic || original).trim();
-  const lower = diagnostic.toLowerCase();
+  const originalLower = original.toLowerCase();
+  const diagnosticLower = diagnostic.toLowerCase();
 
-  if (/unable to download (?:video )?thumbnail|thumbnail[^\n]*(?:403|forbidden)/i.test(diagnostic)) {
+  if (/unable to download (?:video )?thumbnail|thumbnail[^\n]*(?:403|forbidden)/i.test(original)) {
     return {
       category: 'extra_rejected',
       userMessage: `The source rejected the thumbnail request. The media itself may still be available. Try again without Thumbnail or try again later. Original error: ${original}`
     };
   }
 
-  if (/\b429\b|too many requests|rate[ -]?limit|request limit|unusual traffic|temporarily blocked|confirm (?:that )?you(?:'|’)re not a bot/.test(lower)) {
+  if (/\b429\b|too many requests|rate[ -]?limit|request limit|unusual traffic|temporarily blocked|confirm (?:that )?you(?:'|’)re not a bot/.test(diagnosticLower)) {
     return {
       category: 'rate_limited',
       userMessage: `The source is temporarily limiting requests. LVOVD stopped instead of retrying automatically. Try again later. Original error: ${original}`
     };
   }
 
-  if (/\b403\b|forbidden/.test(lower)) {
+  if (/\b403\b|forbidden/.test(originalLower) || /\b403\b|forbidden/.test(diagnosticLower)) {
     return {
       category: 'access_rejected',
       userMessage: `The source rejected the download request (HTTP 403). This can be temporary or mean yt-dlp/source compatibility changed; it does not by itself prove rate limiting. LVOVD stopped instead of retrying automatically. Try updating yt-dlp or try again later. Original error: ${original}`
