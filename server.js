@@ -137,11 +137,21 @@ async function startServer() {
       : 'Checking LVOVD-managed yt-dlp...');
     const ytdlp = await ensureYtdlp({ respectEnvironment: USER_YTDLP_OVERRIDE });
     process.env.YTDLP_PATH = ytdlp.path;
-    console.log(ytdlp.downloaded
-      ? `Downloaded and SHA-256 verified yt-dlp (${ytdlp.manifest?.channel || 'managed'} channel).`
-      : ytdlp.verified
-        ? 'Verified cached yt-dlp; no download was needed.'
-        : 'Using the yt-dlp executable supplied through YTDLP_PATH.');
+
+    if (ytdlp.downloaded && ytdlp.updated) {
+      console.log(`Updated and SHA-256 verified yt-dlp (${ytdlp.manifest?.channel || 'managed'} channel).`);
+    } else if (ytdlp.downloaded) {
+      console.log(`Downloaded and SHA-256 verified yt-dlp (${ytdlp.manifest?.channel || 'managed'} channel).`);
+    } else if (ytdlp.updateCheckError) {
+      console.log('Verified cached yt-dlp; continuing with it because the freshness check could not complete.');
+      console.warn(`yt-dlp freshness check warning: ${ytdlp.updateCheckError}`);
+    } else if (ytdlp.updateChecked) {
+      console.log('Verified cached yt-dlp and confirmed the selected release channel is current.');
+    } else if (ytdlp.verified) {
+      console.log('Verified cached yt-dlp; the previous freshness check is still current.');
+    } else {
+      console.log('Using the yt-dlp executable supplied through YTDLP_PATH.');
+    }
   } catch (error) {
     console.error(`LVOVD could not prepare yt-dlp: ${error.message}`);
     process.exitCode = 1;
