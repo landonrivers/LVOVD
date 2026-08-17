@@ -92,7 +92,7 @@ For beginners, I recommend GitHub Desktop as an easy way to clone, manage, and u
 - **macOS:** double-click `Start-LVOVD-Mac.command`
 - **Linux:** run `./Start-LVOVD-Linux.sh`
 
-On the first run, LVOVD downloads the appropriate **official yt-dlp standalone binary** from the yt-dlp project's GitHub release, verifies it against that release's published SHA-256 checksum, and stores it under the local `.lvovd-bin` folder. Later starts verify and reuse that cached copy without downloading yt-dlp again. Keep the launcher terminal open while using LVOVD.
+On the first run, LVOVD downloads the appropriate **official yt-dlp standalone binary** from the yt-dlp project's GitHub release, verifies it against that release's published SHA-256 checksum, and stores it under the local `.lvovd-bin` folder. Later starts always verify the cached file locally. At most once every 24 hours, LVOVD also checks whether a newer release exists; it downloads a replacement only when one is available. Keep the launcher terminal open while using LVOVD.
 
 ### 4. Open LVOVD
 
@@ -189,9 +189,11 @@ Large downloads may require enough free space for both intermediate and finished
 
 LVOVD has **no third-party Node runtime dependencies**. It invokes the official yt-dlp executable directly.
 
-By default LVOVD uses yt-dlp's **nightly** release channel, which the yt-dlp project recommends for regular users because source websites can change faster than stable releases. Startup does not check GitHub for a newer build every time. Once the cached executable has been downloaded and verified, normal startup hashes the local file against LVOVD's saved verified checksum and reuses it without network traffic.
+By default LVOVD uses yt-dlp's **nightly** release channel, which the yt-dlp project recommends for regular users because source websites can change faster than stable releases. Every startup hashes the local executable against LVOVD's saved verified checksum. A valid cached executable is reused immediately when LVOVD has checked release freshness within the previous 24 hours, so most starts do not contact GitHub.
 
-LVOVD downloads yt-dlp again only when the managed binary is missing or fails its local integrity check, or when you explicitly request an update:
+Once the recorded freshness check is at least 24 hours old, startup makes a small request for the latest release metadata. If the release tag is unchanged, LVOVD records the new check time and keeps the existing executable. If a newer release exists, LVOVD downloads that release's checksum and binary, verifies the replacement, and switches to it atomically. If the freshness check cannot reach GitHub but the cached executable still passes its local integrity check, LVOVD continues with that verified cached copy rather than failing startup.
+
+You can still force an immediate update check and verified download at any time:
 
 ```bash
 npm run update-ytdlp
