@@ -4,11 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   MIN_NODE_MAJOR,
+  STARTUP_TIMEOUT_MS,
   localUrl,
   localhostUrl,
   nodeMajor,
-  npmInvocation,
-  npmWorks,
   readyMessage
 } = require('../scripts/launch');
 
@@ -33,21 +32,6 @@ test('launcher prints both local addresses when ready', () => {
   );
 });
 
-test('launcher uses platform-appropriate npm invocation', () => {
-  assert.deepEqual(npmInvocation(['--version'], 'linux'), {
-    command: 'npm',
-    args: ['--version']
-  });
-  assert.deepEqual(npmInvocation(['--version'], 'win32', 'cmd.exe'), {
-    command: 'cmd.exe',
-    args: ['/d', '/s', '/c', 'npm.cmd --version']
-  });
-  assert.deepEqual(npmInvocation(['install', '--no-audit', '--no-fund'], 'win32', 'C:\\Windows\\System32\\cmd.exe'), {
-    command: 'C:\\Windows\\System32\\cmd.exe',
-    args: ['/d', '/s', '/c', 'npm.cmd install --no-audit --no-fund']
-  });
-});
-
-test('Windows launcher can actually execute npm through cmd.exe', { skip: process.platform !== 'win32' }, () => {
-  assert.equal(npmWorks(), true);
+test('launcher allows enough time for a first-run verified yt-dlp download', () => {
+  assert.ok(STARTUP_TIMEOUT_MS >= 60000);
 });
