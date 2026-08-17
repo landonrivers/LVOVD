@@ -6,9 +6,11 @@ LVOVD — **Landon's Very Own Video Downloader** — is intentionally open for e
 
 1. Install Node.js 22 or newer.
 2. Install FFmpeg and make sure `ffmpeg` is available on PATH.
-3. Run `npm i`.
-4. Run `npm start` or `node server.js`.
+3. Run `npm start` or `node server.js`.
+4. On first use, LVOVD downloads and SHA-256 verifies its project-local official yt-dlp binary; later starts reuse that verified cached copy.
 5. Open `http://127.0.0.1:3000`.
+
+LVOVD currently has no third-party Node runtime dependencies, so `npm install` is not required for normal development or use.
 
 Before submitting a change, run:
 
