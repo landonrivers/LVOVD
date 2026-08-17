@@ -168,6 +168,8 @@ There is no hosted LVOVD backend, account system, analytics service, advertising
 
 The source website still sees normal network requests from your connection, including information such as your public IP address. Your browser may also keep normal local history/download information depending on its own settings and extensions.
 
+**Preview also contacts the source:** it is LVOVD's compatibility/capability probe, not a local-only lookup. Download jobs are serialized so LVOVD does not run multiple remote acquisitions at once, and selected playlist items get a short randomized pause between them. If a source reports a request limit or rejects a download, LVOVD stops instead of automatically retrying through the batch. These safeguards reduce unnecessary request bursts, but they cannot guarantee that a source service will never throttle or reject your connection.
+
 LVOVD is **not** a VPN, proxy, Tor client, anonymity service, DRM bypass, or access-control bypass.
 
 The default server bind is `127.0.0.1`, meaning other computers on your network cannot connect unless you deliberately change `HOST`.
