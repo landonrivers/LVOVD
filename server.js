@@ -2,6 +2,14 @@
 
 const http = require('node:http');
 const { URL } = require('node:url');
+const {
+  activeBinaryPath,
+  ensureYtdlp
+} = require('./ytdlp-manager');
+
+const USER_YTDLP_OVERRIDE = Boolean(process.env.YTDLP_PATH);
+if (!USER_YTDLP_OVERRIDE) process.env.YTDLP_PATH = activeBinaryPath();
+
 const app = require('./app-server');
 
 const HOST = process.env.HOST || '127.0.0.1';
@@ -122,7 +130,24 @@ const server = http.createServer((req, res) => {
   app.server.emit('request', req, res);
 });
 
-if (require.main === module) {
+async function startServer() {
+  try {
+    console.log(USER_YTDLP_OVERRIDE
+      ? 'Checking configured yt-dlp executable...'
+      : 'Checking LVOVD-managed yt-dlp...');
+    const ytdlp = await ensureYtdlp({ respectEnvironment: USER_YTDLP_OVERRIDE });
+    process.env.YTDLP_PATH = ytdlp.path;
+    console.log(ytdlp.downloaded
+      ? `Downloaded and SHA-256 verified yt-dlp (${ytdlp.manifest?.channel || 'managed'} channel).`
+      : ytdlp.verified
+        ? 'Verified cached yt-dlp; no download was needed.'
+        : 'Using the yt-dlp executable supplied through YTDLP_PATH.');
+  } catch (error) {
+    console.error(`LVOVD could not prepare yt-dlp: ${error.message}`);
+    process.exitCode = 1;
+    return;
+  }
+
   server.listen(PORT, HOST, () => {
     console.log(`LVOVD running at http://${HOST}:${PORT}`);
     console.log(`Node ${process.version}`);
@@ -135,9 +160,14 @@ if (require.main === module) {
   });
 }
 
+if (require.main === module) {
+  startServer();
+}
+
 module.exports = {
   ...app,
   server,
+  startServer,
   security: {
     SECURITY_HEADERS,
     configuredAllowedHosts,
