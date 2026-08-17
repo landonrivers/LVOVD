@@ -1,6 +1,6 @@
 {
   "name": "lvovd",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "private": true,
   "description": "A Locally Hosted Video Downloader Which You'll Use Responsibly",
   "scripts": {
@@ -12,5 +12,5 @@
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }
