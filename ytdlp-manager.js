@@ -9,23 +9,25 @@ const { pipeline } = require('node:stream/promises');
 
 const ROOT = __dirname;
 const DEFAULT_CHANNEL = 'nightly';
-const CHANNELS = Object.freeze({
-  stable: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download',
-  nightly: 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download'
+const CHANNEL_REPOS = Object.freeze({
+  stable: 'yt-dlp/yt-dlp',
+  nightly: 'yt-dlp/yt-dlp-nightly-builds'
 });
 const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  'api.github.com',
   'github.com',
   'release-assets.githubusercontent.com',
   'objects.githubusercontent.com'
 ]);
 const MAX_REDIRECTS = 6;
 const MAX_BINARY_BYTES = 128 * 1024 * 1024;
+const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const CHECKSUM_FILENAME = 'SHA2-256SUMS';
 const MANIFEST_FILENAME = 'manifest.json';
 
 function normalizedChannel(value = process.env.LVOVD_YTDLP_CHANNEL || DEFAULT_CHANNEL) {
   const channel = String(value || '').trim().toLowerCase();
-  if (!CHANNELS[channel]) throw new Error(`Unsupported yt-dlp channel: ${value}`);
+  if (!CHANNEL_REPOS[channel]) throw new Error(`Unsupported yt-dlp channel: ${value}`);
   return channel;
 }
 
@@ -84,13 +86,13 @@ function assertAllowedUrl(value) {
 async function fetchWithRedirects(url, { fetchImpl = globalThis.fetch, maxRedirects = MAX_REDIRECTS } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('Node fetch API is unavailable. Node.js 22+ is required.');
   let current = assertAllowedUrl(url);
-  let releaseUrl = /\/releases\/download\//.test(current.pathname) && current.hostname === 'github.com' ? current.toString() : null;
   for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
     const response = await fetchImpl(current, {
       redirect: 'manual',
       headers: {
         'User-Agent': 'LVOVD yt-dlp manager',
-        Accept: 'application/octet-stream,*/*'
+        Accept: 'application/vnd.github+json,application/octet-stream,*/*',
+        'X-GitHub-Api-Version': '2022-11-28'
       }
     });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -98,20 +100,51 @@ async function fetchWithRedirects(url, { fetchImpl = globalThis.fetch, maxRedire
       const location = response.headers.get('location');
       if (!location) throw new Error('yt-dlp download redirect did not include a destination.');
       current = assertAllowedUrl(new URL(location, current));
-      if (current.hostname === 'github.com' && /\/releases\/download\//.test(current.pathname)) releaseUrl = current.toString();
       continue;
     }
     if (!response.ok) throw new Error(`yt-dlp download failed with HTTP ${response.status}.`);
-    return { response, finalUrl: current.toString(), releaseUrl };
+    return { response, finalUrl: current.toString() };
   }
   throw new Error('Too many redirects while downloading yt-dlp.');
 }
 
-async function fetchText(url, options = {}) {
-  const { response, finalUrl, releaseUrl } = await fetchWithRedirects(url, options);
+async function responseTextLimited(response, maxBytes, label) {
   const text = await response.text();
-  if (Buffer.byteLength(text) > 1024 * 1024) throw new Error('yt-dlp checksum file was unexpectedly large.');
-  return { text, finalUrl, releaseUrl };
+  if (Buffer.byteLength(text) > maxBytes) throw new Error(`${label} was unexpectedly large.`);
+  return text;
+}
+
+async function fetchText(url, options = {}) {
+  const { response, finalUrl } = await fetchWithRedirects(url, options);
+  const text = await responseTextLimited(response, MAX_METADATA_BYTES, 'yt-dlp metadata response');
+  return { text, finalUrl };
+}
+
+async function fetchLatestRelease(channel, { fetchImpl = globalThis.fetch } = {}) {
+  const selectedChannel = normalizedChannel(channel);
+  const repository = CHANNEL_REPOS[selectedChannel];
+  const apiUrl = `https://api.github.com/repos/${repository}/releases/latest`;
+  const { response } = await fetchWithRedirects(apiUrl, { fetchImpl });
+  const text = await responseTextLimited(response, MAX_METADATA_BYTES, 'yt-dlp release metadata');
+  let release;
+  try {
+    release = JSON.parse(text);
+  } catch {
+    throw new Error('GitHub returned unreadable yt-dlp release metadata.');
+  }
+  if (!release?.tag_name || !Array.isArray(release.assets)) {
+    throw new Error('GitHub returned incomplete yt-dlp release metadata.');
+  }
+  return { channel: selectedChannel, repository, release };
+}
+
+function releaseAsset(release, assetName) {
+  const asset = release?.assets?.find((candidate) => candidate?.name === assetName);
+  if (!asset?.browser_download_url) {
+    throw new Error(`Official yt-dlp release did not contain ${assetName}.`);
+  }
+  assertAllowedUrl(asset.browser_download_url);
+  return asset;
 }
 
 function parseChecksumFile(text, assetName) {
@@ -122,15 +155,9 @@ function parseChecksumFile(text, assetName) {
   throw new Error(`Official yt-dlp checksum file did not contain ${assetName}.`);
 }
 
-function exactReleaseAssetUrl(checksumFinalUrl, assetName) {
-  const url = assertAllowedUrl(checksumFinalUrl);
-  if (!url.pathname.endsWith(`/${CHECKSUM_FILENAME}`)) {
-    throw new Error('Could not determine the exact yt-dlp release from the checksum URL.');
-  }
-  url.pathname = `${url.pathname.slice(0, -CHECKSUM_FILENAME.length)}${assetName}`;
-  url.search = '';
-  url.hash = '';
-  return url.toString();
+function assetDigest(asset) {
+  const match = String(asset?.digest || '').match(/^sha256:([a-f0-9]{64})$/i);
+  return match ? match[1].toLowerCase() : null;
 }
 
 async function sha256File(filePath) {
@@ -218,31 +245,37 @@ async function installYtdlp({
   fetchImpl = globalThis.fetch
 } = {}) {
   const selectedChannel = normalizedChannel(channel);
-  const asset = platformAsset(platform, arch, musl);
+  const assetName = platformAsset(platform, arch, musl);
   const directory = managedDir(root);
   const binaryPath = managedBinaryPath({ root, platform, arch, musl });
-  const checksumUrl = `${CHANNELS[selectedChannel]}/${CHECKSUM_FILENAME}`;
   await fsp.mkdir(directory, { recursive: true });
 
-  const { text: sums, releaseUrl: checksumReleaseUrl } = await fetchText(checksumUrl, { fetchImpl });
-  if (!checksumReleaseUrl) throw new Error('Could not determine the exact yt-dlp release selected by GitHub.');
-  const expectedSha256 = parseChecksumFile(sums, asset);
-  const binaryUrl = exactReleaseAssetUrl(checksumReleaseUrl, asset);
-  const tempPath = path.join(directory, `.${asset}.${process.pid}.${Date.now()}.download`);
+  const { repository, release } = await fetchLatestRelease(selectedChannel, { fetchImpl });
+  const checksumAsset = releaseAsset(release, CHECKSUM_FILENAME);
+  const binaryAsset = releaseAsset(release, assetName);
+  const { text: sums } = await fetchText(checksumAsset.browser_download_url, { fetchImpl });
+  const expectedSha256 = parseChecksumFile(sums, assetName);
+  const githubDigest = assetDigest(binaryAsset);
+  if (githubDigest && githubDigest !== expectedSha256) {
+    throw new Error(`Official yt-dlp release metadata disagreed with ${CHECKSUM_FILENAME} for ${assetName}.`);
+  }
 
+  const tempPath = path.join(directory, `.${assetName}.${process.pid}.${Date.now()}.download`);
   try {
-    await downloadToFile(binaryUrl, tempPath, { fetchImpl });
+    await downloadToFile(binaryAsset.browser_download_url, tempPath, { fetchImpl });
     const actualSha256 = await sha256File(tempPath);
     if (actualSha256 !== expectedSha256) {
-      throw new Error(`yt-dlp checksum verification failed for ${asset}.`);
+      throw new Error(`yt-dlp checksum verification failed for ${assetName}.`);
     }
     if (platform !== 'win32') await fsp.chmod(tempPath, 0o755);
     await replaceFileAtomically(tempPath, binaryPath);
     const manifest = {
-      asset,
+      asset: assetName,
       channel: selectedChannel,
+      repository,
+      release: release.tag_name,
       sha256: expectedSha256,
-      source: binaryUrl,
+      source: binaryAsset.browser_download_url,
       verifiedAt: new Date().toISOString()
     };
     await fsp.writeFile(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -271,14 +304,15 @@ async function ensureYtdlp(options = {}) {
 
 module.exports = {
   ALLOWED_DOWNLOAD_HOSTS,
-  CHANNELS,
+  CHANNEL_REPOS,
   CHECKSUM_FILENAME,
   DEFAULT_CHANNEL,
   activeBinaryPath,
   assertAllowedUrl,
+  assetDigest,
   cachedBinaryStatus,
   ensureYtdlp,
-  exactReleaseAssetUrl,
+  fetchLatestRelease,
   fetchWithRedirects,
   installYtdlp,
   managedBinaryPath,
@@ -286,5 +320,6 @@ module.exports = {
   normalizedChannel,
   parseChecksumFile,
   platformAsset,
+  releaseAsset,
   sha256File
 };
