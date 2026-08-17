@@ -9,6 +9,7 @@ const { pipeline } = require('node:stream/promises');
 
 const ROOT = __dirname;
 const DEFAULT_CHANNEL = 'nightly';
+const DEFAULT_UPDATE_CHECK_MS = 24 * 60 * 60 * 1000;
 const CHANNEL_REPOS = Object.freeze({
   stable: 'yt-dlp/yt-dlp',
   nightly: 'yt-dlp/yt-dlp-nightly-builds'
@@ -200,6 +201,23 @@ async function readManifest(root = ROOT) {
   }
 }
 
+async function writeManifest(root, manifest) {
+  await fsp.mkdir(managedDir(root), { recursive: true });
+  await fsp.writeFile(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+}
+
+function updateCheckDue(manifest, {
+  channel = normalizedChannel(),
+  now = Date.now(),
+  maxAgeMs = DEFAULT_UPDATE_CHECK_MS
+} = {}) {
+  const selectedChannel = normalizedChannel(channel);
+  if (manifest?.channel !== selectedChannel || !manifest?.release) return true;
+  const checked = Date.parse(manifest.checkedAt || manifest.verifiedAt || '');
+  if (!Number.isFinite(checked)) return true;
+  return now - checked >= maxAgeMs;
+}
+
 async function cachedBinaryStatus({ root = ROOT, platform = process.platform, arch = process.arch, musl } = {}) {
   const binaryPath = managedBinaryPath({ root, platform, arch, musl });
   const manifest = await readManifest(root);
@@ -242,7 +260,9 @@ async function installYtdlp({
   platform = process.platform,
   arch = process.arch,
   musl,
-  fetchImpl = globalThis.fetch
+  fetchImpl = globalThis.fetch,
+  releaseInfo,
+  now = Date.now()
 } = {}) {
   const selectedChannel = normalizedChannel(channel);
   const assetName = platformAsset(platform, arch, musl);
@@ -250,7 +270,11 @@ async function installYtdlp({
   const binaryPath = managedBinaryPath({ root, platform, arch, musl });
   await fsp.mkdir(directory, { recursive: true });
 
-  const { repository, release } = await fetchLatestRelease(selectedChannel, { fetchImpl });
+  const latest = releaseInfo || await fetchLatestRelease(selectedChannel, { fetchImpl });
+  if (latest.channel !== selectedChannel) {
+    throw new Error('yt-dlp release metadata did not match the requested update channel.');
+  }
+  const { repository, release } = latest;
   const checksumAsset = releaseAsset(release, CHECKSUM_FILENAME);
   const binaryAsset = releaseAsset(release, assetName);
   const { text: sums } = await fetchText(checksumAsset.browser_download_url, { fetchImpl });
@@ -260,7 +284,7 @@ async function installYtdlp({
     throw new Error(`Official yt-dlp release metadata disagreed with ${CHECKSUM_FILENAME} for ${assetName}.`);
   }
 
-  const tempPath = path.join(directory, `.${assetName}.${process.pid}.${Date.now()}.download`);
+  const tempPath = path.join(directory, `.${assetName}.${process.pid}.${now}.download`);
   try {
     await downloadToFile(binaryAsset.browser_download_url, tempPath, { fetchImpl });
     const actualSha256 = await sha256File(tempPath);
@@ -269,6 +293,7 @@ async function installYtdlp({
     }
     if (platform !== 'win32') await fsp.chmod(tempPath, 0o755);
     await replaceFileAtomically(tempPath, binaryPath);
+    const timestamp = new Date(now).toISOString();
     const manifest = {
       asset: assetName,
       channel: selectedChannel,
@@ -276,9 +301,10 @@ async function installYtdlp({
       release: release.tag_name,
       sha256: expectedSha256,
       source: binaryAsset.browser_download_url,
-      verifiedAt: new Date().toISOString()
+      verifiedAt: timestamp,
+      checkedAt: timestamp
     };
-    await fsp.writeFile(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await writeManifest(root, manifest);
     return { path: binaryPath, downloaded: true, verified: true, manifest };
   } finally {
     await fsp.rm(tempPath, { force: true }).catch(() => {});
@@ -286,7 +312,12 @@ async function installYtdlp({
 }
 
 async function ensureYtdlp(options = {}) {
-  const { respectEnvironment = true, ...managerOptions } = options;
+  const {
+    respectEnvironment = true,
+    updateCheckMs = DEFAULT_UPDATE_CHECK_MS,
+    now = Date.now(),
+    ...managerOptions
+  } = options;
   if (respectEnvironment && process.env.YTDLP_PATH) {
     const override = path.resolve(process.env.YTDLP_PATH);
     await fsp.access(override, fs.constants.X_OK).catch(() => {
@@ -296,10 +327,69 @@ async function ensureYtdlp(options = {}) {
   }
 
   const status = await cachedBinaryStatus(managerOptions);
-  if (status.valid) {
-    return { path: status.binaryPath, downloaded: false, verified: true, manifest: status.manifest };
+  if (!status.valid) {
+    return installYtdlp({ ...managerOptions, now });
   }
-  return installYtdlp(managerOptions);
+
+  const selectedChannel = normalizedChannel(managerOptions.channel);
+  if (!updateCheckDue(status.manifest, {
+    channel: selectedChannel,
+    now,
+    maxAgeMs: updateCheckMs
+  })) {
+    return {
+      path: status.binaryPath,
+      downloaded: false,
+      verified: true,
+      manifest: status.manifest,
+      updateChecked: false
+    };
+  }
+
+  try {
+    const latest = await fetchLatestRelease(selectedChannel, { fetchImpl: managerOptions.fetchImpl });
+    if (status.manifest.channel === selectedChannel && status.manifest.release === latest.release.tag_name) {
+      const manifest = {
+        ...status.manifest,
+        channel: selectedChannel,
+        repository: latest.repository,
+        release: latest.release.tag_name,
+        checkedAt: new Date(now).toISOString()
+      };
+      await writeManifest(managerOptions.root || ROOT, manifest);
+      return {
+        path: status.binaryPath,
+        downloaded: false,
+        verified: true,
+        manifest,
+        updateChecked: true,
+        updateAvailable: false
+      };
+    }
+
+    const installed = await installYtdlp({
+      ...managerOptions,
+      channel: selectedChannel,
+      releaseInfo: latest,
+      now
+    });
+    return {
+      ...installed,
+      updated: true,
+      previousRelease: status.manifest.release || null,
+      updateChecked: true,
+      updateAvailable: true
+    };
+  } catch (error) {
+    return {
+      path: status.binaryPath,
+      downloaded: false,
+      verified: true,
+      manifest: status.manifest,
+      updateChecked: true,
+      updateCheckError: error.message
+    };
+  }
 }
 
 module.exports = {
@@ -307,6 +397,7 @@ module.exports = {
   CHANNEL_REPOS,
   CHECKSUM_FILENAME,
   DEFAULT_CHANNEL,
+  DEFAULT_UPDATE_CHECK_MS,
   activeBinaryPath,
   assertAllowedUrl,
   assetDigest,
@@ -321,5 +412,6 @@ module.exports = {
   parseChecksumFile,
   platformAsset,
   releaseAsset,
-  sha256File
+  sha256File,
+  updateCheckDue
 };
