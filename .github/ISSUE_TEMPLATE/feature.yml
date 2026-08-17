@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting an improvement. LVOVD is intentionally open to expansion, but please keep requests focused on responsible local media workflows.
+        Thanks for suggesting an improvement. LVOVD is intentionally open to expansion, but please keep requests focused on responsible local media workflows. **Do not include real media titles, media URLs, channel/account names, post/video IDs, screenshots, or other details that identify specific source content. Use generic or synthetic examples only.**
   - type: textarea
     id: problem
     attributes:
@@ -32,5 +32,7 @@ body:
     attributes:
       label: Responsible-use check
       options:
+        - label: This request does not identify specific source media or accounts through a real title, URL, ID, screenshot, or other identifying detail.
+          required: true
         - label: This request is not asking LVOVD to bypass DRM, authentication, paywalls, or other access controls.
           required: true
