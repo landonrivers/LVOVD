@@ -255,7 +255,9 @@ LVOVD was initially generated and iteratively developed with **ChatGPT by OpenAI
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+LVOVD v2.2.6 and later are licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+The `NOTICE` file preserves the project's origin attribution. Releases through **v2.2.5** remain available under the MIT License terms under which they were originally published; changing the license for later versions does not revoke those earlier grants.
 
 ## Acknowledgements
 
