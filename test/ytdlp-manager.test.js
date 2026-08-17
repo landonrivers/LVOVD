@@ -10,7 +10,7 @@ const {
   assertAllowedUrl,
   cachedBinaryStatus,
   ensureYtdlp,
-  exactReleaseAssetUrl,
+  installYtdlp,
   parseChecksumFile,
   platformAsset
 } = require('../ytdlp-manager');
@@ -32,17 +32,8 @@ test('checksum parser selects the exact requested asset', () => {
   assert.throws(() => parseChecksumFile(sums, 'missing'), /did not contain/);
 });
 
-test('exact release URL stays on the same official release tag', () => {
-  assert.equal(
-    exactReleaseAssetUrl(
-      'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag/SHA2-256SUMS',
-      'yt-dlp.exe'
-    ),
-    'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag/yt-dlp.exe'
-  );
-});
-
-test('download host policy rejects non-GitHub and non-HTTPS locations', () => {
+test('download host policy allows only expected GitHub HTTPS hosts', () => {
+  assert.equal(assertAllowedUrl('https://api.github.com/repos/example').hostname, 'api.github.com');
   assert.equal(assertAllowedUrl('https://github.com/example').hostname, 'github.com');
   assert.throws(() => assertAllowedUrl('http://github.com/example'), /HTTPS/);
   assert.throws(() => assertAllowedUrl('https://example.com/file'), /unexpected/);
@@ -82,25 +73,30 @@ test('a verified cached binary is reused without any network fetch', async () =>
   }
 });
 
-test('verified install pins the binary to the same release as the checksum file', async () => {
-  const { installYtdlp } = require('../ytdlp-manager');
+test('verified install uses one exact official release for metadata, checksum, and binary', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'lvovd-ytdlp-install-'));
   const binaryBytes = Buffer.from('official fake binary bytes');
   const digest = crypto.createHash('sha256').update(binaryBytes).digest('hex');
+  const releaseUrl = 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag';
+  const checksumUrl = `${releaseUrl}/SHA2-256SUMS`;
+  const binaryUrl = `${releaseUrl}/yt-dlp_linux`;
   const calls = [];
   const fetchImpl = async (input) => {
     const url = String(input);
     calls.push(url);
-    if (url.endsWith('/releases/latest/download/SHA2-256SUMS')) {
-      return new Response(null, {
-        status: 302,
-        headers: { location: 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag/SHA2-256SUMS' }
-      });
+    if (url === 'https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest') {
+      return new Response(JSON.stringify({
+        tag_name: 'test-tag',
+        assets: [
+          { name: 'SHA2-256SUMS', browser_download_url: checksumUrl },
+          { name: 'yt-dlp_linux', browser_download_url: binaryUrl, digest: `sha256:${digest}` }
+        ]
+      }), { status: 200 });
     }
-    if (url.endsWith('/releases/download/test-tag/SHA2-256SUMS')) {
+    if (url === checksumUrl) {
       return new Response(`${digest}  yt-dlp_linux\n`, { status: 200 });
     }
-    if (url.endsWith('/releases/download/test-tag/yt-dlp_linux')) {
+    if (url === binaryUrl) {
       return new Response(binaryBytes, { status: 200, headers: { 'content-length': String(binaryBytes.length) } });
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -117,10 +113,45 @@ test('verified install pins the binary to the same release as the checksum file'
     });
     assert.equal(result.verified, true);
     assert.equal(await fsp.readFile(result.path, 'utf8'), binaryBytes.toString());
-    assert.ok(calls.some((url) => url.endsWith('/releases/download/test-tag/yt-dlp_linux')));
+    assert.deepEqual(calls, [
+      'https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest',
+      checksumUrl,
+      binaryUrl
+    ]);
     const manifest = JSON.parse(await fsp.readFile(path.join(root, '.lvovd-bin', 'manifest.json'), 'utf8'));
     assert.equal(manifest.sha256, digest);
-    assert.equal(manifest.source, 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag/yt-dlp_linux');
+    assert.equal(manifest.release, 'test-tag');
+    assert.equal(manifest.source, binaryUrl);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('install fails closed if GitHub asset digest and published checksum disagree', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'lvovd-ytdlp-mismatch-'));
+  const expected = 'a'.repeat(64);
+  const apiUrl = 'https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest';
+  const checksumUrl = 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag/SHA2-256SUMS';
+  const binaryUrl = 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/test-tag/yt-dlp_linux';
+  const fetchImpl = async (input) => {
+    const url = String(input);
+    if (url === apiUrl) {
+      return new Response(JSON.stringify({
+        tag_name: 'test-tag',
+        assets: [
+          { name: 'SHA2-256SUMS', browser_download_url: checksumUrl },
+          { name: 'yt-dlp_linux', browser_download_url: binaryUrl, digest: `sha256:${'b'.repeat(64)}` }
+        ]
+      }), { status: 200 });
+    }
+    if (url === checksumUrl) return new Response(`${expected}  yt-dlp_linux\n`, { status: 200 });
+    throw new Error('binary should not be downloaded after metadata mismatch');
+  };
+  try {
+    await assert.rejects(
+      installYtdlp({ root, channel: 'nightly', platform: 'linux', arch: 'x64', musl: false, fetchImpl }),
+      /metadata disagreed/
+    );
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }
