@@ -22,6 +22,10 @@ Please keep the project local-first: media processing should happen on the user'
 
 When adding yt-dlp features or support for additional source services, prefer exposing understandable concepts in the UI rather than raw yt-dlp format IDs or command-line flags.
 
+## Licensing contributions
+
+LVOVD v2.2.6 and later are distributed under the **Apache License 2.0**. Unless you explicitly state otherwise, a contribution intentionally submitted for inclusion in LVOVD is provided under the Apache License 2.0 terms described in [LICENSE](LICENSE). Preserve the project attribution in [NOTICE](NOTICE) when redistributing derivative works as required by that license.
+
 ## Public source-example hygiene
 
 Do not include real media titles, media URLs, channel/account names, post/video IDs, or other identifiable source-content details in public issues, pull requests, commit messages, test fixtures, documentation, release notes, screenshots, or logs.
