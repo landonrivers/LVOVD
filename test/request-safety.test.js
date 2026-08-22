@@ -12,6 +12,7 @@ const {
   BATCH_DELAY_MIN_MS,
   BATCH_DELAY_MAX_MS,
   createSerialTaskQueue,
+  createSourceRequestCoordinator,
   courtesyDelayMs,
   classifyDownloadError
 } = require('../request-safety');
@@ -52,6 +53,52 @@ test('serial task queue never overlaps work and continues after a failed task', 
     'start:three', 'end:three'
   ]);
   assert.equal(queue.size, 0);
+});
+
+test('source request coordinator serializes previews with downloads and coalesces duplicate previews', async () => {
+  const coordinator = createSourceRequestCoordinator();
+  let active = 0;
+  let maxActive = 0;
+  let duplicateRuns = 0;
+  const order = [];
+
+  const work = (name) => async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    order.push(`start:${name}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    order.push(`end:${name}`);
+    active -= 1;
+    return name;
+  };
+
+  const firstPreview = coordinator.preview('https://video.example/watch/one', work('preview-one'));
+  const duplicatePreview = coordinator.preview('https://video.example/watch/one', async () => {
+    duplicateRuns += 1;
+    return 'duplicate';
+  });
+  const download = coordinator.download(work('download'));
+  const secondPreview = coordinator.preview('https://video.example/watch/two', work('preview-two'));
+
+  assert.strictEqual(firstPreview, duplicatePreview);
+  assert.equal(coordinator.size, 3);
+  assert.equal(await firstPreview, 'preview-one');
+  assert.equal(await duplicatePreview, 'preview-one');
+  assert.equal(await download, 'download');
+  assert.equal(await secondPreview, 'preview-two');
+  assert.equal(duplicateRuns, 0);
+  assert.equal(maxActive, 1);
+  assert.deepEqual(order, [
+    'start:preview-one', 'end:preview-one',
+    'start:download', 'end:download',
+    'start:preview-two', 'end:preview-two'
+  ]);
+  assert.equal(coordinator.size, 0);
+
+  assert.equal(
+    await coordinator.preview('https://video.example/watch/one', async () => 'preview-one-again'),
+    'preview-one-again'
+  );
 });
 
 test('429 is classified as a request limit while a bare 403 is not', () => {
