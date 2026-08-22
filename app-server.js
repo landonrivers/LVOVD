@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { URL } = require('node:url');
 const {
-  createSerialTaskQueue,
+  createSourceRequestCoordinator,
   courtesyDelayMs,
   wait,
   classifyDownloadError
@@ -24,7 +24,7 @@ const STALE_WORK_MS = 24 * 60 * 60 * 1000;
 const MAX_PLAYLIST_PREVIEW = 100;
 const MAX_PLAYLIST_SELECTION = 100;
 const jobs = new Map();
-const remoteDownloadQueue = createSerialTaskQueue();
+const remoteSourceRequests = createSourceRequestCoordinator();
 let ytdlpLoadError = null;
 
 const CONTENT_MODES = new Set(['av', 'video', 'audio', 'extras']);
@@ -1189,12 +1189,12 @@ async function startDownload(videoUrl, rawOptions, rawSelection) {
   const options = normalizeOptions(rawOptions);
   const selection = normalizeSelection(rawSelection);
   const id = crypto.randomUUID();
-  const waitingBehindAnotherJob = remoteDownloadQueue.size > 0;
+  const waitingBehindSourceWork = remoteSourceRequests.size > 0;
   const job = {
     id,
     status: 'queued',
     phase: 'queued',
-    message: waitingBehindAnotherJob ? 'Waiting for another download to finish…' : 'Queued…',
+    message: waitingBehindSourceWork ? 'Waiting for another source request to finish…' : 'Queued…',
     percent: null,
     downloadedBytes: null,
     totalBytes: null,
@@ -1215,7 +1215,7 @@ async function startDownload(videoUrl, rawOptions, rawSelection) {
   };
   jobs.set(id, job);
 
-  remoteDownloadQueue.enqueue(async () => {
+  remoteSourceRequests.download(async () => {
     if (jobs.get(job.id) !== job) return;
     try {
       await prepareDownloadJob(job, videoUrl, options, selection);
@@ -1325,7 +1325,8 @@ const server = http.createServer(async (req, res) => {
     const rawUrl = requestUrl.searchParams.get('url');
     try {
       const videoUrl = parseMediaUrl(rawUrl);
-      return json(res, 200, await fetchInfo(videoUrl));
+      const info = await remoteSourceRequests.preview(videoUrl, () => fetchInfo(videoUrl));
+      return json(res, 200, info);
     } catch (error) {
       let parsedUrl = rawUrl;
       try { parsedUrl = parseMediaUrl(rawUrl); } catch {}
