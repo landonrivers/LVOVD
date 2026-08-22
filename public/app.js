@@ -74,6 +74,12 @@ let currentInfo = null;
 let progressSource = null;
 let activeJobId = null;
 let autoDownloadStarted = false;
+const trackedJobs = new Map();
+const queueSources = new Map();
+const autoDownloadedQueueJobs = new Set();
+let queuePanel = null;
+let queueList = null;
+let queueSummary = null;
 
 function setStatus(message, kind = '') {
   status.textContent = message || '';
@@ -121,6 +127,228 @@ function formatDuration(seconds) {
   return h
     ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function ensureQueuePanel() {
+  if (queuePanel) return;
+  queuePanel = document.createElement('section');
+  queuePanel.className = 'download-progress';
+  queuePanel.hidden = true;
+
+  const head = document.createElement('div');
+  head.className = 'progress-head';
+  const heading = document.createElement('div');
+  const strong = document.createElement('strong');
+  strong.textContent = 'Download queue';
+  const help = document.createElement('span');
+  help.className = 'progress-item';
+  help.textContent = 'Remote downloads run one at a time.';
+  heading.append(strong, help);
+  queueSummary = document.createElement('span');
+  head.append(heading, queueSummary);
+
+  queueList = document.createElement('div');
+  queueList.className = 'output-list';
+  queueList.hidden = false;
+  queuePanel.append(head, queueList);
+  downloadButton.insertAdjacentElement('afterend', queuePanel);
+}
+
+function queueStateLabel(data = {}) {
+  if (data.status === 'cancelled') return 'Cancelled';
+  if (data.status === 'ready') return 'Ready';
+  if (data.status === 'error') return 'Failed';
+  if (data.status === 'running') {
+    if (data.phase === 'waiting') return 'Waiting';
+    if (data.phase === 'processing') return 'Processing';
+    return 'Downloading';
+  }
+  return 'Queued';
+}
+
+function triggerAutoDownload(jobId, url) {
+  if (!jobId || !url || autoDownloadedQueueJobs.has(jobId)) return;
+  autoDownloadedQueueJobs.add(jobId);
+  if (jobId === activeJobId) autoDownloadStarted = true;
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function queueDetails(data = {}) {
+  const details = [];
+  if (Number.isFinite(data.percent)) details.push(`${data.percent.toFixed(data.percent >= 10 ? 0 : 1)}%`);
+  if (Number.isFinite(data.downloadedBytes)) {
+    details.push(data.totalBytes
+      ? `${formatBytes(data.downloadedBytes)} / ${formatBytes(data.totalBytes)}`
+      : formatBytes(data.downloadedBytes));
+  }
+  if (Number.isFinite(data.speed)) details.push(formatSpeed(data.speed));
+  if (Number.isFinite(data.eta) && data.eta > 0) details.push(`ETA ${formatEta(data.eta)}`);
+  return details.join(' · ');
+}
+
+function closeQueueSource(jobId) {
+  const source = queueSources.get(jobId);
+  if (source) source.close();
+  queueSources.delete(jobId);
+}
+
+async function manageQueueJob(jobId) {
+  const job = trackedJobs.get(jobId);
+  if (!job) return;
+  const previousStatus = job.data?.status || 'queued';
+
+  if (previousStatus === 'cancelled') {
+    trackedJobs.delete(jobId);
+    renderQueue();
+    return;
+  }
+
+  closeQueueSource(jobId);
+  try {
+    await fetch(`/api/download/job?id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+  } catch {
+    setStatus('Could not contact LVOVD to update that queue item.', 'error');
+    return;
+  }
+
+  if (previousStatus === 'queued') {
+    trackedJobs.delete(jobId);
+    setStatus('Queued download removed.', 'success');
+  } else if (previousStatus === 'running') {
+    job.data = {
+      ...job.data,
+      status: 'cancelled',
+      phase: 'cancelled',
+      message: 'Cancelled by you.',
+      percent: null,
+      speed: null,
+      eta: null,
+      outputs: []
+    };
+    setStatus('Download cancelled.', 'success');
+  } else {
+    trackedJobs.delete(jobId);
+    setStatus('Queue item cleared.', 'success');
+  }
+
+  if (activeJobId === jobId) {
+    if (progressSource) progressSource.close();
+    progressSource = null;
+    activeJobId = null;
+    autoDownloadStarted = false;
+    progressPanel.hidden = true;
+  }
+  renderQueue();
+}
+
+function renderQueue() {
+  ensureQueuePanel();
+  queuePanel.hidden = trackedJobs.size === 0;
+  queueList.replaceChildren();
+  if (!trackedJobs.size) {
+    queueSummary.textContent = '';
+    return;
+  }
+
+  const jobs = [...trackedJobs.values()];
+  const activeCount = jobs.filter((job) => job.data?.status === 'running').length;
+  const queuedCount = jobs.filter((job) => !job.data?.status || job.data.status === 'queued').length;
+  queueSummary.textContent = [
+    activeCount ? `${activeCount} active` : '',
+    queuedCount ? `${queuedCount} queued` : ''
+  ].filter(Boolean).join(' · ') || `${jobs.length} item${jobs.length === 1 ? '' : 's'}`;
+
+  for (const job of jobs) {
+    const data = job.data || {};
+    const row = document.createElement('div');
+    row.className = 'output-row';
+
+    const copy = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = job.title || 'Media download';
+    const small = document.createElement('small');
+    const message = data.error || data.message || queueStateLabel(data);
+    const details = queueDetails(data);
+    small.textContent = `${queueStateLabel(data)}${message && message !== queueStateLabel(data) ? ` · ${message}` : ''}${details ? ` · ${details}` : ''}`;
+    copy.append(strong, small);
+
+    if (Number.isFinite(data.percent) || ['starting', 'processing'].includes(data.phase)) {
+      const track = document.createElement('div');
+      track.className = 'progress-track';
+      const bar = document.createElement('div');
+      bar.className = `progress-bar${!Number.isFinite(data.percent) ? ' indeterminate' : ''}`;
+      bar.style.width = Number.isFinite(data.percent) ? `${Math.max(0, Math.min(100, data.percent))}%` : '36%';
+      track.appendChild(bar);
+      copy.appendChild(track);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'inline-actions';
+    for (const output of data.outputs || []) {
+      const link = document.createElement('a');
+      link.className = 'button secondary mini';
+      link.href = output.downloadUrl;
+      link.textContent = output.kind === 'media' ? 'Download' : output.label || 'File';
+      actions.appendChild(link);
+    }
+
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'button secondary mini';
+    action.textContent = data.status === 'running'
+      ? 'Cancel'
+      : data.status === 'queued' || !data.status
+        ? 'Remove'
+        : data.status === 'cancelled'
+          ? 'Dismiss'
+          : 'Clear';
+    action.addEventListener('click', () => manageQueueJob(job.id));
+    actions.appendChild(action);
+
+    row.append(copy, actions);
+    queueList.appendChild(row);
+  }
+}
+
+function trackQueueJob(jobId, snapshot) {
+  const job = {
+    id: jobId,
+    ...snapshot,
+    data: {
+      id: jobId,
+      status: 'queued',
+      phase: 'queued',
+      message: 'Queued…',
+      outputs: []
+    }
+  };
+  trackedJobs.set(jobId, job);
+  renderQueue();
+
+  const source = new EventSource(`/api/download/progress?id=${encodeURIComponent(jobId)}`);
+  queueSources.set(jobId, source);
+  source.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      job.data = data;
+      renderQueue();
+      if (data.autoDownloadUrl) triggerAutoDownload(jobId, data.autoDownloadUrl);
+      if (data.status === 'ready' || data.status === 'error') closeQueueSource(jobId);
+    } catch {
+      setStatus('Received an unreadable queue update.', 'error');
+    }
+  };
+  source.onerror = () => {
+    if (!['ready', 'error', 'cancelled'].includes(job.data?.status)) {
+      job.connectionIssue = true;
+      renderQueue();
+    }
+  };
 }
 
 function setCheck(element, label, result) {
@@ -506,7 +734,6 @@ function updateOptionVisibility() {
 
 function setControlsDisabled(disabled) {
   downloadButton.disabled = disabled;
-  previewButton.disabled = disabled;
 }
 
 function renderOutputs(outputs) {
@@ -581,15 +808,7 @@ function renderProgress(data) {
     clearJobButton.hidden = false;
     setStatus(data.outputs?.length === 1 ? 'Ready.' : `${data.outputs?.length || 0} files are ready.`, 'success');
     setControlsDisabled(false);
-    if (data.autoDownloadUrl && !autoDownloadStarted) {
-      autoDownloadStarted = true;
-      const anchor = document.createElement('a');
-      anchor.href = data.autoDownloadUrl;
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    }
+    if (data.autoDownloadUrl) triggerAutoDownload(activeJobId, data.autoDownloadUrl);
     if (progressSource) progressSource.close();
   }
 }
@@ -653,10 +872,16 @@ async function startDownload() {
     return setStatus(error.message, 'error');
   }
 
+  const snapshot = {
+    title: currentInfo.title || (currentInfo.kind === 'playlist' ? 'Media collection' : 'Media download'),
+    url: currentUrl,
+    source: currentInfo.source?.name || currentInfo.source?.hostname || ''
+  };
+
   resetProgress();
   progressPanel.hidden = false;
   setControlsDisabled(true);
-  setStatus('Starting download…');
+  setStatus('Adding download to the queue…');
 
   try {
     const response = await fetch('/api/download/start', {
@@ -672,6 +897,7 @@ async function startDownload() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Could not start the download.');
     activeJobId = data.jobId;
+    trackQueueJob(data.jobId, snapshot);
     progressSource = new EventSource(`/api/download/progress?id=${encodeURIComponent(data.jobId)}`);
     progressSource.onmessage = (event) => {
       try {
@@ -683,6 +909,8 @@ async function startDownload() {
     progressSource.onerror = () => {
       if (!autoDownloadStarted) setStatus('Progress connection interrupted. The server may still be working.', 'error');
     };
+    setControlsDisabled(false);
+    setStatus('Added to the download queue. Downloads run one at a time.', 'success');
   } catch (error) {
     setStatus(error.message, 'error');
     progressStage.textContent = error.message;
@@ -692,9 +920,13 @@ async function startDownload() {
 
 async function clearActiveJob() {
   if (!activeJobId) return;
+  const jobId = activeJobId;
   try {
-    await fetch(`/api/download/job?id=${encodeURIComponent(activeJobId)}`, { method: 'DELETE' });
+    await fetch(`/api/download/job?id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
   } catch {}
+  closeQueueSource(jobId);
+  trackedJobs.delete(jobId);
+  renderQueue();
   resetProgress();
   setStatus('Prepared temporary files cleared.', 'success');
 }
