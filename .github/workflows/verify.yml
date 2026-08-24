@@ -1,6 +1,9 @@
 name: LVOVD Verify
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
   pull_request:
     branches:
@@ -15,7 +18,7 @@ permissions:
 
 jobs:
   verify:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -33,7 +36,7 @@ jobs:
         run: npm run check
 
   windows-launcher:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Windows launcher and yt-dlp manager
     runs-on: windows-latest
     timeout-minutes: 10
@@ -43,8 +46,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
+        uses:
           node-version: '24'
 
       - name: Verify Windows launcher and yt-dlp manager behavior
