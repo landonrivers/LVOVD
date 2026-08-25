@@ -181,7 +181,7 @@ LVOVD does not currently import browser cookies or your logged-in browser sessio
 
 ## Temporary files
 
-LVOVD prepares media under your operating system's temporary directory. Ready files remain available locally for about one hour while the server is running, and the UI provides **Clear prepared files now**. Stale LVOVD working directories are also cleaned on later starts.
+LVOVD prepares media inside a fresh, randomly named workspace under your operating system's temporary directory for each server run. Ready files remain available locally for about one hour while the server is running, and the UI provides **Clear prepared files now**. LVOVD cleans job files it still owns while the server is running. If the server stops before a job is cleaned—for example, because its terminal is closed—the operating system may retain that run's temporary folder until its normal temporary-file cleanup or manual removal.
 
 Large downloads may require enough free space for both intermediate and finished files.
 
