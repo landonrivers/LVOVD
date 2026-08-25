@@ -1,0 +1,87 @@
+name: Temporary HTTP containment transfer
+
+on:
+  push:
+    branches:
+      - agent/http-request-containment
+
+permissions:
+  contents: write
+
+jobs:
+  transfer:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/http-request-containment
+      - name: Reconstruct verified app-server edit
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import base64
+
+          path = Path('app-server.js')
+          text = path.read_text()
+
+          def replace_once(old, new):
+              global text
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one match, got {text.count(old)}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once("const http = require('node:http');\n", "")
+          replace_once("const remoteSourceRequests = createSourceRequestCoordinator();\nlet ytdlpLoadError = null;\n", "const remoteSourceRequests = createSourceRequestCoordinator();\n")
+          replace_once("""function resolveYtdlpPath() {
+  if (process.env.YTDLP_PATH) return process.env.YTDLP_PATH;
+  try {
+    const { YtDlp } = require('ytdlp-nodejs');
+    return new YtDlp().binaryPath || '';
+  } catch (error) {
+    ytdlpLoadError = error;
+    return '';
+  }
+}
+
+const YTDLP_PATH = resolveYtdlpPath();
+""", "const YTDLP_PATH = process.env.YTDLP_PATH || '';\n")
+          replace_once("""      reject(new Error(ytdlpLoadError
+        ? `yt-dlp npm dependency is not ready: ${ytdlpLoadError.message}`
+        : 'yt-dlp npm dependency is not ready. Run npm install.'));
+""", "      reject(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'));\n")
+          replace_once("""        fail(new Error(isYtdlp
+          ? 'The npm-managed yt-dlp binary is missing. Run npm install (or npm rebuild ytdlp-nodejs).'
+          : `${command} is not installed or is not on PATH.`));
+""", """        fail(new Error(isYtdlp
+          ? 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
+          : `${command} is not installed or is not on PATH.`));
+""")
+          replace_once("""      reject(error.code === 'ENOENT'
+        ? new Error('The npm-managed yt-dlp binary is missing. Run npm install (or npm rebuild ytdlp-nodejs).')
+        : error);
+""", """      reject(error.code === 'ENOENT'
+        ? new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.')
+        : error);
+""")
+          replace_once("if (!YTDLP_PATH) throw new Error('The npm-managed yt-dlp binary is not ready. Run npm install.');", "if (!YTDLP_PATH) throw new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.');")
+
+          anchor = "setInterval(() => cleanupExpiredJobs().catch(() => {}), 10 * 60 * 1000).unref();\n"
+          index = text.find(anchor)
+          if index == -1:
+              raise SystemExit('tail anchor not found')
+          tail = base64.b64decode('c2V0SW50ZXJ2YWwoKCkgPT4gY2xlYW51cEV4cGlyZWRKb2JzKCkuY2F0Y2goKCkgPT4ge30pLCAxMCAqIDYwICogMTAwMCkudW5yZWYoKTsKCmZ1bmN0aW9uIHN0cmVhbVByZXBhcmVkRmlsZShyZXMsIG91dHB1dCkgewogIHJldHVybiBuZXcgUHJvbWlzZSgocmVzb2x2ZSkgPT4gewogICAgbGV0IHNldHRsZWQgPSBmYWxzZTsKICAgIGNvbnN0IHN0cmVhbSA9IGZzLmNyZWF0ZVJlYWRTdHJlYW0ob3V0cHV0LmZpbGVQYXRoKTsKCiAgICBjb25zdCBmaW5pc2ggPSAoKSA9PiB7CiAgICAgIGlmIChzZXR0bGVkKSByZXR1cm47CiAgICAgIHNldHRsZWQgPSB0cnVlOwogICAgICByZXNvbHZlKCk7CiAgICB9OwoKICAgIHN0cmVhbS5vbmNlKCdlcnJvcicsIChlcnJvcikgPT4gewogICAgICBpZiAoc2V0dGxlZCkgcmV0dXJuOwogICAgICBmaW5pc2goKTsKICAgICAgaWYgKHJlcy5oZWFkZXJzU2VudCB8fCByZXMuZGVzdHJveWVkKSB7CiAgICAgICAgcmVzLmRlc3Ryb3koZXJyb3IpOwogICAgICAgIHJldHVybjsKICAgICAgfQogICAgICBpZiAoZXJyb3IuY29kZSA9PT0gJ0VOT0VOVCcpIHJldHVybiBqc29uKHJlcywgNDA0LCB7IGVycm9yOiAnVGhhdCBwcmVwYXJlZCBmaWxlIGhhcyBleHBpcmVkLicgfSk7CiAgICAgIHJldHVybiBqc29uKHJlcywgNTAwLCB7IGVycm9yOiAnQ291bGQgbm90IHJlYWQgdGhhdCBwcmVwYXJlZCBmaWxlLicgfSk7CiAgICB9KTsKCiAgICBzdHJlYW0ub25jZSgnb3BlbicsIChkZXNjcmlwdG9yKSA9PiB7CiAgICAgIGZzLmZzdGF0KGRlc2NyaXB0b3IsIChlcnJvciwgc3RhdCkgPT4gewogICAgICAgIGlmIChlcnJvciB8fCBzZXR0bGVkKSB7CiAgICAgICAgICBpZiAoIXNldHRsZWQpIHN0cmVhbS5kZXN0cm95KGVycm9yKTsKICAgICAgICAgIHJldHVybjsKICAgICAgICB9CgogICAgICAgIHJlcy53cml0ZUhlYWQoMjAwLCB7CiAgICAgICAgICAnQ29udGVudC1UeXBlJzogb3V0cHV0TWltZShvdXRwdXQuZmlsZW5hbWUpLAogICAgICAgICAgJ0NvbnRlbnQtTGVuZ3RoJzogc3RhdC5zaXplLAogICAgICAgICAgJ0NvbnRlbnQtRGlzcG9zaXRpb24nOiBjb250ZW50RGlzcG9zaXRpb24ob3V0cHV0LmZpbGVuYW1lKSwKICAgICAgICAgICdDYWNoZS1Db250cm9sJzogJ25vLXN0b3JlJywKICAgICAgICAgICdYLUNvbnRlbnQtVHlwZS1PcHRpb25zJzogJ25vc25pZmYnCiAgICAgICAgfSk7CgogICAgICAgIHJlcy5vbmNlKCdjbG9zZScsICgpID0+IHsKICAgICAgICAgIGlmICghc2V0dGxlZCkgc3RyZWFtLmRlc3Ryb3koKTsKICAgICAgICB9KTsKICAgICAgICBzdHJlYW0ub25jZSgnZW5kJywgZmluaXNoKTsKICAgICAgICBzdHJlYW0ucGlwZShyZXMpOwogICAgICB9KTsKICAgIH0pOwogIH0pOwp9Cgphc3luYyBmdW5jdGlvbiBoYW5kbGVSZXF1ZXN0KHJlcSwgcmVzKSB7CiAgbGV0IHJlcXVlc3RVcmw7CiAgdHJ5IHsKICAgIHJlcXVlc3RVcmwgPSBuZXcgVVJMKHJlcS51cmwsIGBodHRwOi8vJHtyZXEuaGVhZGVycy5ob3N0IHx8IGAke0hPU1R9OiR7UE9SVH1gfWApOwogIH0gY2F0Y2ggewogICAgcmV0dXJuIGpzb24ocmVzLCA0MDAsIHsgZXJyb3I6ICdJbnZhbGlkIHJlcXVlc3QgVVJMLicgfSk7CiAgfQoKICBpZiAocmVxLm1ldGhvZCA9PT0gJ0dFVCcgJiYgc2VydmVTdGF0aWMocmVxdWVzdFVybC5wYXRobmFtZSwgcmVzKSkgcmV0dXJuOwoKICBpZiAocmVxLm1ldGhvZCA9PT0gJ0dFVCcgJiYgcmVxdWVzdFVybC5wYXRobmFtZSA9PT0gJy9hcGkvaGVhbHRoJykgewogICAgY29uc3QgW3l0ZGxwLCBmZm1wZWddID0gYXdhaXQgUHJvbWlzZS5hbGwoWwogICAgICBjb21tYW5kVmVyc2lvbihZVERMUF9QQVRILCBbJy0tdmVyc2lvbiddKSwKICAgICAgY29tbWFuZFZlcnNpb24oJ2ZmbXBlZycsIFsnLXZlcnNpb24nXSkKICAgIF0pOwogICAgcmV0dXJuIGpzb24ocmVzLCAyMDAsIHsKICAgICAgbm9kZTogeyBpbnN0YWxsZWQ6IHRydWUsIHZlcnNpb246IHByb2Nlc3MudmVyc2lvbiB9LAogICAgICB5dGRscCwKICAgICAgZmZtcGVnLAogICAgICBsb2NhbE9ubHk6IEhPU1QgPT09ICcxMjcuMC4wLjEnIHx8IEhPU1QgPT09ICdsb2NhbGhvc3QnCiAgICB9KTsKICB9CgogIGlmIChyZXEubWV0aG9kID09PSAnR0VUJyAmJiByZXF1ZXN0VXJsLnBhdGhuYW1lID09PSAnL2FwaS9pbmZvJykgewogICAgY29uc3QgcmF3VXJsID0gcmVxdWVzdFVybC5zZWFyY2hQYXJhbXMuZ2V0KCd1cmwnKTsKICAgIHRyeSB7CiAgICAgIGNvbnN0IHZpZGVvVXJsID0gcGFyc2VNZWRpYVVybChyYXdVcmwpOwogICAgICBjb25zdCBpbmZvID0gYXdhaXQgcmVtb3RlU291cmNlUmVxdWVzdHMucHJldmlldyh2aWRlb1VybCwgKCkgPT4gZmV0Y2hJbmZvKHZpZGVvVXJsKSk7CiAgICAgIHJldHVybiBqc29uKHJlcywgMjAwLCBpbmZvKTsKICAgIH0gY2F0Y2ggKGVycm9yKSB7CiAgICAgIGxldCBwYXJzZWRVcmwgPSByYXdVcmw7CiAgICAgIHRyeSB7IHBhcnNlZFVybCA9IHBhcnNlTWVkaWFVcmwocmF3VXJsKTsgfSBjYXRjaCB7fQogICAgICByZXR1cm4ganNvbihyZXMsIDQwMCwgeyBlcnJvcjogZXJyb3IubWVzc2FnZSwgZGV0YWlsczogY2xhc3NpZnlQcmV2aWV3RXJyb3IoZXJyb3IsIHBhcnNlZFVybCkgfSk7CiAgICB9CiAgfQoKICBpZiAocmVxLm1ldGhvZCA9PT0gJ1BPU1QnICYmIHJlcXVlc3RVcmwucGF0aG5hbWUgPT09ICcvYXBpL2Rvd25sb2FkL3N0YXJ0JykgewogICAgdHJ5IHsKICAgICAgY29uc3QgYm9keSA9IGF3YWl0IHJlYWRKc29uQm9keShyZXEpOwogICAgICBjb25zdCB2aWRlb1VybCA9IHBhcnNlTWVkaWFVcmwoYm9keS51cmwpOwogICAgICBjb25zdCBqb2IgPSBhd2FpdCBzdGFydERvd25sb2FkKHZpZGVvVXJsLCBib2R5Lm9wdGlvbnMgfHwge30sIGJvZHkuc2VsZWN0aW9uIHx8IHt9KTsKICAgICAgcmV0dXJuIGpzb24ocmVzLCAyMDIsIHsgam9iSWQ6IGpvYi5pZCB9KTsKICAgIH0gY2F0Y2ggKGVycm9yKSB7CiAgICAgIHJldHVybiBqc29uKHJlcywgNDAwLCB7IGVycm9yOiBlcnJvci5tZXNzYWdlIH0pOwogICAgfQogIH0KCiAgaWYgKHJlcS5tZXRob2QgPT09ICdHRVQnICYmIHJlcXVlc3RVcmwucGF0aG5hbWUgPT09ICcvYXBpL2Rvd25sb2FkL3Byb2dyZXNzJykgewogICAgY29uc3Qgam9iID0gam9icy5nZXQocmVxdWVzdFVybC5zZWFyY2hQYXJhbXMuZ2V0KCdpZCcpKTsKICAgIGlmICgham9iKSByZXR1cm4ganNvbihyZXMsIDQwNCwgeyBlcnJvcjogJ0Rvd25sb2FkIGpvYiBub3QgZm91bmQgb3IgZXhwaXJlZC4nIH0pOwoKICAgIHJlcy53cml0ZUhlYWQoMjAwLCB7CiAgICAgICdDb250ZW50LVR5cGUnOiAndGV4dC9ldmVudC1zdHJlYW07IGNoYXJzZXQ9dXRmLTgnLAogICAgICAnQ2FjaGUtQ29udHJvbCc6ICduby1jYWNoZSwgbm8tdHJhbnNmb3JtJywKICAgICAgJ0Nvbm5lY3Rpb24nOiAna2VlcC1hbGl2ZScsCiAgICAgICdYLUFjY2VsLUJ1ZmZlcmluZyc6ICdubycKICAgIH0pOwogICAgcmVzLndyaXRlKGBkYXRhOiAke0pTT04uc3RyaW5naWZ5KHB1YmxpY0pvYihqb2IpKX1cblxuYCk7CiAgICBqb2IubGlzdGVuZXJzLmFkZChyZXMpOwogICAgY29uc3Qga2VlcEFsaXZlID0gc2V0SW50ZXJ2YWwoKCkgPT4gewogICAgICB0cnkgeyByZXMud3JpdGUoJzoga2VlcGFsaXZlXG5cbicpOyB9IGNhdGNoIHt9CiAgICB9LCAxNTAwMCk7CiAgICByZXEub24oJ2Nsb3NlJywgKCkgPT4gewogICAgICBjbGVhckludGVydmFsKGtlZXBBbGl2ZSk7CiAgICAgIGpvYi5saXN0ZW5lcnMuZGVsZXRlKHJlcyk7CiAgICB9KTsKICAgIHJldHVybjsKICB9CgogIGlmIChyZXEubWV0aG9kID09PSAnR0VUJyAmJiByZXF1ZXN0VXJsLnBhdGhuYW1lID09PSAnL2FwaS9kb3dubG9hZC9maWxlJykgewogICAgY29uc3Qgam9iID0gam9icy5nZXQocmVxdWVzdFVybC5zZWFyY2hQYXJhbXMuZ2V0KCdpZCcpKTsKICAgIGlmICgham9iIHx8IGpvYi5zdGF0dXMgIT09ICdyZWFkeScpIHJldHVybiBqc29uKHJlcywgNDA0LCB7IGVycm9yOiAnVGhlIHByZXBhcmVkIGZpbGVzIGFyZSBub3QgYXZhaWxhYmxlLicgfSk7CiAgICBjb25zdCBvdXRwdXQgPSBqb2Iub3V0cHV0cy5maW5kKChpdGVtKSA9PiBpdGVtLmlkID09PSByZXF1ZXN0VXJsLnNlYXJjaFBhcmFtcy5nZXQoJ2ZpbGUnKSk7CiAgICBpZiAoIW91dHB1dD8uZmlsZVBhdGgpIHJldHVybiBqc29uKHJlcywgNDA0LCB7IGVycm9yOiAnVGhhdCBwcmVwYXJlZCBmaWxlIGlzIG5vdCBhdmFpbGFibGUuJyB9KTsKICAgIHJldHVybiBzdHJlYW1QcmVwYXJlZEZpbGUocmVzLCBvdXRwdXQpOwogIH0KCiAgaWYgKHJlcS5tZXRob2QgPT09ICdERUxFVEUnICYmIHJlcXVlc3RVcmwucGF0aG5hbWUgPT09ICcvYXBpL2Rvd25sb2FkL2pvYicpIHsKICAgIGNvbnN0IGlkID0gcmVxdWVzdFVybC5zZWFyY2hQYXJhbXMuZ2V0KCdpZCcpOwogICAgY29uc3Qgam9iID0gam9icy5nZXQoaWQpOwogICAgaWYgKCFqb2IpIHJldHVybiBqc29uKHJlcywgNDA0LCB7IGVycm9yOiAnRG93bmxvYWQgam9iIG5vdCBmb3VuZCBvciBhbHJlYWR5IGNsZWFyZWQuJyB9KTsKICAgIGF3YWl0IGNsZWFudXBKb2Ioam9iKTsKICAgIGpvYnMuZGVsZXRlKGlkKTsKICAgIHJldHVybiBqc29uKHJlcywgMjAwLCB7IG9rOiB0cnVlIH0pOwogIH0KCiAgcmV0dXJuIGpzb24ocmVzLCA0MDQsIHsgZXJyb3I6ICdOb3QgZm91bmQuJyB9KTsKfQoKaWYgKHJlcXVpcmUubWFpbiA9PT0gbW9kdWxlKSB7CiAgY29uc29sZS5lcnJvcignYXBwLXNlcnZlci5qcyBpcyBhbiBpbnRlcm5hbCBMVk9WRCBtb2R1bGUuIFN0YXJ0IExWT1ZEIHdpdGggbm9kZSBzZXJ2ZXIuanMuJyk7CiAgcHJvY2Vzcy5leGl0Q29kZSA9IDE7Cn0KCm1vZHVsZS5leHBvcnRzID0gewogIGhhbmRsZVJlcXVlc3QsCiAgZmV0Y2hJbmZvLAogIGZldGNoUmF3SW5mbywKICBzb3VyY2VTdW1tYXJ5LAogIGNhcGFiaWxpdHlTdW1tYXJ5LAogIGNsYXNzaWZ5UHJldmlld0Vycm9yLAogIHBhcnNlTWVkaWFVcmwsCiAgbm9ybWFsaXplT3B0aW9ucywKICBub3JtYWxpemVTZWxlY3Rpb24sCiAgZm9ybWF0U2VsZWN0b3IsCiAgYnVpbGRZdGRscEFyZ3MsCiAgYXVkaW9Db252ZXJzaW9uQXJncywKICByZXNvbHZlVGFza3MsCiAgc3RhcnREb3dubG9hZCwKICBwdWJsaWNKb2IsCiAgY3JlYXRlUHJvY2Vzc1dvcmtSb290LAogIGNyZWF0ZUpvYldvcmtEaXIsCiAgc3RyZWFtUHJlcGFyZWRGaWxlLAogIGpvYnMKfTsK').decode()
+          text = text[:index] + tail
+          path.write_text(text)
+          PYCODE
+          actual="$(git hash-object app-server.js)"
+          test "$actual" = "6dd28159505d4ddddb1dc9f30ee78cce700062e6" || { echo "unexpected app-server blob: $actual"; exit 1; }
+      - name: Commit transfer result
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app-server.js
+          git commit -m "Temporary HTTP containment transfer"
+          git push origin HEAD:agent/http-request-containment
