@@ -16,15 +16,14 @@ const {
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const WORK_ROOT = path.join(os.tmpdir(), 'lvovd');
 const MAX_JSON_BYTES = 20 * 1024 * 1024;
 const MAX_BODY_BYTES = 128 * 1024;
 const JOB_TTL_MS = 60 * 60 * 1000;
-const STALE_WORK_MS = 24 * 60 * 60 * 1000;
 const MAX_PLAYLIST_PREVIEW = 100;
 const MAX_PLAYLIST_SELECTION = 100;
 const jobs = new Map();
 const remoteSourceRequests = createSourceRequestCoordinator();
+let processWorkRootPromise = null;
 let ytdlpLoadError = null;
 
 const CONTENT_MODES = new Set(['av', 'video', 'audio', 'extras']);
@@ -50,6 +49,24 @@ function resolveYtdlpPath() {
 
 const YTDLP_PATH = resolveYtdlpPath();
 const YTDLP_COMMON_ARGS = ['--js-runtimes', 'node', '--no-colors'];
+
+async function createProcessWorkRoot(tempDir = os.tmpdir()) {
+  return fsp.mkdtemp(path.join(tempDir, 'lvovd-run-'));
+}
+
+function getProcessWorkRoot() {
+  if (!processWorkRootPromise) {
+    processWorkRootPromise = createProcessWorkRoot().catch((error) => {
+      processWorkRootPromise = null;
+      throw error;
+    });
+  }
+  return processWorkRootPromise;
+}
+
+async function createJobWorkDir(workRoot) {
+  return fsp.mkdtemp(path.join(workRoot, 'job-'));
+}
 
 function json(res, status, value) {
   const body = JSON.stringify(value);
@@ -1144,8 +1161,8 @@ async function runTask(job, task, taskIndex, options) {
 
 async function prepareDownloadJob(job, videoUrl, options, selection) {
   if (!YTDLP_PATH) throw new Error('The npm-managed yt-dlp binary is not ready. Run npm install.');
-  await fsp.mkdir(WORK_ROOT, { recursive: true });
-  job.tempDir = await fsp.mkdtemp(path.join(WORK_ROOT, 'job-'));
+  const workRoot = await getProcessWorkRoot();
+  job.tempDir = await createJobWorkDir(workRoot);
 
   const tasks = await resolveTasks(videoUrl, options, selection);
   job.itemCount = tasks.length;
@@ -1287,21 +1304,7 @@ async function cleanupExpiredJobs() {
   }
 }
 
-async function cleanupStaleWork() {
-  await fsp.mkdir(WORK_ROOT, { recursive: true });
-  const entries = await fsp.readdir(WORK_ROOT, { withFileTypes: true });
-  const now = Date.now();
-  await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-    const full = path.join(WORK_ROOT, entry.name);
-    try {
-      const stat = await fsp.stat(full);
-      if (now - stat.mtimeMs > STALE_WORK_MS) await fsp.rm(full, { recursive: true, force: true });
-    } catch {}
-  }));
-}
-
 setInterval(() => cleanupExpiredJobs().catch(() => {}), 10 * 60 * 1000).unref();
-cleanupStaleWork().catch(() => {});
 
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
@@ -1429,5 +1432,7 @@ module.exports = {
   resolveTasks,
   startDownload,
   publicJob,
+  createProcessWorkRoot,
+  createJobWorkDir,
   jobs
 };
