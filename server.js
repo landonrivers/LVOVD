@@ -112,6 +112,17 @@ function rejectRequest(res, statusCode, message) {
   res.end(body);
 }
 
+
+function handleApplicationError(res, error) {
+  console.error('LVOVD application request failed:', error?.stack || error);
+  if (res.destroyed) return;
+  if (res.headersSent) {
+    res.destroy(error instanceof Error ? error : undefined);
+    return;
+  }
+  rejectRequest(res, 500, 'LVOVD could not complete that local request.');
+}
+
 const server = http.createServer((req, res) => {
   applySecurityHeaders(res);
 
@@ -127,7 +138,9 @@ const server = http.createServer((req, res) => {
     return rejectRequest(res, 403, 'LVOVD rejected an unexpected request origin.');
   }
 
-  app.server.emit('request', req, res);
+  Promise.resolve()
+    .then(() => app.handleRequest(req, res))
+    .catch((error) => handleApplicationError(res, error));
 });
 
 async function startServer() {
@@ -178,6 +191,7 @@ module.exports = {
   ...app,
   server,
   startServer,
+  handleApplicationError,
   security: {
     SECURITY_HEADERS,
     configuredAllowedHosts,
