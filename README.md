@@ -19,6 +19,7 @@ LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL, preview 
 - [Privacy and networking](#privacy-and-networking)
 - [Authentication and cookies](#authentication-and-cookies)
 - [Temporary files](#temporary-files)
+- [Download history](#download-history)
 - [yt-dlp binary management](#yt-dlp-binary-management)
 - [Manual start](#manual-start)
 - [Development](#development)
@@ -56,7 +57,7 @@ You can use Node.js's normal macOS installer instead if you prefer, but Homebrew
 The first command adds NodeSource's Node.js 24 LTS package repository. The second installs Node.js and FFmpeg:
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash
 sudo apt install -y nodejs ffmpeg
 ```
 
@@ -153,7 +154,7 @@ SponsorBlock is optional and off by default.
 
 LVOVD is **local-first, not anonymous**.
 
-Your browser connects to LVOVD on `127.0.0.1`. The browser displays the interface and receives the finished local file; **Node/yt-dlp running on your computer makes the outbound requests to the source website**.
+Your browser connects to LVOVD on `127.0.0.1`. The browser displays the interface and receives the finished local file; **Node/yt-dlp running on your computer makes the Preview and media-acquisition requests to the source website**.
 
 ```text
 Your browser
@@ -164,6 +165,8 @@ yt-dlp / FFmpeg
     ↓
 Source website / media CDN
 ```
+
+Preview artwork is a separate browser behavior: when yt-dlp (or a plugin) reports a thumbnail URL, LVOVD embeds that URL at runtime. The browser may therefore fetch the thumbnail directly from that source/CDN using its normal networking, cookie, and cache behavior. LVOVD does not proxy, persist, rehost, or add that Preview thumbnail to its download history.
 
 There is no hosted LVOVD backend, account system, analytics service, advertising service, or cloud database. Downloaded media is not uploaded to ChatGPT or OpenAI by LVOVD.
 
@@ -184,6 +187,24 @@ LVOVD does not currently import browser cookies or your logged-in browser sessio
 LVOVD prepares media inside a fresh, randomly named workspace under your operating system's temporary directory for each server run. Ready files remain available locally for about one hour while the server is running, and the UI provides **Clear prepared files now**. LVOVD cleans job files it still owns while the server is running. If the server stops before a job is cleaned—for example, because its terminal is closed—the operating system may retain that run's temporary folder until its normal temporary-file cleanup or manual removal.
 
 Large downloads may require enough free space for both intermediate and finished files.
+
+## Download history
+
+LVOVD keeps a small, versioned `history.json` file in the current user's local application-data directory. The persistence/API foundation records terminal **Ready**, **Failed**, and **Cancelled** jobs so useful metadata can survive a browser or server restart. A visible History panel and intentional **Use Again** workflow are the next UI slice; history does not silently start source requests or downloads.
+
+A history entry can include the source page URL (and selected playlist-item page URLs), normalized download choices, a bounded title/source label from Preview, output filename/type/size metadata, completion time, and failure information. It does **not** copy the media itself.
+
+LVOVD deliberately does not store temporary workspace paths, runtime `/api/download/file` links, yt-dlp internal media/CDN URLs, Preview thumbnail URLs, or active process/progress state in history. The browser still decides where its downloaded copy is saved, so LVOVD does not know or store that final path and does not currently provide **Open File/Open Folder** from history. Deleting history metadata does not delete files the browser saved elsewhere.
+
+Default history locations are:
+
+- **Windows:** `%LOCALAPPDATA%\LVOVD\history.json`
+- **macOS:** `~/Library/Application Support/LVOVD/history.json`
+- **Linux:** `$XDG_DATA_HOME/LVOVD/history.json`, or `~/.local/share/LVOVD/history.json` when `XDG_DATA_HOME` is not set
+
+Developers or portable/custom setups can override the data directory with `LVOVD_DATA_DIR`.
+
+History is supplementary bookkeeping. If it cannot be read or written, normal Preview/download behavior remains available, and a successful download is not turned into a failure merely because its history record could not be saved.
 
 ## yt-dlp binary management
 
@@ -236,7 +257,7 @@ npm run check
 npm start
 ```
 
-LVOVD uses Node.js 22+, plain HTML/CSS/JavaScript in `public/`, `server.js` as the localhost security gate, `app-server.js` for application/download logic, and `ytdlp-manager.js` for verified project-local yt-dlp binary management. `scripts/launch.js` is shared launcher plumbing behind the three OS-specific start files.
+LVOVD uses Node.js 22+, plain HTML/CSS/JavaScript in `public/`, `server.js` as the localhost security gate, `app-server.js` for application/download logic, `history-store.js` / `download-history.js` for local terminal-job history, and `ytdlp-manager.js` for verified project-local yt-dlp binary management. `scripts/launch.js` is shared launcher plumbing behind the three OS-specific start files.
 
 Useful environment variables:
 
@@ -245,6 +266,7 @@ PORT=3000
 HOST=127.0.0.1
 YTDLP_PATH=/optional/custom/path/to/yt-dlp
 LVOVD_YTDLP_CHANNEL=nightly
+LVOVD_DATA_DIR=/optional/local/data/path
 ```
 
 Keep `HOST=127.0.0.1` unless you intentionally want to change LVOVD's network exposure.

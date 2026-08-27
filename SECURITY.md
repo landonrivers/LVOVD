@@ -47,6 +47,22 @@ The verified executable and a small checksum manifest are cached in `.lvovd-bin/
 
 This checksum validation detects corruption and mismatched release assets, but it is not an independent chain of trust: both the executable and published checksum ultimately come from GitHub/yt-dlp release infrastructure. A user-supplied `YTDLP_PATH` override is outside LVOVD's managed verification because LVOVD cannot know which custom build the user intended.
 
+## Local history data
+
+LVOVD can keep a small durable download-history file in the current user's local application-data directory. History is local metadata, not a second copy of downloaded media and not telemetry.
+
+A history record can contain the source page URL (and selected playlist-item page URLs), the normalized download choices, bounded display title/source name, output filename/type/size metadata, terminal status, and failure details. Source URLs and titles can themselves be sensitive, so anyone with access to the user's local application-data files may be able to read this history.
+
+History deliberately does **not** persist:
+
+- LVOVD temporary workspace paths;
+- the browser's final download/save path, which LVOVD does not know;
+- yt-dlp internal media/CDN URLs or format URLs;
+- Preview thumbnail URLs;
+- active child-process, progress, or EventSource state.
+
+History read/write failures are isolated from the downloader. A corrupt or inaccessible history file may make the history API unavailable, but it must not prevent normal Preview/download operation or turn a successful media job into a failed one. Deleting a history record deletes only the metadata record; it does not delete files the browser saved elsewhere.
+
 ## Secrets and session data
 
 Do not commit `.env` files, npm credentials, exported browser cookies, HAR captures, private keys, or other session material. The repository `.gitignore` includes common patterns as a safety net, but contributors are still responsible for reviewing what they commit.

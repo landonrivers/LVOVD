@@ -12,6 +12,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 
+const HISTORY_DIR = path.join(os.tmpdir(), `lvovd-job-lifecycle-history-${process.pid}-${Date.now()}`);
+process.env.LVOVD_DATA_DIR = HISTORY_DIR;
+
 const realSpawn = childProcess.spawn;
 let spawnImpl = (...args) => realSpawn(...args);
 let spawnCount = 0;
@@ -26,8 +29,9 @@ test.afterEach(() => {
   spawnImpl = (...args) => realSpawn(...args);
 });
 
-test.after(() => {
+test.after(async () => {
   childProcess.spawn = realSpawn;
+  await fsp.rm(HISTORY_DIR, { recursive: true, force: true });
 });
 
 function createTrackedJob() {
@@ -36,7 +40,8 @@ function createTrackedJob() {
   return job;
 }
 
-function forgetJob(job) {
+async function forgetJob(job) {
+  if (job.historyPromise) await job.historyPromise;
   app.jobs.delete(job.id);
 }
 
@@ -82,7 +87,12 @@ async function waitUntil(predicate, label, timeoutMs = 2000) {
   }
 }
 
-test('queued cancellation is terminal before queued work begins', async (t) => {
+async function historyEntry(job) {
+  if (job.historyPromise) await job.historyPromise;
+  return (await app.historyStore.list()).find((item) => item.id === job.id) || null;
+}
+
+test('queued cancellation is terminal before queued work begins and is recorded locally', async (t) => {
   const job = createTrackedJob();
   t.after(() => forgetJob(job));
   const before = spawnCount;
@@ -101,6 +111,7 @@ test('queued cancellation is terminal before queued work begins', async (t) => {
   assert.equal(spawnCount, before);
   assert.equal(job.tempDir, null);
   assert.equal(job.status, 'cancelled');
+  assert.equal((await historyEntry(job))?.status, 'cancelled');
 });
 
 test('cancellation while workspace setup is pending cannot reach a source process', async (t) => {
@@ -271,7 +282,30 @@ test('chapter metadata probes are job-owned and cancellable before media acquisi
   assert.equal(job.tempDir, null);
 });
 
-test('failed all-or-nothing jobs clear deleted output descriptors', async (t) => {
+test('successful synthetic job reaches ready and records output metadata', async (t) => {
+  const job = createTrackedJob();
+  t.after(() => forgetJob(job));
+  spawnImpl = (_command, args) => createFakeChild({
+    onStart: () => writeTaskOutput(args, 'ready-item.mp4'),
+    autoCloseCode: 0
+  });
+
+  await app.runDownloadJob(
+    job,
+    'https://example.invalid/video',
+    app.normalizeOptions({ content: 'video', profile: 'maximum' }),
+    app.normalizeSelection({})
+  );
+
+  assert.equal(job.status, 'ready');
+  const stored = await historyEntry(job);
+  assert.equal(stored?.status, 'ready');
+  assert.equal(stored?.outputs.length, 1);
+  assert.equal(stored?.outputs[0].filename, 'ready-item.mp4');
+  assert.equal('filePath' in stored.outputs[0], false);
+});
+
+test('failed all-or-nothing jobs clear deleted output descriptors and record failure', async (t) => {
   const job = createTrackedJob();
   t.after(() => forgetJob(job));
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'lvovd-failed-job-'));
@@ -299,4 +333,5 @@ test('failed all-or-nothing jobs clear deleted output descriptors', async (t) =>
   assert.equal(job.autoDownloadUrl, null);
   assert.equal(job.tempDir, null);
   await assert.rejects(fsp.access(filePath));
+  assert.equal((await historyEntry(job))?.status, 'error');
 });
