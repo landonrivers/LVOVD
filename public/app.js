@@ -151,10 +151,11 @@ function ensureQueuePanel() {
   queueList.className = 'output-list';
   queueList.hidden = false;
   queuePanel.append(head, queueList);
-  downloadButton.insertAdjacentElement('afterend', queuePanel);
+  preview.insertAdjacentElement('afterend', queuePanel);
 }
 
 function queueStateLabel(data = {}) {
+  if (data.phase === 'cancelling') return 'Cancelling';
   if (data.status === 'cancelled') return 'Cancelled';
   if (data.status === 'ready') return 'Ready';
   if (data.status === 'error') return 'Failed';
@@ -197,53 +198,62 @@ function closeQueueSource(jobId) {
   queueSources.delete(jobId);
 }
 
+async function deleteServerJob(jobId) {
+  const response = await fetch(`/api/download/job?id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {}
+  if (!response.ok) throw new Error(data.error || 'LVOVD could not update that download job.');
+  return data;
+}
+
 async function manageQueueJob(jobId) {
   const job = trackedJobs.get(jobId);
   if (!job) return;
   const previousStatus = job.data?.status || 'queued';
 
-  if (previousStatus === 'cancelled') {
-    trackedJobs.delete(jobId);
+  let data;
+  try {
+    data = await deleteServerJob(jobId);
+  } catch (error) {
+    setStatus(error.message || 'Could not contact LVOVD to update that queue item.', 'error');
+    return;
+  }
+
+  if (data.job) job.data = data.job || job.data;
+
+  if (data.action === 'cancelling') {
+    setStatus('Cancelling download…');
+    if (activeJobId === jobId && data.job) renderProgress(data.job);
     renderQueue();
     return;
   }
 
-  closeQueueSource(jobId);
-  try {
-    await fetch(`/api/download/job?id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
-  } catch {
-    setStatus('Could not contact LVOVD to update that queue item.', 'error');
+  if (data.action === 'cancelled') {
+    if (previousStatus === 'queued') {
+      closeQueueSource(jobId);
+      trackedJobs.delete(jobId);
+      if (activeJobId === jobId) resetProgress();
+      setStatus('Queued download removed.', 'success');
+    } else {
+      setStatus('Download cancelled.', 'success');
+      if (activeJobId === jobId && data.job) renderProgress(data.job);
+    }
+    renderQueue();
     return;
   }
 
-  if (previousStatus === 'queued') {
+  if (data.action === 'cleared') {
+    closeQueueSource(jobId);
     trackedJobs.delete(jobId);
-    setStatus('Queued download removed.', 'success');
-  } else if (previousStatus === 'running') {
-    job.data = {
-      ...job.data,
-      status: 'cancelled',
-      phase: 'cancelled',
-      message: 'Cancelled by you.',
-      percent: null,
-      speed: null,
-      eta: null,
-      outputs: []
-    };
-    setStatus('Download cancelled.', 'success');
-  } else {
-    trackedJobs.delete(jobId);
-    setStatus('Queue item cleared.', 'success');
+    if (activeJobId === jobId) resetProgress();
+    setStatus(previousStatus === 'cancelled' ? 'Cancelled item dismissed.' : 'Queue item cleared.', 'success');
+    renderQueue();
+    return;
   }
 
-  if (activeJobId === jobId) {
-    if (progressSource) progressSource.close();
-    progressSource = null;
-    activeJobId = null;
-    autoDownloadStarted = false;
-    progressPanel.hidden = true;
-  }
-  renderQueue();
+  setStatus('LVOVD returned an unexpected job update.', 'error');
 }
 
 function renderQueue() {
@@ -300,13 +310,16 @@ function renderQueue() {
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'button secondary mini';
-    action.textContent = data.status === 'running'
-      ? 'Cancel'
-      : data.status === 'queued' || !data.status
-        ? 'Remove'
-        : data.status === 'cancelled'
-          ? 'Dismiss'
-          : 'Clear';
+    action.textContent = data.phase === 'cancelling'
+      ? 'Cancelling…'
+      : data.status === 'running'
+        ? 'Cancel'
+        : data.status === 'queued' || !data.status
+          ? 'Remove'
+          : data.status === 'cancelled'
+            ? 'Dismiss'
+            : 'Clear';
+    action.disabled = data.phase === 'cancelling';
     action.addEventListener('click', () => manageQueueJob(job.id));
     actions.appendChild(action);
 
@@ -338,7 +351,7 @@ function trackQueueJob(jobId, snapshot) {
       job.data = data;
       renderQueue();
       if (data.autoDownloadUrl) triggerAutoDownload(jobId, data.autoDownloadUrl);
-      if (data.status === 'ready' || data.status === 'error') closeQueueSource(jobId);
+      if (['ready', 'error', 'cancelled'].includes(data.status)) closeQueueSource(jobId);
     } catch {
       setStatus('Received an unreadable queue update.', 'error');
     }
@@ -793,6 +806,23 @@ function renderProgress(data) {
     setStage(stageReady, 'done');
   }
 
+  if (data.phase === 'cancelling') {
+    progressBar.classList.remove('indeterminate');
+    progressBar.style.width = '0%';
+  }
+
+  if (data.status === 'cancelled') {
+    setStatus('Download cancelled.', 'success');
+    progressStage.textContent = data.message || 'Cancelled by you.';
+    progressBar.classList.remove('indeterminate');
+    progressBar.style.width = '0%';
+    renderOutputs([]);
+    clearJobButton.hidden = true;
+    setControlsDisabled(false);
+    if (progressSource) progressSource.close();
+    return;
+  }
+
   if (data.status === 'error') {
     setStatus(data.error || 'Download failed.', 'error');
     progressStage.textContent = data.error || 'Download failed.';
@@ -922,8 +952,12 @@ async function clearActiveJob() {
   if (!activeJobId) return;
   const jobId = activeJobId;
   try {
-    await fetch(`/api/download/job?id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
-  } catch {}
+    const data = await deleteServerJob(jobId);
+    if (data.action !== 'cleared') throw new Error('LVOVD could not clear those prepared files yet.');
+  } catch (error) {
+    setStatus(error.message || 'Could not clear the prepared temporary files.', 'error');
+    return;
+  }
   closeQueueSource(jobId);
   trackedJobs.delete(jobId);
   renderQueue();
