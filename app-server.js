@@ -8,7 +8,6 @@ const { URL } = require('node:url');
 const {
   createSourceRequestCoordinator,
   courtesyDelayMs,
-  wait,
   classifyDownloadError
 } = require('./request-safety');
 
@@ -20,6 +19,7 @@ const MAX_BODY_BYTES = 128 * 1024;
 const JOB_TTL_MS = 60 * 60 * 1000;
 const MAX_PLAYLIST_PREVIEW = 100;
 const MAX_PLAYLIST_SELECTION = 100;
+const JOB_CANCELLED_CODE = 'LVOVD_JOB_CANCELLED';
 const jobs = new Map();
 const remoteSourceRequests = createSourceRequestCoordinator();
 let processWorkRootPromise = null;
@@ -53,6 +53,100 @@ function getProcessWorkRoot() {
 
 async function createJobWorkDir(workRoot) {
   return fsp.mkdtemp(path.join(workRoot, 'job-'));
+}
+
+function jobCancelledError() {
+  const error = new Error('Download cancelled.');
+  error.code = JOB_CANCELLED_CODE;
+  return error;
+}
+
+function isJobCancelled(job) {
+  return Boolean(job?.cancelRequested || job?.status === 'cancelled');
+}
+
+function throwIfJobCancelled(job) {
+  if (isJobCancelled(job)) throw jobCancelledError();
+}
+
+function waitForJob(job, ms) {
+  throwIfJobCancelled(job);
+  const delay = Math.max(0, Number(ms) || 0);
+  const signal = job?.abortController?.signal;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const onAbort = () => finish(() => reject(jobCancelledError()));
+
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    timer = setTimeout(() => finish(resolve), delay);
+  });
+}
+
+function finalizeCancelledJob(job) {
+  job.cancelRequested = true;
+  updateJob(job, {
+    status: 'cancelled',
+    phase: 'cancelled',
+    message: 'Cancelled by you.',
+    percent: null,
+    downloadedBytes: null,
+    totalBytes: null,
+    speed: null,
+    eta: null,
+    streamLabel: null,
+    outputs: [],
+    autoDownloadUrl: null,
+    error: null,
+    errorCategory: null
+  });
+}
+
+function requestJobCancellation(job) {
+  if (!job || !['queued', 'running'].includes(job.status)) return null;
+
+  job.cancelRequested = true;
+  if (job.abortController && !job.abortController.signal.aborted) {
+    job.abortController.abort();
+  }
+  if (job.child) {
+    try { job.child.kill(); } catch {}
+  }
+
+  if (!job.workActive) {
+    finalizeCancelledJob(job);
+    return 'cancelled';
+  }
+
+  updateJob(job, {
+    status: 'running',
+    phase: 'cancelling',
+    message: 'Cancelling…',
+    percent: null,
+    downloadedBytes: null,
+    totalBytes: null,
+    speed: null,
+    eta: null,
+    streamLabel: null,
+    outputs: [],
+    autoDownloadUrl: null,
+    error: null,
+    errorCategory: null
+  });
+  return 'cancelling';
 }
 
 function json(res, status, value) {
@@ -101,20 +195,38 @@ function safeMediaUrl(value) {
   }
 }
 
-function run(command, args, { maxBytes = 4 * 1024 * 1024 } = {}) {
+function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
   return new Promise((resolve, reject) => {
     if (!command) {
       reject(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'));
       return;
     }
 
-    const child = spawn(command, args, { windowsHide: true, shell: false });
+    try {
+      if (job) throwIfJobCancelled(job);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    let child;
+    try {
+      child = spawn(command, args, { windowsHide: true, shell: false });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    if (job) job.child = child;
+
     const stdout = [];
     const stderr = [];
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
 
+    const clearJobChild = () => {
+      if (job?.child === child) job.child = null;
+    };
     const fail = (error) => {
       if (settled) return;
       settled = true;
@@ -134,6 +246,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024 } = {}) {
     });
 
     child.on('error', (error) => {
+      clearJobChild();
       if (error.code === 'ENOENT') {
         const isYtdlp = command === YTDLP_PATH;
         fail(new Error(isYtdlp
@@ -145,6 +258,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024 } = {}) {
     });
 
     child.on('close', (code) => {
+      clearJobChild();
       if (settled) return;
       settled = true;
       const out = Buffer.concat(stdout).toString('utf8').trim();
@@ -487,7 +601,7 @@ function normalizePlaylistEntry(entry, index) {
   };
 }
 
-async function fetchRawInfo(videoUrl, { playlist = true } = {}) {
+async function fetchRawInfo(videoUrl, { playlist = true, job = null } = {}) {
   const args = [
     ...YTDLP_COMMON_ARGS,
     '--dump-single-json',
@@ -502,7 +616,7 @@ async function fetchRawInfo(videoUrl, { playlist = true } = {}) {
   }
   args.push(videoUrl);
 
-  const { stdout } = await run(YTDLP_PATH, args, { maxBytes: MAX_JSON_BYTES });
+  const { stdout } = await run(YTDLP_PATH, args, { maxBytes: MAX_JSON_BYTES, job });
   try {
     return JSON.parse(stdout);
   } catch {
@@ -741,7 +855,7 @@ function buildYtdlpArgs(task, options, outputTemplate, progressTemplate) {
   return args;
 }
 
-async function resolveTasks(videoUrl, options, selection) {
+async function resolveTasks(videoUrl, options, selection, job = null) {
   let tasks;
   if (selection.entryUrls.length) {
     if (options.range.type !== 'full') throw new Error('Custom ranges and chapter selection are available for single videos, not playlist batches.');
@@ -759,7 +873,7 @@ async function resolveTasks(videoUrl, options, selection) {
   }
 
   if (options.range.type === 'chapters') {
-    const info = await fetchRawInfo(videoUrl, { playlist: false });
+    const info = await fetchRawInfo(videoUrl, { playlist: false, job });
     const chapters = chapterSummary(info);
     tasks = options.range.chapterIndexes.map((chapterIndex) => {
       const chapter = chapters.find((item) => item.index === chapterIndex);
@@ -879,7 +993,9 @@ async function findDownloadedMediaFile(taskDir) {
 }
 
 async function convertDownloadedAudio(job, taskDir, format) {
+  throwIfJobCancelled(job);
   const sourcePath = await findDownloadedMediaFile(taskDir);
+  throwIfJobCancelled(job);
   const sourceExt = path.extname(sourcePath);
   const stem = path.basename(sourcePath, sourceExt);
   const finalPath = path.join(path.dirname(sourcePath), `${stem}.${format}`);
@@ -902,6 +1018,7 @@ async function convertDownloadedAudio(job, taskDir, format) {
     eta: null
   });
 
+  throwIfJobCancelled(job);
   await new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', audioConversionArgs(sourcePath, tempPath, format), {
       windowsHide: true,
@@ -917,23 +1034,27 @@ async function convertDownloadedAudio(job, taskDir, format) {
     });
 
     child.on('error', (error) => {
-      job.child = null;
+      if (job.child === child) job.child = null;
       reject(error.code === 'ENOENT'
         ? new Error('FFmpeg is not installed or is not on PATH.')
         : error);
     });
 
     child.on('close', (code) => {
-      job.child = null;
+      if (job.child === child) job.child = null;
       if (code === 0) return resolve();
       const detail = Buffer.concat(stderr).toString('utf8').trim().split(/\r?\n/).filter(Boolean).slice(-1)[0];
       reject(new Error(detail || `FFmpeg audio conversion exited with code ${code}.`));
     });
   });
 
+  throwIfJobCancelled(job);
   await fsp.rm(sourcePath, { force: true });
+  throwIfJobCancelled(job);
   if (finalPath !== sourcePath) await fsp.rm(finalPath, { force: true });
+  throwIfJobCancelled(job);
   await fsp.rename(tempPath, finalPath);
+  throwIfJobCancelled(job);
   return finalPath;
 }
 
@@ -1018,6 +1139,8 @@ function emitJob(job) {
 }
 
 function updateJob(job, patch) {
+  const cancellationUpdate = patch.status === 'cancelled' || patch.phase === 'cancelling';
+  if (job.cancelRequested && !cancellationUpdate) return;
   Object.assign(job, patch, { updatedAt: Date.now() });
   emitJob(job);
 }
@@ -1035,8 +1158,10 @@ function processingMessage(line) {
 }
 
 async function runTask(job, task, taskIndex, options) {
+  throwIfJobCancelled(job);
   const taskDir = path.join(job.tempDir, `item-${String(taskIndex + 1).padStart(3, '0')}`);
   await fsp.mkdir(taskDir, { recursive: true });
+  throwIfJobCancelled(job);
   const outputTemplate = path.join(taskDir, '%(title).180B [%(id)s].%(ext)s');
   const progressTemplate = 'download:__YTDLP_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s|%(info.vcodec)s|%(info.acodec)s|%(progress._percent_str)s';
   const args = buildYtdlpArgs(task, options, outputTemplate, progressTemplate);
@@ -1056,6 +1181,7 @@ async function runTask(job, task, taskIndex, options) {
     streamLabel: null
   });
 
+  throwIfJobCancelled(job);
   await new Promise((resolve, reject) => {
     const child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
     job.child = child;
@@ -1116,6 +1242,7 @@ async function runTask(job, task, taskIndex, options) {
     child.stderr.on('data', (chunk) => stderrReader.push(chunk));
 
     child.on('error', (error) => {
+      if (job.child === child) job.child = null;
       reject(error.code === 'ENOENT'
         ? new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.')
         : error);
@@ -1124,7 +1251,7 @@ async function runTask(job, task, taskIndex, options) {
     child.on('close', (code) => {
       stdoutReader.flush();
       stderrReader.flush();
-      job.child = null;
+      if (job.child === child) job.child = null;
       if (code === 0) return resolve();
       const compatibilityFailure = options.profile === 'compatible' && /requested format|format.*not available/i.test(lastErrorLine);
       const failure = new Error(compatibilityFailure
@@ -1135,24 +1262,32 @@ async function runTask(job, task, taskIndex, options) {
     });
   });
 
+  throwIfJobCancelled(job);
   if (options.content === 'audio' && options.audioFormat !== 'source') {
     await convertDownloadedAudio(job, taskDir, options.audioFormat);
   }
 
+  throwIfJobCancelled(job);
   const outputs = await collectTaskOutputs(taskDir, task.label);
+  throwIfJobCancelled(job);
   if (!outputs.length) throw new Error('yt-dlp completed but did not produce a downloadable file.');
   job.outputs.push(...outputs);
 }
 
 async function prepareDownloadJob(job, videoUrl, options, selection) {
+  throwIfJobCancelled(job);
   if (!YTDLP_PATH) throw new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.');
   const workRoot = await getProcessWorkRoot();
+  throwIfJobCancelled(job);
   job.tempDir = await createJobWorkDir(workRoot);
+  throwIfJobCancelled(job);
 
-  const tasks = await resolveTasks(videoUrl, options, selection);
+  const tasks = await resolveTasks(videoUrl, options, selection, job);
+  throwIfJobCancelled(job);
   job.itemCount = tasks.length;
 
   for (let i = 0; i < tasks.length; i += 1) {
+    throwIfJobCancelled(job);
     if (i > 0) {
       const delayMs = courtesyDelayMs();
       updateJob(job, {
@@ -1164,16 +1299,20 @@ async function prepareDownloadJob(job, videoUrl, options, selection) {
         speed: null,
         eta: Math.ceil(delayMs / 1000)
       });
-      await wait(delayMs);
+      await waitForJob(job, delayMs);
+      throwIfJobCancelled(job);
     }
     await runTask(job, tasks[i], i, options);
+    throwIfJobCancelled(job);
   }
 
+  throwIfJobCancelled(job);
   const mediaOutputs = job.outputs.filter((output) => output.kind === 'media');
   job.autoDownloadUrl = job.outputs.length === 1 && mediaOutputs.length === 1
     ? `/api/download/file?id=${encodeURIComponent(job.id)}&file=${encodeURIComponent(mediaOutputs[0].id)}`
     : null;
 
+  throwIfJobCancelled(job);
   updateJob(job, {
     status: 'ready',
     phase: 'ready',
@@ -1187,13 +1326,9 @@ async function prepareDownloadJob(job, videoUrl, options, selection) {
   });
 }
 
-async function startDownload(videoUrl, rawOptions, rawSelection) {
-  const options = normalizeOptions(rawOptions);
-  const selection = normalizeSelection(rawSelection);
-  const id = crypto.randomUUID();
-  const waitingBehindSourceWork = remoteSourceRequests.size > 0;
-  const job = {
-    id,
+function createDownloadJob(waitingBehindSourceWork = false) {
+  return {
+    id: crypto.randomUUID(),
     status: 'queued',
     phase: 'queued',
     message: waitingBehindSourceWork ? 'Waiting for another source request to finish…' : 'Queued…',
@@ -1212,37 +1347,80 @@ async function startDownload(videoUrl, rawOptions, rawSelection) {
     listeners: new Set(),
     tempDir: null,
     child: null,
+    cancelRequested: false,
+    workActive: false,
+    abortController: new AbortController(),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
-  jobs.set(id, job);
+}
 
-  remoteSourceRequests.download(async () => {
-    if (jobs.get(job.id) !== job) return;
-    try {
-      await prepareDownloadJob(job, videoUrl, options, selection);
-    } catch (error) {
-      if (job.tempDir) await fsp.rm(job.tempDir, { recursive: true, force: true }).catch(() => {});
-      job.tempDir = null;
-      const classified = classifyDownloadError(error);
-      updateJob(job, {
-        status: 'error',
-        phase: 'error',
-        message: classified.category === 'rate_limited'
-          ? 'The source is limiting requests.'
-          : classified.category === 'access_rejected'
-            ? 'The source rejected the download request.'
-            : classified.category === 'extra_rejected'
-              ? 'The selected extra could not be downloaded.'
-              : 'Download failed.',
-        error: classified.userMessage,
-        errorCategory: classified.category,
-        percent: null,
-        speed: null,
-        eta: null
-      });
-    }
-  }).catch(() => {});
+async function cleanupJob(job) {
+  if (job.child) {
+    try { job.child.kill(); } catch {}
+    job.child = null;
+  }
+  if (job.tempDir) await fsp.rm(job.tempDir, { recursive: true, force: true }).catch(() => {});
+  job.tempDir = null;
+  job.outputs = [];
+  job.autoDownloadUrl = null;
+}
+
+function finalizeDownloadFailure(job, error) {
+  const classified = classifyDownloadError(error);
+  updateJob(job, {
+    status: 'error',
+    phase: 'error',
+    message: classified.category === 'rate_limited'
+      ? 'The source is limiting requests.'
+      : classified.category === 'access_rejected'
+        ? 'The source rejected the download request.'
+        : classified.category === 'extra_rejected'
+          ? 'The selected extra could not be downloaded.'
+          : 'Download failed.',
+    error: classified.userMessage,
+    errorCategory: classified.category,
+    percent: null,
+    downloadedBytes: null,
+    totalBytes: null,
+    speed: null,
+    eta: null,
+    streamLabel: null,
+    outputs: [],
+    autoDownloadUrl: null
+  });
+}
+
+async function settleDownloadFailure(job, error) {
+  await cleanupJob(job);
+  if (job.cancelRequested || error?.code === JOB_CANCELLED_CODE) {
+    finalizeCancelledJob(job);
+    return 'cancelled';
+  }
+  finalizeDownloadFailure(job, error);
+  return 'error';
+}
+
+async function runDownloadJob(job, videoUrl, options, selection) {
+  if (jobs.get(job.id) !== job || isJobCancelled(job)) return;
+  job.workActive = true;
+  try {
+    await prepareDownloadJob(job, videoUrl, options, selection);
+  } catch (error) {
+    await settleDownloadFailure(job, error);
+  } finally {
+    job.workActive = false;
+  }
+}
+
+async function startDownload(videoUrl, rawOptions, rawSelection) {
+  const options = normalizeOptions(rawOptions);
+  const selection = normalizeSelection(rawSelection);
+  const waitingBehindSourceWork = remoteSourceRequests.size > 0;
+  const job = createDownloadJob(waitingBehindSourceWork);
+  jobs.set(job.id, job);
+
+  remoteSourceRequests.download(() => runDownloadJob(job, videoUrl, options, selection)).catch(() => {});
 
   return job;
 }
@@ -1267,16 +1445,6 @@ function serveStatic(reqPath, res) {
     res.end(data);
   });
   return true;
-}
-
-async function cleanupJob(job) {
-  if (job.child) {
-    try { job.child.kill(); } catch {}
-    job.child = null;
-  }
-  if (job.tempDir) await fsp.rm(job.tempDir, { recursive: true, force: true }).catch(() => {});
-  job.tempDir = null;
-  job.outputs = [];
 }
 
 async function cleanupExpiredJobs() {
@@ -1419,9 +1587,15 @@ async function handleRequest(req, res) {
     const id = requestUrl.searchParams.get('id');
     const job = jobs.get(id);
     if (!job) return json(res, 404, { error: 'Download job not found or already cleared.' });
+
+    if (job.status === 'queued' || job.status === 'running') {
+      const action = requestJobCancellation(job);
+      return json(res, 200, { ok: true, action, job: publicJob(job) });
+    }
+
     await cleanupJob(job);
     jobs.delete(id);
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true, action: 'cleared' });
   }
 
   return json(res, 404, { error: 'Not found.' });
@@ -1450,6 +1624,14 @@ module.exports = {
   publicJob,
   createProcessWorkRoot,
   createJobWorkDir,
+  createDownloadJob,
+  requestJobCancellation,
+  finalizeCancelledJob,
+  waitForJob,
+  updateJob,
+  cleanupJob,
+  settleDownloadFailure,
+  runDownloadJob,
   streamPreparedFile,
   jobs
 };
