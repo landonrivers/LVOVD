@@ -14,7 +14,9 @@ LVOVD currently provides:
 - Source Audio plus local FFmpeg conversion to M4A/AAC, MP3, Opus, FLAC, and WAV;
 - resolution limits, custom ranges, chapters, playlists, subtitles/captions, thumbnails, metadata, and optional SponsorBlock integration;
 - real download progress, speed, ETA, and processing stages;
-- serialized remote download jobs and randomized courtesy pauses between selected playlist items;
+- coordinated Preview/download source work with serialized remote acquisition;
+- a visible queue with authoritative queued/running/ready/error/cancelled job state and cancellation;
+- randomized courtesy pauses between selected playlist items;
 - stop-on-rejection behavior instead of aggressive automatic retries;
 - a project-managed, SHA-256-verified yt-dlp executable with bounded update checks;
 - cross-platform launchers for Windows, macOS, and Linux;
@@ -22,43 +24,50 @@ LVOVD currently provides:
 
 ## Near term — Safety and application workflow
 
-### 1. Source-request coordination
+### 1. Source-request coordination — completed
 
-Audit every path that contacts a source service, including Preview, and make the request model consistent.
+LVOVD now coordinates application-controlled Preview and download work through one source-request coordinator.
 
-Goals:
+Established behavior:
 
-- prevent LVOVD-controlled Preview/download work from creating avoidable concurrent source traffic;
-- prevent accidental repeated Preview requests from becoming a request burst;
-- preserve the current one-at-a-time remote acquisition model;
+- avoid LVOVD-controlled Preview/download overlap and accidental duplicate Preview bursts;
+- preserve the one-at-a-time remote acquisition model;
 - keep strong rate-limit/rejection signals fail-closed rather than adding retry storms;
-- distinguish application-level pacing from yt-dlp's own internal requests and avoid claiming a universal "safe" request rate.
+- distinguish application-level pacing from yt-dlp's own internal requests rather than claiming a universal "safe" request rate.
 
-### 2. Download queue and cancellation
+### 2. Download queue and cancellation — completed
 
-Add a visible queue without introducing parallel remote downloads.
+LVOVD now has a visible session queue without parallel remote downloads, plus server-authoritative cancellation.
 
-Goals:
+Established behavior:
 
-- allow multiple intended downloads to be lined up;
-- keep only one remote acquisition active at a time;
-- allow queued jobs to be removed and active jobs to be cancelled safely;
-- make queued, active, processing, completed, failed, and cancelled states clear;
-- avoid automatic retry behavior that could amplify source-side rejection.
+- multiple intended downloads can be lined up;
+- only one remote acquisition runs at a time;
+- queued jobs can be removed and active jobs can be cancelled;
+- cancellation owns the relevant yt-dlp/FFmpeg child and aborts playlist courtesy waits;
+- accepted cancellation cannot later become Ready or ordinary Failed;
+- queued, active, processing, completed, failed, cancelling, and cancelled states are explicit;
+- no automatic retry behavior amplifies a source-side rejection.
 
-### 3. Durable local download history
+### 3. Durable local download history — active
 
 Keep useful local records after temporary prepared files expire.
 
+The persistence foundation records terminal Ready, Failed, and Cancelled jobs in a versioned local JSON store. It retains source page/item URLs, normalized request choices, display metadata, output metadata, and failure details while deliberately excluding temporary paths, runtime download URLs, yt-dlp internal media/CDN URLs, thumbnails, and process/progress state.
+
+The next bounded slice should add the visible History UI and intentional reuse workflow.
+
 Goals:
 
-- record completed, failed, and cancelled downloads locally;
-- show useful details such as title, source URL, mode, output, time, and failure state;
-- provide Open File/Open Folder where the output still exists;
-- support intentional re-download without silently starting one;
-- provide clear history deletion/cleanup controls.
+- show useful details such as title, source URL, mode, output metadata, time, and failure state;
+- provide per-record deletion and explicit Clear All controls;
+- support intentional **Use Again** by returning the URL through Preview and restoring compatible choices where practical;
+- never silently start a source request or download from a history action;
+- keep history local to the user's computer with no analytics or remote telemetry.
 
-History should remain local to the user's computer and should not turn into analytics or remote telemetry.
+The browser remains responsible for the user's final saved download location. LVOVD knows its temporary prepared-file path but does not reliably know where the browser ultimately saved the user's copy, so **Open File/Open Folder is deferred** unless a future feature explicitly makes LVOVD responsible for choosing/managing a final output folder.
+
+Persisting live/queued work across a server restart is also separate from download history; it would require its own crash-recovery/scheduler design and is not part of this roadmap item by default.
 
 ## Next — Power without clutter
 
@@ -158,7 +167,7 @@ LVOVD should not add proxy rotation, anti-block systems, DRM bypasses, access-co
 
 Not planned.
 
-A future queue may improve convenience, but remote source acquisition should remain serialized unless there is a compelling, separately reviewed reason to change that safety model.
+The queue improves convenience while remote source acquisition remains serialized. Changing that safety model would require a compelling, separately reviewed reason.
 
 ## Product principles that continue to apply
 

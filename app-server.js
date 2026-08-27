@@ -10,6 +10,12 @@ const {
   courtesyDelayMs,
   classifyDownloadError
 } = require('./request-safety');
+const {
+  HISTORY_SCHEMA_VERSION,
+  historyStore,
+  createHistoryContext,
+  recordTerminalJob
+} = require('./download-history');
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
@@ -96,6 +102,11 @@ function waitForJob(job, ms) {
   });
 }
 
+function queueHistoryRecord(job) {
+  if (!job.historyPromise) job.historyPromise = recordTerminalJob(job);
+  return job.historyPromise;
+}
+
 function finalizeCancelledJob(job) {
   job.cancelRequested = true;
   updateJob(job, {
@@ -113,6 +124,7 @@ function finalizeCancelledJob(job) {
     error: null,
     errorCategory: null
   });
+  queueHistoryRecord(job);
 }
 
 function requestJobCancellation(job) {
@@ -1324,6 +1336,7 @@ async function prepareDownloadJob(job, videoUrl, options, selection) {
     eta: 0,
     streamLabel: null
   });
+  queueHistoryRecord(job);
 }
 
 function createDownloadJob(waitingBehindSourceWork = false) {
@@ -1350,6 +1363,9 @@ function createDownloadJob(waitingBehindSourceWork = false) {
     cancelRequested: false,
     workActive: false,
     abortController: new AbortController(),
+    historyContext: null,
+    historyPromise: null,
+    historyRecordStarted: false,
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -1389,6 +1405,7 @@ function finalizeDownloadFailure(job, error) {
     outputs: [],
     autoDownloadUrl: null
   });
+  queueHistoryRecord(job);
 }
 
 async function settleDownloadFailure(job, error) {
@@ -1413,11 +1430,12 @@ async function runDownloadJob(job, videoUrl, options, selection) {
   }
 }
 
-async function startDownload(videoUrl, rawOptions, rawSelection) {
+async function startDownload(videoUrl, rawOptions, rawSelection, rawDisplay = {}) {
   const options = normalizeOptions(rawOptions);
   const selection = normalizeSelection(rawSelection);
   const waitingBehindSourceWork = remoteSourceRequests.size > 0;
   const job = createDownloadJob(waitingBehindSourceWork);
+  job.historyContext = createHistoryContext(videoUrl, options, selection, rawDisplay);
   jobs.set(job.id, job);
 
   remoteSourceRequests.download(() => runDownloadJob(job, videoUrl, options, selection)).catch(() => {});
@@ -1529,6 +1547,35 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (req.method === 'GET' && requestUrl.pathname === '/api/history') {
+    try {
+      return json(res, 200, {
+        version: HISTORY_SCHEMA_VERSION,
+        entries: await historyStore.list()
+      });
+    } catch (error) {
+      console.warn(`LVOVD could not read local download history: ${error.message}`);
+      return json(res, 500, { error: 'Local download history could not be read.' });
+    }
+  }
+
+  if (req.method === 'DELETE' && requestUrl.pathname === '/api/history') {
+    try {
+      if (requestUrl.searchParams.get('all') === '1') {
+        const removed = await historyStore.clear();
+        return json(res, 200, { ok: true, action: 'cleared', removed });
+      }
+      const id = requestUrl.searchParams.get('id');
+      if (!id) return json(res, 400, { error: 'Choose a history entry to delete.' });
+      const removed = await historyStore.remove(id);
+      if (!removed) return json(res, 404, { error: 'History entry not found.' });
+      return json(res, 200, { ok: true, action: 'deleted', id });
+    } catch (error) {
+      console.warn(`LVOVD could not update local download history: ${error.message}`);
+      return json(res, 500, { error: 'Local download history could not be updated.' });
+    }
+  }
+
   if (req.method === 'GET' && requestUrl.pathname === '/api/info') {
     const rawUrl = requestUrl.searchParams.get('url');
     try {
@@ -1546,7 +1593,7 @@ async function handleRequest(req, res) {
     try {
       const body = await readJsonBody(req);
       const videoUrl = parseMediaUrl(body.url);
-      const job = await startDownload(videoUrl, body.options || {}, body.selection || {});
+      const job = await startDownload(videoUrl, body.options || {}, body.selection || {}, body.display || {});
       return json(res, 202, { jobId: job.id });
     } catch (error) {
       return json(res, 400, { error: error.message });
@@ -1628,10 +1675,12 @@ module.exports = {
   requestJobCancellation,
   finalizeCancelledJob,
   waitForJob,
+  queueHistoryRecord,
   updateJob,
   cleanupJob,
   settleDownloadFailure,
   runDownloadJob,
   streamPreparedFile,
+  historyStore,
   jobs
 };

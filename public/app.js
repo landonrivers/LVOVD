@@ -921,7 +921,11 @@ async function startDownload() {
       body: JSON.stringify({
         url: currentUrl,
         options,
-        selection: { entryUrls: selectedPlaylistUrls() }
+        selection: { entryUrls: selectedPlaylistUrls() },
+        display: {
+          title: currentInfo.title || '',
+          sourceName: currentInfo.source?.name || currentInfo.source?.hostname || ''
+        }
       })
     });
     const data = await response.json();

@@ -35,3 +35,9 @@ test('queue closes terminal cancelled streams and auto-download stays deduplicat
   assert.match(appSource, /function triggerAutoDownload\(jobId, url\)/);
   assert.match(appSource, /autoDownloadedQueueJobs\.has\(jobId\)/);
 });
+
+test('download start sends bounded Preview display context for local history', () => {
+  assert.match(appSource, /display:\s*\{/);
+  assert.match(appSource, /title: currentInfo\.title \|\| ''/);
+  assert.match(appSource, /sourceName: currentInfo\.source\?\.name \|\| currentInfo\.source\?\.hostname \|\| ''/);
+});
