@@ -1,4 +1,3 @@
-const http = require('node:http');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -24,7 +23,6 @@ const MAX_PLAYLIST_SELECTION = 100;
 const jobs = new Map();
 const remoteSourceRequests = createSourceRequestCoordinator();
 let processWorkRootPromise = null;
-let ytdlpLoadError = null;
 
 const CONTENT_MODES = new Set(['av', 'video', 'audio', 'extras']);
 const PROFILES = new Set(['compatible', 'maximum']);
@@ -36,18 +34,7 @@ const SPONSOR_CATEGORIES = new Set([
   'sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'preview', 'filler', 'music_offtopic', 'hook'
 ]);
 
-function resolveYtdlpPath() {
-  if (process.env.YTDLP_PATH) return process.env.YTDLP_PATH;
-  try {
-    const { YtDlp } = require('ytdlp-nodejs');
-    return new YtDlp().binaryPath || '';
-  } catch (error) {
-    ytdlpLoadError = error;
-    return '';
-  }
-}
-
-const YTDLP_PATH = resolveYtdlpPath();
+const YTDLP_PATH = process.env.YTDLP_PATH || '';
 const YTDLP_COMMON_ARGS = ['--js-runtimes', 'node', '--no-colors'];
 
 async function createProcessWorkRoot(tempDir = os.tmpdir()) {
@@ -117,9 +104,7 @@ function safeMediaUrl(value) {
 function run(command, args, { maxBytes = 4 * 1024 * 1024 } = {}) {
   return new Promise((resolve, reject) => {
     if (!command) {
-      reject(new Error(ytdlpLoadError
-        ? `yt-dlp npm dependency is not ready: ${ytdlpLoadError.message}`
-        : 'yt-dlp npm dependency is not ready. Run npm install.'));
+      reject(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'));
       return;
     }
 
@@ -152,7 +137,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024 } = {}) {
       if (error.code === 'ENOENT') {
         const isYtdlp = command === YTDLP_PATH;
         fail(new Error(isYtdlp
-          ? 'The npm-managed yt-dlp binary is missing. Run npm install (or npm rebuild ytdlp-nodejs).'
+          ? 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
           : `${command} is not installed or is not on PATH.`));
       } else {
         fail(error);
@@ -1132,7 +1117,7 @@ async function runTask(job, task, taskIndex, options) {
 
     child.on('error', (error) => {
       reject(error.code === 'ENOENT'
-        ? new Error('The npm-managed yt-dlp binary is missing. Run npm install (or npm rebuild ytdlp-nodejs).')
+        ? new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.')
         : error);
     });
 
@@ -1160,7 +1145,7 @@ async function runTask(job, task, taskIndex, options) {
 }
 
 async function prepareDownloadJob(job, videoUrl, options, selection) {
-  if (!YTDLP_PATH) throw new Error('The npm-managed yt-dlp binary is not ready. Run npm install.');
+  if (!YTDLP_PATH) throw new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.');
   const workRoot = await getProcessWorkRoot();
   job.tempDir = await createJobWorkDir(workRoot);
 
@@ -1306,8 +1291,60 @@ async function cleanupExpiredJobs() {
 
 setInterval(() => cleanupExpiredJobs().catch(() => {}), 10 * 60 * 1000).unref();
 
-const server = http.createServer(async (req, res) => {
-  const requestUrl = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
+function streamPreparedFile(res, output) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const stream = fs.createReadStream(output.filePath);
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+
+    stream.once('error', (error) => {
+      if (settled) return;
+      finish();
+      if (res.headersSent || res.destroyed) {
+        res.destroy(error);
+        return;
+      }
+      if (error.code === 'ENOENT') return json(res, 404, { error: 'That prepared file has expired.' });
+      return json(res, 500, { error: 'Could not read that prepared file.' });
+    });
+
+    stream.once('open', (descriptor) => {
+      fs.fstat(descriptor, (error, stat) => {
+        if (error || settled) {
+          if (!settled) stream.destroy(error);
+          return;
+        }
+
+        res.writeHead(200, {
+          'Content-Type': outputMime(output.filename),
+          'Content-Length': stat.size,
+          'Content-Disposition': contentDisposition(output.filename),
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff'
+        });
+
+        res.once('close', () => {
+          if (!settled) stream.destroy();
+        });
+        stream.once('end', finish);
+        stream.pipe(res);
+      });
+    });
+  });
+}
+
+async function handleRequest(req, res) {
+  let requestUrl;
+  try {
+    requestUrl = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
+  } catch {
+    return json(res, 400, { error: 'Invalid request URL.' });
+  }
 
   if (req.method === 'GET' && serveStatic(requestUrl.pathname, res)) return;
 
@@ -1375,23 +1412,7 @@ const server = http.createServer(async (req, res) => {
     if (!job || job.status !== 'ready') return json(res, 404, { error: 'The prepared files are not available.' });
     const output = job.outputs.find((item) => item.id === requestUrl.searchParams.get('file'));
     if (!output?.filePath) return json(res, 404, { error: 'That prepared file is not available.' });
-
-    let stat;
-    try {
-      stat = await fsp.stat(output.filePath);
-    } catch {
-      return json(res, 404, { error: 'That prepared file has expired.' });
-    }
-
-    res.writeHead(200, {
-      'Content-Type': outputMime(output.filename),
-      'Content-Length': stat.size,
-      'Content-Disposition': contentDisposition(output.filename),
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff'
-    });
-    fs.createReadStream(output.filePath).pipe(res);
-    return;
+    return streamPreparedFile(res, output);
   }
 
   if (req.method === 'DELETE' && requestUrl.pathname === '/api/download/job') {
@@ -1404,20 +1425,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   return json(res, 404, { error: 'Not found.' });
-});
+}
 
 if (require.main === module) {
-  server.listen(PORT, HOST, () => {
-    console.log(`LVOVD running at http://${HOST}:${PORT}`);
-    console.log(`Node ${process.version}`);
-    console.log(`Using project-local yt-dlp at ${YTDLP_PATH || '(not installed yet)'}`);
-    console.log('FFmpeg is expected on PATH. All media processing runs locally on this computer.');
-    console.log('Only download media you own or have permission to download.');
-  });
+  console.error('app-server.js is an internal LVOVD module. Start LVOVD with node server.js.');
+  process.exitCode = 1;
 }
 
 module.exports = {
-  server,
+  handleRequest,
   fetchInfo,
   fetchRawInfo,
   sourceSummary,
@@ -1434,5 +1450,6 @@ module.exports = {
   publicJob,
   createProcessWorkRoot,
   createJobWorkDir,
+  streamPreparedFile,
   jobs
 };
