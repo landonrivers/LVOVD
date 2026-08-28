@@ -16,6 +16,7 @@ const {
   createHistoryContext,
   recordTerminalJob
 } = require('./download-history');
+const { sourceFormatSummary } = require('./source-formats');
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
@@ -713,6 +714,7 @@ async function fetchInfo(videoUrl) {
     webpageUrl: info.webpage_url || videoUrl,
     liveStatus: info.live_status || null,
     source: capabilities.source,
+    sourceFormats: sourceFormatSummary(info),
     capabilities
   };
 }

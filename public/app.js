@@ -18,6 +18,7 @@ const previewErrorHint = $('#preview-error-hint');
 const sourceName = $('#source-name');
 const sourceDetail = $('#source-detail');
 const sourceMode = $('#source-mode');
+const sourceCapabilities = $('#source-capabilities');
 const capabilityList = $('#capability-list');
 const capabilityNote = $('#capability-note');
 const playlistPanel = $('#playlist-panel');
@@ -82,6 +83,9 @@ const TERMINAL_JOB_STATUSES = new Set(['ready', 'error', 'cancelled']);
 let queuePanel = null;
 let queueList = null;
 let queueSummary = null;
+let sourceFormatsPanel = null;
+let sourceFormatsList = null;
+let sourceFormatsSummary = null;
 
 function setStatus(message, kind = '') {
   status.textContent = message || '';
@@ -614,6 +618,84 @@ function renderCapabilities(info) {
     : 'LVOVD built the controls below from the capabilities yt-dlp reported for this URL.');
 }
 
+function formatSourceBitrate(value) {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)} Mbps` : `${Math.round(value)} kbps`;
+}
+
+function ensureSourceFormatsPanel() {
+  if (sourceFormatsPanel || !sourceCapabilities) return;
+  sourceFormatsPanel = document.createElement('details');
+  sourceFormatsPanel.className = 'advanced-panel';
+  sourceFormatsPanel.id = 'source-formats';
+
+  const summary = document.createElement('summary');
+  summary.textContent = 'Source formats';
+  const content = document.createElement('div');
+  content.className = 'advanced-content';
+  const help = document.createElement('p');
+  help.className = 'help';
+  help.textContent = 'Read-only details from this Preview. LVOVD’s normal Compatible MP4 and Maximum Quality choices remain the download controls; manual source-format selection is not enabled yet.';
+  sourceFormatsSummary = document.createElement('p');
+  sourceFormatsSummary.className = 'help';
+  sourceFormatsList = document.createElement('div');
+  sourceFormatsList.className = 'output-list';
+  sourceFormatsList.hidden = false;
+  content.append(help, sourceFormatsSummary, sourceFormatsList);
+  sourceFormatsPanel.append(summary, content);
+  sourceCapabilities.insertAdjacentElement('afterend', sourceFormatsPanel);
+}
+
+function renderSourceFormats(info) {
+  ensureSourceFormatsPanel();
+  if (!sourceFormatsPanel || !sourceFormatsList || !sourceFormatsSummary) return;
+  const formatInfo = info?.kind === 'media' ? info.sourceFormats : null;
+  const formats = Array.isArray(formatInfo?.formats) ? formatInfo.formats : [];
+  sourceFormatsPanel.hidden = !formats.length;
+  sourceFormatsPanel.open = false;
+  sourceFormatsList.replaceChildren();
+  if (!formats.length) {
+    sourceFormatsSummary.textContent = '';
+    return;
+  }
+
+  sourceFormatsSummary.textContent = formatInfo.limited
+    ? `Showing ${formatInfo.shown} of ${formatInfo.total} usable media formats reported by yt-dlp.`
+    : `${formatInfo.total} usable media format${formatInfo.total === 1 ? '' : 's'} reported by yt-dlp.`;
+
+  for (const format of formats) {
+    const row = document.createElement('div');
+    row.className = 'output-row';
+    const copy = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = `Format ${format.id} · ${format.type}`;
+    const details = [];
+    if (format.note) details.push(format.note);
+    if (format.width && format.height) details.push(`${format.width}×${format.height}`);
+    else if (format.height) details.push(`${format.height}p`);
+    else if (format.width) details.push(`${format.width}px wide`);
+    if (format.fps) details.push(`${format.fps} fps`);
+    if (format.videoCodec) details.push(`Video ${format.videoCodec}`);
+    else if (format.video === true) details.push('Video codec unknown');
+    if (format.audioCodec) details.push(`Audio ${format.audioCodec}`);
+    else if (format.audio === true) details.push('Audio codec unknown');
+    if (format.ext) details.push(format.ext.toUpperCase());
+    if (format.totalBitrateKbps) details.push(formatSourceBitrate(format.totalBitrateKbps));
+    else {
+      if (format.videoBitrateKbps) details.push(`Video ${formatSourceBitrate(format.videoBitrateKbps)}`);
+      if (format.audioBitrateKbps) details.push(`Audio ${formatSourceBitrate(format.audioBitrateKbps)}`);
+    }
+    if (format.sizeBytes) details.push(`${format.sizeApproximate ? '~' : ''}${formatBytes(format.sizeBytes)}`);
+    if (format.audioChannels) details.push(`${format.audioChannels} ch`);
+    if (format.sampleRate) details.push(`${Math.round(format.sampleRate / 100) / 10} kHz`);
+    const small = document.createElement('small');
+    small.textContent = details.join(' · ');
+    copy.append(strong, small);
+    row.appendChild(copy);
+    sourceFormatsList.appendChild(row);
+  }
+}
+
 function setChoiceAvailability(name, value, available) {
   const input = document.querySelector(`input[name="${name}"][value="${value}"]`);
   if (!input) return;
@@ -763,6 +845,7 @@ function renderInfo(info) {
   title.textContent = info.title || (info.kind === 'playlist' ? 'Media collection' : 'Untitled media');
   renderMeta(info);
   renderCapabilities(info);
+  renderSourceFormats(info);
   renderPlaylist(info);
   renderChapters(info);
   renderSubtitleLanguages(info);
