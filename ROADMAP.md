@@ -16,6 +16,7 @@ LVOVD currently provides:
 - real download progress, speed, ETA, and processing stages;
 - coordinated Preview/download source work with serialized remote acquisition;
 - a visible queue with authoritative queued/running/ready/error/cancelled job state and cancellation;
+- durable local terminal-job history with intentional capability-safe Use Again;
 - randomized courtesy pauses between selected playlist items;
 - stop-on-rejection behavior instead of aggressive automatic retries;
 - a project-managed, SHA-256-verified yt-dlp executable with bounded update checks;
@@ -46,24 +47,23 @@ Established behavior:
 - queued jobs can be removed and active jobs can be cancelled;
 - cancellation owns the relevant yt-dlp/FFmpeg child and aborts playlist courtesy waits;
 - accepted cancellation cannot later become Ready or ordinary Failed;
-- queued, active, processing, completed, failed, cancelling, and cancelled states are explicit;
+- queued, active, processing, prepared, failed, cancelling, and cancelled states are explicit;
+- prepared jobs remain in the session queue while their temporary files are available for download;
 - no automatic retry behavior amplifies a source-side rejection.
 
-### 3. Durable local download history — active
+### 3. Durable local download history — completed
 
-Keep useful local records after temporary prepared files expire.
+LVOVD keeps useful local terminal-job records after temporary prepared files expire.
 
-The persistence foundation records terminal Ready, Failed, and Cancelled jobs in a versioned local JSON store. It retains source page/item URLs, normalized request choices, display metadata, output metadata, and failure details while deliberately excluding temporary paths, runtime download URLs, yt-dlp internal media/CDN URLs, thumbnails, and process/progress state.
+Established behavior:
 
-The next bounded slice should add the visible History UI and intentional reuse workflow.
-
-Goals:
-
-- show useful details such as title, source URL, mode, output metadata, time, and failure state;
-- provide per-record deletion and explicit Clear All controls;
-- support intentional **Use Again** by returning the URL through Preview and restoring compatible choices where practical;
-- never silently start a source request or download from a history action;
-- keep history local to the user's computer with no analytics or remote telemetry.
+- terminal Ready, Failed, and Cancelled jobs are stored in a versioned local JSON history store;
+- history retains source page/item URLs, normalized request choices, bounded display metadata, output metadata, terminal timestamps, and failure details;
+- temporary paths, runtime download URLs, yt-dlp internal media/CDN URLs, Preview thumbnail URLs, browser final save paths, and process/progress state are deliberately excluded;
+- the visible History panel loads automatically, shows recent records with expandable details, and supports per-record Delete plus explicit Clear All;
+- **Use Again** returns through a fresh Preview and restores only still-compatible historical choices; it never starts a download automatically;
+- live terminal jobs refresh History by exact job identity with a small bounded retry for supplementary persistence timing;
+- session queue thumbnails remain runtime-only and are not added to durable history.
 
 The browser remains responsible for the user's final saved download location. LVOVD knows its temporary prepared-file path but does not reliably know where the browser ultimately saved the user's copy, so **Open File/Open Folder is deferred** unless a future feature explicitly makes LVOVD responsible for choosing/managing a final output folder.
 
