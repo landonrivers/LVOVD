@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createHistoryUiApi() {
   const INITIAL_HISTORY_COUNT = 10;
   const HISTORY_INCREMENT = 10;
-  const TERMINAL_QUEUE_PATTERN = /\b(?:Ready|Failed|Cancelled)\b/;
+  const TERMINAL_JOB_STATUSES = new Set(['ready', 'error', 'cancelled']);
 
   function historyTime(entry) {
     const value = Date.parse(entry?.finishedAt || entry?.createdAt || 0);
@@ -16,6 +16,10 @@
 
   function sortHistoryEntries(entries) {
     return [...(Array.isArray(entries) ? entries : [])].sort((a, b) => historyTime(b) - historyTime(a));
+  }
+
+  function hasHistoryEntry(entries, jobId) {
+    return Boolean(jobId) && (Array.isArray(entries) ? entries : []).some((entry) => entry?.id === jobId);
   }
 
   function isExactAvailable(value, availableValues) {
@@ -41,6 +45,14 @@
       return { type: 'full', restored: false, reason: 'custom range' };
     }
     return { type: 'full', restored: false, reason: 'time range' };
+  }
+
+  function historyMediaInfo(entry = {}) {
+    const content = entry?.request?.options?.content;
+    if (content === 'audio') return { glyph: '♪', label: 'Audio' };
+    if (content === 'extras') return { glyph: '+', label: 'Extras' };
+    if (content === 'video') return { glyph: '▶', label: 'Video only' };
+    return { glyph: '▶', label: 'Video' };
   }
 
   function init(root) {
@@ -80,8 +92,9 @@
     let entries = [];
     let visibleCount = INITIAL_HISTORY_COUNT;
     let pendingRestore = null;
-    let lastTerminalSignature = '';
-    let liveRefreshGeneration = 0;
+    const pendingTerminalJobs = new Map();
+    let terminalRefreshInFlight = false;
+    let terminalRetryTimer = null;
 
     function setHistoryMessage(message, kind = '') {
       historyMessage.textContent = message || '';
@@ -132,10 +145,10 @@
     }
 
     function statusInfo(status) {
-      if (status === 'ready') return { label: 'Completed', className: 'check good' };
-      if (status === 'error') return { label: 'Failed', className: 'check bad' };
-      if (status === 'cancelled') return { label: 'Cancelled', className: 'check' };
-      return { label: 'Unknown', className: 'check pending' };
+      if (status === 'ready') return { label: 'Completed', className: 'history-status completed' };
+      if (status === 'error') return { label: 'Failed', className: 'history-status failed' };
+      if (status === 'cancelled') return { label: 'Cancelled', className: 'history-status cancelled' };
+      return { label: 'Unknown', className: 'history-status unknown' };
     }
 
     function contentLabel(content) {
@@ -194,11 +207,11 @@
 
     function detailsForEntry(entry) {
       const details = document.createElement('details');
-      details.className = 'advanced-panel';
+      details.className = 'history-details';
       const summary = document.createElement('summary');
       summary.textContent = 'Details';
       const body = document.createElement('div');
-      body.className = 'advanced-content';
+      body.className = 'history-details-body';
       const options = entry?.request?.options || {};
       const selection = entry?.request?.selection || {};
 
@@ -273,9 +286,19 @@
 
       for (const entry of visible) {
         const row = document.createElement('div');
-        row.className = 'output-row';
+        row.className = 'output-row history-row';
+
+        const main = document.createElement('div');
+        main.className = 'history-entry-main';
+        const media = historyMediaInfo(entry);
+        const mediaIcon = document.createElement('span');
+        mediaIcon.className = 'history-media-icon';
+        mediaIcon.textContent = media.glyph;
+        mediaIcon.title = media.label;
+        mediaIcon.setAttribute('aria-hidden', 'true');
 
         const copy = document.createElement('div');
+        copy.className = 'history-entry-copy';
         const state = statusInfo(entry?.status);
         const badge = document.createElement('span');
         badge.className = state.className;
@@ -283,6 +306,9 @@
 
         const strong = document.createElement('strong');
         strong.textContent = entry?.title || 'Media download';
+        const titleLine = document.createElement('div');
+        titleLine.className = 'history-title-line';
+        titleLine.append(strong, badge);
 
         const source = entry?.source?.name || hostnameFromUrl(entry?.source?.url) || 'Source';
         const options = entry?.request?.options || {};
@@ -296,10 +322,11 @@
 
         const small = document.createElement('small');
         small.textContent = summaryBits.filter(Boolean).join(' · ');
-        copy.append(badge, strong, small, detailsForEntry(entry));
+        copy.append(titleLine, small, detailsForEntry(entry));
+        main.append(mediaIcon, copy);
 
         const actions = document.createElement('div');
-        actions.className = 'inline-actions';
+        actions.className = 'inline-actions history-actions';
         if (entry?.source?.url) {
           const useAgain = document.createElement('button');
           useAgain.type = 'button';
@@ -316,7 +343,7 @@
         remove.addEventListener('click', () => deleteHistoryEntry(entry.id));
         actions.appendChild(remove);
 
-        row.append(copy, actions);
+        row.append(main, actions);
         historyList.appendChild(row);
       }
     }
@@ -612,35 +639,48 @@
     previewObserver.observe(preview, { attributes: true, attributeFilter: ['hidden'] });
     previewObserver.observe(previewError, { attributes: true, attributeFilter: ['hidden'] });
 
-    async function refreshAfterTerminalQueueChange() {
-      const generation = ++liveRefreshGeneration;
-      const knownIds = new Set(entries.map((entry) => entry?.id).filter(Boolean));
-      const loaded = await loadHistory({ keepVisibleCount: true });
-      const foundNew = loaded && entries.some((entry) => entry?.id && !knownIds.has(entry.id));
-      if (foundNew || generation !== liveRefreshGeneration) return;
-      root.setTimeout(() => {
-        if (generation === liveRefreshGeneration) loadHistory({ keepVisibleCount: true });
-      }, 500);
-    }
-
-    function inspectQueueForTerminalState() {
-      const queue = [...document.querySelectorAll('section.download-progress')].find((section) =>
-        section !== historyPanel && section.querySelector('.progress-head strong')?.textContent === 'Download queue');
-      if (!queue || queue.hidden) {
-        lastTerminalSignature = '';
-        return;
+    function confirmPersistedTerminalJobs() {
+      for (const [jobId, statusValue] of pendingTerminalJobs) {
+        if (!hasHistoryEntry(entries, jobId)) continue;
+        pendingTerminalJobs.delete(jobId);
+        document.dispatchEvent(new root.CustomEvent('lvovd:history-confirmed', {
+          detail: { jobId, status: statusValue }
+        }));
       }
-      const terminalRows = [...queue.querySelectorAll('.output-row')]
-        .map((row) => row.textContent.trim())
-        .filter((text) => TERMINAL_QUEUE_PATTERN.test(text));
-      const signature = terminalRows.join('\n---\n');
-      if (!signature || signature === lastTerminalSignature) return;
-      lastTerminalSignature = signature;
-      refreshAfterTerminalQueueChange();
     }
 
-    const queueObserver = new root.MutationObserver(inspectQueueForTerminalState);
-    queueObserver.observe(historyPanel.parentElement || document.body, { childList: true, subtree: true, characterData: true });
+    async function refreshPendingTerminalJobs({ allowRetry = true } = {}) {
+      if (terminalRefreshInFlight || !pendingTerminalJobs.size) return;
+      if (terminalRetryTimer) {
+        root.clearTimeout(terminalRetryTimer);
+        terminalRetryTimer = null;
+      }
+
+      terminalRefreshInFlight = true;
+      try {
+        const loaded = await loadHistory({ keepVisibleCount: true });
+        if (loaded) confirmPersistedTerminalJobs();
+      } finally {
+        terminalRefreshInFlight = false;
+      }
+
+      if (allowRetry && pendingTerminalJobs.size) {
+        terminalRetryTimer = root.setTimeout(() => {
+          terminalRetryTimer = null;
+          refreshPendingTerminalJobs({ allowRetry: false });
+        }, 500);
+      }
+    }
+
+    function handleTerminalJob(event) {
+      const jobId = event.detail?.jobId;
+      const statusValue = event.detail?.status;
+      if (!jobId || !TERMINAL_JOB_STATUSES.has(statusValue)) return;
+      pendingTerminalJobs.set(jobId, statusValue);
+      refreshPendingTerminalJobs({ allowRetry: true });
+    }
+
+    document.addEventListener('lvovd:terminal-job', handleTerminalJob);
 
     historyShowMore.addEventListener('click', () => {
       visibleCount += HISTORY_INCREMENT;
@@ -654,9 +694,11 @@
 
   return {
     sortHistoryEntries,
+    hasHistoryEntry,
     isExactAvailable,
     intersectPlaylistUrls,
     planRangeRestore,
+    historyMediaInfo,
     init
   };
 });

@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   sortHistoryEntries,
+  hasHistoryEntry,
   isExactAvailable,
   intersectPlaylistUrls,
   planRangeRestore
@@ -33,6 +34,14 @@ test('history ordering is newest first even when stored input is not ordered', (
     { id: 'middle', finishedAt: '2026-08-21T12:00:00.000Z' }
   ]);
   assert.deepEqual(entries.map((entry) => entry.id), ['new', 'middle', 'old']);
+});
+
+test('history confirmation checks the exact terminal job id', () => {
+  const entries = [{ id: 'job-a' }, { id: 'job-b' }];
+  assert.equal(hasHistoryEntry(entries, 'job-a'), true);
+  assert.equal(hasHistoryEntry(entries, 'job-c'), false);
+  assert.equal(hasHistoryEntry(entries, ''), false);
+  assert.equal(hasHistoryEntry(null, 'job-a'), false);
 });
 
 test('safe reuse requires exact current choices instead of inventing substitutes', () => {
@@ -155,15 +164,23 @@ test('reuse policy warns for non-restorable chapters and uses current DOM availa
   assert.match(restore, /isExactAvailable\(saved\.extras\.subtitleLanguage, codes\)/);
 });
 
-test('terminal queue changes trigger one immediate History refresh with at most one delayed retry', () => {
+test('terminal job events refresh History by exact job id with at most one delayed retry', () => {
   const source = read('public/history-ui.js');
-  const refresh = functionSource(source, 'refreshAfterTerminalQueueChange', 'inspectQueueForTerminalState');
+  assert.doesNotMatch(source, /TERMINAL_QUEUE_PATTERN|inspectQueueForTerminalState/);
+  assert.match(source, /document\.addEventListener\('lvovd:terminal-job', handleTerminalJob\)/);
+
+  const confirm = functionSource(source, 'confirmPersistedTerminalJobs', 'refreshPendingTerminalJobs');
+  assert.match(confirm, /hasHistoryEntry\(entries, jobId\)/);
+  assert.match(confirm, /new root\.CustomEvent\('lvovd:history-confirmed'/);
+  assert.match(confirm, /detail: \{ jobId, status: statusValue \}/);
+
+  const refresh = functionSource(source, 'refreshPendingTerminalJobs', 'handleTerminalJob');
   assert.match(refresh, /await loadHistory\(\{ keepVisibleCount: true \}\)/);
   assert.match(refresh, /root\.setTimeout\(/);
   assert.match(refresh, /500/);
+  assert.match(refresh, /refreshPendingTerminalJobs\(\{ allowRetry: false \}\)/);
 
-  const inspect = functionSource(source, 'inspectQueueForTerminalState', 'init');
-  assert.match(inspect, /Download queue/);
-  assert.match(inspect, /TERMINAL_QUEUE_PATTERN/);
-  assert.match(inspect, /signature === lastTerminalSignature/);
+  const handle = functionSource(source, 'handleTerminalJob');
+  assert.match(handle, /pendingTerminalJobs\.set\(jobId, statusValue\)/);
+  assert.match(handle, /refreshPendingTerminalJobs\(\{ allowRetry: true \}\)/);
 });
