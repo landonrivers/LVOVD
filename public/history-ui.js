@@ -47,6 +47,14 @@
     return { type: 'full', restored: false, reason: 'time range' };
   }
 
+  function historyMediaInfo(entry = {}) {
+    const content = entry?.request?.options?.content;
+    if (content === 'audio') return { glyph: '♪', label: 'Audio' };
+    if (content === 'extras') return { glyph: '+', label: 'Extras' };
+    if (content === 'video') return { glyph: '▶', label: 'Video only' };
+    return { glyph: '▶', label: 'Video' };
+  }
+
   function init(root) {
     const document = root.document;
     const historyPanel = document.querySelector('#history-panel');
@@ -137,10 +145,10 @@
     }
 
     function statusInfo(status) {
-      if (status === 'ready') return { label: 'Completed', className: 'check good' };
-      if (status === 'error') return { label: 'Failed', className: 'check bad' };
-      if (status === 'cancelled') return { label: 'Cancelled', className: 'check' };
-      return { label: 'Unknown', className: 'check pending' };
+      if (status === 'ready') return { label: 'Completed', className: 'history-status completed' };
+      if (status === 'error') return { label: 'Failed', className: 'history-status failed' };
+      if (status === 'cancelled') return { label: 'Cancelled', className: 'history-status cancelled' };
+      return { label: 'Unknown', className: 'history-status unknown' };
     }
 
     function contentLabel(content) {
@@ -199,11 +207,11 @@
 
     function detailsForEntry(entry) {
       const details = document.createElement('details');
-      details.className = 'advanced-panel';
+      details.className = 'history-details';
       const summary = document.createElement('summary');
       summary.textContent = 'Details';
       const body = document.createElement('div');
-      body.className = 'advanced-content';
+      body.className = 'history-details-body';
       const options = entry?.request?.options || {};
       const selection = entry?.request?.selection || {};
 
@@ -278,9 +286,19 @@
 
       for (const entry of visible) {
         const row = document.createElement('div');
-        row.className = 'output-row';
+        row.className = 'output-row history-row';
+
+        const main = document.createElement('div');
+        main.className = 'history-entry-main';
+        const media = historyMediaInfo(entry);
+        const mediaIcon = document.createElement('span');
+        mediaIcon.className = 'history-media-icon';
+        mediaIcon.textContent = media.glyph;
+        mediaIcon.title = media.label;
+        mediaIcon.setAttribute('aria-hidden', 'true');
 
         const copy = document.createElement('div');
+        copy.className = 'history-entry-copy';
         const state = statusInfo(entry?.status);
         const badge = document.createElement('span');
         badge.className = state.className;
@@ -288,6 +306,9 @@
 
         const strong = document.createElement('strong');
         strong.textContent = entry?.title || 'Media download';
+        const titleLine = document.createElement('div');
+        titleLine.className = 'history-title-line';
+        titleLine.append(strong, badge);
 
         const source = entry?.source?.name || hostnameFromUrl(entry?.source?.url) || 'Source';
         const options = entry?.request?.options || {};
@@ -301,10 +322,11 @@
 
         const small = document.createElement('small');
         small.textContent = summaryBits.filter(Boolean).join(' · ');
-        copy.append(badge, strong, small, detailsForEntry(entry));
+        copy.append(titleLine, small, detailsForEntry(entry));
+        main.append(mediaIcon, copy);
 
         const actions = document.createElement('div');
-        actions.className = 'inline-actions';
+        actions.className = 'inline-actions history-actions';
         if (entry?.source?.url) {
           const useAgain = document.createElement('button');
           useAgain.type = 'button';
@@ -321,7 +343,7 @@
         remove.addEventListener('click', () => deleteHistoryEntry(entry.id));
         actions.appendChild(remove);
 
-        row.append(copy, actions);
+        row.append(main, actions);
         historyList.appendChild(row);
       }
     }
@@ -676,6 +698,7 @@
     isExactAvailable,
     intersectPlaylistUrls,
     planRangeRestore,
+    historyMediaInfo,
     init
   };
 });
