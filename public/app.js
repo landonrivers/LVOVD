@@ -77,6 +77,8 @@ let autoDownloadStarted = false;
 const trackedJobs = new Map();
 const queueSources = new Map();
 const autoDownloadedQueueJobs = new Set();
+const historyNotifiedJobs = new Set();
+const TERMINAL_JOB_STATUSES = new Set(['ready', 'error', 'cancelled']);
 let queuePanel = null;
 let queueList = null;
 let queueSummary = null;
@@ -142,7 +144,7 @@ function ensureQueuePanel() {
   strong.textContent = 'Download queue';
   const help = document.createElement('span');
   help.className = 'progress-item';
-  help.textContent = 'Remote downloads run one at a time.';
+  help.textContent = 'Remote downloads run one at a time. Prepared items stay here while their temporary file is available.';
   heading.append(strong, help);
   queueSummary = document.createElement('span');
   head.append(heading, queueSummary);
@@ -157,7 +159,7 @@ function ensureQueuePanel() {
 function queueStateLabel(data = {}) {
   if (data.phase === 'cancelling') return 'Cancelling';
   if (data.status === 'cancelled') return 'Cancelled';
-  if (data.status === 'ready') return 'Ready';
+  if (data.status === 'ready') return 'Prepared';
   if (data.status === 'error') return 'Failed';
   if (data.status === 'running') {
     if (data.phase === 'waiting') return 'Waiting';
@@ -165,6 +167,70 @@ function queueStateLabel(data = {}) {
     return 'Downloading';
   }
   return 'Queued';
+}
+
+function queueModeSummary(job = {}) {
+  const options = job.options || {};
+  const bits = [];
+  const contentLabels = {
+    av: 'Video + Audio',
+    video: 'Video Only',
+    audio: 'Audio Only',
+    extras: 'Extras Only'
+  };
+  const profileLabels = {
+    compatible: 'Compatible MP4',
+    maximum: 'Maximum Quality'
+  };
+  const audioLabels = {
+    source: 'Source Audio',
+    m4a: 'M4A / AAC',
+    mp3: 'MP3',
+    opus: 'Opus',
+    flac: 'FLAC',
+    wav: 'WAV'
+  };
+
+  bits.push(contentLabels[options.content] || 'Media');
+  if (['av', 'video'].includes(options.content)) {
+    bits.push(profileLabels[options.profile] || options.profile || 'Video');
+    bits.push(options.maxHeight ? `${options.maxHeight}p` : 'Best available');
+  } else if (options.content === 'audio') {
+    bits.push(audioLabels[options.audioFormat] || options.audioFormat || 'Audio');
+  } else if (options.content === 'extras') {
+    const extras = [];
+    if (options.extras?.thumbnail) extras.push('Thumbnail');
+    if (options.extras?.metadata) extras.push('Metadata');
+    if (options.extras?.subtitles) extras.push('Subtitles');
+    if (extras.length) bits.push(extras.join(' + '));
+  }
+
+  if (job.isPlaylist) {
+    bits.push(`${job.selectionCount || 0} selected item${job.selectionCount === 1 ? '' : 's'}`);
+  } else if (options.content !== 'extras' && options.range?.type === 'custom') {
+    bits.push(`${options.range.start || '?'}–${options.range.end || '?'}`);
+  } else if (options.content !== 'extras' && options.range?.type === 'chapters') {
+    const count = options.range.chapterIndexes?.length || 0;
+    bits.push(`${count} chapter${count === 1 ? '' : 's'}`);
+  }
+  return bits.filter(Boolean).join(' · ');
+}
+
+function notifyHistoryTerminal(jobId, statusValue) {
+  if (!jobId || !TERMINAL_JOB_STATUSES.has(statusValue) || historyNotifiedJobs.has(jobId)) return;
+  historyNotifiedJobs.add(jobId);
+  document.dispatchEvent(new CustomEvent('lvovd:terminal-job', {
+    detail: { jobId, status: statusValue }
+  }));
+}
+
+function retireHistoryBackedQueueJob(jobId, statusValue) {
+  if (!['error', 'cancelled'].includes(statusValue)) return;
+  const job = trackedJobs.get(jobId);
+  if (!job || job.data?.status !== statusValue) return;
+  closeQueueSource(jobId);
+  trackedJobs.delete(jobId);
+  renderQueue();
 }
 
 function triggerAutoDownload(jobId, url) {
@@ -231,6 +297,7 @@ async function manageQueueJob(jobId) {
   }
 
   if (data.action === 'cancelled') {
+    if (data.job?.status === 'cancelled') notifyHistoryTerminal(jobId, 'cancelled');
     if (previousStatus === 'queued') {
       closeQueueSource(jobId);
       trackedJobs.delete(jobId);
@@ -268,23 +335,44 @@ function renderQueue() {
   const jobs = [...trackedJobs.values()];
   const activeCount = jobs.filter((job) => job.data?.status === 'running').length;
   const queuedCount = jobs.filter((job) => !job.data?.status || job.data.status === 'queued').length;
+  const preparedCount = jobs.filter((job) => job.data?.status === 'ready').length;
   queueSummary.textContent = [
     activeCount ? `${activeCount} active` : '',
-    queuedCount ? `${queuedCount} queued` : ''
+    queuedCount ? `${queuedCount} queued` : '',
+    preparedCount ? `${preparedCount} prepared` : ''
   ].filter(Boolean).join(' · ') || `${jobs.length} item${jobs.length === 1 ? '' : 's'}`;
 
   for (const job of jobs) {
     const data = job.data || {};
     const row = document.createElement('div');
-    row.className = 'output-row';
+    row.className = `output-row queue-row${data.status === 'ready' ? ' prepared' : ''}`;
+
+    const main = document.createElement('div');
+    main.className = 'queue-entry-main';
+    if (job.thumbnailUrl) {
+      const image = document.createElement('img');
+      image.className = 'queue-thumbnail';
+      image.src = job.thumbnailUrl;
+      image.alt = '';
+      image.loading = 'lazy';
+      image.addEventListener('error', () => image.remove(), { once: true });
+      main.appendChild(image);
+    }
 
     const copy = document.createElement('div');
     const strong = document.createElement('strong');
     strong.textContent = job.title || 'Media download';
     const small = document.createElement('small');
-    const message = data.error || data.message || queueStateLabel(data);
+    const state = queueStateLabel(data);
+    const message = data.error || data.message || state;
     const details = queueDetails(data);
-    small.textContent = `${queueStateLabel(data)}${message && message !== queueStateLabel(data) ? ` · ${message}` : ''}${details ? ` · ${details}` : ''}`;
+    const mode = queueModeSummary(job);
+    small.textContent = [
+      mode,
+      state,
+      message && message !== state ? message : '',
+      details
+    ].filter(Boolean).join(' · ');
     copy.append(strong, small);
 
     if (Number.isFinite(data.percent) || ['starting', 'processing'].includes(data.phase)) {
@@ -296,6 +384,7 @@ function renderQueue() {
       track.appendChild(bar);
       copy.appendChild(track);
     }
+    main.appendChild(copy);
 
     const actions = document.createElement('div');
     actions.className = 'inline-actions';
@@ -323,7 +412,7 @@ function renderQueue() {
     action.addEventListener('click', () => manageQueueJob(job.id));
     actions.appendChild(action);
 
-    row.append(copy, actions);
+    row.append(main, actions);
     queueList.appendChild(row);
   }
 }
@@ -351,13 +440,16 @@ function trackQueueJob(jobId, snapshot) {
       job.data = data;
       renderQueue();
       if (data.autoDownloadUrl) triggerAutoDownload(jobId, data.autoDownloadUrl);
-      if (['ready', 'error', 'cancelled'].includes(data.status)) closeQueueSource(jobId);
+      if (TERMINAL_JOB_STATUSES.has(data.status)) {
+        notifyHistoryTerminal(jobId, data.status);
+        closeQueueSource(jobId);
+      }
     } catch {
       setStatus('Received an unreadable queue update.', 'error');
     }
   };
   source.onerror = () => {
-    if (!['ready', 'error', 'cancelled'].includes(job.data?.status)) {
+    if (!TERMINAL_JOB_STATUSES.has(job.data?.status)) {
       job.connectionIssue = true;
       renderQueue();
     }
@@ -902,10 +994,15 @@ async function startDownload() {
     return setStatus(error.message, 'error');
   }
 
+  const playlistUrls = selectedPlaylistUrls();
   const snapshot = {
     title: currentInfo.title || (currentInfo.kind === 'playlist' ? 'Media collection' : 'Media download'),
     url: currentUrl,
-    source: currentInfo.source?.name || currentInfo.source?.hostname || ''
+    source: currentInfo.source?.name || currentInfo.source?.hostname || '',
+    thumbnailUrl: currentInfo.thumbnail || '',
+    options,
+    isPlaylist: currentInfo.kind === 'playlist',
+    selectionCount: playlistUrls.length
   };
 
   resetProgress();
@@ -921,7 +1018,7 @@ async function startDownload() {
       body: JSON.stringify({
         url: currentUrl,
         options,
-        selection: { entryUrls: selectedPlaylistUrls() },
+        selection: { entryUrls: playlistUrls },
         display: {
           title: currentInfo.title || '',
           sourceName: currentInfo.source?.name || currentInfo.source?.hostname || ''
@@ -1017,6 +1114,11 @@ playlistAll.addEventListener('click', () => {
 playlistNone.addEventListener('click', () => {
   $$('[data-playlist-entry]').forEach((checkbox) => { checkbox.checked = false; });
   updateDownloadLabel();
+});
+document.addEventListener('lvovd:history-confirmed', (event) => {
+  const jobId = event.detail?.jobId;
+  const statusValue = event.detail?.status;
+  retireHistoryBackedQueueJob(jobId, statusValue);
 });
 downloadButton.addEventListener('click', startDownload);
 clearJobButton.addEventListener('click', clearActiveJob);

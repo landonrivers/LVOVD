@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createHistoryUiApi() {
   const INITIAL_HISTORY_COUNT = 10;
   const HISTORY_INCREMENT = 10;
-  const TERMINAL_QUEUE_PATTERN = /\b(?:Ready|Failed|Cancelled)\b/;
+  const TERMINAL_JOB_STATUSES = new Set(['ready', 'error', 'cancelled']);
 
   function historyTime(entry) {
     const value = Date.parse(entry?.finishedAt || entry?.createdAt || 0);
@@ -16,6 +16,10 @@
 
   function sortHistoryEntries(entries) {
     return [...(Array.isArray(entries) ? entries : [])].sort((a, b) => historyTime(b) - historyTime(a));
+  }
+
+  function hasHistoryEntry(entries, jobId) {
+    return Boolean(jobId) && (Array.isArray(entries) ? entries : []).some((entry) => entry?.id === jobId);
   }
 
   function isExactAvailable(value, availableValues) {
@@ -80,8 +84,9 @@
     let entries = [];
     let visibleCount = INITIAL_HISTORY_COUNT;
     let pendingRestore = null;
-    let lastTerminalSignature = '';
-    let liveRefreshGeneration = 0;
+    const pendingTerminalJobs = new Map();
+    let terminalRefreshInFlight = false;
+    let terminalRetryTimer = null;
 
     function setHistoryMessage(message, kind = '') {
       historyMessage.textContent = message || '';
@@ -612,35 +617,48 @@
     previewObserver.observe(preview, { attributes: true, attributeFilter: ['hidden'] });
     previewObserver.observe(previewError, { attributes: true, attributeFilter: ['hidden'] });
 
-    async function refreshAfterTerminalQueueChange() {
-      const generation = ++liveRefreshGeneration;
-      const knownIds = new Set(entries.map((entry) => entry?.id).filter(Boolean));
-      const loaded = await loadHistory({ keepVisibleCount: true });
-      const foundNew = loaded && entries.some((entry) => entry?.id && !knownIds.has(entry.id));
-      if (foundNew || generation !== liveRefreshGeneration) return;
-      root.setTimeout(() => {
-        if (generation === liveRefreshGeneration) loadHistory({ keepVisibleCount: true });
-      }, 500);
-    }
-
-    function inspectQueueForTerminalState() {
-      const queue = [...document.querySelectorAll('section.download-progress')].find((section) =>
-        section !== historyPanel && section.querySelector('.progress-head strong')?.textContent === 'Download queue');
-      if (!queue || queue.hidden) {
-        lastTerminalSignature = '';
-        return;
+    function confirmPersistedTerminalJobs() {
+      for (const [jobId, statusValue] of pendingTerminalJobs) {
+        if (!hasHistoryEntry(entries, jobId)) continue;
+        pendingTerminalJobs.delete(jobId);
+        document.dispatchEvent(new root.CustomEvent('lvovd:history-confirmed', {
+          detail: { jobId, status: statusValue }
+        }));
       }
-      const terminalRows = [...queue.querySelectorAll('.output-row')]
-        .map((row) => row.textContent.trim())
-        .filter((text) => TERMINAL_QUEUE_PATTERN.test(text));
-      const signature = terminalRows.join('\n---\n');
-      if (!signature || signature === lastTerminalSignature) return;
-      lastTerminalSignature = signature;
-      refreshAfterTerminalQueueChange();
     }
 
-    const queueObserver = new root.MutationObserver(inspectQueueForTerminalState);
-    queueObserver.observe(historyPanel.parentElement || document.body, { childList: true, subtree: true, characterData: true });
+    async function refreshPendingTerminalJobs({ allowRetry = true } = {}) {
+      if (terminalRefreshInFlight || !pendingTerminalJobs.size) return;
+      if (terminalRetryTimer) {
+        root.clearTimeout(terminalRetryTimer);
+        terminalRetryTimer = null;
+      }
+
+      terminalRefreshInFlight = true;
+      try {
+        const loaded = await loadHistory({ keepVisibleCount: true });
+        if (loaded) confirmPersistedTerminalJobs();
+      } finally {
+        terminalRefreshInFlight = false;
+      }
+
+      if (allowRetry && pendingTerminalJobs.size) {
+        terminalRetryTimer = root.setTimeout(() => {
+          terminalRetryTimer = null;
+          refreshPendingTerminalJobs({ allowRetry: false });
+        }, 500);
+      }
+    }
+
+    function handleTerminalJob(event) {
+      const jobId = event.detail?.jobId;
+      const statusValue = event.detail?.status;
+      if (!jobId || !TERMINAL_JOB_STATUSES.has(statusValue)) return;
+      pendingTerminalJobs.set(jobId, statusValue);
+      refreshPendingTerminalJobs({ allowRetry: true });
+    }
+
+    document.addEventListener('lvovd:terminal-job', handleTerminalJob);
 
     historyShowMore.addEventListener('click', () => {
       visibleCount += HISTORY_INCREMENT;
@@ -654,6 +672,7 @@
 
   return {
     sortHistoryEntries,
+    hasHistoryEntry,
     isExactAvailable,
     intersectPlaylistUrls,
     planRangeRestore,
