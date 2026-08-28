@@ -71,15 +71,17 @@ Persisting live/queued work across a server restart is also separate from downlo
 
 ## Next — Power without clutter
 
-### 4. Advanced source format explorer
+### 4. Advanced source format explorer — in progress
 
 Expose more of the format metadata yt-dlp reports without replacing LVOVD's simple defaults.
+
+The first slice adds a collapsed, read-only format explorer to the existing Preview response. It shows bounded normalized media-format evidence such as format ID, audio/video presence, resolution, FPS, codec, container, bitrate, and size when yt-dlp reports them. It does not expose yt-dlp transport/CDN URLs, make an additional source request, or change the selected download format.
 
 Goals:
 
 - keep Compatible MP4 and Maximum Quality as the primary choices;
-- optionally show source formats with understandable resolution, FPS, codec, audio/video presence, bitrate/size estimates when known;
-- allow advanced manual format selection only when the metadata supports it safely;
+- show source formats with understandable resolution, FPS, codec, audio/video presence, bitrate/size estimates when known — read-only inspection is now established;
+- allow advanced manual format selection only when the metadata supports it safely — still deferred to a later bounded slice;
 - continue treating missing metadata as unknown rather than absent.
 
 ### 5. Better failure and compatibility explanations
