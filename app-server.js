@@ -747,7 +747,9 @@ function normalizeOptions(raw = {}) {
     throw new Error('Resolution must be a valid video height.');
   }
 
-  const rangeType = RANGE_MODES.has(raw?.range?.type) ? raw.range.type : 'full';
+  const rangeType = content === 'extras'
+    ? 'full'
+    : RANGE_MODES.has(raw?.range?.type) ? raw.range.type : 'full';
   const range = { type: rangeType };
   if (rangeType === 'custom') {
     range.start = parseTimecode(raw.range.start);
@@ -777,9 +779,13 @@ function normalizeOptions(raw = {}) {
     throw new Error('Choose at least one extra when using Extras Only.');
   }
 
-  const sponsorMode = SPONSOR_MODES.has(raw?.sponsor?.mode) ? raw.sponsor.mode : 'off';
-  const sponsorCategories = [...new Set((Array.isArray(raw?.sponsor?.categories) ? raw.sponsor.categories : [])
-    .filter((category) => SPONSOR_CATEGORIES.has(category)))];
+  const sponsorMode = content === 'extras'
+    ? 'off'
+    : SPONSOR_MODES.has(raw?.sponsor?.mode) ? raw.sponsor.mode : 'off';
+  const sponsorCategories = content === 'extras'
+    ? []
+    : [...new Set((Array.isArray(raw?.sponsor?.categories) ? raw.sponsor.categories : [])
+      .filter((category) => SPONSOR_CATEGORIES.has(category)))];
   const sponsor = {
     mode: sponsorMode,
     categories: sponsorCategories.length ? sponsorCategories : ['sponsor']
@@ -1447,6 +1453,7 @@ function serveStatic(reqPath, res) {
   const routes = {
     '/': ['index.html', 'text/html; charset=utf-8'],
     '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+    '/history-ui.js': ['history-ui.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };
   const route = routes[reqPath];

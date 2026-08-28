@@ -269,6 +269,22 @@
         </div>
       </section>
 
+      <section id="history-panel" class="download-progress" aria-live="polite">
+        <div class="progress-head">
+          <div>
+            <strong>Download History</strong>
+            <span class="progress-item">Local records of completed, failed, and cancelled downloads.</span>
+          </div>
+          <button id="history-clear-all" class="text-button" type="button" hidden>Clear All</button>
+        </div>
+        <p id="history-message" class="status">Loading download history…</p>
+        <div id="history-list" class="output-list" hidden></div>
+        <div class="inline-actions">
+          <button id="history-show-more" class="text-button" type="button" hidden>Show More</button>
+          <button id="history-retry" class="text-button" type="button" hidden>Retry</button>
+        </div>
+      </section>
+
       <section class="requirements">
         <div class="req-head">
           <span>Runtime status</span>
@@ -285,5 +301,6 @@
     </section>
   </main>
   <script src="/app.js" defer></script>
+  <script src="/history-ui.js" defer></script>
 </body>
 </html>
