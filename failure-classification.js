@@ -14,19 +14,47 @@ function failureEvidence(error) {
     .replace(/https?:\/\/\S+/g, '[url]');
 }
 
+function classifyLocalFailure(error) {
+  const message = String(error?.message || error || '').trim();
+
+  if (message === 'FFmpeg is not installed or is not on PATH.') {
+    return failure(
+      'local_error',
+      'Local processing could not start',
+      message,
+      'Install FFmpeg or make it available on PATH, then restart LVOVD.'
+    );
+  }
+
+  if (message === 'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'
+    || message === 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.') {
+    return failure(
+      'local_error',
+      'LVOVD\'s downloader is not ready',
+      message,
+      'Restart LVOVD. If the problem continues, run npm run update-ytdlp.'
+    );
+  }
+
+  return failure(
+    'local_error',
+    'LVOVD could not complete local processing',
+    'A local processing or file operation failed. LVOVD did not attribute it to the media source.',
+    'Try again. If the problem continues, check that LVOVD can use its local temporary workspace.'
+  );
+}
+
+function classifyFailure(error, context = {}) {
+  const scope = context.scope || error?.failureScope;
+  return scope === 'local'
+    ? classifyLocalFailure(error)
+    : classifySourceFailure(error, context);
+}
+
 function classifySourceFailure(error, context = {}) {
   const evidence = failureEvidence(error);
   const manualSourceFormat = context.manualSourceFormat === true
     || context.sourceFormatMode === 'manual';
-
-  if (/unable to download (?:video )?thumbnail|thumbnail[^\n]*(?:403|forbidden|rejected|failed)/.test(evidence)) {
-    return failure(
-      'extra_rejected',
-      'The thumbnail could not be downloaded',
-      'The source rejected the thumbnail request. The media itself may still be available.',
-      'Try again without Thumbnail, or wait and try again later.'
-    );
-  }
 
   if (/\b(?:http (?:error )?)?429\b|\btoo many requests\b|\brate[ -]?limit(?:ed|ing)?\b|\brequest limit(?:ed|ing)?\b/.test(evidence)) {
     return failure(
@@ -34,6 +62,15 @@ function classifySourceFailure(error, context = {}) {
       'The source is limiting requests',
       'The source explicitly reported too many requests or another request limit. LVOVD stopped without retrying automatically.',
       'Wait before running Preview or Download again. Repeated attempts may extend the limit.'
+    );
+  }
+
+  if (/unable to download (?:video )?thumbnail|thumbnail[^\n]*(?:403|forbidden|rejected|failed)/.test(evidence)) {
+    return failure(
+      'extra_rejected',
+      'The thumbnail could not be downloaded',
+      'The source rejected the thumbnail request. The media itself may still be available.',
+      'Try again without Thumbnail, or wait and try again later.'
     );
   }
 
@@ -127,5 +164,6 @@ function classifySourceFailure(error, context = {}) {
 }
 
 module.exports = {
+  classifyFailure,
   classifySourceFailure
 };

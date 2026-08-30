@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const app = require('../server');
-const { classifySourceFailure } = require('../failure-classification');
+const { classifyFailure, classifySourceFailure } = require('../failure-classification');
 const { createHistoryContext, createHistoryEntry } = require('../download-history');
 
 function assertNormalizedFailure(value, category) {
@@ -95,9 +95,40 @@ test('thumbnail rejection stays distinct and unknown diagnostics are not exposed
   assertNormalizedFailure(thumbnail, 'extra_rejected');
   assert.match(thumbnail.help, /without Thumbnail/i);
 
+  const limitedThumbnail = classifySourceFailure(new Error('Unable to download video thumbnail 41: HTTP Error 429: Too Many Requests'));
+  assertNormalizedFailure(limitedThumbnail, 'rate_limited');
+
   const unknown = classifySourceFailure(new Error('opaque internal failure at https://private.invalid/token/secret'));
   assertNormalizedFailure(unknown, 'unknown');
   assert.doesNotMatch(JSON.stringify(unknown), /private\.invalid|opaque internal failure|Original error/i);
+});
+
+test('local failures use a neutral boundary while unknown source failures keep the source fallback', async () => {
+  const ffmpegError = Object.assign(new Error('FFmpeg is not installed or is not on PATH.'), {
+    failureScope: 'local'
+  });
+  const ffmpeg = classifyFailure(ffmpegError);
+  assertNormalizedFailure(ffmpeg, 'local_error');
+  assert.equal(ffmpeg.explanation, 'FFmpeg is not installed or is not on PATH.');
+  assert.doesNotMatch(`${ffmpeg.title} ${ffmpeg.help}`, /source request|media url|update yt-dlp/i);
+
+  const filesystemError = Object.assign(new Error('EACCES: synthetic private workspace path'), {
+    failureScope: 'local'
+  });
+  const filesystem = classifyFailure(filesystemError);
+  assertNormalizedFailure(filesystem, 'local_error');
+  assert.doesNotMatch(JSON.stringify(filesystem), /EACCES|private workspace path/i);
+  assert.doesNotMatch(`${filesystem.title} ${filesystem.explanation} ${filesystem.help}`, /media url|update yt-dlp/i);
+
+  const job = app.createDownloadJob();
+  job.historyRecordStarted = true;
+  await app.settleDownloadFailure(job, filesystemError);
+  assert.deepEqual(app.publicJob(job).failure, filesystem);
+
+  const sourceUnknown = classifyFailure(new Error('synthetic acquisition failure without specific evidence'));
+  assertNormalizedFailure(sourceUnknown, 'unknown');
+  assert.match(sourceUnknown.title, /source request/i);
+  assert.match(sourceUnknown.help, /url/i);
 });
 
 test('Preview and download paths publish the same normalized failure contract', async () => {

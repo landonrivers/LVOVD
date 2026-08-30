@@ -9,7 +9,7 @@ const {
   createSourceRequestCoordinator,
   courtesyDelayMs
 } = require('./request-safety');
-const { classifySourceFailure } = require('./failure-classification');
+const { classifyFailure } = require('./failure-classification');
 const {
   HISTORY_SCHEMA_VERSION,
   historyStore,
@@ -47,6 +47,20 @@ const SPONSOR_CATEGORIES = new Set([
 
 const YTDLP_PATH = process.env.YTDLP_PATH || '';
 const YTDLP_COMMON_ARGS = ['--js-runtimes', 'node', '--no-colors'];
+
+function withFailureScope(error, failureScope) {
+  const scoped = error instanceof Error ? error : new Error(String(error || 'Download failed.'));
+  if (!scoped.failureScope) scoped.failureScope = failureScope;
+  return scoped;
+}
+
+async function localOperation(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw withFailureScope(error, 'local');
+  }
+}
 
 async function createProcessWorkRoot(tempDir = os.tmpdir()) {
   return fsp.mkdtemp(path.join(tempDir, 'lvovd-run-'));
@@ -217,7 +231,7 @@ function safeMediaUrl(value) {
 function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
   return new Promise((resolve, reject) => {
     if (!command) {
-      reject(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'));
+      reject(withFailureScope(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'), 'local'));
       return;
     }
 
@@ -232,7 +246,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
     try {
       child = spawn(command, args, { windowsHide: true, shell: false });
     } catch (error) {
-      reject(error);
+      reject(withFailureScope(error, 'local'));
       return;
     }
     if (job) job.child = child;
@@ -268,11 +282,11 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
       clearJobChild();
       if (error.code === 'ENOENT') {
         const isYtdlp = command === YTDLP_PATH;
-        fail(new Error(isYtdlp
+        fail(withFailureScope(new Error(isYtdlp
           ? 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
-          : `${command} is not installed or is not on PATH.`));
+          : `${command} is not installed or is not on PATH.`), 'local'));
       } else {
-        fail(error);
+        fail(withFailureScope(error, 'local'));
       }
     });
 
@@ -284,7 +298,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
       const err = Buffer.concat(stderr).toString('utf8').trim();
       if (code === 0) return resolve({ stdout: out, stderr: err });
       const lastLine = err.split(/\r?\n/).filter(Boolean).slice(-1)[0];
-      reject(new Error(lastLine || `${path.basename(command)} exited with code ${code}.`));
+      reject(withFailureScope(new Error(lastLine || `${path.basename(command)} exited with code ${code}.`), 'source'));
     });
   });
 }
@@ -531,7 +545,7 @@ function capabilitySummary(info, requestedUrl) {
 }
 
 function classifyPreviewError(error, requestedUrl) {
-  return classifySourceFailure(error);
+  return classifyFailure(error);
 }
 
 function normalizePlaylistEntry(entry, index) {
@@ -1126,7 +1140,7 @@ function processingMessage(line) {
 async function runTask(job, task, taskIndex, options) {
   throwIfJobCancelled(job);
   const taskDir = path.join(job.tempDir, `item-${String(taskIndex + 1).padStart(3, '0')}`);
-  await fsp.mkdir(taskDir, { recursive: true });
+  await localOperation(() => fsp.mkdir(taskDir, { recursive: true }));
   throwIfJobCancelled(job);
   const outputTemplate = path.join(taskDir, '%(title).180B [%(id)s].%(ext)s');
   const progressTemplate = 'download:__YTDLP_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s|%(info.vcodec)s|%(info.acodec)s|%(progress._percent_str)s';
@@ -1149,9 +1163,16 @@ async function runTask(job, task, taskIndex, options) {
 
   throwIfJobCancelled(job);
   await new Promise((resolve, reject) => {
-    const child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
+    let child;
+    try {
+      child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
+    } catch (error) {
+      reject(withFailureScope(error, 'local'));
+      return;
+    }
     job.child = child;
     let lastErrorLine = '';
+    let localProcessingStarted = false;
     const recentErrorLines = [];
 
     const handleStdout = (line) => {
@@ -1190,6 +1211,7 @@ async function runTask(job, task, taskIndex, options) {
         if (recentErrorLines.length > 8) recentErrorLines.shift();
       }
       if (/\[(Merger|VideoRemuxer|VideoConvertor|ExtractAudio|Metadata|EmbedThumbnail|EmbedSubtitle|SubtitleConvertor|ThumbnailsConvertor|SponsorBlock|ModifyChapters|Fixup[^\]]*|MoveFiles)\]/i.test(line)) {
+        localProcessingStarted = true;
         updateJob(job, {
           status: 'running',
           phase: 'processing',
@@ -1209,9 +1231,9 @@ async function runTask(job, task, taskIndex, options) {
 
     child.on('error', (error) => {
       if (job.child === child) job.child = null;
-      reject(error.code === 'ENOENT'
+      reject(withFailureScope(error.code === 'ENOENT'
         ? new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.')
-        : error);
+        : error, 'local'));
     });
 
     child.on('close', (code) => {
@@ -1221,28 +1243,32 @@ async function runTask(job, task, taskIndex, options) {
       if (code === 0) return resolve();
       const failure = new Error(lastErrorLine || `yt-dlp exited with code ${code}.`);
       failure.diagnostic = recentErrorLines.join('\n');
-      reject(failure);
+      reject(withFailureScope(failure, localProcessingStarted ? 'local' : 'source'));
     });
   });
 
   throwIfJobCancelled(job);
   if (options.content === 'audio' && options.audioFormat !== 'source') {
-    await convertDownloadedAudio(job, taskDir, options.audioFormat);
+    await localOperation(() => convertDownloadedAudio(job, taskDir, options.audioFormat));
   }
 
   throwIfJobCancelled(job);
-  const outputs = await collectTaskOutputs(taskDir, task.label);
+  const outputs = await localOperation(() => collectTaskOutputs(taskDir, task.label));
   throwIfJobCancelled(job);
-  if (!outputs.length) throw new Error('yt-dlp completed but did not produce a downloadable file.');
+  if (!outputs.length) {
+    throw withFailureScope(new Error('yt-dlp completed but did not produce a downloadable file.'), 'local');
+  }
   job.outputs.push(...outputs);
 }
 
 async function prepareDownloadJob(job, videoUrl, options, selection) {
   throwIfJobCancelled(job);
-  if (!YTDLP_PATH) throw new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.');
-  const workRoot = await getProcessWorkRoot();
+  if (!YTDLP_PATH) {
+    throw withFailureScope(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'), 'local');
+  }
+  const workRoot = await localOperation(() => getProcessWorkRoot());
   throwIfJobCancelled(job);
-  job.tempDir = await createJobWorkDir(workRoot);
+  job.tempDir = await localOperation(() => createJobWorkDir(workRoot));
   throwIfJobCancelled(job);
 
   const tasks = await resolveTasks(videoUrl, options, selection, job);
@@ -1336,7 +1362,7 @@ async function cleanupJob(job) {
 
 function finalizeDownloadFailure(job, error) {
   const options = job.historyContext?.request?.options || {};
-  const classified = classifySourceFailure(error, {
+  const classified = classifyFailure(error, {
     sourceFormatMode: options.sourceFormat?.mode
   });
   updateJob(job, {
