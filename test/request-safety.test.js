@@ -13,8 +13,7 @@ const {
   BATCH_DELAY_MAX_MS,
   createSerialTaskQueue,
   createSourceRequestCoordinator,
-  courtesyDelayMs,
-  classifyDownloadError
+  courtesyDelayMs
 } = require('../request-safety');
 
 test('playlist courtesy delay stays between five and ten seconds', () => {
@@ -99,23 +98,6 @@ test('source request coordinator serializes previews with downloads and coalesce
     await coordinator.preview('https://video.example/watch/one', async () => 'preview-one-again'),
     'preview-one-again'
   );
-});
-
-test('429 is classified as a request limit while a bare 403 is not', () => {
-  const limited = classifyDownloadError(new Error('HTTP Error 429: Too Many Requests'));
-  assert.equal(limited.category, 'rate_limited');
-  assert.match(limited.userMessage, /stopped instead of retrying automatically/i);
-
-  const forbidden = classifyDownloadError(new Error('ERROR: unable to download video data: HTTP Error 403: Forbidden'));
-  assert.equal(forbidden.category, 'access_rejected');
-  assert.doesNotMatch(forbidden.userMessage, /temporarily limiting requests/i);
-  assert.match(forbidden.userMessage, /does not by itself prove rate limiting/i);
-});
-
-test('thumbnail-specific rejection is distinguished from a media 403', () => {
-  const result = classifyDownloadError(new Error('ERROR: Unable to download video thumbnail 41: HTTP Error 403: Forbidden'));
-  assert.equal(result.category, 'extra_rejected');
-  assert.match(result.userMessage, /try again without Thumbnail/i);
 });
 
 test('checking Thumbnail does not change audio source acquisition', () => {

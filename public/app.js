@@ -426,7 +426,7 @@ function renderQueue() {
     strong.textContent = job.title || 'Media download';
     const small = document.createElement('small');
     const state = queueStateLabel(data);
-    const message = data.error || data.message || state;
+    const message = data.failure?.title || data.message || data.error || state;
     const details = queueDetails(data);
     const mode = queueModeSummary(job);
     small.textContent = [
@@ -436,6 +436,13 @@ function renderQueue() {
       details
     ].filter(Boolean).join(' · ');
     copy.append(strong, small);
+
+    if (data.status === 'error' && data.failure) {
+      const failureHelp = document.createElement('small');
+      failureHelp.className = 'queue-failure-help';
+      failureHelp.textContent = [data.failure.explanation, data.failure.help].filter(Boolean).join(' ');
+      copy.appendChild(failureHelp);
+    }
 
     if (Number.isFinite(data.percent) || ['starting', 'processing'].includes(data.phase)) {
       const track = document.createElement('div');
@@ -1072,8 +1079,8 @@ function renderInfo(info) {
 
 function renderPreviewError(details, fallback) {
   previewErrorTitle.textContent = details?.title || 'Could not preview this URL';
-  previewErrorMessage.textContent = details?.message || fallback || 'yt-dlp could not inspect this URL.';
-  previewErrorHint.textContent = details?.hint || '';
+  previewErrorMessage.textContent = details?.explanation || details?.message || fallback || 'LVOVD could not inspect this URL.';
+  previewErrorHint.textContent = details?.help || details?.hint || '';
   previewError.hidden = false;
 }
 
@@ -1199,8 +1206,12 @@ function renderProgress(data) {
   }
 
   if (data.status === 'error') {
-    setStatus(data.error || 'Download failed.', 'error');
-    progressStage.textContent = data.error || 'Download failed.';
+    const failure = data.failure || {};
+    const failureTitle = failure.title || data.message || 'Download failed.';
+    setStatus(failureTitle, 'error');
+    progressStage.textContent = failureTitle;
+    progressStream.textContent = failure.explanation || data.error || '';
+    progressDetails.textContent = failure.help || '';
     progressBar.classList.remove('indeterminate');
     progressBar.style.width = '0%';
     setControlsDisabled(false);

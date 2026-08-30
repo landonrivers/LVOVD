@@ -305,6 +305,43 @@ test('successful synthetic job reaches ready and records output metadata', async
   assert.equal('filePath' in stored.outputs[0], false);
 });
 
+test('known local FFmpeg startup failure is not presented as a source-request failure', async (t) => {
+  const job = createTrackedJob();
+  t.after(() => forgetJob(job));
+  spawnImpl = (command, args) => {
+    if (command === process.execPath) {
+      return createFakeChild({
+        onStart: () => writeTaskOutput(args, 'source-audio.webm'),
+        autoCloseCode: 0
+      });
+    }
+
+    const child = createFakeChild();
+    process.nextTick(() => {
+      const error = new Error('synthetic spawn failure');
+      error.code = 'ENOENT';
+      child.emit('error', error);
+    });
+    return child;
+  };
+
+  await app.runDownloadJob(
+    job,
+    'https://example.invalid/audio',
+    app.normalizeOptions({ content: 'audio', audioFormat: 'mp3' }),
+    app.normalizeSelection({})
+  );
+
+  assert.equal(job.status, 'error');
+  assert.equal(job.errorCategory, 'local_error');
+  assert.equal(job.message, 'Local processing could not start');
+  assert.equal(job.error, 'FFmpeg is not installed or is not on PATH.');
+  assert.doesNotMatch(JSON.stringify(job.failure), /source request|media URL|update yt-dlp/i);
+  const stored = await historyEntry(job);
+  assert.equal(stored?.failure?.category, 'local_error');
+  assert.equal(stored?.failure?.message, 'FFmpeg is not installed or is not on PATH.');
+});
+
 test('failed all-or-nothing jobs clear deleted output descriptors and record failure', async (t) => {
   const job = createTrackedJob();
   t.after(() => forgetJob(job));

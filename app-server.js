@@ -7,9 +7,9 @@ const { spawn } = require('node:child_process');
 const { URL } = require('node:url');
 const {
   createSourceRequestCoordinator,
-  courtesyDelayMs,
-  classifyDownloadError
+  courtesyDelayMs
 } = require('./request-safety');
+const { classifyFailure } = require('./failure-classification');
 const {
   HISTORY_SCHEMA_VERSION,
   historyStore,
@@ -47,6 +47,20 @@ const SPONSOR_CATEGORIES = new Set([
 
 const YTDLP_PATH = process.env.YTDLP_PATH || '';
 const YTDLP_COMMON_ARGS = ['--js-runtimes', 'node', '--no-colors'];
+
+function withFailureScope(error, failureScope) {
+  const scoped = error instanceof Error ? error : new Error(String(error || 'Download failed.'));
+  if (!scoped.failureScope) scoped.failureScope = failureScope;
+  return scoped;
+}
+
+async function localOperation(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw withFailureScope(error, 'local');
+  }
+}
 
 async function createProcessWorkRoot(tempDir = os.tmpdir()) {
   return fsp.mkdtemp(path.join(tempDir, 'lvovd-run-'));
@@ -126,6 +140,7 @@ function finalizeCancelledJob(job) {
     streamLabel: null,
     outputs: [],
     autoDownloadUrl: null,
+    failure: null,
     error: null,
     errorCategory: null
   });
@@ -160,6 +175,7 @@ function requestJobCancellation(job) {
     streamLabel: null,
     outputs: [],
     autoDownloadUrl: null,
+    failure: null,
     error: null,
     errorCategory: null
   });
@@ -215,7 +231,7 @@ function safeMediaUrl(value) {
 function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
   return new Promise((resolve, reject) => {
     if (!command) {
-      reject(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'));
+      reject(withFailureScope(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'), 'local'));
       return;
     }
 
@@ -230,7 +246,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
     try {
       child = spawn(command, args, { windowsHide: true, shell: false });
     } catch (error) {
-      reject(error);
+      reject(withFailureScope(error, 'local'));
       return;
     }
     if (job) job.child = child;
@@ -266,11 +282,11 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
       clearJobChild();
       if (error.code === 'ENOENT') {
         const isYtdlp = command === YTDLP_PATH;
-        fail(new Error(isYtdlp
+        fail(withFailureScope(new Error(isYtdlp
           ? 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
-          : `${command} is not installed or is not on PATH.`));
+          : `${command} is not installed or is not on PATH.`), 'local'));
       } else {
-        fail(error);
+        fail(withFailureScope(error, 'local'));
       }
     });
 
@@ -282,7 +298,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
       const err = Buffer.concat(stderr).toString('utf8').trim();
       if (code === 0) return resolve({ stdout: out, stderr: err });
       const lastLine = err.split(/\r?\n/).filter(Boolean).slice(-1)[0];
-      reject(new Error(lastLine || `${path.basename(command)} exited with code ${code}.`));
+      reject(withFailureScope(new Error(lastLine || `${path.basename(command)} exited with code ${code}.`), 'source'));
     });
   });
 }
@@ -529,72 +545,7 @@ function capabilitySummary(info, requestedUrl) {
 }
 
 function classifyPreviewError(error, requestedUrl) {
-  const message = String(error?.message || error || 'Could not inspect this URL.').trim();
-  let hostname = null;
-  try { hostname = new URL(requestedUrl).hostname.replace(/^www\./i, ''); } catch {}
-  const lower = message.toLowerCase();
-
-  if (/drm|digital rights management/.test(lower)) {
-    return {
-      category: 'protected',
-      title: 'Protected media is not supported',
-      message,
-      hint: 'LVOVD does not bypass DRM or other access-control protections.',
-      hostname
-    };
-  }
-  if (/login|log in|sign in|signin|authentication|cookies|private video|private post|account required|members-only|members only/.test(lower)) {
-    return {
-      category: 'authentication',
-      title: 'This source appears to require sign-in',
-      message,
-      hint: 'The URL may be supported by yt-dlp, but LVOVD does not import browser cookies or authenticated sessions yet.',
-      hostname
-    };
-  }
-  if (/unsupported url|no suitable extractor|not a valid url|unable to extract.*url/.test(lower)) {
-    return {
-      category: 'unsupported',
-      title: 'yt-dlp could not recognize this media URL',
-      message,
-      hint: 'The site may not be supported, the page may not expose downloadable media, or its extractor may need an update.',
-      hostname
-    };
-  }
-  if (/geo|not available in your country|not available in your region|geographic/.test(lower)) {
-    return {
-      category: 'geo_restricted',
-      title: 'This media appears to be region restricted',
-      message,
-      hint: 'LVOVD does not attempt to bypass geographic restrictions.',
-      hostname
-    };
-  }
-  if (/not available|unavailable|removed|deleted|does not exist/.test(lower)) {
-    return {
-      category: 'unavailable',
-      title: 'The media is unavailable',
-      message,
-      hint: 'The item may have been removed, made private, expired, or otherwise become inaccessible.',
-      hostname
-    };
-  }
-  if (/403|forbidden|429|too many requests|rate limit|blocked/.test(lower)) {
-    return {
-      category: 'access_blocked',
-      title: 'The source rejected the request',
-      message,
-      hint: 'The service may be rate-limiting or blocking automated access. Trying again later or updating yt-dlp may help.',
-      hostname
-    };
-  }
-  return {
-    category: 'extractor_error',
-    title: 'yt-dlp could not preview this URL',
-    message,
-    hint: 'The service may have changed, the URL may need authentication, or the current yt-dlp extractor may be temporarily broken.',
-    hostname
-  };
+  return classifyFailure(error);
 }
 
 function normalizePlaylistEntry(entry, index) {
@@ -1154,6 +1105,7 @@ function publicJob(job) {
     itemLabel: job.itemLabel || null,
     outputs,
     autoDownloadUrl: job.autoDownloadUrl || null,
+    failure: job.failure || null,
     error: job.error || null,
     errorCategory: job.errorCategory || null
   };
@@ -1188,7 +1140,7 @@ function processingMessage(line) {
 async function runTask(job, task, taskIndex, options) {
   throwIfJobCancelled(job);
   const taskDir = path.join(job.tempDir, `item-${String(taskIndex + 1).padStart(3, '0')}`);
-  await fsp.mkdir(taskDir, { recursive: true });
+  await localOperation(() => fsp.mkdir(taskDir, { recursive: true }));
   throwIfJobCancelled(job);
   const outputTemplate = path.join(taskDir, '%(title).180B [%(id)s].%(ext)s');
   const progressTemplate = 'download:__YTDLP_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s|%(info.vcodec)s|%(info.acodec)s|%(progress._percent_str)s';
@@ -1211,9 +1163,16 @@ async function runTask(job, task, taskIndex, options) {
 
   throwIfJobCancelled(job);
   await new Promise((resolve, reject) => {
-    const child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
+    let child;
+    try {
+      child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
+    } catch (error) {
+      reject(withFailureScope(error, 'local'));
+      return;
+    }
     job.child = child;
     let lastErrorLine = '';
+    let localProcessingStarted = false;
     const recentErrorLines = [];
 
     const handleStdout = (line) => {
@@ -1252,6 +1211,7 @@ async function runTask(job, task, taskIndex, options) {
         if (recentErrorLines.length > 8) recentErrorLines.shift();
       }
       if (/\[(Merger|VideoRemuxer|VideoConvertor|ExtractAudio|Metadata|EmbedThumbnail|EmbedSubtitle|SubtitleConvertor|ThumbnailsConvertor|SponsorBlock|ModifyChapters|Fixup[^\]]*|MoveFiles)\]/i.test(line)) {
+        localProcessingStarted = true;
         updateJob(job, {
           status: 'running',
           phase: 'processing',
@@ -1271,9 +1231,9 @@ async function runTask(job, task, taskIndex, options) {
 
     child.on('error', (error) => {
       if (job.child === child) job.child = null;
-      reject(error.code === 'ENOENT'
+      reject(withFailureScope(error.code === 'ENOENT'
         ? new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.')
-        : error);
+        : error, 'local'));
     });
 
     child.on('close', (code) => {
@@ -1281,37 +1241,34 @@ async function runTask(job, task, taskIndex, options) {
       stderrReader.flush();
       if (job.child === child) job.child = null;
       if (code === 0) return resolve();
-      const unavailableFormat = /requested format|format.*not available/i.test(lastErrorLine);
-      const manualSourceFailure = options.sourceFormat?.mode === 'manual' && unavailableFormat;
-      const compatibilityFailure = options.profile === 'compatible' && unavailableFormat;
-      const failure = new Error(manualSourceFailure
-        ? 'The manually selected source format is no longer available. Run Preview again and choose a current source format.'
-        : compatibilityFailure
-          ? 'A requested native H.264/AAC format was not available. Try Maximum Quality or a lower resolution.'
-          : (lastErrorLine || `yt-dlp exited with code ${code}.`));
+      const failure = new Error(lastErrorLine || `yt-dlp exited with code ${code}.`);
       failure.diagnostic = recentErrorLines.join('\n');
-      reject(failure);
+      reject(withFailureScope(failure, localProcessingStarted ? 'local' : 'source'));
     });
   });
 
   throwIfJobCancelled(job);
   if (options.content === 'audio' && options.audioFormat !== 'source') {
-    await convertDownloadedAudio(job, taskDir, options.audioFormat);
+    await localOperation(() => convertDownloadedAudio(job, taskDir, options.audioFormat));
   }
 
   throwIfJobCancelled(job);
-  const outputs = await collectTaskOutputs(taskDir, task.label);
+  const outputs = await localOperation(() => collectTaskOutputs(taskDir, task.label));
   throwIfJobCancelled(job);
-  if (!outputs.length) throw new Error('yt-dlp completed but did not produce a downloadable file.');
+  if (!outputs.length) {
+    throw withFailureScope(new Error('yt-dlp completed but did not produce a downloadable file.'), 'local');
+  }
   job.outputs.push(...outputs);
 }
 
 async function prepareDownloadJob(job, videoUrl, options, selection) {
   throwIfJobCancelled(job);
-  if (!YTDLP_PATH) throw new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.');
-  const workRoot = await getProcessWorkRoot();
+  if (!YTDLP_PATH) {
+    throw withFailureScope(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'), 'local');
+  }
+  const workRoot = await localOperation(() => getProcessWorkRoot());
   throwIfJobCancelled(job);
-  job.tempDir = await createJobWorkDir(workRoot);
+  job.tempDir = await localOperation(() => createJobWorkDir(workRoot));
   throwIfJobCancelled(job);
 
   const tasks = await resolveTasks(videoUrl, options, selection, job);
@@ -1375,6 +1332,7 @@ function createDownloadJob(waitingBehindSourceWork = false) {
     itemLabel: null,
     outputs: [],
     autoDownloadUrl: null,
+    failure: null,
     error: null,
     errorCategory: null,
     listeners: new Set(),
@@ -1403,18 +1361,16 @@ async function cleanupJob(job) {
 }
 
 function finalizeDownloadFailure(job, error) {
-  const classified = classifyDownloadError(error);
+  const options = job.historyContext?.request?.options || {};
+  const classified = classifyFailure(error, {
+    sourceFormatMode: options.sourceFormat?.mode
+  });
   updateJob(job, {
     status: 'error',
     phase: 'error',
-    message: classified.category === 'rate_limited'
-      ? 'The source is limiting requests.'
-      : classified.category === 'access_rejected'
-        ? 'The source rejected the download request.'
-        : classified.category === 'extra_rejected'
-          ? 'The selected extra could not be downloaded.'
-          : 'Download failed.',
-    error: classified.userMessage,
+    message: classified.title,
+    failure: classified,
+    error: classified.explanation,
     errorCategory: classified.category,
     percent: null,
     downloadedBytes: null,
@@ -1609,7 +1565,8 @@ async function handleRequest(req, res) {
     } catch (error) {
       let parsedUrl = rawUrl;
       try { parsedUrl = parseMediaUrl(rawUrl); } catch {}
-      return json(res, 400, { error: error.message, details: classifyPreviewError(error, parsedUrl) });
+      const details = classifyPreviewError(error, parsedUrl);
+      return json(res, 400, { error: details.title, details });
     }
   }
 
