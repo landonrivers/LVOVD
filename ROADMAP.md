@@ -95,7 +95,7 @@ Established behavior:
 - manual format IDs are Preview-time identities: History records them truthfully, while Use Again requires the user to choose them again after fresh capability discovery;
 - missing metadata continues to mean unknown rather than absent.
 
-### 5. Better failure and compatibility explanations
+### 5. Better failure and compatibility explanations — completed
 
 Expand the existing error classification so users can understand why a Preview or download failed.
 
@@ -113,6 +113,8 @@ Potential categories include:
 The UI should explain what the user can reasonably do next without pretending LVOVD can bypass source restrictions.
 
 Roadmap 5A establishes one shared generic contract for high-confidence source/acquisition failures used by both Preview and downloads. It distinguishes explicit request limiting, ambiguous access rejection, authentication, unavailable content, unsupported URLs, protected media, unavailable formats, thumbnail-extra rejection, and an unknown fallback without exposing raw tool diagnostics as the primary explanation. FFmpeg/local-processing and disk/filesystem classification remain a separate follow-up slice.
+
+Roadmap 5B adds structured local-operation provenance at the failure boundary and uses it to distinguish missing required tools, permission failures, disk exhaustion, missing local files, explicit FFmpeg codec gaps, generic local processing failures, output-collection inconsistencies, and a neutral local fallback. The normalized four-field failure contract and History schema remain unchanged, and raw FFmpeg diagnostics or temporary paths are not promoted into primary UI copy.
 
 ### 6. Local edit staging
 
