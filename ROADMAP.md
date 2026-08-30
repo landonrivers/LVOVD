@@ -95,7 +95,7 @@ Established behavior:
 - manual format IDs are Preview-time identities: History records them truthfully, while Use Again requires the user to choose them again after fresh capability discovery;
 - missing metadata continues to mean unknown rather than absent.
 
-### 5. Better failure and compatibility explanations
+### 5. Better failure and compatibility explanations — completed
 
 Expand the existing error classification so users can understand why a Preview or download failed.
 
