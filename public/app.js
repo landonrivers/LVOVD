@@ -262,6 +262,46 @@ function queueDetails(data = {}) {
   return details.join(' · ');
 }
 
+function queueDownloadLink(output) {
+  const link = document.createElement('a');
+  link.className = 'button secondary mini';
+  link.href = output.downloadUrl;
+  link.textContent = 'Download';
+  return link;
+}
+
+function appendQueueOutputActions(actions, outputs = []) {
+  if (!outputs.length) return;
+  if (outputs.length === 1) {
+    actions.appendChild(queueDownloadLink(outputs[0]));
+    return;
+  }
+
+  const files = document.createElement('details');
+  files.className = 'queue-files';
+  const summary = document.createElement('summary');
+  summary.className = 'button secondary mini';
+  summary.textContent = `Files (${outputs.length})`;
+  const menu = document.createElement('div');
+  menu.className = 'queue-files-menu';
+
+  outputs.forEach((output, index) => {
+    const item = document.createElement('div');
+    item.className = 'queue-file-item';
+    const copy = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = output.label || `File ${index + 1}`;
+    const small = document.createElement('small');
+    small.textContent = [output.filename, formatBytes(output.size)].filter(Boolean).join(' · ');
+    copy.append(strong, small);
+    item.append(copy, queueDownloadLink(output));
+    menu.appendChild(item);
+  });
+
+  files.append(summary, menu);
+  actions.appendChild(files);
+}
+
 function closeQueueSource(jobId) {
   const source = queueSources.get(jobId);
   if (source) source.close();
@@ -392,13 +432,7 @@ function renderQueue() {
 
     const actions = document.createElement('div');
     actions.className = 'inline-actions';
-    for (const output of data.outputs || []) {
-      const link = document.createElement('a');
-      link.className = 'button secondary mini';
-      link.href = output.downloadUrl;
-      link.textContent = output.kind === 'media' ? 'Download' : output.label || 'File';
-      actions.appendChild(link);
-    }
+    appendQueueOutputActions(actions, data.outputs || []);
 
     const action = document.createElement('button');
     action.type = 'button';

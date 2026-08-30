@@ -58,6 +58,28 @@ test('queue rows show mode detail, prepared state, and compact thumbnails', () =
   assert.match(styleSource, /\.queue-row\.prepared/);
 });
 
+test('multiple prepared outputs collapse into one named queue file menu', () => {
+  const helperStart = appSource.indexOf('function appendQueueOutputActions');
+  const helperEnd = appSource.indexOf('function closeQueueSource', helperStart);
+  const helperSource = appSource.slice(helperStart, helperEnd);
+  assert.match(helperSource, /outputs\.length === 1/);
+  assert.match(helperSource, /queueDownloadLink\(outputs\[0\]\)/);
+  assert.match(helperSource, /files\.className = 'queue-files'/);
+  assert.match(helperSource, /summary\.textContent = `Files \(\$\{outputs\.length\}\)`/);
+  assert.match(helperSource, /output\.label \|\| `File \$\{index \+ 1\}`/);
+  assert.match(helperSource, /output\.filename, formatBytes\(output\.size\)/);
+
+  const renderStart = appSource.indexOf('function renderQueue');
+  const renderEnd = appSource.indexOf('function trackQueueJob', renderStart);
+  const renderSource = appSource.slice(renderStart, renderEnd);
+  assert.match(renderSource, /appendQueueOutputActions\(actions, data\.outputs \|\| \[\]\)/);
+  assert.doesNotMatch(renderSource, /for \(const output of data\.outputs/);
+
+  for (const selector of ['.queue-files', '.queue-files-menu', '.queue-file-item']) {
+    assert.match(styleSource, new RegExp(selector.replace('.', '\\.')));
+  }
+});
+
 test('terminal queue jobs notify History by exact job id and retire failures only after confirmation', () => {
   assert.match(appSource, /function notifyHistoryTerminal\(jobId, statusValue\)/);
   assert.match(appSource, /new CustomEvent\('lvovd:terminal-job'/);
