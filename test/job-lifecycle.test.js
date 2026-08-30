@@ -251,7 +251,12 @@ test('active FFmpeg conversion cancellation kills the conversion child and settl
   assert.equal(spawnCount - before, 2);
   assert.equal(ffmpegKills, 1);
   assert.equal(job.status, 'cancelled');
+  assert.equal(job.failure, null);
+  assert.equal(job.errorCategory, null);
   assert.equal(job.tempDir, null);
+  const stored = await historyEntry(job);
+  assert.equal(stored?.status, 'cancelled');
+  assert.equal(stored?.failure, null);
 });
 
 test('chapter metadata probes are job-owned and cancellable before media acquisition', async (t) => {
@@ -333,13 +338,66 @@ test('known local FFmpeg startup failure is not presented as a source-request fa
   );
 
   assert.equal(job.status, 'error');
-  assert.equal(job.errorCategory, 'local_error');
-  assert.equal(job.message, 'Local processing could not start');
+  assert.equal(job.errorCategory, 'local_runtime_unavailable');
+  assert.equal(job.message, 'FFmpeg is unavailable');
   assert.equal(job.error, 'FFmpeg is not installed or is not on PATH.');
   assert.doesNotMatch(JSON.stringify(job.failure), /source request|media URL|update yt-dlp/i);
   const stored = await historyEntry(job);
-  assert.equal(stored?.failure?.category, 'local_error');
+  assert.equal(stored?.failure?.category, 'local_runtime_unavailable');
   assert.equal(stored?.failure?.message, 'FFmpeg is not installed or is not on PATH.');
+});
+
+test('generic FFmpeg nonzero failure is normalized without exposing stderr or paths', async (t) => {
+  const job = createTrackedJob();
+  t.after(() => forgetJob(job));
+  let spawnIndex = 0;
+
+  spawnImpl = (_command, args) => {
+    spawnIndex += 1;
+    if (spawnIndex === 1) {
+      return createFakeChild({
+        onStart: () => writeTaskOutput(args, 'source-audio.webm'),
+        autoCloseCode: 0
+      });
+    }
+
+    let child;
+    child = createFakeChild({
+      onStart: () => child.stderr.write('opaque conversion failure at C:\\Users\\person\\private\\source.webm\n'),
+      autoCloseCode: 1
+    });
+    return child;
+  };
+
+  await app.runDownloadJob(
+    job,
+    'https://example.invalid/audio',
+    app.normalizeOptions({ content: 'audio', audioFormat: 'mp3' }),
+    app.normalizeSelection({})
+  );
+
+  assert.equal(job.status, 'error');
+  assert.equal(job.errorCategory, 'local_processing_failed');
+  assert.doesNotMatch(JSON.stringify(job.failure), /Users|private|source\.webm|opaque/i);
+  assert.equal((await historyEntry(job))?.failure?.category, 'local_processing_failed');
+});
+
+test('completed acquisition without a collectible output is an output inconsistency', async (t) => {
+  const job = createTrackedJob();
+  t.after(() => forgetJob(job));
+  spawnImpl = () => createFakeChild({ autoCloseCode: 0 });
+
+  await app.runDownloadJob(
+    job,
+    'https://example.invalid/video',
+    app.normalizeOptions({ content: 'video', profile: 'maximum' }),
+    app.normalizeSelection({})
+  );
+
+  assert.equal(job.status, 'error');
+  assert.equal(job.errorCategory, 'local_output_inconsistent');
+  assert.match(job.message, /collect the prepared output/i);
+  assert.equal((await historyEntry(job))?.failure?.category, 'local_output_inconsistent');
 });
 
 test('failed all-or-nothing jobs clear deleted output descriptors and record failure', async (t) => {

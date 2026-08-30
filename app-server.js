@@ -54,11 +54,27 @@ function withFailureScope(error, failureScope) {
   return scoped;
 }
 
-async function localOperation(operation) {
+function withLocalFailure(error, provenance = {}) {
+  const local = withFailureScope(error, 'local');
+  const existing = local.localFailure || {};
+  const systemCode = typeof local.code === 'string' ? local.code : null;
+  local.localFailure = {
+    ...provenance,
+    ...(systemCode ? { systemCode } : {}),
+    ...existing
+  };
+  return local;
+}
+
+function localFailureError(message, provenance) {
+  return withLocalFailure(new Error(message), provenance);
+}
+
+async function localOperation(operation, provenance = {}) {
   try {
     return await operation();
   } catch (error) {
-    throw withFailureScope(error, 'local');
+    throw withLocalFailure(error, provenance);
   }
 }
 
@@ -231,9 +247,16 @@ function safeMediaUrl(value) {
 function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
   return new Promise((resolve, reject) => {
     if (!command) {
-      reject(withFailureScope(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'), 'local'));
+      reject(localFailureError(
+        'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.',
+        { operation: 'process_start', tool: 'yt-dlp' }
+      ));
       return;
     }
+
+    const localTool = command === YTDLP_PATH
+      ? 'yt-dlp'
+      : /(?:^|[\\/])ffmpeg(?:\.exe)?$/i.test(command) ? 'ffmpeg' : null;
 
     try {
       if (job) throwIfJobCancelled(job);
@@ -246,7 +269,7 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
     try {
       child = spawn(command, args, { windowsHide: true, shell: false });
     } catch (error) {
-      reject(withFailureScope(error, 'local'));
+      reject(withLocalFailure(error, { operation: 'process_start', tool: localTool }));
       return;
     }
     if (job) job.child = child;
@@ -282,11 +305,14 @@ function run(command, args, { maxBytes = 4 * 1024 * 1024, job = null } = {}) {
       clearJobChild();
       if (error.code === 'ENOENT') {
         const isYtdlp = command === YTDLP_PATH;
-        fail(withFailureScope(new Error(isYtdlp
+        fail(withLocalFailure(Object.assign(new Error(isYtdlp
           ? 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
-          : `${command} is not installed or is not on PATH.`), 'local'));
+          : `${command} is not installed or is not on PATH.`), { code: error.code }), {
+          operation: 'process_start',
+          tool: localTool
+        }));
       } else {
-        fail(withFailureScope(error, 'local'));
+        fail(withLocalFailure(error, { operation: 'process_start', tool: localTool }));
       }
     });
 
@@ -967,8 +993,16 @@ async function findDownloadedMediaFile(taskDir) {
     return classifyOutput(filePath)?.kind === 'media';
   });
   if (mediaFiles.length === 1) return mediaFiles[0];
-  if (!mediaFiles.length) throw new Error('yt-dlp completed but did not produce a source audio file.');
-  throw new Error('yt-dlp produced multiple media files, so LVOVD could not safely choose which one to convert.');
+  if (!mediaFiles.length) {
+    throw localFailureError(
+      'yt-dlp completed but did not produce a source audio file.',
+      { operation: 'output_collection', reason: 'output_inconsistent' }
+    );
+  }
+  throw localFailureError(
+    'yt-dlp produced multiple media files, so LVOVD could not safely choose which one to convert.',
+    { operation: 'output_collection', reason: 'output_inconsistent' }
+  );
 }
 
 async function convertDownloadedAudio(job, taskDir, format) {
@@ -999,10 +1033,16 @@ async function convertDownloadedAudio(job, taskDir, format) {
 
   throwIfJobCancelled(job);
   await new Promise((resolve, reject) => {
-    const child = spawn('ffmpeg', audioConversionArgs(sourcePath, tempPath, format), {
-      windowsHide: true,
-      shell: false
-    });
+    let child;
+    try {
+      child = spawn('ffmpeg', audioConversionArgs(sourcePath, tempPath, format), {
+        windowsHide: true,
+        shell: false
+      });
+    } catch (error) {
+      reject(withLocalFailure(error, { operation: 'process_start', tool: 'ffmpeg' }));
+      return;
+    }
     job.child = child;
     const stderr = [];
     let stderrBytes = 0;
@@ -1015,24 +1055,36 @@ async function convertDownloadedAudio(job, taskDir, format) {
     child.on('error', (error) => {
       if (job.child === child) job.child = null;
       reject(error.code === 'ENOENT'
-        ? new Error('FFmpeg is not installed or is not on PATH.')
-        : error);
+        ? withLocalFailure(Object.assign(
+            new Error('FFmpeg is not installed or is not on PATH.'),
+            { code: error.code }
+          ), { operation: 'process_start', tool: 'ffmpeg' })
+        : withLocalFailure(error, { operation: 'process_start', tool: 'ffmpeg' }));
     });
 
     child.on('close', (code) => {
       if (job.child === child) job.child = null;
       if (code === 0) return resolve();
-      const detail = Buffer.concat(stderr).toString('utf8').trim().split(/\r?\n/).filter(Boolean).slice(-1)[0];
-      reject(new Error(detail || `FFmpeg audio conversion exited with code ${code}.`));
+      const diagnosticLines = Buffer.concat(stderr).toString('utf8').trim()
+        .split(/\r?\n/).filter(Boolean).slice(-12);
+      const failure = new Error(diagnosticLines.at(-1) || `FFmpeg audio conversion exited with code ${code}.`);
+      failure.diagnostic = diagnosticLines.join('\n');
+      reject(withLocalFailure(failure, {
+        operation: 'ffmpeg_processing',
+        tool: 'ffmpeg',
+        exitCode: code
+      }));
     });
   });
 
   throwIfJobCancelled(job);
-  await fsp.rm(sourcePath, { force: true });
+  await localOperation(() => fsp.rm(sourcePath, { force: true }), { operation: 'local_file_operation' });
   throwIfJobCancelled(job);
-  if (finalPath !== sourcePath) await fsp.rm(finalPath, { force: true });
+  if (finalPath !== sourcePath) {
+    await localOperation(() => fsp.rm(finalPath, { force: true }), { operation: 'local_file_operation' });
+  }
   throwIfJobCancelled(job);
-  await fsp.rename(tempPath, finalPath);
+  await localOperation(() => fsp.rename(tempPath, finalPath), { operation: 'output_collection' });
   throwIfJobCancelled(job);
   return finalPath;
 }
@@ -1140,7 +1192,10 @@ function processingMessage(line) {
 async function runTask(job, task, taskIndex, options) {
   throwIfJobCancelled(job);
   const taskDir = path.join(job.tempDir, `item-${String(taskIndex + 1).padStart(3, '0')}`);
-  await localOperation(() => fsp.mkdir(taskDir, { recursive: true }));
+  await localOperation(
+    () => fsp.mkdir(taskDir, { recursive: true }),
+    { operation: 'workspace_creation' }
+  );
   throwIfJobCancelled(job);
   const outputTemplate = path.join(taskDir, '%(title).180B [%(id)s].%(ext)s');
   const progressTemplate = 'download:__YTDLP_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s|%(info.vcodec)s|%(info.acodec)s|%(progress._percent_str)s';
@@ -1167,12 +1222,12 @@ async function runTask(job, task, taskIndex, options) {
     try {
       child = spawn(YTDLP_PATH, args, { windowsHide: true, shell: false });
     } catch (error) {
-      reject(withFailureScope(error, 'local'));
+      reject(withLocalFailure(error, { operation: 'process_start', tool: 'yt-dlp' }));
       return;
     }
     job.child = child;
     let lastErrorLine = '';
-    let localProcessingStarted = false;
+    let localProcessing = null;
     const recentErrorLines = [];
 
     const handleStdout = (line) => {
@@ -1211,7 +1266,12 @@ async function runTask(job, task, taskIndex, options) {
         if (recentErrorLines.length > 8) recentErrorLines.shift();
       }
       if (/\[(Merger|VideoRemuxer|VideoConvertor|ExtractAudio|Metadata|EmbedThumbnail|EmbedSubtitle|SubtitleConvertor|ThumbnailsConvertor|SponsorBlock|ModifyChapters|Fixup[^\]]*|MoveFiles)\]/i.test(line)) {
-        localProcessingStarted = true;
+        const nextLocalProcessing = /\[(Merger|VideoRemuxer|VideoConvertor|ExtractAudio|SubtitleConvertor|ThumbnailsConvertor|Fixup[^\]]*)\]/i.test(line)
+          ? { operation: 'ffmpeg_processing', tool: 'ffmpeg' }
+          : { operation: 'local_processing', tool: 'yt-dlp' };
+        if (!localProcessing || nextLocalProcessing.tool === 'ffmpeg') {
+          localProcessing = nextLocalProcessing;
+        }
         updateJob(job, {
           status: 'running',
           phase: 'processing',
@@ -1231,9 +1291,12 @@ async function runTask(job, task, taskIndex, options) {
 
     child.on('error', (error) => {
       if (job.child === child) job.child = null;
-      reject(withFailureScope(error.code === 'ENOENT'
-        ? new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.')
-        : error, 'local'));
+      reject(error.code === 'ENOENT'
+        ? withLocalFailure(Object.assign(
+            new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'),
+            { code: error.code }
+          ), { operation: 'process_start', tool: 'yt-dlp' })
+        : withLocalFailure(error, { operation: 'process_start', tool: 'yt-dlp' }));
     });
 
     child.on('close', (code) => {
@@ -1243,20 +1306,31 @@ async function runTask(job, task, taskIndex, options) {
       if (code === 0) return resolve();
       const failure = new Error(lastErrorLine || `yt-dlp exited with code ${code}.`);
       failure.diagnostic = recentErrorLines.join('\n');
-      reject(withFailureScope(failure, localProcessingStarted ? 'local' : 'source'));
+      reject(localProcessing
+        ? withLocalFailure(failure, { ...localProcessing, exitCode: code })
+        : withFailureScope(failure, 'source'));
     });
   });
 
   throwIfJobCancelled(job);
   if (options.content === 'audio' && options.audioFormat !== 'source') {
-    await localOperation(() => convertDownloadedAudio(job, taskDir, options.audioFormat));
+    await localOperation(
+      () => convertDownloadedAudio(job, taskDir, options.audioFormat),
+      { operation: 'ffmpeg_processing', tool: 'ffmpeg' }
+    );
   }
 
   throwIfJobCancelled(job);
-  const outputs = await localOperation(() => collectTaskOutputs(taskDir, task.label));
+  const outputs = await localOperation(
+    () => collectTaskOutputs(taskDir, task.label),
+    { operation: 'output_collection' }
+  );
   throwIfJobCancelled(job);
   if (!outputs.length) {
-    throw withFailureScope(new Error('yt-dlp completed but did not produce a downloadable file.'), 'local');
+    throw localFailureError(
+      'yt-dlp completed but did not produce a downloadable file.',
+      { operation: 'output_collection', reason: 'output_inconsistent' }
+    );
   }
   job.outputs.push(...outputs);
 }
@@ -1264,11 +1338,20 @@ async function runTask(job, task, taskIndex, options) {
 async function prepareDownloadJob(job, videoUrl, options, selection) {
   throwIfJobCancelled(job);
   if (!YTDLP_PATH) {
-    throw withFailureScope(new Error('LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'), 'local');
+    throw localFailureError(
+      'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.',
+      { operation: 'process_start', tool: 'yt-dlp' }
+    );
   }
-  const workRoot = await localOperation(() => getProcessWorkRoot());
+  const workRoot = await localOperation(
+    () => getProcessWorkRoot(),
+    { operation: 'workspace_creation' }
+  );
   throwIfJobCancelled(job);
-  job.tempDir = await localOperation(() => createJobWorkDir(workRoot));
+  job.tempDir = await localOperation(
+    () => createJobWorkDir(workRoot),
+    { operation: 'workspace_creation' }
+  );
   throwIfJobCancelled(job);
 
   const tasks = await resolveTasks(videoUrl, options, selection, job);

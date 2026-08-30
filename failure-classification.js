@@ -16,30 +16,111 @@ function failureEvidence(error) {
 
 function classifyLocalFailure(error) {
   const message = String(error?.message || error || '').trim();
+  const evidence = failureEvidence(error);
+  const provenance = error?.localFailure || {};
+  const operation = String(provenance.operation || '').toLowerCase();
+  const tool = String(provenance.tool || '').toLowerCase();
+  const systemCode = String(provenance.systemCode || error?.code || '').toUpperCase();
+  const hasStructuredLocalProvenance = Boolean(operation || tool);
+  const processStartMissing = operation === 'process_start' && systemCode === 'ENOENT';
+  const ffmpegUnavailable = message === 'FFmpeg is not installed or is not on PATH.'
+    || (processStartMissing && tool === 'ffmpeg');
+  const ytdlpUnavailable = message === 'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'
+    || message === 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
+    || (processStartMissing && tool === 'yt-dlp');
 
-  if (message === 'FFmpeg is not installed or is not on PATH.') {
+  if (ffmpegUnavailable) {
     return failure(
-      'local_error',
-      'Local processing could not start',
-      message,
+      'local_runtime_unavailable',
+      'FFmpeg is unavailable',
+      'FFmpeg is not installed or is not on PATH.',
       'Install FFmpeg or make it available on PATH, then restart LVOVD.'
     );
   }
 
-  if (message === 'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'
-    || message === 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.') {
+  if (ytdlpUnavailable) {
     return failure(
-      'local_error',
+      'local_runtime_unavailable',
       'LVOVD\'s downloader is not ready',
-      message,
+      message === 'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.'
+        || message === 'The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'
+        ? message
+        : 'The LVOVD-managed yt-dlp executable is missing or could not be started.',
       'Restart LVOVD. If the problem continues, run npm run update-ytdlp.'
+    );
+  }
+
+  if (processStartMissing) {
+    return failure(
+      'local_runtime_unavailable',
+      'A required local tool is unavailable',
+      'A required local program could not be found or started.',
+      'Check the required local tools, then restart LVOVD and try again.'
+    );
+  }
+
+  if (systemCode === 'ENOSPC'
+    || (hasStructuredLocalProvenance && /\bno space left on device\b|\bdisk (?:is )?full\b/.test(evidence))) {
+    return failure(
+      'local_disk_full',
+      'Not enough local disk space',
+      'The operating system reported that there is not enough space for LVOVD\'s local temporary files.',
+      'Free local disk space, then start the download again.'
+    );
+  }
+
+  if (systemCode === 'EACCES' || systemCode === 'EPERM'
+    || (hasStructuredLocalProvenance && /\bpermission denied\b|\boperation not permitted\b|\baccess is denied\b/.test(evidence))) {
+    return failure(
+      'local_access_denied',
+      'LVOVD was denied local access',
+      'The operating system denied a local file operation or prevented a required local tool from running.',
+      'Check permissions for LVOVD and its temporary workspace, then try again.'
+    );
+  }
+
+  if ((tool === 'ffmpeg' || operation === 'ffmpeg_processing')
+    && /\bunknown (?:encoder|decoder)\b|\b(?:encoder|decoder)(?: \([^\n)]*\))? not found\b|\bno (?:encoder|decoder) found\b|\berror selecting an? (?:encoder|decoder)\b/.test(evidence)) {
+    return failure(
+      'local_codec_unavailable',
+      'FFmpeg does not support a required codec',
+      'FFmpeg explicitly reported that a required encoder or decoder is unavailable in this installation.',
+      'Use an FFmpeg build with the required codec. For audio jobs, Source Audio or another format may avoid that codec.'
+    );
+  }
+
+  if (systemCode === 'ENOENT'
+    || ((tool === 'ffmpeg' || operation === 'ffmpeg_processing') && /\bno such file or directory\b/.test(evidence))) {
+    return failure(
+      'local_file_missing',
+      'A required local file is missing',
+      'A local input or output file could not be found while LVOVD was processing it.',
+      'Start the download again. If it repeats, check that LVOVD\'s temporary files are not being removed while it runs.'
+    );
+  }
+
+  if (provenance.reason === 'output_inconsistent' || operation === 'output_collection') {
+    return failure(
+      'local_output_inconsistent',
+      'LVOVD could not collect the prepared output',
+      'Local processing finished, but the expected output files were missing or inconsistent.',
+      'Start the download again. If it repeats, check the local temporary workspace and FFmpeg installation.'
+    );
+  }
+
+  if (tool === 'ffmpeg' || operation === 'ffmpeg_processing' || operation === 'local_processing') {
+    return failure(
+      'local_processing_failed',
+      'Local media processing failed',
+      'FFmpeg or another local post-processing step failed without a reliable, more specific cause.',
+      'Try again or choose different output options. For audio jobs, Source Audio avoids conversion. If it repeats, check the FFmpeg installation.'
     );
   }
 
   return failure(
     'local_error',
-    'LVOVD could not complete local processing',
-    'A local processing or file operation failed. LVOVD did not attribute it to the media source.',
+    'LVOVD could not complete a local operation',
+    'A local operation failed, but the available evidence does not identify a reliable specific cause.',
     'Try again. If the problem continues, check that LVOVD can use its local temporary workspace.'
   );
 }
