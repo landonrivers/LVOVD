@@ -271,7 +271,9 @@
       appendDetail(body, 'Terminal time', formatTimestamp(entry?.finishedAt || entry?.createdAt));
       if (entry?.failure) {
         appendDetail(body, 'Failure category', String(entry.failure.category || '').replace(/_/g, ' '));
+        appendDetail(body, 'Failure title', entry.failure.title);
         appendDetail(body, 'Failure message', entry.failure.message);
+        appendDetail(body, 'Next step', entry.failure.help);
       }
 
       details.append(summary, body);
@@ -330,7 +332,10 @@
           const more = entry.outputs.length > 1 ? ` + ${entry.outputs.length - 1} more` : '';
           summaryBits.push(`${firstOutput.filename}${more}${Number.isFinite(firstOutput.size) ? ` · ${formatBytes(firstOutput.size)}` : ''}`);
         }
-        if (entry?.status === 'error' && entry?.failure?.message) summaryBits.push(conciseText(entry.failure.message));
+        if (entry?.status === 'error') {
+          const failureSummary = entry?.failure?.title || entry?.failure?.message;
+          if (failureSummary) summaryBits.push(conciseText(failureSummary));
+        }
 
         const small = document.createElement('small');
         small.textContent = summaryBits.filter(Boolean).join(' · ');

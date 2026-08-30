@@ -112,6 +112,8 @@ Potential categories include:
 
 The UI should explain what the user can reasonably do next without pretending LVOVD can bypass source restrictions.
 
+Roadmap 5A establishes one shared generic contract for high-confidence source/acquisition failures used by both Preview and downloads. It distinguishes explicit request limiting, ambiguous access rejection, authentication, unavailable content, unsupported URLs, protected media, unavailable formats, thumbnail-extra rejection, and an unknown fallback without exposing raw tool diagnostics as the primary explanation. FFmpeg/local-processing and disk/filesystem classification remain a separate follow-up slice.
+
 ### 6. Local edit staging
 
 Add an optional editing path before finalizing a download, while preserving the current straight-through download path for users who do not need edits.

@@ -66,8 +66,10 @@ function createHistoryEntry(job, finishedAt = new Date()) {
     outputs,
     failure: job.status === 'error'
       ? {
-          category: job.errorCategory || 'download_error',
-          message: job.error || job.message || 'Download failed.'
+          category: job.failure?.category || job.errorCategory || 'unknown',
+          title: job.failure?.title || job.message || 'Download failed.',
+          message: job.failure?.explanation || job.error || job.message || 'Download failed.',
+          help: job.failure?.help || null
         }
       : null
   };

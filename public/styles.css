@@ -119,6 +119,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 #output-list .output-row small { margin-top: 0; color: #e8e7ed; font-size: 10px; font-weight: 800; }
 .queue-entry-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .queue-entry-main > div { min-width: 0; flex: 1; }
+.output-row small.queue-failure-help { color: #a9868e; line-height: 1.45; }
 .queue-thumbnail { width: 56px; height: 56px; flex: 0 0 56px; object-fit: cover; border-radius: 9px; border: 1px solid rgba(255,255,255,.07); background: #09090d; }
 .queue-row.prepared { background: rgba(83,200,136,.035); }
 .queue-row > .inline-actions { flex: 0 0 auto; }

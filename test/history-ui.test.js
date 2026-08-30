@@ -126,7 +126,7 @@ test('history UI covers terminal states, details, deletion, clear confirmation, 
   for (const label of [
     'Source URL', 'Content', 'Profile', 'Resolution', 'Audio output', 'Range', 'Extras',
     'Subtitle mode', 'Subtitle language', 'SponsorBlock', 'Playlist selection', 'Selected item URLs',
-    'Output', 'Terminal time', 'Failure category', 'Failure message'
+    'Output', 'Terminal time', 'Failure category', 'Failure title', 'Failure message', 'Next step'
   ]) {
     assert.match(source, new RegExp(`'${label}'`));
   }
