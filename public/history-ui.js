@@ -183,6 +183,15 @@
       return ({ off: 'Off', mark: 'Mark as chapters', remove: 'Remove segments' })[mode] || mode || '';
     }
 
+    function sourceFormatHistoryLabel(selection) {
+      if (!selection || selection.mode !== 'manual') return '';
+      if (selection.type === 'combined') return `Combined format ${selection.combinedId}`;
+      if (selection.type === 'separate') return `Video ${selection.videoId} + Audio ${selection.audioId}`;
+      if (selection.type === 'video') return `Video format ${selection.videoId}`;
+      if (selection.type === 'audio') return `Audio format ${selection.audioId}`;
+      return 'Manual source format';
+    }
+
     function extraLabels(options) {
       const labels = [];
       if (options?.thumbnail) labels.push('Thumbnail');
@@ -214,10 +223,12 @@
       body.className = 'history-details-body';
       const options = entry?.request?.options || {};
       const selection = entry?.request?.selection || {};
+      const manualSource = sourceFormatHistoryLabel(options.sourceFormat);
 
       appendDetail(body, 'Source URL', entry?.source?.url);
       appendDetail(body, 'Content', contentLabel(options.content));
-      if (['av', 'video'].includes(options.content)) {
+      if (manualSource) appendDetail(body, 'Source format override', manualSource);
+      if (['av', 'video'].includes(options.content) && !manualSource) {
         appendDetail(body, 'Profile', profileLabel(options.profile));
         appendDetail(body, 'Resolution', options.maxHeight ? `${options.maxHeight}p` : 'Best available');
       }
@@ -313,6 +324,7 @@
         const source = entry?.source?.name || hostnameFromUrl(entry?.source?.url) || 'Source';
         const options = entry?.request?.options || {};
         const summaryBits = [formatTimestamp(entry?.finishedAt || entry?.createdAt), source, contentLabel(options.content)];
+        if (options.sourceFormat?.mode === 'manual') summaryBits.push('Manual source');
         const firstOutput = entry?.outputs?.[0];
         if (firstOutput?.filename) {
           const more = entry.outputs.length > 1 ? ` + ${entry.outputs.length - 1} more` : '';
@@ -501,13 +513,15 @@
         addWarning(warnings, 'saved download settings');
         return [...warnings];
       }
+      const manualSourceWasUsed = saved.sourceFormat?.mode === 'manual';
+      if (manualSourceWasUsed) addWarning(warnings, 'manual source format selection (choose again)');
 
       const savedContent = saved.content || 'av';
       const contentRestored = selectRadio('content', savedContent);
       if (!contentRestored) addWarning(warnings, `content mode (${contentLabel(savedContent) || savedContent})`);
       const effectiveContent = radioInput('content', savedContent)?.checked ? savedContent : null;
 
-      if (effectiveContent && ['av', 'video'].includes(savedContent)) {
+      if (effectiveContent && ['av', 'video'].includes(savedContent) && !manualSourceWasUsed) {
         if (!selectRadio('profile', saved.profile || 'compatible')) {
           addWarning(warnings, `profile (${profileLabel(saved.profile) || saved.profile || 'unknown'})`);
         }

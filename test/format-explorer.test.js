@@ -72,6 +72,8 @@ test('source format explorer normalizes useful media evidence without exposing t
   assert.equal(video.audioCodec, null);
   assert.equal(video.sizeBytes, 50 * 1024 * 1024);
   assert.equal(video.sizeApproximate, false);
+  assert.equal(video.selectionId, '137');
+  assert.equal(video.selectionKind, 'video');
 
   const audio = summary.formats.find((format) => format.id === '140');
   assert.equal(audio.type, 'Audio only');
@@ -82,12 +84,14 @@ test('source format explorer normalizes useful media evidence without exposing t
   assert.equal(audio.sizeApproximate, true);
   assert.equal(audio.audioChannels, 2);
   assert.equal(audio.sampleRate, 48000);
+  assert.equal(audio.selectionKind, 'audio');
 
   const direct = summary.formats.find((format) => format.id === 'direct');
   assert.equal(direct.video, true);
   assert.equal(direct.audio, null);
   assert.equal(direct.type, 'Video · audio unknown');
   assert.equal(direct.videoCodec, null);
+  assert.equal(direct.selectable, false);
 
   const serialized = JSON.stringify(summary);
   assert.equal(serialized.includes('cdn.example'), false);
@@ -108,6 +112,7 @@ test('source format explorer keeps missing metadata unknown instead of inventing
   assert.equal(summary.formats[0].video, true);
   assert.equal(summary.formats[0].audio, null);
   assert.equal(summary.formats[0].audioCodec, null);
+  assert.equal(summary.formats[0].selectable, false);
 });
 
 test('source format explorer bounds the Preview payload and scrubs URL-like display metadata', () => {
@@ -129,13 +134,15 @@ test('source format explorer bounds the Preview payload and scrubs URL-like disp
   assert.equal(JSON.stringify(summary).includes('cdn.example'), false);
 });
 
-test('format explorer UI is read-only and uses the normal Preview response', () => {
+test('format explorer uses the normal Preview response and exposes only bounded manual choices', () => {
   const app = read('public/app.js');
   const server = read('app-server.js');
   assert.match(server, /sourceFormats: sourceFormatSummary\(info\)/);
-  assert.match(app, /function renderSourceFormats\(info\)/);
-  assert.match(app, /Read-only details from this Preview/);
-  assert.match(app, /manual source-format selection is not enabled yet/i);
-  assert.match(app, /renderSourceFormats\(info\)/);
-  assert.doesNotMatch(app, /sourceFormatId|manualFormat|\/api\/formats/);
+  assert.match(app, /function renderSourceFormats\(info, \{ preserveOpen = false \} = \{\}\)/);
+  assert.match(app, /Automatic \(recommended\)/);
+  assert.match(app, /Manual source override/);
+  assert.match(app, /format\.selectable/);
+  assert.match(app, /format\.selectionId/);
+  assert.match(app, /sourceFormat: currentSourceFormatSelection\(content\)/);
+  assert.doesNotMatch(app, /\/api\/formats|raw yt-dlp selector|selector textbox/i);
 });

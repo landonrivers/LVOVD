@@ -4,6 +4,12 @@ LVOVD is already a capable local-first downloader. The next work should focus le
 
 This roadmap is directional rather than a promise of dates or release numbers. Individual slices should stay small enough to review and test independently.
 
+## Product vision
+
+LVOVD exists as a practical local alternative to ad-heavy, tracking-heavy online downloader and media-conversion sites. It should be easy to obtain and understand, stay out of the user's way, keep processing local wherever practical, avoid telemetry/profiling, and be precise about the network requests it does make.
+
+The long-term product can grow beyond downloading into a small local media compatibility toolkit, but source acquisition, local editing, and local conversion should remain understandable as distinct jobs rather than becoming one opaque media pipeline.
+
 ## Current baseline
 
 LVOVD currently provides:
@@ -71,18 +77,23 @@ Persisting live/queued work across a server restart is also separate from downlo
 
 ## Next — Power without clutter
 
-### 4. Advanced source format explorer — in progress
+### 4. Advanced source format explorer — completed
 
-Expose more of the format metadata yt-dlp reports without replacing LVOVD's simple defaults.
+LVOVD exposes more of the format metadata yt-dlp reports without replacing its simple defaults.
 
-The first slice adds a collapsed, read-only format explorer to the existing Preview response. It shows bounded normalized media-format evidence such as format ID, audio/video presence, resolution, FPS, codec, container, bitrate, and size when yt-dlp reports them. It does not expose yt-dlp transport/CDN URLs, make an additional source request, or change the selected download format.
+Established behavior:
 
-Goals:
-
-- keep Compatible MP4 and Maximum Quality as the primary choices;
-- show source formats with understandable resolution, FPS, codec, audio/video presence, bitrate/size estimates when known — read-only inspection is now established;
-- allow advanced manual format selection only when the metadata supports it safely — still deferred to a later bounded slice;
-- continue treating missing metadata as unknown rather than absent.
+- Compatible MP4 and Maximum Quality remain the primary choices;
+- the collapsed Source Formats panel shows understandable resolution, FPS, codec, audio/video presence, container, bitrate, and size evidence when yt-dlp reports it;
+- transport/CDN URLs and raw yt-dlp request details are not exposed to the browser;
+- single-media Previews can opt into a capability-safe Manual source override using exact literal format IDs reported by that Preview;
+- Video + Audio can use one combined format or an exact video-only + audio-only pair; Video Only and Audio Only accept the matching single-stream role;
+- formats with unknown stream composition remain visible for inspection but are not selectable;
+- manual selection is deliberately unavailable for flat playlist Preview rather than probing every playlist item;
+- the server accepts only conservative literal format IDs and constructs any `video+audio` selector itself; arbitrary yt-dlp selector syntax is not accepted;
+- stale manual IDs fail clearly and require a fresh Preview rather than silently substituting another format;
+- manual format IDs are Preview-time identities: History records them truthfully, while Use Again requires the user to choose them again after fresh capability discovery;
+- missing metadata continues to mean unknown rather than absent.
 
 ### 5. Better failure and compatibility explanations
 
@@ -117,18 +128,24 @@ Goals:
 
 The editing workspace should remain a focused trim/stitch tool rather than growing into a general-purpose nonlinear video editor.
 
-### 7. Local media converter
+### 7. Local media compatibility converter
 
-Consider a separate local-only utility for existing media files using the FFmpeg dependency LVOVD already requires.
+Build a separate local-only utility for existing media files: a small codec/encoder workbench whose practical goal is **make this media work where I need it to work**.
 
 Potential uses:
 
+- inspect an existing file and explain its container/codecs before changing anything;
 - remux compatible media without re-encoding;
-- create editor-friendly MP4 output;
+- create editor- and Windows-friendly MP4 output;
 - convert existing audio/video files to supported local formats;
-- show local conversion progress and cancellation.
+- handle common Apple-origin compatibility problems such as MOV/HEVC-family media where the installed codecs permit it;
+- convert modern image formats that cause compatibility friction, including AVIF/HEIC-style cases, to broadly usable formats such as PNG or JPEG where a suitable local decoder is available;
+- support bounded local batch/queue conversion so a set of incompatible media can be normalized together;
+- show local conversion progress, cancellation, and whether an operation is lossless/remux-only or requires re-encoding.
 
-This feature should remain clearly separate from source acquisition.
+Capability discovery should inspect the **actual installed local conversion engine(s)** and expose only conversions that this installation can perform. FFmpeg is the natural primary engine because LVOVD already depends on it, but the product should not force every future image conversion through FFmpeg when a small, well-maintained local image library is demonstrably safer or more capable. No conversion path should require uploading the user's files to a cloud service.
+
+This feature should remain clearly separate from source acquisition: changing the requested local output format must not alter or multiply remote source requests.
 
 ## Major milestone — Easier desktop distribution
 
@@ -147,7 +164,11 @@ Priorities:
 5. evaluate installer/update signing and release-security requirements before treating packaged builds as the default distribution;
 6. consider macOS and Linux packages after the Windows path is proven.
 
-A mobile application is not currently planned. LVOVD's filesystem, yt-dlp, and FFmpeg workflows fit a desktop utility much better than a mobile distribution model.
+### Mobile / phone use — exploratory
+
+A native mobile application is not currently planned because LVOVD's filesystem, yt-dlp, and FFmpeg workflows fit a desktop utility much better. **Convenient phone/mobile use remains a longer-term product aspiration**, but the architecture is intentionally unresolved.
+
+Any future mobile-access approach must preserve LVOVD's security and privacy model. In particular, do not casually expose the localhost server to the LAN or Internet merely to make phone access convenient.
 
 ## Risk-gated or intentionally out of scope
 
@@ -181,5 +202,6 @@ The queue improves convenience while remote source acquisition remains serialize
 - Source Audio downloads the best source audio unchanged; converted audio formats are produced afterward from the local file with FFmpeg.
 - SponsorBlock remains optional and off by default.
 - LVOVD is local-first, not anonymous. Source services still see the user's network requests.
+- LVOVD should not add telemetry/profiling as a condition of normal use.
 - Keep the default server bind local-only and do not weaken the loopback security model for convenience.
 - Do not add DRM or access-control bypass behavior.
