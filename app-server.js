@@ -17,6 +17,10 @@ const {
   recordTerminalJob
 } = require('./download-history');
 const { sourceFormatSummary } = require('./source-formats');
+const {
+  normalizeSourceFormatSelection,
+  sourceFormatSelector
+} = require('./source-format-selection');
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
@@ -792,8 +796,9 @@ function normalizeOptions(raw = {}) {
     mode: sponsorMode,
     categories: sponsorCategories.length ? sponsorCategories : ['sponsor']
   };
+  const sourceFormat = normalizeSourceFormatSelection(raw?.sourceFormat, content);
 
-  return { content, profile, audioFormat, maxHeight, range, extras, sponsor };
+  return { content, profile, audioFormat, maxHeight, range, extras, sponsor, sourceFormat };
 }
 
 function normalizeSelection(raw = {}) {
@@ -807,6 +812,9 @@ function withHeightFilter(base, maxHeight) {
 }
 
 function formatSelector(options) {
+  const manualSelector = sourceFormatSelector(options.sourceFormat);
+  if (manualSelector) return manualSelector;
+
   const h = options.maxHeight;
   if (options.content === 'audio') return 'bestaudio';
   if (options.content === 'extras') return null;
@@ -1273,10 +1281,14 @@ async function runTask(job, task, taskIndex, options) {
       stderrReader.flush();
       if (job.child === child) job.child = null;
       if (code === 0) return resolve();
-      const compatibilityFailure = options.profile === 'compatible' && /requested format|format.*not available/i.test(lastErrorLine);
-      const failure = new Error(compatibilityFailure
-        ? 'A requested native H.264/AAC format was not available. Try Maximum Quality or a lower resolution.'
-        : (lastErrorLine || `yt-dlp exited with code ${code}.`));
+      const unavailableFormat = /requested format|format.*not available/i.test(lastErrorLine);
+      const manualSourceFailure = options.sourceFormat?.mode === 'manual' && unavailableFormat;
+      const compatibilityFailure = options.profile === 'compatible' && unavailableFormat;
+      const failure = new Error(manualSourceFailure
+        ? 'The manually selected source format is no longer available. Run Preview again and choose a current source format.'
+        : compatibilityFailure
+          ? 'A requested native H.264/AAC format was not available. Try Maximum Quality or a lower resolution.'
+          : (lastErrorLine || `yt-dlp exited with code ${code}.`));
       failure.diagnostic = recentErrorLines.join('\n');
       reject(failure);
     });
@@ -1441,6 +1453,9 @@ async function runDownloadJob(job, videoUrl, options, selection) {
 async function startDownload(videoUrl, rawOptions, rawSelection, rawDisplay = {}) {
   const options = normalizeOptions(rawOptions);
   const selection = normalizeSelection(rawSelection);
+  if (selection.entryUrls.length && options.sourceFormat?.mode === 'manual') {
+    throw new Error('Manual source format selection is available for single media Previews, not playlist batches.');
+  }
   const waitingBehindSourceWork = remoteSourceRequests.size > 0;
   const job = createDownloadJob(waitingBehindSourceWork);
   job.historyContext = createHistoryContext(videoUrl, options, selection, rawDisplay);

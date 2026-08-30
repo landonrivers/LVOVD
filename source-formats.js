@@ -1,5 +1,7 @@
 'use strict';
 
+const { SAFE_SOURCE_FORMAT_ID } = require('./source-format-selection');
+
 const MAX_SOURCE_FORMATS = 100;
 
 function boundedText(value, maxLength) {
@@ -61,6 +63,13 @@ function mediaType({ video, audio }) {
   return 'Media';
 }
 
+function selectionKind(presence) {
+  if (presence.video === true && presence.audio === true) return 'combined';
+  if (presence.video === true && presence.audio === false) return 'video';
+  if (presence.video === false && presence.audio === true) return 'audio';
+  return null;
+}
+
 function normalizeSourceFormat(format, index) {
   if (!format || typeof format !== 'object') return null;
   if (!format.url && !format.manifest_url) return null;
@@ -78,9 +87,15 @@ function normalizeSourceFormat(format, index) {
 
   const exactSize = finitePositive(format.filesize);
   const approximateSize = exactSize == null ? finitePositive(format.filesize_approx) : null;
+  const rawId = boundedText(format.format_id, 100);
+  const safeSelectionId = rawId && SAFE_SOURCE_FORMAT_ID.test(rawId) ? rawId : null;
+  const selectableKind = selectionKind(presence);
 
   return {
-    id: boundedText(format.format_id, 100) || `format-${index + 1}`,
+    id: rawId || `format-${index + 1}`,
+    selectionId: safeSelectionId && selectableKind ? safeSelectionId : null,
+    selectionKind: safeSelectionId ? selectableKind : null,
+    selectable: Boolean(safeSelectionId && selectableKind),
     note,
     type: mediaType(presence),
     video: presence.video,

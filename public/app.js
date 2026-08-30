@@ -86,6 +86,10 @@ let queueSummary = null;
 let sourceFormatsPanel = null;
 let sourceFormatsList = null;
 let sourceFormatsSummary = null;
+let sourceFormatSelectionSummary = null;
+let sourceFormatModeAutomatic = null;
+let sourceFormatModeManual = null;
+let manualSourceFormat = { combinedId: null, videoId: null, audioId: null };
 
 function setStatus(message, kind = '') {
   status.textContent = message || '';
@@ -173,6 +177,15 @@ function queueStateLabel(data = {}) {
   return 'Queued';
 }
 
+function manualSourceFormatLabel(selection) {
+  if (!selection || selection.mode !== 'manual') return '';
+  if (selection.type === 'combined') return `Manual source ${selection.combinedId}`;
+  if (selection.type === 'separate') return `Manual source ${selection.videoId} + ${selection.audioId}`;
+  if (selection.type === 'video') return `Manual source ${selection.videoId}`;
+  if (selection.type === 'audio') return `Manual source ${selection.audioId}`;
+  return 'Manual source';
+}
+
 function queueModeSummary(job = {}) {
   const options = job.options || {};
   const bits = [];
@@ -196,10 +209,15 @@ function queueModeSummary(job = {}) {
   };
 
   bits.push(contentLabels[options.content] || 'Media');
+  const manualLabel = manualSourceFormatLabel(options.sourceFormat);
   if (['av', 'video'].includes(options.content)) {
-    bits.push(profileLabels[options.profile] || options.profile || 'Video');
-    bits.push(options.maxHeight ? `${options.maxHeight}p` : 'Best available');
+    if (manualLabel) bits.push(manualLabel);
+    else {
+      bits.push(profileLabels[options.profile] || options.profile || 'Video');
+      bits.push(options.maxHeight ? `${options.maxHeight}p` : 'Best available');
+    }
   } else if (options.content === 'audio') {
+    if (manualLabel) bits.push(manualLabel);
     bits.push(audioLabels[options.audioFormat] || options.audioFormat || 'Audio');
   } else if (options.content === 'extras') {
     const extras = [];
@@ -657,6 +675,87 @@ function formatSourceBitrate(value) {
   return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)} Mbps` : `${Math.round(value)} kbps`;
 }
 
+function sourceFormatManualActive() {
+  return Boolean(sourceFormatModeManual?.checked);
+}
+
+function clearManualSourceFormat({ automatic = false } = {}) {
+  manualSourceFormat = { combinedId: null, videoId: null, audioId: null };
+  if (automatic && sourceFormatModeAutomatic && sourceFormatModeManual) {
+    sourceFormatModeAutomatic.checked = true;
+    sourceFormatModeManual.checked = false;
+  }
+}
+
+function sourceFormatSelectionText() {
+  if (!sourceFormatManualActive()) return 'Automatic selection is active.';
+  const content = selectedValue('content') || 'av';
+  if (content === 'av') {
+    if (manualSourceFormat.combinedId) return `Manual combined format: ${manualSourceFormat.combinedId}`;
+    if (manualSourceFormat.videoId && manualSourceFormat.audioId) return `Manual pair: video ${manualSourceFormat.videoId} + audio ${manualSourceFormat.audioId}`;
+    if (manualSourceFormat.videoId) return `Video ${manualSourceFormat.videoId} selected. Choose an audio-only format too, or choose a combined format.`;
+    if (manualSourceFormat.audioId) return `Audio ${manualSourceFormat.audioId} selected. Choose a video-only format too, or choose a combined format.`;
+    return 'Choose one combined format, or choose one video-only and one audio-only format.';
+  }
+  if (content === 'video') {
+    return manualSourceFormat.videoId
+      ? `Manual video format: ${manualSourceFormat.videoId}`
+      : 'Choose one video-only source format.';
+  }
+  if (content === 'audio') {
+    return manualSourceFormat.audioId
+      ? `Manual audio format: ${manualSourceFormat.audioId}`
+      : 'Choose one audio-only source format. Your Audio Output choice below still controls any local conversion.';
+  }
+  return 'Manual source selection does not apply to Extras Only.';
+}
+
+function currentSourceFormatSelection(content) {
+  if (!sourceFormatManualActive() || currentInfo?.kind !== 'media' || content === 'extras') {
+    return { mode: 'automatic' };
+  }
+  if (content === 'av') {
+    if (manualSourceFormat.combinedId) return { mode: 'manual', type: 'combined', combinedId: manualSourceFormat.combinedId };
+    if (manualSourceFormat.videoId && manualSourceFormat.audioId) {
+      return { mode: 'manual', type: 'separate', videoId: manualSourceFormat.videoId, audioId: manualSourceFormat.audioId };
+    }
+    throw new Error('For manual Video + Audio, choose one combined source format or both one video-only and one audio-only format.');
+  }
+  if (content === 'video') {
+    if (!manualSourceFormat.videoId) throw new Error('Choose one video-only source format for the manual Video Only override.');
+    return { mode: 'manual', type: 'video', videoId: manualSourceFormat.videoId };
+  }
+  if (content === 'audio') {
+    if (!manualSourceFormat.audioId) throw new Error('Choose one audio-only source format for the manual Audio Only override.');
+    return { mode: 'manual', type: 'audio', audioId: manualSourceFormat.audioId };
+  }
+  return { mode: 'automatic' };
+}
+
+function sourceFormatActionFor(format, content) {
+  if (!format?.selectable || !format.selectionId || !format.selectionKind) return null;
+  if (content === 'av' && ['combined', 'video', 'audio'].includes(format.selectionKind)) return format.selectionKind;
+  if (content === 'video' && format.selectionKind === 'video') return 'video';
+  if (content === 'audio' && format.selectionKind === 'audio') return 'audio';
+  return null;
+}
+
+function chooseManualSourceFormat(format, action) {
+  if (!format?.selectionId || !action) return;
+  if (action === 'combined') {
+    manualSourceFormat = { combinedId: format.selectionId, videoId: null, audioId: null };
+  } else if (action === 'video') {
+    manualSourceFormat.combinedId = null;
+    manualSourceFormat.videoId = format.selectionId;
+  } else if (action === 'audio') {
+    manualSourceFormat.combinedId = null;
+    manualSourceFormat.audioId = format.selectionId;
+  }
+  if (sourceFormatSelectionSummary) sourceFormatSelectionSummary.textContent = sourceFormatSelectionText();
+  renderSourceFormats(currentInfo, { preserveOpen: true });
+  updateOptionVisibility();
+}
+
 function ensureSourceFormatsPanel() {
   if (sourceFormatsPanel || !sourceCapabilities) return;
   sourceFormatsPanel = document.createElement('details');
@@ -669,26 +768,65 @@ function ensureSourceFormatsPanel() {
   content.className = 'advanced-content';
   const help = document.createElement('p');
   help.className = 'help';
-  help.textContent = 'Read-only details from this Preview. LVOVD’s normal Compatible MP4 and Maximum Quality choices remain the download controls; manual source-format selection is not enabled yet.';
+  help.textContent = 'Automatic is recommended. Manual selection uses exact source-format IDs from this Preview only; if the source changes, Preview again instead of silently substituting another format.';
+
+  const modeRow = document.createElement('div');
+  modeRow.className = 'radio-row source-format-mode';
+  const automaticLabel = document.createElement('label');
+  sourceFormatModeAutomatic = document.createElement('input');
+  sourceFormatModeAutomatic.type = 'radio';
+  sourceFormatModeAutomatic.name = 'source-format-mode';
+  sourceFormatModeAutomatic.value = 'automatic';
+  sourceFormatModeAutomatic.checked = true;
+  automaticLabel.append(sourceFormatModeAutomatic, document.createTextNode(' Automatic (recommended)'));
+  const manualLabel = document.createElement('label');
+  sourceFormatModeManual = document.createElement('input');
+  sourceFormatModeManual.type = 'radio';
+  sourceFormatModeManual.name = 'source-format-mode';
+  sourceFormatModeManual.value = 'manual';
+  manualLabel.append(sourceFormatModeManual, document.createTextNode(' Manual source override'));
+  modeRow.append(automaticLabel, manualLabel);
+
+  sourceFormatSelectionSummary = document.createElement('p');
+  sourceFormatSelectionSummary.className = 'help source-format-selection-summary';
+  sourceFormatSelectionSummary.textContent = 'Automatic selection is active.';
   sourceFormatsSummary = document.createElement('p');
   sourceFormatsSummary.className = 'help';
   sourceFormatsList = document.createElement('div');
-  sourceFormatsList.className = 'output-list';
+  sourceFormatsList.className = 'output-list source-format-list';
   sourceFormatsList.hidden = false;
-  content.append(help, sourceFormatsSummary, sourceFormatsList);
+  content.append(help, modeRow, sourceFormatSelectionSummary, sourceFormatsSummary, sourceFormatsList);
   sourceFormatsPanel.append(summary, content);
   sourceCapabilities.insertAdjacentElement('afterend', sourceFormatsPanel);
+
+  sourceFormatModeAutomatic.addEventListener('change', () => {
+    if (!sourceFormatModeAutomatic.checked) return;
+    clearManualSourceFormat();
+    sourceFormatSelectionSummary.textContent = sourceFormatSelectionText();
+    renderSourceFormats(currentInfo, { preserveOpen: true });
+    updateOptionVisibility();
+  });
+  sourceFormatModeManual.addEventListener('change', () => {
+    if (!sourceFormatModeManual.checked) return;
+    clearManualSourceFormat();
+    sourceFormatSelectionSummary.textContent = sourceFormatSelectionText();
+    renderSourceFormats(currentInfo, { preserveOpen: true });
+    updateOptionVisibility();
+  });
 }
 
-function renderSourceFormats(info) {
+function renderSourceFormats(info, { preserveOpen = false } = {}) {
   ensureSourceFormatsPanel();
   if (!sourceFormatsPanel || !sourceFormatsList || !sourceFormatsSummary) return;
+  const wasOpen = preserveOpen && sourceFormatsPanel.open;
   const formatInfo = info?.kind === 'media' ? info.sourceFormats : null;
   const formats = Array.isArray(formatInfo?.formats) ? formatInfo.formats : [];
   sourceFormatsPanel.hidden = !formats.length;
-  sourceFormatsPanel.open = false;
+  sourceFormatsPanel.open = Boolean(wasOpen);
   sourceFormatsList.replaceChildren();
   if (!formats.length) {
+    clearManualSourceFormat({ automatic: true });
+    if (sourceFormatSelectionSummary) sourceFormatSelectionSummary.textContent = 'Automatic selection is active.';
     sourceFormatsSummary.textContent = '';
     return;
   }
@@ -696,10 +834,14 @@ function renderSourceFormats(info) {
   sourceFormatsSummary.textContent = formatInfo.limited
     ? `Showing ${formatInfo.shown} of ${formatInfo.total} usable media formats reported by yt-dlp.`
     : `${formatInfo.total} usable media format${formatInfo.total === 1 ? '' : 's'} reported by yt-dlp.`;
+  if (sourceFormatSelectionSummary) sourceFormatSelectionSummary.textContent = sourceFormatSelectionText();
 
+  const content = selectedValue('content') || 'av';
   for (const format of formats) {
     const row = document.createElement('div');
-    row.className = 'output-row';
+    const action = sourceFormatActionFor(format, content);
+    const selected = format.selectionId && [manualSourceFormat.combinedId, manualSourceFormat.videoId, manualSourceFormat.audioId].includes(format.selectionId);
+    row.className = `output-row source-format-row${selected ? ' selected' : ''}`;
     const copy = document.createElement('div');
     const strong = document.createElement('strong');
     strong.textContent = `Format ${format.id} · ${format.type}`;
@@ -722,10 +864,26 @@ function renderSourceFormats(info) {
     if (format.sizeBytes) details.push(`${format.sizeApproximate ? '~' : ''}${formatBytes(format.sizeBytes)}`);
     if (format.audioChannels) details.push(`${format.audioChannels} ch`);
     if (format.sampleRate) details.push(`${Math.round(format.sampleRate / 100) / 10} kHz`);
+    if (!format.selectable) details.push('Inspection only');
     const small = document.createElement('small');
     small.textContent = details.join(' · ');
     copy.append(strong, small);
     row.appendChild(copy);
+
+    if (sourceFormatManualActive() && action) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `button secondary mini${selected ? ' selected-source-format' : ''}`;
+      button.textContent = selected
+        ? 'Selected'
+        : action === 'combined'
+          ? 'Use combined'
+          : action === 'video'
+            ? 'Use video'
+            : 'Use audio';
+      button.addEventListener('click', () => chooseManualSourceFormat(format, action));
+      row.appendChild(button);
+    }
     sourceFormatsList.appendChild(row);
   }
 }
@@ -781,7 +939,8 @@ function updateResolutionSelect() {
     option.textContent = `Up to ${height}p`;
     resolutionSelect.appendChild(option);
   }
-  resolutionSelect.disabled = currentInfo?.kind === 'media' && !heights.length;
+  const manualOverride = sourceFormatManualActive() && ['av', 'video'].includes(selectedValue('content') || 'av');
+  resolutionSelect.disabled = manualOverride || (currentInfo?.kind === 'media' && !heights.length);
   if ([...resolutionSelect.options].some((option) => option.value === previous)) resolutionSelect.value = previous;
 }
 
@@ -866,11 +1025,18 @@ function updateProfileAvailability() {
     document.querySelector('input[name="profile"][value="maximum"]').checked = true;
     setChoiceClasses('profile');
   }
+
+  const manualOverride = sourceFormatManualActive() && ['av', 'video'].includes(content);
+  if (manualOverride) {
+    $$('input[name="profile"]').forEach((input) => { input.disabled = true; });
+  }
+  videoOptions.classList.toggle('manual-overridden', manualOverride);
 }
 
 function renderInfo(info) {
   currentInfo = info;
   previewError.hidden = true;
+  clearManualSourceFormat({ automatic: true });
   thumbnail.src = info.thumbnail || '';
   thumbnail.hidden = !info.thumbnail;
   duration.hidden = info.kind !== 'media' || !info.durationString;
@@ -879,7 +1045,6 @@ function renderInfo(info) {
   title.textContent = info.title || (info.kind === 'playlist' ? 'Media collection' : 'Untitled media');
   renderMeta(info);
   renderCapabilities(info);
-  renderSourceFormats(info);
   renderPlaylist(info);
   renderChapters(info);
   renderSubtitleLanguages(info);
@@ -901,6 +1066,7 @@ function renderInfo(info) {
   updateProfileAvailability();
   updateResolutionSelect();
   updateOptionVisibility();
+  renderSourceFormats(info);
   preview.hidden = false;
 }
 
@@ -1065,6 +1231,7 @@ function buildRequestOptions() {
     profile: selectedValue('profile') || 'compatible',
     maxHeight: resolutionSelect.value ? Number(resolutionSelect.value) : null,
     audioFormat: audioFormat.value,
+    sourceFormat: currentSourceFormatSelection(content),
     range: { type: rangeType },
     extras: {
       thumbnail: extraThumbnail.checked,
@@ -1214,7 +1381,9 @@ form.addEventListener('submit', async (event) => {
 
 $$('input[name="content"]').forEach((input) => input.addEventListener('change', () => {
   setChoiceClasses('content');
+  clearManualSourceFormat();
   updateOptionVisibility();
+  renderSourceFormats(currentInfo, { preserveOpen: true });
 }));
 $$('input[name="profile"]').forEach((input) => input.addEventListener('change', () => {
   setChoiceClasses('profile');
