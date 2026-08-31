@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createMediaEditorApi() {
   const MAX_LOCAL_MEDIA_BYTES = 100 * 1024 * 1024 * 1024;
   const MIN_SELECTION_SECONDS = 0.001;
-  const MIN_VISIBLE_SECONDS = 1;
+  const MIN_VISIBLE_SECONDS = 0.25;
 
   function clamp(value, minimum, maximum) {
     return Math.min(maximum, Math.max(minimum, value));
@@ -119,6 +119,75 @@
     return clamp((timeSeconds - window.startSeconds) / span * 100, 0, 100);
   }
 
+  function formatTimelineTick(value, stepSeconds = 1) {
+    const step = Math.abs(Number(stepSeconds)) || 1;
+    const precision = step >= 1 ? 0 : step >= 0.1 ? 1 : 3;
+    const precisionMilliseconds = precision === 0 ? 1000 : precision === 1 ? 100 : 1;
+    const totalMilliseconds = Math.max(0,
+      Math.round(Number(value || 0) * 1000 / precisionMilliseconds) * precisionMilliseconds);
+    const hours = Math.floor(totalMilliseconds / 3_600_000);
+    const minutes = Math.floor(totalMilliseconds % 3_600_000 / 60_000);
+    const seconds = Math.floor(totalMilliseconds % 60_000 / 1000);
+    const fraction = totalMilliseconds % 1000;
+    const secondsText = String(seconds).padStart(2, '0')
+      + (precision === 1 ? `.${Math.floor(fraction / 100)}` : '')
+      + (precision === 3 ? `.${String(fraction).padStart(3, '0')}` : '');
+    if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${secondsText}`;
+    const minutesText = precision === 0 ? String(minutes) : String(minutes).padStart(2, '0');
+    return `${minutesText}:${secondsText}`;
+  }
+
+  function timelineTickStep(spanSeconds, pixelWidth = 600) {
+    const span = Math.max(0, Number(spanSeconds) || 0);
+    if (!span) return 1;
+    const maxIntervals = clamp(Math.floor(Math.max(1, Number(pixelWidth) || 0) / 96), 2, 6);
+    const rawStep = span / maxIntervals;
+    const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+    const normalized = rawStep / magnitude;
+    const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+    return factor * magnitude;
+  }
+
+  function buildTimelineTicks(window, pixelWidth = 600) {
+    const start = Number(window?.startSeconds);
+    const end = Number(window?.endSeconds);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return { stepSeconds: 1, ticks: [] };
+    }
+    const span = end - start;
+    const stepSeconds = timelineTickStep(span, pixelWidth);
+    const epsilon = stepSeconds / 1000;
+    const first = Math.ceil((start - epsilon) / stepSeconds) * stepSeconds;
+    const ticks = [];
+    for (let time = first; time <= end + epsilon && ticks.length < 12; time += stepSeconds) {
+      const normalizedTime = roundMilliseconds(time);
+      ticks.push({
+        timeSeconds: normalizedTime,
+        percent: timeToPercent(normalizedTime, { startSeconds: start, endSeconds: end }),
+        label: formatTimelineTick(normalizedTime, stepSeconds)
+      });
+    }
+    return { stepSeconds, ticks };
+  }
+
+  function formatTimelineWindowTime(value) {
+    return formatTimecode(value).replace(/^00:/, '');
+  }
+
+  function playbackShortcutForKey(key) {
+    if (key === ' ' || key === 'Spacebar') return 'toggle';
+    if (key === 'ArrowLeft') return -5;
+    if (key === 'ArrowRight') return 5;
+    return null;
+  }
+
+  function seekBySeconds(currentSeconds, deltaSeconds, durationSeconds) {
+    const duration = Math.max(0, Number(durationSeconds) || 0);
+    const current = Number.isFinite(Number(currentSeconds)) ? Number(currentSeconds) : 0;
+    const delta = Number.isFinite(Number(deltaSeconds)) ? Number(deltaSeconds) : 0;
+    return roundMilliseconds(clamp(current + delta, 0, duration));
+  }
+
   function formatBytes(value) {
     const bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes < 0) return '';
@@ -189,6 +258,9 @@
     let seekPointer = null;
     let handleDrag = null;
     let panDrag = null;
+    let playheadDrag = null;
+    let playheadSeekFrame = null;
+    let pendingPlayheadTime = null;
 
     function setStatus(message, type = '') {
       workspaceStatus.textContent = message || '';
@@ -228,7 +300,17 @@
 
     function resetEditor() {
       if (animationFrame != null) root.cancelAnimationFrame(animationFrame);
+      if (playheadSeekFrame != null) root.cancelAnimationFrame(playheadSeekFrame);
       animationFrame = null;
+      playheadSeekFrame = null;
+      pendingPlayheadTime = null;
+      playheadDrag = null;
+      seekPointer = null;
+      handleDrag = null;
+      panDrag = null;
+      playhead.classList.remove('dragging');
+      track.classList.remove('seeking');
+      ruler.classList.remove('panning');
       video.pause();
       video.removeAttribute('src');
       video.load();
@@ -247,7 +329,8 @@
       activeWorkspaceId = null;
       fileInput.value = '';
       chooseButton.disabled = false;
-      dropZone.classList.remove('disabled', 'dragover');
+      dropZone.hidden = false;
+      dropZone.classList.remove('dragover');
       workspaceProgress.hidden = true;
       workspaceCancel.hidden = true;
       workspaceCancel.disabled = false;
@@ -265,22 +348,25 @@
 
     function renderRuler() {
       rulerTicks.replaceChildren();
-      const span = visibleWindow.endSeconds - visibleWindow.startSeconds;
-      for (let index = 0; index <= 8; index += 1) {
-        const time = visibleWindow.startSeconds + span * index / 8;
+      ruler.classList.toggle('can-pan', visibleWindow.endSeconds - visibleWindow.startSeconds < durationSeconds);
+      const { ticks } = buildTimelineTicks(visibleWindow, rulerTicks.clientWidth || ruler.clientWidth || 600);
+      for (const value of ticks) {
         const tick = document.createElement('span');
         tick.className = 'timeline-tick';
-        tick.style.left = `${index / 8 * 100}%`;
-        tick.textContent = formatTimecode(time).replace(/^00:/, '');
+        tick.classList.toggle('edge-start', value.percent < 1);
+        tick.classList.toggle('edge-end', value.percent > 99);
+        tick.style.left = `${value.percent}%`;
+        tick.textContent = value.label;
         rulerTicks.appendChild(tick);
       }
-      visibleLabel.textContent = `${formatTimecode(visibleWindow.startSeconds)} — ${formatTimecode(visibleWindow.endSeconds)}`;
+      visibleLabel.textContent = `Showing ${formatTimelineWindowTime(visibleWindow.startSeconds)} – ${formatTimelineWindowTime(visibleWindow.endSeconds)}`;
     }
 
     function renderPlayhead() {
       const current = clamp(Number(video.currentTime) || 0, 0, durationSeconds || 0);
       playhead.style.left = `${timeToPercent(current, visibleWindow)}%`;
       playhead.hidden = current < visibleWindow.startSeconds || current > visibleWindow.endSeconds;
+      track.setAttribute('aria-label', `Timeline seek control, playhead ${formatTimecode(current)}. Space plays or pauses; Left and Right Arrow seek five seconds.`);
       clock.textContent = `${formatTimecode(current)} / ${formatTimecode(durationSeconds)}`;
     }
 
@@ -374,6 +460,65 @@
     function seekFromPointer(event) {
       if (!durationSeconds) return;
       video.currentTime = clamp(pointerTime(event, track), 0, durationSeconds);
+      renderPlayhead();
+    }
+
+    function schedulePlayheadSeek(event) {
+      pendingPlayheadTime = clamp(pointerTime(event, track), 0, durationSeconds);
+      if (playheadSeekFrame != null) return;
+      playheadSeekFrame = root.requestAnimationFrame(() => {
+        playheadSeekFrame = null;
+        if (pendingPlayheadTime == null) return;
+        video.currentTime = pendingPlayheadTime;
+        pendingPlayheadTime = null;
+        renderPlayhead();
+      });
+    }
+
+    function beginPlayheadDrag(event) {
+      if (!editPlan || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      track.focus({ preventScroll: true });
+      playhead.setPointerCapture(event.pointerId);
+      playheadDrag = event.pointerId;
+      playhead.classList.add('dragging');
+      schedulePlayheadSeek(event);
+    }
+
+    function movePlayhead(event) {
+      if (playheadDrag !== event.pointerId) return;
+      schedulePlayheadSeek(event);
+    }
+
+    function endPlayheadDrag(event) {
+      if (playheadDrag !== event.pointerId) return;
+      schedulePlayheadSeek(event);
+      try { playhead.releasePointerCapture(event.pointerId); } catch {}
+      playheadDrag = null;
+      playhead.classList.remove('dragging');
+    }
+
+    function isPlaybackShortcutBlocked(target) {
+      if (!target || target === track || target === video) return false;
+      return Boolean(target.closest?.('input, textarea, select, button, [contenteditable="true"]'));
+    }
+
+    function handlePlaybackKey(event) {
+      if (!editPlan || event.altKey || event.ctrlKey || event.metaKey || isPlaybackShortcutBlocked(event.target)) return;
+      const action = playbackShortcutForKey(event.key);
+      if (action == null || (action === 'toggle' && event.repeat)) return;
+      event.preventDefault();
+      if (action === 'toggle') {
+        if (video.paused || video.ended) {
+          const playing = video.play();
+          if (playing?.catch) playing.catch(() => {});
+        } else {
+          video.pause();
+        }
+        return;
+      }
+      video.currentTime = seekBySeconds(video.currentTime, action, durationSeconds);
       renderPlayhead();
     }
 
@@ -471,7 +616,7 @@
       video.src = data.playback.url;
       editor.hidden = false;
       chooseButton.disabled = true;
-      dropZone.classList.add('disabled');
+      dropZone.hidden = true;
       setStatus('Local editor ready.', 'success');
       clearFailure();
       renderTimeline();
@@ -542,7 +687,7 @@
       }
 
       chooseButton.disabled = true;
-      dropZone.classList.add('disabled');
+      dropZone.hidden = true;
       workspaceCancel.textContent = 'Cancel';
       workspaceCancel.hidden = false;
       setStatus('Copying the selected file into LVOVD temporary storage…');
@@ -615,8 +760,10 @@
     track.addEventListener('pointerdown', (event) => {
       if (!editPlan || event.button !== 0) return;
       event.preventDefault();
+      track.focus({ preventScroll: true });
       track.setPointerCapture(event.pointerId);
       seekPointer = event.pointerId;
+      track.classList.add('seeking');
       seekFromPointer(event);
     });
     track.addEventListener('pointermove', (event) => {
@@ -627,13 +774,19 @@
       if (seekPointer === event.pointerId) {
         try { track.releasePointerCapture(event.pointerId); } catch {}
         seekPointer = null;
+        track.classList.remove('seeking');
       }
       endHandleDrag(event);
     });
     track.addEventListener('pointercancel', (event) => {
       seekPointer = null;
+      track.classList.remove('seeking');
       endHandleDrag(event);
     });
+    playhead.addEventListener('pointerdown', beginPlayheadDrag);
+    playhead.addEventListener('pointermove', movePlayhead);
+    playhead.addEventListener('pointerup', endPlayheadDrag);
+    playhead.addEventListener('pointercancel', endPlayheadDrag);
     startHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'start'));
     endHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'end'));
     for (const handle of [startHandle, endHandle]) {
@@ -703,6 +856,8 @@
       visibleWindow = { startSeconds: 0, endSeconds: durationSeconds };
       renderTimeline();
     });
+    track.addEventListener('keydown', handlePlaybackKey);
+    video.addEventListener('keydown', handlePlaybackKey);
     video.addEventListener('play', beginPlaybackFrames);
     video.addEventListener('timeupdate', renderPlayhead);
     video.addEventListener('seeked', renderPlayhead);
@@ -710,6 +865,9 @@
     workspaceCancel.addEventListener('click', discardWorkspace);
     failureDiscard.addEventListener('click', discardWorkspace);
     discard.addEventListener('click', discardWorkspace);
+    root.addEventListener('resize', () => {
+      if (editPlan) renderRuler();
+    });
   }
 
   return {
@@ -720,6 +878,11 @@
     zoomVisibleWindow,
     panVisibleWindow,
     timeToPercent,
+    formatTimelineTick,
+    timelineTickStep,
+    buildTimelineTicks,
+    playbackShortcutForKey,
+    seekBySeconds,
     init
   };
 });

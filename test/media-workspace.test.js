@@ -77,6 +77,35 @@ test('ffprobe inspection normalization keeps only finite video facts', () => {
   assert.equal(isDirectPlaybackCompatible(normalized), true);
 });
 
+test('ISO Base Media brands produce truthful MP4 and MOV container labels without extension authority', () => {
+  const commonVideo = [
+    { codec_type: 'video', codec_name: 'h264', width: 1280, height: 720 }
+  ];
+  const mp4 = normalizeInspection({
+    format: {
+      filename: 'misleading.mov',
+      duration: '10',
+      format_name: 'mov,mp4,m4a,3gp,3g2,mj2',
+      format_long_name: 'QuickTime / MOV',
+      tags: { major_brand: 'isom', compatible_brands: 'isomiso2avc1mp41' }
+    },
+    streams: commonVideo
+  });
+  const quickTime = normalizeInspection({
+    format: {
+      filename: 'misleading.mp4',
+      duration: '10',
+      format_name: 'mov,mp4,m4a,3gp,3g2,mj2',
+      format_long_name: 'QuickTime / MOV',
+      tags: { major_brand: 'qt  ', compatible_brands: 'qt  ' }
+    },
+    streams: commonVideo
+  });
+
+  assert.equal(mp4.format, 'MP4');
+  assert.equal(quickTime.format, 'MOV / QuickTime');
+});
+
 test('inspection ignores attached cover art and timed-thumbnail-only video streams', () => {
   for (const disposition of [{ attached_pic: 1 }, { timed_thumbnails: 1 }]) {
     assert.throws(

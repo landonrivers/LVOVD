@@ -75,6 +75,37 @@ function parseFrameRate(value) {
   return Number.isFinite(rate) && rate > 0 ? roundMilliseconds(rate) : null;
 }
 
+const MP4_BRANDS = new Set([
+  'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6', 'iso7', 'iso8', 'iso9',
+  'mp41', 'mp42', 'avc1', 'dash', 'mmp4', 'm4v', 'm4a', 'f4v', 'f4a',
+  '3gp4', '3gp5', '3gp6'
+]);
+
+function normalizedBrandEvidence(format = {}) {
+  const major = String(format.tags?.major_brand || '').trim().toLowerCase();
+  const compatible = String(format.tags?.compatible_brands || '').toLowerCase();
+  const brands = new Set(major ? [major] : []);
+  for (let index = 0; index < compatible.length; index += 4) {
+    const brand = compatible.slice(index, index + 4).trim();
+    if (brand) brands.add(brand);
+  }
+  for (const brand of compatible.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean)) {
+    brands.add(brand);
+  }
+  return brands;
+}
+
+function normalizedContainerLabel(format, formatNames) {
+  const brands = normalizedBrandEvidence(format);
+  const isoBaseMediaFamily = formatNames.some((name) => (
+    ['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2'].includes(name)
+  ));
+  if (isoBaseMediaFamily && brands.has('qt')) return 'MOV / QuickTime';
+  if (isoBaseMediaFamily && [...brands].some((brand) => MP4_BRANDS.has(brand))) return 'MP4';
+  return String(format.format_long_name || format.format_name || 'Unknown container')
+    .trim().slice(0, 120);
+}
+
 function normalizeInspection(raw = {}) {
   const streams = Array.isArray(raw.streams) ? raw.streams : [];
   const video = streams.find((stream) => stream?.codec_type === 'video'
@@ -113,8 +144,7 @@ function normalizeInspection(raw = {}) {
   const audio = streams.find((stream) => stream?.codec_type === 'audio') || null;
   const formatName = String(raw.format?.format_name || '').trim().toLowerCase();
   const formatNames = formatName.split(',').map((name) => name.trim()).filter(Boolean).slice(0, 20);
-  const displayFormat = String(raw.format?.format_long_name || formatName || 'Unknown container')
-    .trim().slice(0, 120);
+  const displayFormat = normalizedContainerLabel(raw.format || {}, formatNames);
 
   return {
     durationSeconds: roundMilliseconds(duration),

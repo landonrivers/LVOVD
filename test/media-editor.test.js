@@ -12,7 +12,12 @@ const {
   clampVisibleWindow,
   zoomVisibleWindow,
   panVisibleWindow,
-  timeToPercent
+  timeToPercent,
+  formatTimelineTick,
+  timelineTickStep,
+  buildTimelineTicks,
+  playbackShortcutForKey,
+  seekBySeconds
 } = require('../public/media-editor');
 
 const ROOT = path.join(__dirname, '..');
@@ -68,7 +73,37 @@ test('zoom and pan math stays clamped to the finite media duration', () => {
   assert.equal(timeToPercent(200, zoomed), 100);
 });
 
-test('editor markup and controller keep the 6A1 visual single-range boundary explicit', () => {
+test('timeline ticks use readable adaptive precision and a bounded label count', () => {
+  assert.equal(formatTimelineTick(0, 5), '0:00');
+  assert.equal(formatTimelineTick(5, 5), '0:05');
+  assert.equal(formatTimelineTick(12.5, 0.5), '00:12.5');
+  assert.equal(formatTimelineTick(13, 0.05), '00:13.000');
+  assert.equal(formatTimelineTick(3_723, 5), '1:02:03');
+  assert.equal(timelineTickStep(30, 600), 5);
+
+  const whole = buildTimelineTicks({ startSeconds: 0, endSeconds: 30 }, 600);
+  assert.deepEqual(whole.ticks.map((tick) => tick.label), [
+    '0:00', '0:05', '0:10', '0:15', '0:20', '0:25', '0:30'
+  ]);
+  assert.ok(whole.ticks.length < 9);
+
+  const close = buildTimelineTicks({ startSeconds: 12.5, endSeconds: 12.75 }, 600);
+  assert.equal(close.stepSeconds, 0.05);
+  assert.equal(close.ticks[0].label, '00:12.500');
+  assert.equal(close.ticks.at(-1).label, '00:12.750');
+});
+
+test('bounded playback shortcuts toggle or seek five seconds with duration clamping', () => {
+  assert.equal(playbackShortcutForKey(' '), 'toggle');
+  assert.equal(playbackShortcutForKey('ArrowLeft'), -5);
+  assert.equal(playbackShortcutForKey('ArrowRight'), 5);
+  assert.equal(playbackShortcutForKey('Enter'), null);
+  assert.equal(seekBySeconds(2, -5, 20), 0);
+  assert.equal(seekBySeconds(18, 5, 20), 20);
+  assert.equal(seekBySeconds(10.125, 5, 20), 15.125);
+});
+
+test('editor markup keeps the downloader primary and makes local timeline interactions explicit', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const source = fs.readFileSync(path.join(ROOT, 'public', 'media-editor.js'), 'utf8');
   const serverSource = fs.readFileSync(path.join(ROOT, 'app-server.js'), 'utf8');
@@ -100,6 +135,15 @@ test('editor markup and controller keep the 6A1 visual single-range boundary exp
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
   assert.doesNotMatch(html, /id="media-file-input"[^>]*\baccept=/i);
   assert.doesNotMatch(source, /Roadmap 6A1/i);
+  assert.ok(html.indexOf('id="lookup-form"') < html.indexOf('id="media-workspace-panel"'));
+  assert.ok(html.indexOf('id="preview"') < html.indexOf('id="media-workspace-panel"'));
+  assert.ok(html.indexOf('id="media-workspace-panel"') < html.indexOf('id="history-panel"'));
+  assert.match(html, /<label for="video-url">Media URL<\/label>/);
+  assert.doesNotMatch(html, />Video URL<\/label>/);
+  assert.doesNotMatch(html, /VISUAL RETAINED RANGE/i);
+  assert.match(html, />Full Timeline<\/button>/);
+  assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
+  assert.match(html, /id="timeline-track"[^>]*tabindex="0"/);
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
   assert.match(source, /requestAnimationFrame\(playbackFrame\)/);
   assert.match(source, /video\.currentTime/);
@@ -107,6 +151,12 @@ test('editor markup and controller keep the 6A1 visual single-range boundary exp
   assert.match(source, /addEventListener\('drop'/);
   assert.match(source, /addEventListener\('pointerdown'/);
   assert.match(source, /setPointerCapture/);
+  assert.match(source, /dropZone\.hidden = true/);
+  assert.match(source, /dropZone\.hidden = false/);
+  assert.match(source, /playhead\.addEventListener\('pointerdown', beginPlayheadDrag\)/);
+  assert.match(source, /playheadSeekFrame = root\.requestAnimationFrame/);
+  assert.match(source, /track\.addEventListener\('keydown', handlePlaybackKey\)/);
+  assert.match(source, /video\.addEventListener\('keydown', handlePlaybackKey\)/);
   const readyBranch = source.match(/else if \(data\.status === 'ready'\) \{([\s\S]*?)\n      \}/)?.[1];
   assert.ok(readyBranch);
   assert.doesNotMatch(readyBranch, /closeProgressSource/);
