@@ -21,6 +21,9 @@ const {
   normalizeSourceFormatSelection,
   sourceFormatSelector
 } = require('./source-format-selection');
+const {
+  createMediaWorkspaceManager
+} = require('./media-workspace');
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
@@ -33,6 +36,7 @@ const MAX_PLAYLIST_SELECTION = 100;
 const JOB_CANCELLED_CODE = 'LVOVD_JOB_CANCELLED';
 const jobs = new Map();
 const remoteSourceRequests = createSourceRequestCoordinator();
+const mediaWorkspaces = createMediaWorkspaceManager();
 let processWorkRootPromise = null;
 
 const CONTENT_MODES = new Set(['av', 'video', 'audio', 'extras']);
@@ -1510,6 +1514,7 @@ function serveStatic(reqPath, res) {
     '/': ['index.html', 'text/html; charset=utf-8'],
     '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
     '/history-ui.js': ['history-ui.js', 'text/javascript; charset=utf-8'],
+    '/media-editor.js': ['media-editor.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };
   const route = routes[reqPath];
@@ -1538,7 +1543,14 @@ async function cleanupExpiredJobs() {
   }
 }
 
-setInterval(() => cleanupExpiredJobs().catch(() => {}), 10 * 60 * 1000).unref();
+async function cleanupExpiredTemporaryWork() {
+  await Promise.all([
+    cleanupExpiredJobs(),
+    mediaWorkspaces.cleanupExpired()
+  ]);
+}
+
+setInterval(() => cleanupExpiredTemporaryWork().catch(() => {}), 10 * 60 * 1000).unref();
 
 function streamPreparedFile(res, output) {
   return new Promise((resolve) => {
@@ -1637,6 +1649,73 @@ async function handleRequest(req, res) {
       console.warn(`LVOVD could not update local download history: ${error.message}`);
       return json(res, 500, { error: 'Local download history could not be updated.' });
     }
+  }
+
+  if (req.method === 'POST' && requestUrl.pathname === '/api/workspace/local') {
+    const declaredLength = req.headers['content-length'] == null
+      ? null
+      : Number(req.headers['content-length']);
+    let displayName = req.headers['x-lvovd-filename'] || 'Local video';
+    try { displayName = decodeURIComponent(displayName); } catch {}
+
+    try {
+      const workspace = await mediaWorkspaces.receiveLocalStream(req, {
+        displayName,
+        claimedType: req.headers['content-type'],
+        declaredLength
+      });
+      return json(res, 202, {
+        workspaceId: workspace.id,
+        workspace: mediaWorkspaces.publicWorkspace(workspace)
+      });
+    } catch (error) {
+      if (req.aborted || res.destroyed) return;
+      const details = mediaWorkspaces.failureFor(error);
+      return json(res, error.statusCode || 500, { error: details.title, details });
+    }
+  }
+
+  if (req.method === 'GET' && requestUrl.pathname === '/api/workspace/progress') {
+    const workspace = mediaWorkspaces.get(requestUrl.searchParams.get('workspace'));
+    if (!workspace) return json(res, 404, { error: 'Local media workspace not found or expired.' });
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+    res.write(`data: ${JSON.stringify(mediaWorkspaces.publicWorkspace(workspace))}\n\n`);
+    workspace.listeners.add(res);
+    const keepAlive = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch {}
+    }, 15000);
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      workspace.listeners.delete(res);
+    });
+    return;
+  }
+
+  if (['GET', 'HEAD'].includes(req.method) && requestUrl.pathname === '/api/workspace/media') {
+    return mediaWorkspaces.serveMedia(
+      req,
+      res,
+      requestUrl.searchParams.get('workspace'),
+      requestUrl.searchParams.get('asset')
+    );
+  }
+
+  if (req.method === 'DELETE' && requestUrl.pathname === '/api/workspace') {
+    const workspaceId = requestUrl.searchParams.get('workspace');
+    const workspace = mediaWorkspaces.get(workspaceId, { touch: false });
+    if (!workspace) return json(res, 404, { error: 'Local media workspace not found or already discarded.' });
+    const wasActive = Boolean(workspace.activeOperation);
+    await mediaWorkspaces.discard(workspaceId);
+    return json(res, 200, {
+      ok: true,
+      action: wasActive ? 'cancelled-and-discarded' : 'discarded'
+    });
   }
 
   if (req.method === 'GET' && requestUrl.pathname === '/api/info') {
@@ -1745,6 +1824,8 @@ module.exports = {
   settleDownloadFailure,
   runDownloadJob,
   streamPreparedFile,
+  cleanupExpiredTemporaryWork,
   historyStore,
+  mediaWorkspaces,
   jobs
 };

@@ -5,7 +5,7 @@
   "description": "A Locally Hosted Video Downloader Which You'll Use Responsibly",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check app-server.js && node --check failure-classification.js && node --check history-store.js && node --check download-history.js && node --check ytdlp-manager.js && node --check scripts/launch.js && node --check scripts/update-ytdlp.js && node --check public/app.js && node --test test/*.test.js",
+    "check": "node --check server.js && node --check app-server.js && node --check media-workspace.js && node --check failure-classification.js && node --check history-store.js && node --check download-history.js && node --check ytdlp-manager.js && node --check scripts/launch.js && node --check scripts/update-ytdlp.js && node --check public/app.js && node --check public/media-editor.js && node --test test/*.test.js",
     "update-ytdlp": "node scripts/update-ytdlp.js",
     "test": "node --test test/*.test.js"
   },

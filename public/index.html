@@ -23,6 +23,125 @@
 
       <p class="intro">A Locally Hosted Video Downloader Which You'll Use Responsibly</p>
 
+      <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
+        <div class="section-head workspace-heading">
+          <div>
+            <p class="eyebrow">LOCAL EDIT WORKSPACE</p>
+            <h2 id="media-workspace-title">Edit Media</h2>
+            <p class="help">Choose or drop one local video. It stays on this computer, but LVOVD copies it into temporary local storage so the browser editor can use it.</p>
+          </div>
+          <span class="tag">6A1 · No render yet</span>
+        </div>
+
+        <div class="workspace-storage-note">
+          <strong>Temporary disk use</strong>
+          <span>Large files can temporarily require roughly another copy's worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.</span>
+        </div>
+
+        <div id="media-drop-zone" class="media-drop-zone">
+          <input id="media-file-input" type="file" accept="video/*,.mkv,.mov,.avi,.webm,.mp4,.m4v" hidden />
+          <div class="drop-glyph" aria-hidden="true">＋</div>
+          <div>
+            <strong>Drop one local video here</strong>
+            <span>or choose a file up to 100 GiB</span>
+          </div>
+          <button id="media-choose-button" class="button secondary" type="button">Choose File</button>
+        </div>
+
+        <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+
+        <section id="workspace-progress" class="workspace-progress" aria-live="polite" hidden>
+          <div class="progress-head">
+            <strong id="workspace-progress-label">Copying local media…</strong>
+            <button id="workspace-cancel" class="text-button" type="button">Cancel</button>
+          </div>
+          <div class="progress-track" aria-hidden="true"><div id="workspace-progress-bar" class="progress-bar"></div></div>
+        </section>
+
+        <section id="workspace-failure" class="preview-error workspace-failure" hidden>
+          <div>
+            <p class="eyebrow">LOCAL MEDIA RESULT</p>
+            <h3 id="workspace-failure-title">Local media preparation failed</h3>
+            <p id="workspace-failure-explanation" class="error-message"></p>
+            <p id="workspace-failure-help" class="help"></p>
+            <button id="workspace-failure-discard" class="button secondary mini workspace-failure-action" type="button" hidden>Discard failed workspace</button>
+          </div>
+        </section>
+
+        <section id="media-editor" class="media-editor" hidden>
+          <div class="editor-head">
+            <div>
+              <p class="eyebrow">VISUAL RETAINED RANGE</p>
+              <h3 id="editor-media-name">Local video</h3>
+              <p id="editor-media-facts" class="help"></p>
+              <p id="editor-proxy-note" class="editor-proxy-note"></p>
+            </div>
+            <button id="workspace-discard" class="button secondary mini" type="button">Discard</button>
+          </div>
+
+          <div class="editor-layout">
+            <div class="editor-player">
+              <video id="editor-video" controls preload="metadata" playsinline></video>
+              <div id="editor-clock" class="editor-clock">00:00:00.000 / 00:00:00.000</div>
+            </div>
+
+            <div class="timeline-editor">
+              <div class="timeline-toolbar">
+                <div>
+                  <strong>Timeline</strong>
+                  <span id="timeline-visible-label">Full duration</span>
+                </div>
+                <div class="inline-actions">
+                  <button id="timeline-zoom-in" class="text-button" type="button">Zoom In</button>
+                  <button id="timeline-zoom-out" class="text-button" type="button">Zoom Out</button>
+                  <button id="timeline-fit" class="text-button" type="button">Fit</button>
+                </div>
+              </div>
+
+              <div id="timeline-ruler" class="timeline-ruler" title="Drag to pan while zoomed">
+                <div id="timeline-ruler-ticks" class="timeline-ruler-ticks"></div>
+              </div>
+
+              <div id="timeline-track" class="timeline-track" title="Click or drag to seek; use the handles to change the retained range">
+                <div id="timeline-removed-before" class="timeline-region removed"></div>
+                <div id="timeline-retained" class="timeline-region retained"></div>
+                <div id="timeline-removed-after" class="timeline-region removed"></div>
+                <div id="timeline-playhead" class="timeline-playhead" aria-hidden="true"></div>
+                <button id="timeline-start-handle" class="timeline-handle start" type="button" role="slider" aria-label="Retained range start" aria-valuemin="0"></button>
+                <button id="timeline-end-handle" class="timeline-handle end" type="button" role="slider" aria-label="Retained range end" aria-valuemin="0"></button>
+              </div>
+
+              <div class="timeline-legend" aria-hidden="true">
+                <span><i class="legend-retained"></i>Retained</span>
+                <span><i class="legend-removed"></i>Removed</span>
+                <span><i class="legend-playhead"></i>Playhead</span>
+              </div>
+
+              <div class="editor-exact-grid">
+                <div class="editor-exact-control">
+                  <label class="field" for="editor-start-time">
+                    <span>Retained start</span>
+                    <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
+                  </label>
+                  <button id="set-start-playhead" class="button secondary mini" type="button">Set Start to Playhead</button>
+                  <small id="editor-start-error" class="field-error" aria-live="polite"></small>
+                </div>
+                <div class="editor-exact-control">
+                  <label class="field" for="editor-end-time">
+                    <span>Retained end</span>
+                    <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
+                  </label>
+                  <button id="set-end-playhead" class="button secondary mini" type="button">Set End to Playhead</button>
+                  <small id="editor-end-error" class="field-error" aria-live="polite"></small>
+                </div>
+              </div>
+
+              <p class="editor-foundation-note">This foundation records one visual retained range only. It does not trim, render, download, or promise frame-perfect lossless output yet.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+
       <form id="lookup-form" class="lookup-form">
         <label for="video-url">Video URL</label>
         <div class="input-row">
@@ -302,5 +421,6 @@
   </main>
   <script src="/app.js" defer></script>
   <script src="/history-ui.js" defer></script>
+  <script src="/media-editor.js" defer></script>
 </body>
 </html>
