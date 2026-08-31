@@ -78,7 +78,9 @@ function parseFrameRate(value) {
 function normalizeInspection(raw = {}) {
   const streams = Array.isArray(raw.streams) ? raw.streams : [];
   const video = streams.find((stream) => stream?.codec_type === 'video'
-    && Number(stream.width) > 0 && Number(stream.height) > 0);
+    && Number(stream.width) > 0 && Number(stream.height) > 0
+    && Number(stream.disposition?.attached_pic) !== 1
+    && Number(stream.disposition?.timed_thumbnails) !== 1);
   if (!video) {
     throw workspaceUserError(
       'The staged file does not contain a usable video stream.',
@@ -86,12 +88,16 @@ function normalizeInspection(raw = {}) {
         'local_media_invalid',
         'Choose a video file',
         'The staged local file does not contain a usable video stream.',
-        'Choose one local video file. Audio-only editing is not part of this editor slice.'
+        'Choose one local video file. Audio-only files cannot be opened in this editor.'
       )
     );
   }
 
-  const duration = Number(raw.format?.duration ?? video.duration);
+  const formatDuration = Number(raw.format?.duration);
+  const videoDuration = Number(video.duration);
+  const duration = Number.isFinite(formatDuration) && formatDuration > 0
+    ? formatDuration
+    : videoDuration;
   if (!Number.isFinite(duration) || duration <= 0) {
     throw workspaceUserError(
       'The staged video does not have a usable duration.',
@@ -363,7 +369,7 @@ class MediaWorkspaceManager {
       normalizedFailure(
         'local_media_too_large',
         'This local file is too large',
-        'Roadmap 6A1 accepts one local input up to 100 GiB.',
+        'LVOVD accepts one local video up to 100 GiB.',
         'Choose a local video no larger than 100 GiB.'
       ),
       413
@@ -534,6 +540,7 @@ class MediaWorkspaceManager {
     operation,
     tool,
     maxStdoutBytes = 4 * 1024 * 1024,
+    captureStdout = true,
     onStdout = null
   }) {
     return new Promise((resolve, reject) => {
@@ -573,10 +580,12 @@ class MediaWorkspaceManager {
       signal.addEventListener('abort', onAbort, { once: true });
 
       child.stdout.on('data', (chunk) => {
-        stdoutBytes += chunk.length;
         if (onStdout) onStdout(chunk);
-        if (stdoutBytes <= maxStdoutBytes) stdout.push(chunk);
-        else {
+        if (!captureStdout) return;
+        stdoutBytes += chunk.length;
+        if (stdoutBytes <= maxStdoutBytes) {
+          stdout.push(chunk);
+        } else {
           try { child.kill(); } catch {}
           finish(() => reject(withLocalFailure(
             new Error(`${tool} returned too much output.`),
@@ -656,6 +665,7 @@ class MediaWorkspaceManager {
   async defaultCreateProxyAsset(workspace, sourceAsset, inspection) {
     const partialPath = path.join(workspace.tempDir, 'playback-proxy.partial.mp4');
     const finalPath = path.join(workspace.tempDir, 'playback-proxy.mp4');
+    const maxProgressBufferCharacters = 64 * 1024;
     let progressBuffer = '';
     const onStdout = (chunk) => {
       progressBuffer += chunk.toString('utf8');
@@ -671,6 +681,9 @@ class MediaWorkspaceManager {
           percent: Math.max(0, Math.min(99, seconds / inspection.durationSeconds * 100))
         });
       }
+      if (progressBuffer.length > maxProgressBufferCharacters) {
+        progressBuffer = progressBuffer.slice(-maxProgressBufferCharacters);
+      }
     };
 
     try {
@@ -678,7 +691,7 @@ class MediaWorkspaceManager {
         workspace,
         'ffmpeg',
         playbackProxyArgs(sourceAsset.filePath, partialPath, Boolean(inspection.audio)),
-        { operation: 'ffmpeg_processing', tool: 'ffmpeg', onStdout }
+        { operation: 'ffmpeg_processing', tool: 'ffmpeg', captureStdout: false, onStdout }
       );
       await this.fs.rename(partialPath, finalPath);
       const stat = await this.fs.stat(finalPath);

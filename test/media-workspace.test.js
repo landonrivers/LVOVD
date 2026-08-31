@@ -77,6 +77,54 @@ test('ffprobe inspection normalization keeps only finite video facts', () => {
   assert.equal(isDirectPlaybackCompatible(normalized), true);
 });
 
+test('inspection ignores attached cover art and timed-thumbnail-only video streams', () => {
+  for (const disposition of [{ attached_pic: 1 }, { timed_thumbnails: 1 }]) {
+    assert.throws(
+      () => normalizeInspection({
+        format: { duration: '180', format_name: 'mp3' },
+        streams: [
+          { codec_type: 'audio', codec_name: 'mp3' },
+          { codec_type: 'video', codec_name: 'mjpeg', width: 1200, height: 1200, disposition }
+        ]
+      }),
+      (error) => error?.workspaceFailure?.category === 'local_media_invalid'
+        && /video stream/i.test(error.workspaceFailure.explanation)
+    );
+  }
+});
+
+test('inspection selects real video instead of attached artwork and preserves normal video', () => {
+  const withArtwork = normalizeInspection({
+    format: { duration: '42', format_name: 'mov,mp4' },
+    streams: [
+      {
+        codec_type: 'video', codec_name: 'mjpeg', width: 1200, height: 1200,
+        disposition: { attached_pic: 1 }
+      },
+      { codec_type: 'video', codec_name: 'h264', width: 1280, height: 720, avg_frame_rate: '24/1' },
+      { codec_type: 'audio', codec_name: 'aac' }
+    ]
+  });
+  const normal = normalizeInspection({
+    format: { duration: '5', format_name: 'matroska' },
+    streams: [{ codec_type: 'video', codec_name: 'ffv1', width: 640, height: 360 }]
+  });
+
+  assert.deepEqual(withArtwork.video, { codec: 'h264', width: 1280, height: 720, frameRate: 24 });
+  assert.deepEqual(normal.video, { codec: 'ffv1', width: 640, height: 360, frameRate: null });
+});
+
+test('inspection falls back to the selected real video duration when format duration is unusable', () => {
+  const normalized = normalizeInspection({
+    format: { duration: 'N/A', format_name: 'matroska' },
+    streams: [
+      { codec_type: 'video', codec_name: 'h264', width: 640, height: 360, duration: '4.25' }
+    ]
+  });
+
+  assert.equal(normalized.durationSeconds, 4.25);
+});
+
 test('inspection rejects non-video media and missing duration clearly', () => {
   assert.throws(
     () => normalizeInspection({ format: { duration: '10' }, streams: [{ codec_type: 'audio', codec_name: 'aac' }] }),
@@ -120,6 +168,71 @@ test('a missing ffprobe executable becomes a path-safe required-local-tool failu
   assert.doesNotMatch(JSON.stringify(workspace.failure), /C:\\private|ffprobe\.exe/i);
   assert.equal(workspace.tempDir, null);
   assert.equal(workspace.assets.size, 0);
+});
+
+test('streamed FFmpeg progress can exceed the captured-output limit without accumulation or termination', async (t) => {
+  const tempDir = await sandbox(t);
+  let killCount = 0;
+  const chunk = Buffer.alloc(64 * 1024, 0x70);
+  const chunkCount = 65;
+  const manager = createMediaWorkspaceManager({
+    tempDir,
+    spawnProcess() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => { killCount += 1; };
+      queueMicrotask(() => {
+        for (let index = 0; index < chunkCount; index += 1) child.stdout.write(chunk);
+        child.stdout.end();
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    }
+  });
+  t.after(() => manager.clearAll());
+  const workspace = await manager.createWorkspace({ displayName: 'progress.mkv' });
+  let streamedBytes = 0;
+
+  const result = await manager.runOwnedProcess(workspace, 'ffmpeg', [], {
+    operation: 'ffmpeg_processing',
+    tool: 'ffmpeg',
+    captureStdout: false,
+    onStdout(chunkValue) { streamedBytes += chunkValue.length; }
+  });
+
+  assert.ok(streamedBytes > 4 * 1024 * 1024);
+  assert.equal(result.stdout, '');
+  assert.equal(killCount, 0);
+});
+
+test('commands that return captured stdout retain their bounded-output safety limit', async (t) => {
+  const tempDir = await sandbox(t);
+  let killCount = 0;
+  const manager = createMediaWorkspaceManager({
+    tempDir,
+    spawnProcess() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => { killCount += 1; };
+      queueMicrotask(() => child.stdout.write(Buffer.alloc(33)));
+      return child;
+    }
+  });
+  t.after(() => manager.clearAll());
+  const workspace = await manager.createWorkspace({ displayName: 'inspection.mp4' });
+
+  await assert.rejects(
+    manager.runOwnedProcess(workspace, 'ffprobe', [], {
+      operation: 'local_processing',
+      tool: 'ffprobe',
+      maxStdoutBytes: 32
+    }),
+    /too much output/i
+  );
+  assert.equal(killCount, 1);
 });
 
 test('direct playback policy requires MP4-family H.264 with AAC or no audio', () => {
@@ -275,7 +388,7 @@ test('proxy cancellation aborts active work, removes assets, and discards the re
   await assert.rejects(fsp.access(ownedDir));
 });
 
-test('explicit discard and inactivity expiry clean only terminal workspaces', async (t) => {
+test('explicit discard and inactivity expiry honor lease touches for terminal workspaces', async (t) => {
   const tempDir = await sandbox(t);
   let now = 1_000;
   const manager = createMediaWorkspaceManager({
@@ -291,7 +404,13 @@ test('explicit discard and inactivity expiry clean only terminal workspaces', as
   active.phase = 'inspecting';
   active.activeOperation = 'inspecting';
 
-  now += 101;
+  now += 75;
+  manager.touch(ready);
+  now += 75;
+  assert.deepEqual(await manager.cleanupExpired(now), []);
+  assert.equal(manager.workspaces.has(ready.id), true);
+
+  now += 26;
   const expired = await manager.cleanupExpired(now);
   assert.deepEqual(expired, [ready.id]);
   assert.equal(manager.workspaces.has(ready.id), false);

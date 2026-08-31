@@ -433,7 +433,6 @@
         workspaceCancel.hidden = false;
         showFailure(data.failure, data.message);
       } else if (data.status === 'ready') {
-        closeProgressSource();
         workspaceProgress.hidden = true;
         workspaceCancel.hidden = true;
         initializeEditor(data);
@@ -528,7 +527,7 @@
       if (file.size > MAX_LOCAL_MEDIA_BYTES) {
         showFailure({
           title: 'This local file is too large',
-          explanation: 'Roadmap 6A1 accepts one local input up to 100 GiB.',
+          explanation: 'LVOVD accepts one local video up to 100 GiB.',
           help: 'Choose a local video no larger than 100 GiB.'
         });
         return;
@@ -580,7 +579,7 @@
         activeWorkspaceId = data.workspaceId;
         workspaceCancel.textContent = 'Cancel preparation';
         renderWorkspace(data.workspace);
-        if (!['ready', 'error'].includes(data.workspace?.status)) startProgress(activeWorkspaceId);
+        if (data.workspace?.status !== 'error') startProgress(activeWorkspaceId);
       };
       xhr.send(file);
     }

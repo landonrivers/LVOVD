@@ -1688,7 +1688,10 @@ async function handleRequest(req, res) {
     res.write(`data: ${JSON.stringify(mediaWorkspaces.publicWorkspace(workspace))}\n\n`);
     workspace.listeners.add(res);
     const keepAlive = setInterval(() => {
-      try { res.write(': keepalive\n\n'); } catch {}
+      try {
+        res.write(': keepalive\n\n');
+        mediaWorkspaces.touch(workspace);
+      } catch {}
     }, 15000);
     req.on('close', () => {
       clearInterval(keepAlive);

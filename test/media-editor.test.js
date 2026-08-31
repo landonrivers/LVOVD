@@ -71,6 +71,7 @@ test('zoom and pan math stays clamped to the finite media duration', () => {
 test('editor markup and controller keep the 6A1 visual single-range boundary explicit', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const source = fs.readFileSync(path.join(ROOT, 'public', 'media-editor.js'), 'utf8');
+  const serverSource = fs.readFileSync(path.join(ROOT, 'app-server.js'), 'utf8');
 
   for (const id of [
     'media-drop-zone',
@@ -91,10 +92,14 @@ test('editor markup and controller keep the 6A1 visual single-range boundary exp
     'timeline-fit'
   ]) assert.match(html, new RegExp(`id="${id}"`), id);
 
-  assert.match(html, /one visual retained range only/i);
-  assert.match(html, /does not trim, render, download/i);
+  assert.match(html, /one retained range for preview/i);
+  assert.match(html, /does not create, download, or save an edited file/i);
+  assert.match(html, /Edit preview · No output yet/i);
   assert.match(html, /temporary local storage/i);
   assert.match(html, /Nothing is sent to cloud storage/i);
+  assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
+  assert.doesNotMatch(html, /id="media-file-input"[^>]*\baccept=/i);
+  assert.doesNotMatch(source, /Roadmap 6A1/i);
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
   assert.match(source, /requestAnimationFrame\(playbackFrame\)/);
   assert.match(source, /video\.currentTime/);
@@ -102,6 +107,12 @@ test('editor markup and controller keep the 6A1 visual single-range boundary exp
   assert.match(source, /addEventListener\('drop'/);
   assert.match(source, /addEventListener\('pointerdown'/);
   assert.match(source, /setPointerCapture/);
+  const readyBranch = source.match(/else if \(data\.status === 'ready'\) \{([\s\S]*?)\n      \}/)?.[1];
+  assert.ok(readyBranch);
+  assert.doesNotMatch(readyBranch, /closeProgressSource/);
+  assert.match(source, /if \(data\.workspace\?\.status !== 'error'\) startProgress\(activeWorkspaceId\)/);
+  assert.match(source, /function resetWorkspaceUi\([\s\S]{0,100}closeProgressSource\(\)/);
+  assert.match(serverSource, /res\.write\(': keepalive\\n\\n'\);\s*mediaWorkspaces\.touch\(workspace\);/);
   assert.doesNotMatch(source, /\/api\/info/);
   assert.doesNotMatch(source, /\/api\/download/);
 });
