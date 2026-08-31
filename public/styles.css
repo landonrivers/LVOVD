@@ -242,14 +242,18 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .timeline-toolbar strong { color: #e4e0e8; font-size: 12px; }
 .timeline-toolbar span { margin-top: 4px; color: #aaa6b4; font-size: 10px; font-weight: 750; }
 .timeline-interaction-hint { margin: 11px 0 0; color: #aaa6b4; font-size: 10px; font-weight: 700; line-height: 1.45; }
-.timeline-ruler { position: relative; height: 38px; margin-top: 10px; cursor: default; touch-action: none; user-select: none; }
+.timeline-ruler { position: relative; height: 42px; margin-top: 10px; border-radius: 8px; cursor: default; touch-action: none; user-select: none; transition: background .15s ease, box-shadow .15s ease; }
 .timeline-ruler.can-pan { cursor: grab; }
+.timeline-ruler.can-pan:hover, .timeline-ruler.panning { background: rgba(159,123,255,.07); box-shadow: inset 0 0 0 1px rgba(198,184,255,.13); }
 .timeline-ruler.panning { cursor: grabbing; }
-.timeline-ruler-ticks { position: absolute; inset: 0 8px; border-bottom: 1px solid rgba(255,255,255,.2); }
-.timeline-tick { position: absolute; bottom: 8px; transform: translateX(-50%); color: #c0bbc9; font: 750 10px ui-monospace, SFMono-Regular, Consolas, monospace; white-space: nowrap; }
+.timeline-ruler-ticks { position: absolute; inset: 0 8px; }
+.timeline-ruler-ticks::after { content: ''; position: absolute; z-index: 0; left: 0; right: 0; bottom: 4px; height: 2px; border-radius: 999px; background: rgba(255,255,255,.26); box-shadow: 0 0 0 1px rgba(0,0,0,.18); transition: background .15s ease, box-shadow .15s ease; }
+.timeline-ruler.can-pan:hover .timeline-ruler-ticks::after, .timeline-ruler.panning .timeline-ruler-ticks::after { background: rgba(184,159,255,.72); box-shadow: 0 0 8px rgba(159,123,255,.28); }
+.timeline-tick { position: absolute; z-index: 1; bottom: 13px; transform: translateX(-50%); color: #c0bbc9; font: 750 10px ui-monospace, SFMono-Regular, Consolas, monospace; white-space: nowrap; }
 .timeline-tick.edge-start { transform: none; }
 .timeline-tick.edge-end { transform: translateX(-100%); }
-.timeline-tick::after { content: ''; position: absolute; left: 50%; top: calc(100% + 3px); width: 1px; height: 5px; background: rgba(255,255,255,.18); }
+.timeline-tick::after { content: ''; position: absolute; left: 50%; top: calc(100% + 3px); width: 1px; height: 10px; background: rgba(255,255,255,.28); transition: background .15s ease; }
+.timeline-ruler.can-pan:hover .timeline-tick::after, .timeline-ruler.panning .timeline-tick::after { background: rgba(184,159,255,.72); }
 .timeline-tick.edge-start::after { left: 0; }
 .timeline-tick.edge-end::after { left: 100%; }
 .timeline-track { position: relative; height: 76px; margin: 10px 8px 0; overflow: visible; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: #16151d; cursor: ew-resize; touch-action: none; user-select: none; transition: border-color .15s ease, box-shadow .15s ease; }
@@ -276,10 +280,12 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .legend-removed { background: repeating-linear-gradient(135deg, #1a1920, #1a1920 3px, #46414e 3px, #46414e 5px); }
 .legend-playhead { width: 2px !important; background: #ff315f; }
 .editor-exact-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-top: 17px; }
-.editor-exact-control { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 7px; }
+.editor-exact-control { display: grid; grid-template-columns: minmax(0,1fr); align-items: end; gap: 7px; }
 .editor-exact-control .field { min-width: 0; }
 .editor-exact-control input { font: 700 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .editor-exact-control input.invalid { border-color: #d94f6b; box-shadow: 0 0 0 3px rgba(217,79,107,.1); }
+.editor-boundary-actions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
+.timeline-range-actions { display: flex; justify-content: flex-end; margin-top: 2px; }
 .field-error { min-height: 13px; grid-column: 1 / -1; color: #ff8d9f; font-size: 8px; line-height: 1.4; }
 .editor-foundation-note { margin: 12px 0 0; padding: 9px 11px; border-radius: 9px; background: rgba(255,255,255,.025); color: #827e8b; font-size: 9px; line-height: 1.5; }
 
@@ -297,5 +303,6 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
   .timeline-toolbar .inline-actions { display: grid; grid-template-columns: repeat(3, 1fr); }
   .editor-exact-grid { grid-template-columns: 1fr; }
   .editor-exact-control { grid-template-columns: 1fr; }
-  .editor-exact-control .button { width: 100%; }
+  .editor-boundary-actions .button, .timeline-range-actions .button { width: 100%; }
+  .timeline-range-actions { display: block; }
 }

@@ -17,7 +17,10 @@ const {
   timelineTickStep,
   buildTimelineTicks,
   playbackShortcutForKey,
-  seekBySeconds
+  seekBySeconds,
+  fullRetainedRange,
+  retainedRangeWithPlayhead,
+  retainedBoundaryTime
 } = require('../public/media-editor');
 
 const ROOT = path.join(__dirname, '..');
@@ -103,9 +106,35 @@ test('bounded playback shortcuts toggle or seek five seconds with duration clamp
   assert.equal(seekBySeconds(10.125, 5, 20), 15.125);
 });
 
+test('range reset, set-boundary, and go-to-boundary actions keep range and playhead concerns separate', () => {
+  const authoredRange = Object.freeze({ startSeconds: 2.5, endSeconds: 9.75 });
+  const playheadSeconds = 6.125;
+
+  assert.deepEqual(fullRetainedRange(12.3456), {
+    startSeconds: 0,
+    endSeconds: 12.346
+  });
+  assert.equal(fullRetainedRange(0), null);
+  assert.deepEqual(retainedRangeWithPlayhead(authoredRange, 'start', playheadSeconds), {
+    startSeconds: 6.125,
+    endSeconds: 9.75
+  });
+  assert.deepEqual(retainedRangeWithPlayhead(authoredRange, 'end', playheadSeconds), {
+    startSeconds: 2.5,
+    endSeconds: 6.125
+  });
+  assert.deepEqual(authoredRange, { startSeconds: 2.5, endSeconds: 9.75 });
+  assert.equal(retainedBoundaryTime(authoredRange, 'start', 12), 2.5);
+  assert.equal(retainedBoundaryTime(authoredRange, 'end', 12), 9.75);
+  assert.equal(retainedBoundaryTime({ startSeconds: -4, endSeconds: 20 }, 'start', 12), 0);
+  assert.equal(retainedBoundaryTime({ startSeconds: -4, endSeconds: 20 }, 'end', 12), 12);
+  assert.equal(playheadSeconds, 6.125);
+});
+
 test('editor markup keeps the downloader primary and makes local timeline interactions explicit', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const source = fs.readFileSync(path.join(ROOT, 'public', 'media-editor.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(ROOT, 'public', 'styles.css'), 'utf8');
   const serverSource = fs.readFileSync(path.join(ROOT, 'app-server.js'), 'utf8');
 
   for (const id of [
@@ -122,6 +151,11 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'timeline-end-handle',
     'editor-start-time',
     'editor-end-time',
+    'set-start-playhead',
+    'set-end-playhead',
+    'go-to-start',
+    'go-to-end',
+    'reset-range',
     'timeline-zoom-in',
     'timeline-zoom-out',
     'timeline-fit'
@@ -142,6 +176,11 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(html, />Video URL<\/label>/);
   assert.doesNotMatch(html, /VISUAL RETAINED RANGE/i);
   assert.match(html, />Full Timeline<\/button>/);
+  assert.match(html, />Set Start Here<\/button>/);
+  assert.match(html, />Go to Start<\/button>/);
+  assert.match(html, />Set End Here<\/button>/);
+  assert.match(html, />Go to End<\/button>/);
+  assert.match(html, />Reset Range<\/button>/);
   assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
   assert.match(html, /id="timeline-track"[^>]*tabindex="0"/);
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
@@ -162,7 +201,16 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(readyBranch, /closeProgressSource/);
   assert.match(source, /if \(data\.workspace\?\.status !== 'error'\) startProgress\(activeWorkspaceId\)/);
   assert.match(source, /function resetWorkspaceUi\([\s\S]{0,100}closeProgressSource\(\)/);
+  assert.match(source, /function releaseWorkspaceConnectionsForDiscard\(\)[\s\S]*?closeProgressSource\(\);[\s\S]*?video\.removeAttribute\('src'\);/);
+  const discardFlow = source.match(/async function discardWorkspace\(\) \{([\s\S]*?)\n    \}\n\n    function beginUpload/)?.[1];
+  assert.ok(discardFlow);
+  assert.ok(discardFlow.indexOf('releaseWorkspaceConnectionsForDiscard()') < discardFlow.indexOf('root.fetch('));
+  assert.match(discardFlow, /restoreWorkspaceConnectionsAfterDiscardFailure\(id, connections\)/);
   assert.match(serverSource, /res\.write\(': keepalive\\n\\n'\);\s*mediaWorkspaces\.touch\(workspace\);/);
+  assert.match(styles, /\.timeline-ruler-ticks::after[\s\S]*?height:\s*2px/);
+  assert.match(styles, /\.timeline-ruler\.can-pan:hover[\s\S]*?\.timeline-ruler-ticks::after/);
+  assert.match(styles, /\.timeline-ruler\.can-pan\s*\{\s*cursor:\s*grab/);
+  assert.match(styles, /\.timeline-ruler\.panning\s*\{\s*cursor:\s*grabbing/);
   assert.doesNotMatch(source, /\/api\/info/);
   assert.doesNotMatch(source, /\/api\/download/);
 });

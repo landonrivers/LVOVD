@@ -188,6 +188,29 @@
     return roundMilliseconds(clamp(current + delta, 0, duration));
   }
 
+  function fullRetainedRange(durationSeconds) {
+    const result = validateSelection(0, durationSeconds, durationSeconds);
+    if (!result.valid) return null;
+    return { startSeconds: result.startSeconds, endSeconds: result.endSeconds };
+  }
+
+  function retainedRangeWithPlayhead(range, boundary, playheadSeconds) {
+    if (!range || !['start', 'end'].includes(boundary)) return null;
+    const playhead = roundMilliseconds(playheadSeconds);
+    if (!Number.isFinite(playhead)) return null;
+    return {
+      startSeconds: boundary === 'start' ? playhead : range.startSeconds,
+      endSeconds: boundary === 'end' ? playhead : range.endSeconds
+    };
+  }
+
+  function retainedBoundaryTime(range, boundary, durationSeconds) {
+    const duration = Math.max(0, Number(durationSeconds) || 0);
+    const rawValue = boundary === 'end' ? range?.endSeconds : range?.startSeconds;
+    const value = Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0;
+    return roundMilliseconds(clamp(value, 0, duration));
+  }
+
   function formatBytes(value) {
     const bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes < 0) return '';
@@ -242,6 +265,9 @@
     const endError = document.querySelector('#editor-end-error');
     const setStart = document.querySelector('#set-start-playhead');
     const setEnd = document.querySelector('#set-end-playhead');
+    const goToStart = document.querySelector('#go-to-start');
+    const goToEnd = document.querySelector('#go-to-end');
+    const resetRange = document.querySelector('#reset-range');
     const zoomIn = document.querySelector('#timeline-zoom-in');
     const zoomOut = document.querySelector('#timeline-zoom-out');
     const fit = document.querySelector('#timeline-fit');
@@ -298,6 +324,37 @@
       progressSource = null;
     }
 
+    function releaseWorkspaceConnectionsForDiscard() {
+      const playbackUrl = workspaceSnapshot?.status === 'ready'
+        ? workspaceSnapshot.playback?.url || null
+        : null;
+      const recovery = {
+        playbackUrl,
+        playbackTime: clamp(Number(video.currentTime) || 0, 0, durationSeconds || 0),
+        reconnectProgress: Boolean(workspaceSnapshot && workspaceSnapshot.status !== 'error')
+      };
+      closeProgressSource();
+      if (playbackUrl) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+      return recovery;
+    }
+
+    function restoreWorkspaceConnectionsAfterDiscardFailure(workspaceId, recovery) {
+      if (activeWorkspaceId !== workspaceId) return;
+      if (recovery.playbackUrl) {
+        video.src = recovery.playbackUrl;
+        video.addEventListener('loadedmetadata', () => {
+          video.currentTime = clamp(recovery.playbackTime, 0, durationSeconds || 0);
+          renderPlayhead();
+        }, { once: true });
+        video.load();
+      }
+      if (recovery.reconnectProgress) startProgress(workspaceId);
+    }
+
     function resetEditor() {
       if (animationFrame != null) root.cancelAnimationFrame(animationFrame);
       if (playheadSeekFrame != null) root.cancelAnimationFrame(playheadSeekFrame);
@@ -335,6 +392,7 @@
       workspaceCancel.hidden = true;
       workspaceCancel.disabled = false;
       failureDiscard.disabled = false;
+      discard.disabled = false;
       clearFailure();
       setStatus(message);
     }
@@ -558,6 +616,11 @@
     }
 
     function renderWorkspace(data) {
+      const editorAlreadyReady = Boolean(
+        workspaceSnapshot?.id === data.id
+        && workspaceSnapshot.status === 'ready'
+        && editPlan
+      );
       workspaceSnapshot = data;
       const percent = Number.isFinite(data.percent) ? data.percent : null;
       if (data.status === 'inspecting') {
@@ -580,7 +643,7 @@
       } else if (data.status === 'ready') {
         workspaceProgress.hidden = true;
         workspaceCancel.hidden = true;
-        initializeEditor(data);
+        if (!editorAlreadyReady) initializeEditor(data);
       }
       if (!['error', 'ready'].includes(data.status)) setStatus(data.message || 'Preparing local media…');
     }
@@ -646,8 +709,10 @@
         return;
       }
       const id = activeWorkspaceId;
+      const connections = releaseWorkspaceConnectionsForDiscard();
       workspaceCancel.disabled = true;
       failureDiscard.disabled = true;
+      discard.disabled = true;
       setStatus(workspaceSnapshot?.status === 'ready'
         ? 'Discarding local workspace…'
         : 'Cancelling local preparation and cleaning temporary files…');
@@ -657,11 +722,17 @@
           cache: 'no-store'
         });
         const data = await response.json();
+        if (response.status === 404) {
+          resetWorkspaceUi('Local media workspace was already discarded.');
+          return;
+        }
         if (!response.ok) throw new Error(data.error || 'Could not discard the local workspace.');
         resetWorkspaceUi('Local media workspace discarded.');
       } catch (error) {
+        restoreWorkspaceConnectionsAfterDiscardFailure(id, connections);
         workspaceCancel.disabled = false;
         failureDiscard.disabled = false;
+        discard.disabled = false;
         setStatus(error.message || 'Could not discard the local workspace.', 'error');
       }
     }
@@ -841,14 +912,31 @@
     setStart.addEventListener('click', () => {
       if (!editPlan) return;
       const range = editPlan.keepRanges[0];
-      const result = commitSelection(video.currentTime, range.endSeconds);
+      const next = retainedRangeWithPlayhead(range, 'start', video.currentTime);
+      const result = commitSelection(next.startSeconds, next.endSeconds);
       setFieldError(startField, startError, result.valid ? '' : result.reason);
     });
     setEnd.addEventListener('click', () => {
       if (!editPlan) return;
       const range = editPlan.keepRanges[0];
-      const result = commitSelection(range.startSeconds, video.currentTime);
+      const next = retainedRangeWithPlayhead(range, 'end', video.currentTime);
+      const result = commitSelection(next.startSeconds, next.endSeconds);
       setFieldError(endField, endError, result.valid ? '' : result.reason);
+    });
+    goToStart.addEventListener('click', () => {
+      if (!editPlan) return;
+      video.currentTime = retainedBoundaryTime(editPlan.keepRanges[0], 'start', durationSeconds);
+      renderPlayhead();
+    });
+    goToEnd.addEventListener('click', () => {
+      if (!editPlan) return;
+      video.currentTime = retainedBoundaryTime(editPlan.keepRanges[0], 'end', durationSeconds);
+      renderPlayhead();
+    });
+    resetRange.addEventListener('click', () => {
+      if (!editPlan) return;
+      const range = fullRetainedRange(durationSeconds);
+      if (range) commitSelection(range.startSeconds, range.endSeconds);
     });
     zoomIn.addEventListener('click', () => zoom(0.5));
     zoomOut.addEventListener('click', () => zoom(2));
@@ -883,6 +971,9 @@
     buildTimelineTicks,
     playbackShortcutForKey,
     seekBySeconds,
+    fullRetainedRange,
+    retainedRangeWithPlayhead,
+    retainedBoundaryTime,
     init
   };
 });

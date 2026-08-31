@@ -370,7 +370,10 @@
                     <span>Retained start</span>
                     <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
                   </label>
-                  <button id="set-start-playhead" class="button secondary mini" type="button">Set Start to Playhead</button>
+                  <div class="editor-boundary-actions">
+                    <button id="set-start-playhead" class="button secondary mini" type="button">Set Start Here</button>
+                    <button id="go-to-start" class="button secondary mini" type="button">Go to Start</button>
+                  </div>
                   <small id="editor-start-error" class="field-error" aria-live="polite"></small>
                 </div>
                 <div class="editor-exact-control">
@@ -378,9 +381,16 @@
                     <span>Retained end</span>
                     <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
                   </label>
-                  <button id="set-end-playhead" class="button secondary mini" type="button">Set End to Playhead</button>
+                  <div class="editor-boundary-actions">
+                    <button id="set-end-playhead" class="button secondary mini" type="button">Set End Here</button>
+                    <button id="go-to-end" class="button secondary mini" type="button">Go to End</button>
+                  </div>
                   <small id="editor-end-error" class="field-error" aria-live="polite"></small>
                 </div>
+              </div>
+
+              <div class="timeline-range-actions">
+                <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
               </div>
 
               <p class="editor-foundation-note">This editor records one retained range for preview. It does not create, download, or save an edited file yet.</p>

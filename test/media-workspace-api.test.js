@@ -150,6 +150,64 @@ function readOneSseEvent(pathname) {
   });
 }
 
+function openSseConnection(pathname) {
+  let req;
+  let response;
+  let firstSettled = false;
+  let resolveClosed;
+  const closed = new Promise((resolve) => { resolveClosed = resolve; });
+  const firstEvent = new Promise((resolve, reject) => {
+    req = http.request({
+      hostname: '127.0.0.1',
+      port: PORT,
+      path: pathname,
+      method: 'GET',
+      headers: {
+        Host: `127.0.0.1:${PORT}`,
+        Origin: `http://127.0.0.1:${PORT}`,
+        'Sec-Fetch-Site': 'same-origin'
+      }
+    }, (res) => {
+      response = res;
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        text += chunk;
+        const match = text.match(/data: ([^\n]+)\n\n/);
+        if (!match || firstSettled) return;
+        firstSettled = true;
+        resolve({ status: res.statusCode, headers: res.headers, data: JSON.parse(match[1]) });
+      });
+      const finish = () => resolveClosed();
+      res.once('end', finish);
+      res.once('close', finish);
+    });
+    req.once('error', (error) => {
+      resolveClosed();
+      if (!firstSettled) reject(error);
+    });
+    req.end();
+  });
+  return {
+    firstEvent,
+    closed,
+    close() {
+      response?.destroy();
+      req?.destroy();
+    }
+  };
+}
+
+function within(promise, label, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${label}.`)), timeoutMs);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
 test('raw local intake returns an opaque workspace and direct media supports GET, HEAD, and byte ranges', async () => {
   const bytes = Buffer.from('synthetic-direct-video-bytes');
   const { response, data } = await upload(bytes, '..\\private\\camera.mp4', 'user/claimed-type');
@@ -261,6 +319,32 @@ test('non-video inspection remains a normalized local error and removes staged a
   assert.equal(discarded.status, 200);
   assert.equal(JSON.parse(discarded.body.toString('utf8')).action, 'discarded');
   assert.equal(mediaWorkspaces.get(workspace.id, { touch: false }), null);
+});
+
+test('DELETE succeeds with an open workspace SSE lease and completes authoritative cleanup', async (t) => {
+  const bytes = Buffer.from('synthetic-ready-video-with-live-lease');
+  const { data } = await upload(bytes, 'leased.mp4');
+  const workspace = await waitForWorkspace(data.workspaceId);
+  const snapshot = mediaWorkspaces.publicWorkspace(workspace);
+  const lease = openSseConnection(`/api/workspace/progress?workspace=${workspace.id}`);
+  t.after(() => lease.close());
+
+  const event = await within(lease.firstEvent, 'initial workspace lease event');
+  assert.equal(event.status, 200);
+  assert.equal(event.data.status, 'ready');
+  assert.equal(workspace.listeners.size, 1);
+
+  const response = await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(response.body.toString('utf8')).action, 'discarded');
+  await within(lease.closed, 'workspace lease closure');
+  assert.equal(workspace.listeners.size, 0);
+  assert.equal(mediaWorkspaces.get(workspace.id, { touch: false }), null);
+
+  const oldMedia = await request(snapshot.playback.url);
+  assert.equal(oldMedia.status, 404);
+  const oldProgress = await request(`/api/workspace/progress?workspace=${workspace.id}`);
+  assert.equal(oldProgress.status, 404);
 });
 
 test('declared over-limit intake is rejected before workspace creation', async () => {
