@@ -120,6 +120,8 @@ Roadmap 5B adds structured local-operation provenance at the failure boundary an
 
 Add an optional editing path before finalizing a download, while preserving the current straight-through download path for users who do not need edits.
 
+The approved cross-roadmap product contract for local-file intake, the shared temporary media workspace, the visual timeline/editor interaction, Edit -> Convert handoff, and the boundary between Roadmap #6 and #7 is documented in [`docs/local-media-workspace.md`](docs/local-media-workspace.md). Implementation slices should preserve that contract unless a later explicit product decision revises it.
+
 Goals:
 
 - present two clear choices after Preview: download normally or open an Edit/Staging workspace;
