@@ -158,8 +158,15 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .history-actions { flex: 0 0 auto; }
 .clear-button { margin-top: 11px; }
 .source-format-mode { margin-top: 12px; }
-.source-format-selection-summary { margin-top: 10px; color: #b8b2c6; }
-.source-format-row.selected { background: rgba(123,87,239,.09); box-shadow: inset 0 0 0 1px rgba(169,148,255,.2); }
+#source-formats .help { color: #bbb7c5; font-size: 12px; line-height: 1.55; }
+#source-formats .source-format-mode label { color: #d0ccd7; font-size: 12px; }
+.source-format-selection-summary, .source-formats-summary { margin-top: 10px; color: #c5c1ce; font-size: 12px; line-height: 1.55; }
+.source-format-list { gap: 10px; }
+.source-format-row { min-height: 72px; padding: 12px 13px; background: rgba(255,255,255,.035); }
+.source-format-row .source-format-copy { display: grid; gap: 4px; }
+.source-format-row strong.source-format-title { color: #f1eff5; font-size: 13px; line-height: 1.35; font-weight: 850; }
+.source-format-row small.source-format-details { margin: 0; color: #bbb8c5; font-size: 11px; line-height: 1.5; }
+.source-format-row.selected { background: rgba(123,87,239,.11); box-shadow: inset 0 0 0 1px rgba(169,148,255,.28); }
 .button.selected-source-format { background: rgba(123,87,239,.3); }
 .manual-overridden .choice-grid, .manual-overridden .field-row { opacity: .45; }
 .requirements { margin-top: 28px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.08); }

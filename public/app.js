@@ -685,6 +685,51 @@ function formatSourceBitrate(value) {
   return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)} Mbps` : `${Math.round(value)} kbps`;
 }
 
+function friendlySourceCodec(codec, mediaType) {
+  if (typeof codec !== 'string' || !codec.trim()) return '';
+  const normalized = codec.trim().toLowerCase();
+  const codecLabels = mediaType === 'video'
+    ? [
+        [/^(?:avc1|avc3|h264)/, 'H.264'],
+        [/^(?:hev1|hvc1|hevc|h265)/, 'H.265 / HEVC'],
+        [/^(?:av01|av1)/, 'AV1'],
+        [/^(?:vp09|vp9)/, 'VP9'],
+        [/^vp8/, 'VP8'],
+        [/^theora/, 'Theora']
+      ]
+    : [
+        [/^(?:mp3|mp4a\.(?:69|6b))/, 'MP3'],
+        [/^(?:mp4a|aac)/, 'AAC'],
+        [/^opus/, 'Opus'],
+        [/^vorbis/, 'Vorbis'],
+        [/^(?:ec-3|eac3)/, 'Dolby Digital Plus'],
+        [/^(?:ac-3|ac3)/, 'Dolby Digital'],
+        [/^flac/, 'FLAC']
+      ];
+  return codecLabels.find(([pattern]) => pattern.test(normalized))?.[1] || codec.trim().toUpperCase();
+}
+
+function sourceFormatResolution(format) {
+  if (format.width && format.height) return `${format.width} × ${format.height}`;
+  if (format.height) return `${format.height}p`;
+  if (format.width) return `${format.width}px wide`;
+  return '';
+}
+
+function sourceFormatTitle(format) {
+  const resolution = sourceFormatResolution(format);
+  const note = typeof format.note === 'string' && !/^\s*(?:audio only|video only)\s*$/i.test(format.note)
+    ? format.note.trim()
+    : '';
+  const visualQuality = resolution || note;
+  if (format.video === true && format.audio === true) {
+    return visualQuality ? `${visualQuality} video with audio` : 'Video with audio';
+  }
+  if (format.video === true) return visualQuality ? `${visualQuality} video` : 'Video';
+  if (format.audio === true) return note ? `Audio · ${note.charAt(0).toUpperCase()}${note.slice(1)}` : 'Audio';
+  return 'Media source';
+}
+
 function sourceFormatManualActive() {
   return Boolean(sourceFormatModeManual?.checked);
 }
@@ -701,21 +746,21 @@ function sourceFormatSelectionText() {
   if (!sourceFormatManualActive()) return 'Automatic selection is active.';
   const content = selectedValue('content') || 'av';
   if (content === 'av') {
-    if (manualSourceFormat.combinedId) return `Manual combined format: ${manualSourceFormat.combinedId}`;
-    if (manualSourceFormat.videoId && manualSourceFormat.audioId) return `Manual pair: video ${manualSourceFormat.videoId} + audio ${manualSourceFormat.audioId}`;
-    if (manualSourceFormat.videoId) return `Video ${manualSourceFormat.videoId} selected. Choose an audio-only format too, or choose a combined format.`;
-    if (manualSourceFormat.audioId) return `Audio ${manualSourceFormat.audioId} selected. Choose a video-only format too, or choose a combined format.`;
-    return 'Choose one combined format, or choose one video-only and one audio-only format.';
+    if (manualSourceFormat.combinedId) return 'A video-with-audio source is selected.';
+    if (manualSourceFormat.videoId && manualSourceFormat.audioId) return 'Separate video and audio sources are selected.';
+    if (manualSourceFormat.videoId) return 'A video source is selected. Choose an audio source too, or choose one video-with-audio source.';
+    if (manualSourceFormat.audioId) return 'An audio source is selected. Choose a video source too, or choose one video-with-audio source.';
+    return 'Choose one video-with-audio source, or choose one video source and one audio source.';
   }
   if (content === 'video') {
     return manualSourceFormat.videoId
-      ? `Manual video format: ${manualSourceFormat.videoId}`
-      : 'Choose one video-only source format.';
+      ? 'A video source is selected.'
+      : 'Choose one video source.';
   }
   if (content === 'audio') {
     return manualSourceFormat.audioId
-      ? `Manual audio format: ${manualSourceFormat.audioId}`
-      : 'Choose one audio-only source format. Your Audio Output choice below still controls any local conversion.';
+      ? 'An audio source is selected.'
+      : 'Choose one audio source. Your Audio Output choice below still controls any local conversion.';
   }
   return 'Manual source selection does not apply to Extras Only.';
 }
@@ -801,7 +846,7 @@ function ensureSourceFormatsPanel() {
   sourceFormatSelectionSummary.className = 'help source-format-selection-summary';
   sourceFormatSelectionSummary.textContent = 'Automatic selection is active.';
   sourceFormatsSummary = document.createElement('p');
-  sourceFormatsSummary.className = 'help';
+  sourceFormatsSummary.className = 'help source-formats-summary';
   sourceFormatsList = document.createElement('div');
   sourceFormatsList.className = 'output-list source-format-list';
   sourceFormatsList.hidden = false;
@@ -853,17 +898,21 @@ function renderSourceFormats(info, { preserveOpen = false } = {}) {
     const selected = format.selectionId && [manualSourceFormat.combinedId, manualSourceFormat.videoId, manualSourceFormat.audioId].includes(format.selectionId);
     row.className = `output-row source-format-row${selected ? ' selected' : ''}`;
     const copy = document.createElement('div');
+    copy.className = 'source-format-copy';
     const strong = document.createElement('strong');
-    strong.textContent = `Format ${format.id} · ${format.type}`;
+    strong.className = 'source-format-title';
+    strong.textContent = sourceFormatTitle(format);
     const details = [];
-    if (format.note) details.push(format.note);
-    if (format.width && format.height) details.push(`${format.width}×${format.height}`);
-    else if (format.height) details.push(`${format.height}p`);
-    else if (format.width) details.push(`${format.width}px wide`);
+    if (format.type) details.push(format.type);
+    const resolution = sourceFormatResolution(format);
+    const noteIsUseful = format.note
+      && !/^\s*(?:audio only|video only)\s*$/i.test(format.note)
+      && (!resolution || !format.video);
+    if (noteIsUseful && format.video !== false) details.push(format.note);
     if (format.fps) details.push(`${format.fps} fps`);
-    if (format.videoCodec) details.push(`Video ${format.videoCodec}`);
+    if (format.videoCodec) details.push(friendlySourceCodec(format.videoCodec, 'video'));
     else if (format.video === true) details.push('Video codec unknown');
-    if (format.audioCodec) details.push(`Audio ${format.audioCodec}`);
+    if (format.audioCodec) details.push(friendlySourceCodec(format.audioCodec, 'audio'));
     else if (format.audio === true) details.push('Audio codec unknown');
     if (format.ext) details.push(format.ext.toUpperCase());
     if (format.totalBitrateKbps) details.push(formatSourceBitrate(format.totalBitrateKbps));
@@ -872,10 +921,11 @@ function renderSourceFormats(info, { preserveOpen = false } = {}) {
       if (format.audioBitrateKbps) details.push(`Audio ${formatSourceBitrate(format.audioBitrateKbps)}`);
     }
     if (format.sizeBytes) details.push(`${format.sizeApproximate ? '~' : ''}${formatBytes(format.sizeBytes)}`);
-    if (format.audioChannels) details.push(`${format.audioChannels} ch`);
+    if (format.audioChannels) details.push(format.audioChannels === 2 ? 'Stereo' : `${format.audioChannels} channels`);
     if (format.sampleRate) details.push(`${Math.round(format.sampleRate / 100) / 10} kHz`);
     if (!format.selectable) details.push('Inspection only');
     const small = document.createElement('small');
+    small.className = 'source-format-details';
     small.textContent = details.join(' · ');
     copy.append(strong, small);
     row.appendChild(copy);
@@ -887,10 +937,10 @@ function renderSourceFormats(info, { preserveOpen = false } = {}) {
       button.textContent = selected
         ? 'Selected'
         : action === 'combined'
-          ? 'Use combined'
+          ? 'Choose video + audio'
           : action === 'video'
-            ? 'Use video'
-            : 'Use audio';
+            ? 'Choose video'
+            : 'Choose audio';
       button.addEventListener('click', () => chooseManualSourceFormat(format, action));
       row.appendChild(button);
     }
