@@ -199,6 +199,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.ok(html.indexOf('id="preview"') < html.indexOf('id="media-workspace-panel"'));
   assert.ok(html.indexOf('id="media-workspace-panel"') < html.indexOf('id="history-panel"'));
   assert.match(html, /<label for="video-url">Media URL<\/label>/);
+  assert.match(html, /id="preview-button" class="button secondary lookup-submit"[^>]*>Preview<\/button>/);
   assert.doesNotMatch(html, />Video URL<\/label>/);
   assert.doesNotMatch(html, /VISUAL RETAINED RANGE/i);
   assert.match(html, />Full Timeline<\/button>/);
@@ -247,6 +248,9 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(styles, /\.timeline-ruler\.can-pan:hover[\s\S]*?\.timeline-ruler-ticks::after/);
   assert.match(styles, /\.timeline-ruler\.can-pan\s*\{\s*cursor:\s*grab/);
   assert.match(styles, /\.timeline-ruler\.panning\s*\{\s*cursor:\s*grabbing/);
+  assert.match(styles, /\.lookup-form\s*\{[^}]*border:[^;}]*rgba\(169,148,255,\.22\)[^}]*background:\s*linear-gradient[^}]*box-shadow:/);
+  assert.match(styles, /\.lookup-form:focus-within\s*\{[^}]*border-color:[^;}]*rgba\(184,159,255,\.42\)/);
+  assert.match(styles, /\.lookup-form \.lookup-submit\s*\{[^}]*background:\s*linear-gradient/);
   assert.match(styles, /grid-template-columns:\s*repeat\(2,\s*minmax\(180px,200px\)\)\s*max-content/);
   assert.match(styles, /grid-template-areas:\s*"start-field end-field \."\s*"start-actions end-actions reset"/);
   assert.match(styles, /\.timeline-range-actions\s*\{\s*grid-area:\s*reset/);
