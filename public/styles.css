@@ -19,10 +19,10 @@ button, label, summary, select { -webkit-tap-highlight-color: transparent; }
 h1 { margin: 0; font-size: clamp(25px, 4vw, 38px); letter-spacing: -.035em; }
 .brand-subtitle { margin: 3px 0 0; color: #aaa7b4; font-size: 12px; font-weight: 700; letter-spacing: .01em; }
 .intro { max-width: 760px; margin: 20px 0 26px; color: #aaa7b4; line-height: 1.65; font-size: 14px; }
-.lookup-form { padding: clamp(14px, 2vw, 18px); border: 1px solid rgba(169,148,255,.22); border-radius: 16px; background: linear-gradient(145deg, rgba(123,87,239,.075), rgba(216,31,255,.025) 68%, rgba(255,255,255,.015)); box-shadow: inset 3px 0 0 rgba(159,123,255,.58), 0 12px 34px rgba(0,0,0,.12); transition: border-color .15s ease, box-shadow .15s ease; }
-.lookup-form:focus-within { border-color: rgba(184,159,255,.42); box-shadow: inset 3px 0 0 rgba(184,159,255,.82), 0 12px 34px rgba(0,0,0,.16); }
+.lookup-form { padding: clamp(14px, 2vw, 18px); border: 1px solid rgba(169,148,255,.22); border-radius: 16px; background: linear-gradient(145deg, rgba(123,87,239,.075), rgba(216,31,255,.025) 68%, rgba(255,255,255,.015)); transition: border-color .15s ease, background .15s ease; }
+.lookup-form:focus-within { border-color: rgba(184,159,255,.42); background: linear-gradient(145deg, rgba(123,87,239,.095), rgba(216,31,255,.035) 68%, rgba(255,255,255,.02)); }
 .lookup-form label, .field > span { display: block; margin-bottom: 8px; color: #b5b2bf; font-size: 11px; font-weight: 800; letter-spacing: .03em; }
-.lookup-form label { margin-bottom: 10px; color: #eeeaf5; font-size: 12px; letter-spacing: .05em; }
+.workflow-heading { margin: 0 0 12px; color: #eeeaf5; font-size: clamp(15px, 2vw, 17px); font-weight: 850; line-height: 1.25; letter-spacing: -.01em; }
 .input-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 input[type="url"], input[type="text"], select { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid #302e39; border-radius: 11px; background: #111117; color: #f2f0f5; outline: none; }
 input:focus, select:focus { border-color: #7b57ef; box-shadow: 0 0 0 3px rgba(123,87,239,.12); }
@@ -214,10 +214,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 
 /* Roadmap 6A1 local media workspace and visual timeline */
 .media-workspace-panel { margin: 32px 0 28px; padding: clamp(16px, 2.5vw, 24px); border: 1px solid rgba(169,148,255,.2); border-radius: 18px; background: linear-gradient(145deg, rgba(123,87,239,.08), rgba(216,31,255,.035) 55%, rgba(255,0,61,.035)); }
-.workspace-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-.workspace-heading > div:first-child { display: block; min-width: 0; }
-.workspace-heading h2 { font-size: clamp(20px, 3vw, 28px); }
-.workspace-heading .help { max-width: 760px; margin: 7px 0 0; }
+.workspace-heading { display: block; }
 .workspace-storage-note { display: grid; grid-template-columns: auto 1fr; gap: 10px 13px; margin-top: 15px; padding: 11px 13px; border-radius: 11px; background: rgba(255,255,255,.035); color: #aaa7b4; font-size: 10px; line-height: 1.55; }
 .workspace-storage-note strong { color: #d7d2e0; }
 .media-drop-zone { min-height: 116px; margin-top: 15px; padding: 18px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; border: 1px dashed rgba(169,148,255,.38); border-radius: 14px; background: rgba(8,8,12,.42); transition: border-color .15s ease, background .15s ease, opacity .15s ease; }
@@ -323,7 +320,6 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 }
 
 @media (max-width: 620px) {
-  .workspace-heading { flex-direction: column; }
   .media-drop-zone { grid-template-columns: auto 1fr; }
   .media-drop-zone .button { grid-column: 1 / -1; width: 100%; }
   .workspace-storage-note { grid-template-columns: 1fr; }

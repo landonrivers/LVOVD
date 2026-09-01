@@ -24,7 +24,7 @@
       <p class="intro">A Locally Hosted Video Downloader Which You'll Use Responsibly</p>
 
       <form id="lookup-form" class="lookup-form">
-        <label for="video-url">Media URL</label>
+        <label class="workflow-heading" for="video-url">Download From Media URL</label>
         <div class="input-row">
           <input id="video-url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://example.com/media/..." />
           <button id="preview-button" class="button secondary lookup-submit" type="submit">Preview</button>
@@ -270,16 +270,11 @@
       </section>
 
       <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
-        <div class="section-head workspace-heading">
-          <div>
-            <p class="eyebrow">LOCAL EDIT WORKSPACE</p>
-            <h2 id="media-workspace-title">Edit Media</h2>
-            <p class="help">Choose or drop one local video. It stays on this computer, but LVOVD copies it into temporary local storage so the browser editor can use it.</p>
-          </div>
-          <span class="tag">Edit locally · Creates MP4</span>
+        <div class="workspace-heading">
+          <h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File</h2>
         </div>
 
-        <div class="workspace-storage-note">
+        <div id="workspace-storage-note" class="workspace-storage-note" hidden>
           <strong>Temporary disk use</strong>
           <span>Large files can temporarily require roughly another copy's worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.</span>
         </div>

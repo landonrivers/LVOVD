@@ -182,7 +182,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'timeline-fit'
   ]) assert.match(html, new RegExp(`id="${id}"`), id);
 
-  assert.match(html, /Edit locally · Creates MP4/i);
+  assert.doesNotMatch(html, /Edit locally · Creates MP4/i);
   assert.match(html, /Creates a new MP4 locally/i);
   assert.match(html, /re-encodes the edited output/i);
   assert.match(html, /id="create-edited-file" class="button secondary mini"[^>]*>Create Edited File<\/button>/);
@@ -190,15 +190,18 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /id="download-edited-file" class="button secondary mini"[^>]*>Download<\/a>/);
   assert.match(html, /Move the start or end before creating an edited file/i);
   assert.match(html, /Range changed — create the edited file again to update it/i);
-  assert.match(html, /temporary local storage/i);
+  assert.doesNotMatch(html, /Choose or drop one local video\. It stays on this computer/i);
   assert.match(html, /Nothing is sent to cloud storage/i);
+  assert.doesNotMatch(html, /LOCAL EDIT WORKSPACE/i);
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
   assert.doesNotMatch(html, /id="media-file-input"[^>]*\baccept=/i);
   assert.doesNotMatch(source, /Roadmap 6A1/i);
   assert.ok(html.indexOf('id="lookup-form"') < html.indexOf('id="media-workspace-panel"'));
   assert.ok(html.indexOf('id="preview"') < html.indexOf('id="media-workspace-panel"'));
   assert.ok(html.indexOf('id="media-workspace-panel"') < html.indexOf('id="history-panel"'));
-  assert.match(html, /<label for="video-url">Media URL<\/label>/);
+  assert.match(html, /<label class="workflow-heading" for="video-url">Download From Media URL<\/label>/);
+  assert.match(html, /<h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File<\/h2>/);
+  assert.match(html, /id="workspace-storage-note" class="workspace-storage-note" hidden/);
   assert.match(html, /id="preview-button" class="button secondary lookup-submit"[^>]*>Preview<\/button>/);
   assert.doesNotMatch(html, />Video URL<\/label>/);
   assert.doesNotMatch(html, /VISUAL RETAINED RANGE/i);
@@ -221,6 +224,8 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /setPointerCapture/);
   assert.match(source, /dropZone\.hidden = true/);
   assert.match(source, /dropZone\.hidden = false/);
+  assert.match(source, /storageNote\.hidden = true/);
+  assert.match(source, /if \(!file\.size\)[\s\S]*?return;[\s\S]*?storageNote\.hidden = false/);
   assert.match(source, /playhead\.addEventListener\('pointerdown', beginPlayheadDrag\)/);
   assert.match(source, /playheadSeekFrame = root\.requestAnimationFrame/);
   assert.match(source, /track\.addEventListener\('keydown', handlePlaybackKey\)/);
@@ -248,9 +253,11 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(styles, /\.timeline-ruler\.can-pan:hover[\s\S]*?\.timeline-ruler-ticks::after/);
   assert.match(styles, /\.timeline-ruler\.can-pan\s*\{\s*cursor:\s*grab/);
   assert.match(styles, /\.timeline-ruler\.panning\s*\{\s*cursor:\s*grabbing/);
-  assert.match(styles, /\.lookup-form\s*\{[^}]*border:[^;}]*rgba\(169,148,255,\.22\)[^}]*background:\s*linear-gradient[^}]*box-shadow:/);
+  assert.match(styles, /\.lookup-form\s*\{[^}]*border:[^;}]*rgba\(169,148,255,\.22\)[^}]*background:\s*linear-gradient/);
+  assert.doesNotMatch(styles, /\.lookup-form\s*\{[^}]*box-shadow:/);
   assert.match(styles, /\.lookup-form:focus-within\s*\{[^}]*border-color:[^;}]*rgba\(184,159,255,\.42\)/);
   assert.match(styles, /\.lookup-form \.lookup-submit\s*\{[^}]*background:\s*linear-gradient/);
+  assert.match(styles, /\.workflow-heading\s*\{[^}]*font-size:\s*clamp\(15px,\s*2vw,\s*17px\)/);
   assert.match(styles, /grid-template-columns:\s*repeat\(2,\s*minmax\(180px,200px\)\)\s*max-content/);
   assert.match(styles, /grid-template-areas:\s*"start-field end-field \."\s*"start-actions end-actions reset"/);
   assert.match(styles, /\.timeline-range-actions\s*\{\s*grid-area:\s*reset/);

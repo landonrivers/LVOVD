@@ -251,6 +251,7 @@
     const dropZone = document.querySelector('#media-drop-zone');
     const chooseButton = document.querySelector('#media-choose-button');
     const fileInput = document.querySelector('#media-file-input');
+    const storageNote = document.querySelector('#workspace-storage-note');
     const workspaceStatus = document.querySelector('#workspace-status');
     const workspaceProgress = document.querySelector('#workspace-progress');
     const workspaceProgressBar = document.querySelector('#workspace-progress-bar');
@@ -498,6 +499,7 @@
       fileInput.value = '';
       chooseButton.disabled = false;
       dropZone.hidden = false;
+      storageNote.hidden = true;
       dropZone.classList.remove('dragover');
       workspaceProgress.hidden = true;
       workspaceCancel.hidden = true;
@@ -928,6 +930,7 @@
 
       chooseButton.disabled = true;
       dropZone.hidden = true;
+      storageNote.hidden = false;
       workspaceCancel.textContent = 'Cancel';
       workspaceCancel.hidden = false;
       setStatus('Copying the selected file into LVOVD temporary storage…');
