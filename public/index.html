@@ -276,7 +276,7 @@
             <h2 id="media-workspace-title">Edit Media</h2>
             <p class="help">Choose or drop one local video. It stays on this computer, but LVOVD copies it into temporary local storage so the browser editor can use it.</p>
           </div>
-          <span class="tag">Edit preview · No output yet</span>
+          <span class="tag">Edit locally · Creates MP4</span>
         </div>
 
         <div class="workspace-storage-note">
@@ -320,6 +320,7 @@
               <h3 id="editor-media-name">Local video</h3>
               <p id="editor-media-facts" class="help"></p>
               <p id="editor-proxy-note" class="editor-proxy-note"></p>
+              <p id="editor-track-warning" class="editor-track-warning" hidden>This edited output uses the primary video/audio track. Additional audio or subtitle tracks are not included yet.</p>
             </div>
             <button id="workspace-discard" class="button secondary mini" type="button">Discard</button>
           </div>
@@ -393,7 +394,47 @@
                 <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
               </div>
 
-              <p class="editor-foundation-note">This editor records one retained range for preview. It does not create, download, or save an edited file yet.</p>
+              <section class="editor-render-panel" aria-labelledby="editor-render-title">
+                <div class="editor-render-head">
+                  <div>
+                    <strong id="editor-render-title">Create edited output</strong>
+                    <p class="editor-foundation-note">Creates a new MP4 locally. To closely match arbitrary cut times, this version re-encodes the edited output. Your staged source is unchanged.</p>
+                  </div>
+                  <button id="create-edited-file" class="button mini" type="button" disabled>Create Edited File</button>
+                </div>
+
+                <p id="editor-render-noop" class="editor-render-noop">Move the start or end before creating an edited file.</p>
+
+                <div id="editor-render-progress" class="workspace-progress editor-render-progress" aria-live="polite" hidden>
+                  <div class="progress-head">
+                    <div>
+                      <strong id="editor-render-progress-label">Creating edited file…</strong>
+                      <span>Re-encoding locally for the selected boundaries.</span>
+                    </div>
+                    <button id="cancel-edited-render" class="text-button" type="button">Cancel Render</button>
+                  </div>
+                  <div class="progress-track" aria-hidden="true"><div id="editor-render-progress-bar" class="progress-bar"></div></div>
+                </div>
+
+                <section id="editor-render-failure" class="preview-error editor-render-failure" aria-live="polite" hidden>
+                  <div>
+                    <p class="eyebrow">EDITED FILE RESULT</p>
+                    <h4 id="editor-render-failure-title">Edited-file creation failed</h4>
+                    <p id="editor-render-failure-explanation" class="error-message"></p>
+                    <p id="editor-render-failure-help" class="help"></p>
+                  </div>
+                </section>
+
+                <section id="editor-edited-output" class="editor-edited-output" aria-live="polite" hidden>
+                  <div>
+                    <p class="eyebrow">EDITED FILE READY</p>
+                    <h4 id="editor-output-filename">Edited video.mp4</h4>
+                    <p id="editor-output-facts" class="help"></p>
+                    <p id="editor-output-stale" class="editor-output-stale" hidden>Range changed — create the edited file again to update it. This download was created from the previous range.</p>
+                  </div>
+                  <a id="download-edited-file" class="button mini" href="#">Download Edited File</a>
+                </section>
+              </section>
             </div>
           </div>
         </section>

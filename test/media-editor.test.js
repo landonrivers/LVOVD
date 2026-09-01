@@ -20,7 +20,9 @@ const {
   seekBySeconds,
   fullRetainedRange,
   retainedRangeWithPlayhead,
-  retainedBoundaryTime
+  retainedBoundaryTime,
+  editPlansEqual,
+  isFullDurationEditPlan
 } = require('../public/media-editor');
 
 const ROOT = path.join(__dirname, '..');
@@ -131,6 +133,16 @@ test('range reset, set-boundary, and go-to-boundary actions keep range and playh
   assert.equal(playheadSeconds, 6.125);
 });
 
+test('edited-output plan comparison identifies no-op and stale one-range output deterministically', () => {
+  const full = { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12.346 }] };
+  const trimmed = { version: 1, keepRanges: [{ startSeconds: 1.25, endSeconds: 11 }] };
+  assert.equal(isFullDurationEditPlan(full, 12.3456), true);
+  assert.equal(isFullDurationEditPlan(trimmed, 12.3456), false);
+  assert.equal(editPlansEqual(trimmed, structuredClone(trimmed)), true);
+  assert.equal(editPlansEqual(trimmed, { version: 1, keepRanges: [{ startSeconds: 1.25, endSeconds: 10 }] }), false);
+  assert.equal(editPlansEqual(trimmed, { version: 2, keepRanges: trimmed.keepRanges }), false);
+});
+
 test('editor markup keeps the downloader primary and makes local timeline interactions explicit', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const source = fs.readFileSync(path.join(ROOT, 'public', 'media-editor.js'), 'utf8');
@@ -156,14 +168,27 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'go-to-start',
     'go-to-end',
     'reset-range',
+    'editor-track-warning',
+    'create-edited-file',
+    'editor-render-noop',
+    'editor-render-progress',
+    'cancel-edited-render',
+    'editor-render-failure',
+    'editor-edited-output',
+    'editor-output-stale',
+    'download-edited-file',
     'timeline-zoom-in',
     'timeline-zoom-out',
     'timeline-fit'
   ]) assert.match(html, new RegExp(`id="${id}"`), id);
 
-  assert.match(html, /one retained range for preview/i);
-  assert.match(html, /does not create, download, or save an edited file/i);
-  assert.match(html, /Edit preview · No output yet/i);
+  assert.match(html, /Edit locally · Creates MP4/i);
+  assert.match(html, /Creates a new MP4 locally/i);
+  assert.match(html, /re-encodes the edited output/i);
+  assert.match(html, />Create Edited File<\/button>/);
+  assert.match(html, />Download Edited File<\/a>/);
+  assert.match(html, /Move the start or end before creating an edited file/i);
+  assert.match(html, /Range changed — create the edited file again to update it/i);
   assert.match(html, /temporary local storage/i);
   assert.match(html, /Nothing is sent to cloud storage/i);
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
@@ -200,6 +225,14 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.ok(readyBranch);
   assert.doesNotMatch(readyBranch, /closeProgressSource/);
   assert.match(source, /if \(data\.workspace\?\.status !== 'error'\) startProgress\(activeWorkspaceId\)/);
+  assert.match(source, /root\.fetch\('\/api\/workspace\/render'/);
+  assert.match(source, /method:\s*'POST'/);
+  assert.match(source, /root\.fetch\(\s*`\/api\/workspace\/render\?workspace=/);
+  assert.match(source, /method:\s*'DELETE'/);
+  assert.match(source, /downloadEditedFile\.href = output\.downloadUrl/);
+  assert.match(source, /downloadEditedFile\.download = output\.filename/);
+  assert.match(source, /!editPlansEqual\(editPlan, output\.editPlan\)/);
+  assert.doesNotMatch(source, /downloadEditedFile\.click\(/);
   assert.match(source, /function resetWorkspaceUi\([\s\S]{0,100}closeProgressSource\(\)/);
   assert.match(source, /function releaseWorkspaceConnectionsForDiscard\(\)[\s\S]*?closeProgressSource\(\);[\s\S]*?video\.removeAttribute\('src'\);/);
   const discardFlow = source.match(/async function discardWorkspace\(\) \{([\s\S]*?)\n    \}\n\n    function beginUpload/)?.[1];

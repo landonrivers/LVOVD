@@ -1709,6 +1709,45 @@ async function handleRequest(req, res) {
     );
   }
 
+  if (req.method === 'POST' && requestUrl.pathname === '/api/workspace/render') {
+    try {
+      const body = await readJsonBody(req);
+      if (typeof body.workspaceId !== 'string' || !body.workspaceId) {
+        return json(res, 400, { error: 'Choose a local media workspace to render.' });
+      }
+      const workspace = mediaWorkspaces.startRender(body.workspaceId, body.editPlan);
+      return json(res, 202, { workspace: mediaWorkspaces.publicWorkspace(workspace) });
+    } catch (error) {
+      const response = { error: error.message || 'Could not start edited-file creation.' };
+      if (error.workspaceFailure) response.details = error.workspaceFailure;
+      return json(res, error.statusCode || 400, response);
+    }
+  }
+
+  if (req.method === 'DELETE' && requestUrl.pathname === '/api/workspace/render') {
+    try {
+      const workspace = await mediaWorkspaces.cancelRender(requestUrl.searchParams.get('workspace'));
+      return json(res, 200, {
+        ok: true,
+        action: 'render-cancelled',
+        workspace: mediaWorkspaces.publicWorkspace(workspace)
+      });
+    } catch (error) {
+      return json(res, error.statusCode || 400, {
+        error: error.message || 'Could not cancel edited-file creation.'
+      });
+    }
+  }
+
+  if (req.method === 'GET' && requestUrl.pathname === '/api/workspace/output') {
+    const resolved = mediaWorkspaces.resolveOutputAsset(
+      requestUrl.searchParams.get('workspace'),
+      requestUrl.searchParams.get('asset')
+    );
+    if (!resolved) return json(res, 404, { error: 'That edited output is not available.' });
+    return streamPreparedFile(res, resolved.asset);
+  }
+
   if (req.method === 'DELETE' && requestUrl.pathname === '/api/workspace') {
     const workspaceId = requestUrl.searchParams.get('workspace');
     const workspace = mediaWorkspaces.get(workspaceId, { touch: false });

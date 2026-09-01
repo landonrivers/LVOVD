@@ -211,6 +211,24 @@
     return roundMilliseconds(clamp(value, 0, duration));
   }
 
+  function editPlansEqual(first, second) {
+    if (first?.version !== 1 || second?.version !== 1) return false;
+    if (!Array.isArray(first.keepRanges) || !Array.isArray(second.keepRanges)
+      || first.keepRanges.length !== second.keepRanges.length) return false;
+    return first.keepRanges.every((range, index) => (
+      range?.startSeconds === second.keepRanges[index]?.startSeconds
+      && range?.endSeconds === second.keepRanges[index]?.endSeconds
+    ));
+  }
+
+  function isFullDurationEditPlan(plan, durationSeconds) {
+    const duration = roundMilliseconds(durationSeconds);
+    const range = plan?.version === 1 && Array.isArray(plan.keepRanges) && plan.keepRanges.length === 1
+      ? plan.keepRanges[0]
+      : null;
+    return Boolean(range && range.startSeconds === 0 && range.endSeconds === duration);
+  }
+
   function formatBytes(value) {
     const bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes < 0) return '';
@@ -248,6 +266,7 @@
     const mediaName = document.querySelector('#editor-media-name');
     const mediaFacts = document.querySelector('#editor-media-facts');
     const proxyNote = document.querySelector('#editor-proxy-note');
+    const trackWarning = document.querySelector('#editor-track-warning');
     const clock = document.querySelector('#editor-clock');
     const ruler = document.querySelector('#timeline-ruler');
     const rulerTicks = document.querySelector('#timeline-ruler-ticks');
@@ -272,6 +291,21 @@
     const zoomOut = document.querySelector('#timeline-zoom-out');
     const fit = document.querySelector('#timeline-fit');
     const discard = document.querySelector('#workspace-discard');
+    const createEditedFile = document.querySelector('#create-edited-file');
+    const renderNoop = document.querySelector('#editor-render-noop');
+    const renderProgress = document.querySelector('#editor-render-progress');
+    const renderProgressLabel = document.querySelector('#editor-render-progress-label');
+    const renderProgressBar = document.querySelector('#editor-render-progress-bar');
+    const cancelEditedRender = document.querySelector('#cancel-edited-render');
+    const renderFailure = document.querySelector('#editor-render-failure');
+    const renderFailureTitle = document.querySelector('#editor-render-failure-title');
+    const renderFailureExplanation = document.querySelector('#editor-render-failure-explanation');
+    const renderFailureHelp = document.querySelector('#editor-render-failure-help');
+    const editedOutput = document.querySelector('#editor-edited-output');
+    const outputFilename = document.querySelector('#editor-output-filename');
+    const outputFacts = document.querySelector('#editor-output-facts');
+    const outputStale = document.querySelector('#editor-output-stale');
+    const downloadEditedFile = document.querySelector('#download-edited-file');
 
     let upload = null;
     let progressSource = null;
@@ -317,6 +351,73 @@
       failureExplanation.textContent = '';
       failureHelp.textContent = '';
       failureDiscard.hidden = true;
+    }
+
+    function showRenderFailure(failure, fallback) {
+      renderFailureTitle.textContent = failure?.title || fallback || 'Edited-file creation failed';
+      renderFailureExplanation.textContent = failure?.explanation || '';
+      renderFailureHelp.textContent = failure?.help || '';
+      renderFailure.hidden = false;
+    }
+
+    function clearRenderFailure() {
+      renderFailure.hidden = true;
+      renderFailureTitle.textContent = '';
+      renderFailureExplanation.textContent = '';
+      renderFailureHelp.textContent = '';
+    }
+
+    function renderEditedOutput() {
+      const output = workspaceSnapshot?.editedOutput;
+      if (!output) {
+        editedOutput.hidden = true;
+        downloadEditedFile.removeAttribute('href');
+        downloadEditedFile.removeAttribute('download');
+        return;
+      }
+      outputFilename.textContent = output.filename || 'Edited video.mp4';
+      outputFacts.textContent = [
+        Number.isFinite(output.inspection?.durationSeconds)
+          ? formatTimecode(output.inspection.durationSeconds)
+          : null,
+        formatBytes(output.size)
+      ].filter(Boolean).join(' · ');
+      const stale = !editPlansEqual(editPlan, output.editPlan);
+      outputStale.hidden = !stale;
+      downloadEditedFile.href = output.downloadUrl;
+      downloadEditedFile.download = output.filename || 'edited-video.mp4';
+      editedOutput.hidden = false;
+    }
+
+    function renderRenderState(data = workspaceSnapshot) {
+      const state = data?.render || { status: 'idle', percent: null, failure: null };
+      const busy = ['rendering', 'cancelling'].includes(state.status);
+      const fullDuration = isFullDurationEditPlan(editPlan, durationSeconds);
+      createEditedFile.disabled = !editPlan || fullDuration || busy;
+      cancelEditedRender.disabled = state.status === 'cancelling';
+      renderProgress.hidden = !busy;
+      if (busy) {
+        const percent = Number.isFinite(state.percent) ? clamp(state.percent, 0, 100) : null;
+        renderProgressLabel.textContent = state.message || (state.status === 'cancelling'
+          ? 'Cancelling edited-file creation…'
+          : 'Creating edited file…');
+        renderProgressBar.classList.toggle('indeterminate', percent == null);
+        renderProgressBar.style.width = percent == null ? '36%' : `${percent}%`;
+      }
+
+      if (fullDuration) {
+        renderNoop.textContent = 'Move the start or end before creating an edited file.';
+        renderNoop.hidden = false;
+      } else if (state.status === 'cancelled') {
+        renderNoop.textContent = state.message || 'Edited-file creation cancelled. The editor is still available.';
+        renderNoop.hidden = false;
+      } else {
+        renderNoop.hidden = true;
+      }
+
+      clearRenderFailure();
+      if (state.status === 'error') showRenderFailure(state.failure, state.message);
+      renderEditedOutput();
     }
 
     function closeProgressSource() {
@@ -372,9 +473,19 @@
       video.removeAttribute('src');
       video.load();
       editor.hidden = true;
+      trackWarning.hidden = true;
       durationSeconds = 0;
       editPlan = null;
       workspaceSnapshot = null;
+      renderProgress.hidden = true;
+      renderNoop.hidden = false;
+      renderNoop.textContent = 'Move the start or end before creating an edited file.';
+      editedOutput.hidden = true;
+      createEditedFile.disabled = true;
+      cancelEditedRender.disabled = false;
+      downloadEditedFile.removeAttribute('href');
+      downloadEditedFile.removeAttribute('download');
+      clearRenderFailure();
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
     }
@@ -466,6 +577,7 @@
       renderTimeline({ normalizeFields });
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
+      renderRenderState();
       return result;
     }
 
@@ -644,6 +756,7 @@
         workspaceProgress.hidden = true;
         workspaceCancel.hidden = true;
         if (!editorAlreadyReady) initializeEditor(data);
+        renderRenderState(data);
       }
       if (!['error', 'ready'].includes(data.status)) setStatus(data.message || 'Preparing local media…');
     }
@@ -676,6 +789,8 @@
         ? 'Playback uses a temporary local H.264/AAC proxy. The staged source remains separate and unchanged.'
         : 'This staged source is directly compatible with browser playback; no proxy copy was needed.';
       proxyNote.classList.toggle('proxy', Boolean(data.playback.proxy));
+      const trackCounts = inspection.trackCounts || {};
+      trackWarning.hidden = !(Number(trackCounts.audio) > 1 || Number(trackCounts.subtitle) > 0);
       video.src = data.playback.url;
       editor.hidden = false;
       chooseButton.disabled = true;
@@ -683,6 +798,7 @@
       setStatus('Local editor ready.', 'success');
       clearFailure();
       renderTimeline();
+      renderRenderState(data);
     }
 
     function startProgress(workspaceId) {
@@ -734,6 +850,59 @@
         failureDiscard.disabled = false;
         discard.disabled = false;
         setStatus(error.message || 'Could not discard the local workspace.', 'error');
+      }
+    }
+
+    async function startEditedRender() {
+      if (!activeWorkspaceId || !editPlan || isFullDurationEditPlan(editPlan, durationSeconds)) return;
+      createEditedFile.disabled = true;
+      clearRenderFailure();
+      renderProgress.hidden = false;
+      renderProgressLabel.textContent = 'Starting edited-file creation…';
+      renderProgressBar.classList.add('indeterminate');
+      renderProgressBar.style.width = '36%';
+      try {
+        const response = await root.fetch('/api/workspace/render', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspaceId: activeWorkspaceId,
+            editPlan
+          })
+        });
+        let data = null;
+        try { data = await response.json(); } catch {}
+        if (!response.ok) throw Object.assign(
+          new Error(data?.error || 'Could not start edited-file creation.'),
+          { failure: data?.details }
+        );
+        renderWorkspace(data.workspace);
+      } catch (error) {
+        renderProgress.hidden = true;
+        renderRenderState();
+        showRenderFailure(error.failure, error.message);
+      }
+    }
+
+    async function cancelRender() {
+      if (!activeWorkspaceId || !['rendering', 'cancelling'].includes(workspaceSnapshot?.render?.status)) return;
+      cancelEditedRender.disabled = true;
+      renderProgressLabel.textContent = 'Cancelling edited-file creation…';
+      renderProgressBar.classList.add('indeterminate');
+      renderProgressBar.style.width = '36%';
+      try {
+        const response = await root.fetch(
+          `/api/workspace/render?workspace=${encodeURIComponent(activeWorkspaceId)}`,
+          { method: 'DELETE', cache: 'no-store' }
+        );
+        let data = null;
+        try { data = await response.json(); } catch {}
+        if (!response.ok) throw new Error(data?.error || 'Could not cancel edited-file creation.');
+        renderWorkspace(data.workspace);
+      } catch (error) {
+        cancelEditedRender.disabled = false;
+        showRenderFailure(null, error.message || 'Could not cancel edited-file creation.');
       }
     }
 
@@ -938,6 +1107,8 @@
       const range = fullRetainedRange(durationSeconds);
       if (range) commitSelection(range.startSeconds, range.endSeconds);
     });
+    createEditedFile.addEventListener('click', startEditedRender);
+    cancelEditedRender.addEventListener('click', cancelRender);
     zoomIn.addEventListener('click', () => zoom(0.5));
     zoomOut.addEventListener('click', () => zoom(2));
     fit.addEventListener('click', () => {
@@ -974,6 +1145,8 @@
     fullRetainedRange,
     retainedRangeWithPlayhead,
     retainedBoundaryTime,
+    editPlansEqual,
+    isFullDurationEditPlan,
     init
   };
 });
