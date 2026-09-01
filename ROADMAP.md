@@ -23,6 +23,8 @@ LVOVD currently provides:
 - coordinated Preview/download source work with serialized remote acquisition;
 - a visible queue with authoritative queued/running/ready/error/cancelled job state and cancellation;
 - durable local terminal-job history with intentional capability-safe Use Again;
+- one temporary local-media workspace shared by local-file and eligible URL editing inputs;
+- a browser player and visual multi-cut timeline with real locally rendered H.264/AAC MP4 edited output;
 - randomized courtesy pauses between selected playlist items;
 - stop-on-rejection behavior instead of aggressive automatic retries;
 - a project-managed, SHA-256-verified yt-dlp executable with bounded update checks;
@@ -116,23 +118,26 @@ Roadmap 5A establishes one shared generic contract for high-confidence source/ac
 
 Roadmap 5B adds structured local-operation provenance at the failure boundary and uses it to distinguish missing required tools, permission failures, disk exhaustion, missing local files, explicit FFmpeg codec gaps, generic local processing failures, output-collection inconsistencies, and a neutral local fallback. The normalized four-field failure contract and History schema remain unchanged, and raw FFmpeg diagnostics or temporary paths are not promoted into primary UI copy.
 
-### 6. Local edit staging
+### 6. Local edit staging — completed
 
-Add an optional editing path before finalizing a download, while preserving the current straight-through download path for users who do not need edits.
+LVOVD now provides the first public focused trim/stitch editor baseline while preserving normal Download as an independent path. The approved cross-roadmap product contract and boundary with Roadmap #7 remain documented in [`docs/local-media-workspace.md`](docs/local-media-workspace.md).
 
-The approved cross-roadmap product contract for local-file intake, the shared temporary media workspace, the visual timeline/editor interaction, Edit -> Convert handoff, and the boundary between Roadmap #6 and #7 is documented in [`docs/local-media-workspace.md`](docs/local-media-workspace.md). Implementation slices should preserve that contract unless a later explicit product decision revises it.
+Established behavior:
 
-Goals:
+- chosen/dropped local videos and eligible single, non-live URL Previews enter one temporary local-media workspace model;
+- URL editor acquisition respects the selected source, profile, resolution, and Manual source choice, and is serialized with Preview/Download source work;
+- the browser player, playhead, visual timeline, zoom/pan, exact fields, keyboard playback, and draggable/keyboard-adjustable handles share time-authoritative state;
+- reversible outer Start/End bounds coexist with multiple middle removals and per-gap Restore actions;
+- edited output concatenates retained ranges in source order and is a real high-quality H.264 MP4, with AAC when the source has audio;
+- arbitrary authored boundaries deliberately use a local re-encode so the first release favors accurate editing semantics over a premature stream-copy fast path;
+- compatible sources may play directly, while incompatible sources use a separate local playback proxy; the original workspace source remains final-render authority and is not modified;
+- preparation and rendering support cancellation, while Discard, inactivity expiry, opaque workspace ownership, contained media endpoints, and localhost security bound temporary assets;
+- normal Download remains independent; its Time Range and SponsorBlock behavior do not silently become editor cuts;
+- Edit workspace activity and edited output are not persisted in durable Download History.
 
-- present two clear choices after Preview: download normally or open an Edit/Staging workspace;
-- provide an understandable playback timeline rather than requiring users to type every timecode manually;
-- allow start/end trimming as well as multiple authored cuts so unwanted sections in the middle can be removed;
-- let users review the intended keep/remove ranges before processing;
-- keep editing local after source acquisition, using FFmpeg rather than increasing source requests;
-- preserve the highest practical quality by using lossless stream-copy operations when technically safe and re-encoding only when the requested edit requires it;
-- keep SponsorBlock separate and optional: authored user cuts and SponsorBlock-provided segments may share editing machinery later, but neither should silently enable the other.
+Future enhancements, not blockers for this completed baseline, include conservative/keyframe-aware stream-copy where it can be proven safe and sufficiently accurate, richer audio-track/subtitle preservation, other evidence-driven playback or quality hardening, and an **Edit -> Convert** handoff under Roadmap #7. Safe lossless operations remain a longer-term aspiration; the first release does not describe its re-encoded output as lossless.
 
-The editing workspace should remain a focused trim/stitch tool rather than growing into a general-purpose nonlinear video editor.
+The editing workspace remains a focused trim/stitch tool rather than a general-purpose nonlinear video editor.
 
 ### 7. Local media compatibility converter
 

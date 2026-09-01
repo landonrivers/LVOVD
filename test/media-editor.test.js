@@ -18,6 +18,7 @@ const {
   buildTimelineTicks,
   playbackShortcutForKey,
   seekBySeconds,
+  sliderDeltaForKey,
   fullRetainedRange,
   retainedRangeWithPlayhead,
   retainedBoundaryTime,
@@ -25,7 +26,9 @@ const {
   fullEditPlan,
   fullAuthoringState,
   applyOuterBoundary,
+  adjustOuterBoundaryBy,
   validatePendingCut,
+  adjustPendingCutBoundary,
   removePendingSection,
   restoreRemovedSection,
   timelineRegions,
@@ -113,6 +116,63 @@ test('bounded playback shortcuts toggle or seek five seconds with duration clamp
   assert.equal(seekBySeconds(2, -5, 20), 0);
   assert.equal(seekBySeconds(18, 5, 20), 20);
   assert.equal(seekBySeconds(10.125, 5, 20), 15.125);
+});
+
+test('timeline slider arrow keys map to tenth-second and Shift one-second adjustments', () => {
+  assert.equal(sliderDeltaForKey('ArrowLeft'), -0.1);
+  assert.equal(sliderDeltaForKey('ArrowDown'), -0.1);
+  assert.equal(sliderDeltaForKey('ArrowRight'), 0.1);
+  assert.equal(sliderDeltaForKey('ArrowUp'), 0.1);
+  assert.equal(sliderDeltaForKey('ArrowLeft', true), -1);
+  assert.equal(sliderDeltaForKey('ArrowUp', true), 1);
+  assert.equal(sliderDeltaForKey('Enter'), null);
+});
+
+test('keyboard outer-bound adjustments clamp and preserve reversible middle-cut authoring', () => {
+  const cut = removePendingSection(
+    fullAuthoringState(10),
+    { startSeconds: 3, endSeconds: 5 },
+    10
+  );
+  const startMoved = adjustOuterBoundaryBy(cut.authoringState, 'start', 0.1, 10);
+  assert.equal(startMoved.valid, true);
+  assert.equal(startMoved.boundarySeconds, 0.1);
+  assert.deepEqual(startMoved.editPlan.keepRanges, [
+    { startSeconds: 0.1, endSeconds: 3 },
+    { startSeconds: 5, endSeconds: 10 }
+  ]);
+  assert.deepEqual(startMoved.authoringState.middleCutPlan, cut.authoringState.middleCutPlan);
+
+  const startRestored = adjustOuterBoundaryBy(startMoved.authoringState, 'start', -0.1, 10);
+  assert.equal(startRestored.boundarySeconds, 0);
+  assert.deepEqual(startRestored.editPlan, cut.editPlan);
+
+  const endMoved = adjustOuterBoundaryBy(cut.authoringState, 'end', -1, 10);
+  assert.equal(endMoved.valid, true);
+  assert.equal(endMoved.boundarySeconds, 9);
+  assert.deepEqual(endMoved.editPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 3 },
+    { startSeconds: 5, endSeconds: 9 }
+  ]);
+  assert.deepEqual(endMoved.authoringState.middleCutPlan, cut.authoringState.middleCutPlan);
+
+  assert.equal(adjustOuterBoundaryBy(cut.authoringState, 'start', -1, 10).boundarySeconds, 0);
+  assert.equal(adjustOuterBoundaryBy(cut.authoringState, 'end', 1, 10).boundarySeconds, 10);
+});
+
+test('keyboard pending-cut adjustments update the same bounded pending state', () => {
+  const pending = { startSeconds: 2, endSeconds: 8 };
+  const startMoved = adjustPendingCutBoundary(pending, 'start', 0.1, 10);
+  assert.deepEqual(startMoved, {
+    valid: true,
+    boundarySeconds: 2.1,
+    pendingCut: { startSeconds: 2.1, endSeconds: 8 }
+  });
+  const endMoved = adjustPendingCutBoundary(startMoved.pendingCut, 'end', -1, 10);
+  assert.deepEqual(endMoved.pendingCut, { startSeconds: 2.1, endSeconds: 7 });
+  assert.equal(adjustPendingCutBoundary({ startSeconds: 0, endSeconds: 8 }, 'start', -1, 10).boundarySeconds, 0);
+  assert.equal(adjustPendingCutBoundary({ startSeconds: 2, endSeconds: 10 }, 'end', 1, 10).boundarySeconds, 10);
+  assert.equal(adjustPendingCutBoundary({ startSeconds: null, endSeconds: 8 }, 'start', 0.1, 10).valid, false);
 });
 
 test('range reset, set-boundary, and go-to-boundary actions keep range and playhead concerns separate', () => {
@@ -386,8 +446,10 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   ]) assert.match(html, new RegExp(`id="${id}"`), id);
 
   assert.doesNotMatch(html, /Edit locally · Creates MP4/i);
-  assert.match(html, /Creates a new MP4 locally/i);
-  assert.match(html, /re-encodes the edited output/i);
+  assert.match(html, /Creates a high-quality H\.264 MP4 locally, with AAC audio when the source has audio/i);
+  assert.match(html, /LVOVD re-encodes edits to closely match arbitrary cut times/i);
+  assert.match(html, /Your workspace source is unchanged/i);
+  assert.doesNotMatch(html, /\blossless\b|frame-perfect|source codec preserved/i);
   assert.match(html, /id="create-edited-file" class="button secondary mini"[^>]*>Create Edited File<\/button>/);
   assert.match(html, />DOWNLOAD EDITED FILE<\/p>/);
   assert.match(html, /id="download-edited-file" class="button secondary mini"[^>]*>Download<\/a>/);
@@ -429,7 +491,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.ok(html.indexOf('id="reset-range"') < html.indexOf('class="editor-render-panel"'));
   assert.ok(html.indexOf('id="crop-video-title"') < html.indexOf('class="editor-exact-grid"'));
   assert.ok(html.indexOf('class="editor-exact-grid"') < html.indexOf('id="middle-cut-title"'));
-  assert.ok(html.indexOf('id="create-edited-file"') < html.indexOf('Creates a new MP4 locally'));
+  assert.ok(html.indexOf('id="create-edited-file"') < html.indexOf('Creates a high-quality H.264 MP4 locally'));
   assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
   assert.match(html, /id="timeline-track"[^>]*tabindex="0"/);
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
@@ -447,6 +509,16 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /playheadSeekFrame = root\.requestAnimationFrame/);
   assert.match(source, /track\.addEventListener\('keydown', handlePlaybackKey\)/);
   assert.match(source, /video\.addEventListener\('keydown', handlePlaybackKey\)/);
+  assert.match(source, /startHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'start'\)/);
+  assert.match(source, /endHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'end'\)/);
+  assert.match(source, /cutStartHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'start', 'cut'\)/);
+  assert.match(source, /cutEndHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'end', 'cut'\)/);
+  assert.match(source, /handleTimelineSliderKey\(event, which, kind = 'outer'\)[\s\S]*event\.preventDefault\(\);[\s\S]*event\.stopPropagation\(\)/);
+  assert.match(source, /pendingCut = result\.pendingCut;[\s\S]*renderPendingCut\(\)/);
+  assert.match(source, /commitAuthoringState\(result\.authoringState\)/);
+  for (const id of ['timeline-start-handle', 'timeline-end-handle', 'timeline-cut-start-handle', 'timeline-cut-end-handle']) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*role="slider"[^>]*aria-orientation="horizontal"`));
+  }
   const readyBranch = source.match(/else if \(data\.status === 'ready'\) \{([\s\S]*?)\n      \}/)?.[1];
   assert.ok(readyBranch);
   assert.doesNotMatch(readyBranch, /closeProgressSource/);

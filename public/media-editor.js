@@ -200,6 +200,13 @@
     return roundMilliseconds(clamp(current + delta, 0, duration));
   }
 
+  function sliderDeltaForKey(key, shiftKey = false) {
+    const step = shiftKey ? 1 : 0.1;
+    if (key === 'ArrowLeft' || key === 'ArrowDown') return -step;
+    if (key === 'ArrowRight' || key === 'ArrowUp') return step;
+    return null;
+  }
+
   function fullRetainedRange(durationSeconds) {
     const result = validateSelection(0, durationSeconds, durationSeconds);
     if (!result.valid) return null;
@@ -307,6 +314,28 @@
     };
   }
 
+  function adjustOuterBoundaryBy(state, boundary, deltaSeconds, durationSeconds) {
+    const property = boundary === 'start' ? 'outerStartSeconds' : boundary === 'end' ? 'outerEndSeconds' : null;
+    const duration = roundMilliseconds(durationSeconds);
+    const rawCurrent = property ? state?.[property] : null;
+    const current = typeof rawCurrent === 'number' && Number.isFinite(rawCurrent)
+      ? roundMilliseconds(rawCurrent)
+      : null;
+    const delta = typeof deltaSeconds === 'number' && Number.isFinite(deltaSeconds)
+      ? roundMilliseconds(deltaSeconds)
+      : null;
+    if (!property || !Number.isFinite(duration) || duration <= 0
+      || !Number.isFinite(current) || !Number.isFinite(delta)) {
+      return { valid: false, reason: 'A finite retained boundary adjustment is required.' };
+    }
+    return applyOuterBoundary(
+      state,
+      boundary,
+      roundMilliseconds(clamp(current + delta, 0, duration)),
+      duration
+    );
+  }
+
   function validatePendingCut(pendingCut, durationSeconds) {
     const start = roundMilliseconds(pendingCut?.startSeconds);
     const end = roundMilliseconds(pendingCut?.endSeconds);
@@ -321,6 +350,28 @@
       return { valid: false, reason: 'Cut End must be after Cut Start.' };
     }
     return { valid: true, startSeconds: start, endSeconds: end };
+  }
+
+  function adjustPendingCutBoundary(pendingCut, boundary, deltaSeconds, durationSeconds) {
+    const property = boundary === 'start' ? 'startSeconds' : boundary === 'end' ? 'endSeconds' : null;
+    const duration = roundMilliseconds(durationSeconds);
+    const rawCurrent = property ? pendingCut?.[property] : null;
+    const current = typeof rawCurrent === 'number' && Number.isFinite(rawCurrent)
+      ? roundMilliseconds(rawCurrent)
+      : null;
+    const delta = typeof deltaSeconds === 'number' && Number.isFinite(deltaSeconds)
+      ? roundMilliseconds(deltaSeconds)
+      : null;
+    if (!property || !Number.isFinite(duration) || duration <= 0
+      || !Number.isFinite(current) || !Number.isFinite(delta)) {
+      return { valid: false, reason: 'Set this cut boundary before adjusting it.' };
+    }
+    const boundarySeconds = roundMilliseconds(clamp(current + delta, 0, duration));
+    return {
+      valid: true,
+      boundarySeconds,
+      pendingCut: { ...pendingCut, [property]: boundarySeconds }
+    };
   }
 
   function removePendingSection(state, pendingCut, durationSeconds) {
@@ -1057,6 +1108,34 @@
       handleDrag = null;
     }
 
+    function handleTimelineSliderKey(event, which, kind = 'outer') {
+      if (!editPlan || event.altKey || event.ctrlKey || event.metaKey) return;
+      const delta = sliderDeltaForKey(event.key, event.shiftKey);
+      if (delta == null) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (kind === 'cut') {
+        const result = adjustPendingCutBoundary(pendingCut, which, delta, durationSeconds);
+        if (!result.valid) return;
+        pendingCut = result.pendingCut;
+        const field = which === 'start' ? cutStartField : cutEndField;
+        const error = which === 'start' ? cutStartError : cutEndError;
+        setFieldError(field, error, '');
+        renderPendingCut();
+        return;
+      }
+
+      const result = adjustOuterBoundaryBy(authoringState, which, delta, durationSeconds);
+      const field = which === 'start' ? startField : endField;
+      const error = which === 'start' ? startError : endError;
+      if (!result.valid) {
+        setFieldError(field, error, result.reason);
+        return;
+      }
+      commitAuthoringState(result.authoringState);
+    }
+
     function playbackFrame() {
       renderPlayhead();
       if (!video.paused && !video.ended) animationFrame = root.requestAnimationFrame(playbackFrame);
@@ -1426,6 +1505,10 @@
     endHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'end'));
     cutStartHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'start', 'cut'));
     cutEndHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'end', 'cut'));
+    startHandle.addEventListener('keydown', (event) => handleTimelineSliderKey(event, 'start'));
+    endHandle.addEventListener('keydown', (event) => handleTimelineSliderKey(event, 'end'));
+    cutStartHandle.addEventListener('keydown', (event) => handleTimelineSliderKey(event, 'start', 'cut'));
+    cutEndHandle.addEventListener('keydown', (event) => handleTimelineSliderKey(event, 'end', 'cut'));
     for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
       handle.addEventListener('pointermove', moveHandle);
       handle.addEventListener('pointerup', endHandleDrag);
@@ -1561,6 +1644,7 @@
     buildTimelineTicks,
     playbackShortcutForKey,
     seekBySeconds,
+    sliderDeltaForKey,
     fullRetainedRange,
     retainedRangeWithPlayhead,
     retainedBoundaryTime,
@@ -1569,7 +1653,9 @@
     recomputeAuthoringState,
     fullAuthoringState,
     applyOuterBoundary,
+    adjustOuterBoundaryBy,
     validatePendingCut,
+    adjustPendingCutBoundary,
     removePendingSection,
     restoreRemovedSection,
     timelineRegions,

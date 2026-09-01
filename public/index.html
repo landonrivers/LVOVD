@@ -353,10 +353,10 @@
                 <div id="timeline-regions" class="timeline-regions" aria-hidden="true"></div>
                 <div id="timeline-pending-cut" class="timeline-region pending-cut" aria-hidden="true" hidden></div>
                 <div id="timeline-playhead" class="timeline-playhead" aria-hidden="true"></div>
-                <button id="timeline-start-handle" class="timeline-handle start" type="button" role="slider" aria-label="Retained range start" aria-valuemin="0"></button>
-                <button id="timeline-end-handle" class="timeline-handle end" type="button" role="slider" aria-label="Retained range end" aria-valuemin="0"></button>
-                <button id="timeline-cut-start-handle" class="timeline-handle cut start" type="button" role="slider" aria-label="Pending cut start" aria-valuemin="0" hidden></button>
-                <button id="timeline-cut-end-handle" class="timeline-handle cut end" type="button" role="slider" aria-label="Pending cut end" aria-valuemin="0" hidden></button>
+                <button id="timeline-start-handle" class="timeline-handle start" type="button" role="slider" aria-orientation="horizontal" aria-label="Retained range start" aria-valuemin="0"></button>
+                <button id="timeline-end-handle" class="timeline-handle end" type="button" role="slider" aria-orientation="horizontal" aria-label="Retained range end" aria-valuemin="0"></button>
+                <button id="timeline-cut-start-handle" class="timeline-handle cut start" type="button" role="slider" aria-orientation="horizontal" aria-label="Pending cut start" aria-valuemin="0" hidden></button>
+                <button id="timeline-cut-end-handle" class="timeline-handle cut end" type="button" role="slider" aria-orientation="horizontal" aria-label="Pending cut end" aria-valuemin="0" hidden></button>
               </div>
 
               <div class="timeline-legend" aria-hidden="true">
@@ -428,7 +428,7 @@
               <section class="editor-render-panel" aria-label="Create edited output">
                 <div class="editor-render-head">
                   <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
-                  <p class="editor-foundation-note">Creates a new MP4 locally. To closely match arbitrary cut times, this version re-encodes the edited output. Your staged source is unchanged.</p>
+                  <p class="editor-foundation-note">Creates a high-quality H.264 MP4 locally, with AAC audio when the source has audio. LVOVD re-encodes edits to closely match arbitrary cut times. Your workspace source is unchanged.</p>
                 </div>
 
                 <p id="editor-render-noop" class="editor-render-noop">Change the retained range or remove a section before creating an edited file.</p>
