@@ -185,8 +185,9 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /Edit locally · Creates MP4/i);
   assert.match(html, /Creates a new MP4 locally/i);
   assert.match(html, /re-encodes the edited output/i);
-  assert.match(html, />Create Edited File<\/button>/);
-  assert.match(html, />Download Edited File<\/a>/);
+  assert.match(html, /id="create-edited-file" class="button secondary mini"[^>]*>Create Edited File<\/button>/);
+  assert.match(html, />DOWNLOAD EDITED FILE<\/p>/);
+  assert.match(html, /id="download-edited-file" class="button secondary mini"[^>]*>Download<\/a>/);
   assert.match(html, /Move the start or end before creating an edited file/i);
   assert.match(html, /Range changed — create the edited file again to update it/i);
   assert.match(html, /temporary local storage/i);
@@ -201,11 +202,13 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(html, />Video URL<\/label>/);
   assert.doesNotMatch(html, /VISUAL RETAINED RANGE/i);
   assert.match(html, />Full Timeline<\/button>/);
-  assert.match(html, />Set Start Here<\/button>/);
+  assert.match(html, />Set Start<\/button>/);
   assert.match(html, />Go to Start<\/button>/);
-  assert.match(html, />Set End Here<\/button>/);
+  assert.match(html, />Set End<\/button>/);
   assert.match(html, />Go to End<\/button>/);
   assert.match(html, />Reset Range<\/button>/);
+  assert.ok(html.indexOf('id="reset-range"') < html.indexOf('class="editor-render-panel"'));
+  assert.ok(html.indexOf('id="create-edited-file"') < html.indexOf('Creates a new MP4 locally'));
   assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
   assert.match(html, /id="timeline-track"[^>]*tabindex="0"/);
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
@@ -244,6 +247,9 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(styles, /\.timeline-ruler\.can-pan:hover[\s\S]*?\.timeline-ruler-ticks::after/);
   assert.match(styles, /\.timeline-ruler\.can-pan\s*\{\s*cursor:\s*grab/);
   assert.match(styles, /\.timeline-ruler\.panning\s*\{\s*cursor:\s*grabbing/);
+  assert.match(styles, /grid-template-areas:\s*"start-field end-field \."\s*"start-actions end-actions reset"/);
+  assert.match(styles, /\.timeline-range-actions\s*\{\s*grid-area:\s*reset/);
+  assert.match(styles, /grid-template-areas:\s*"start-field"\s*"start-actions"[\s\S]*?"reset"/);
   assert.doesNotMatch(source, /\/api\/info/);
   assert.doesNotMatch(source, /\/api\/download/);
 });

@@ -372,7 +372,7 @@
                     <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
                   </label>
                   <div class="editor-boundary-actions">
-                    <button id="set-start-playhead" class="button secondary mini" type="button">Set Start Here</button>
+                    <button id="set-start-playhead" class="button secondary mini" type="button">Set Start</button>
                     <button id="go-to-start" class="button secondary mini" type="button">Go to Start</button>
                   </div>
                   <small id="editor-start-error" class="field-error" aria-live="polite"></small>
@@ -383,24 +383,20 @@
                     <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
                   </label>
                   <div class="editor-boundary-actions">
-                    <button id="set-end-playhead" class="button secondary mini" type="button">Set End Here</button>
+                    <button id="set-end-playhead" class="button secondary mini" type="button">Set End</button>
                     <button id="go-to-end" class="button secondary mini" type="button">Go to End</button>
                   </div>
                   <small id="editor-end-error" class="field-error" aria-live="polite"></small>
                 </div>
+                <div class="timeline-range-actions">
+                  <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
+                </div>
               </div>
 
-              <div class="timeline-range-actions">
-                <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
-              </div>
-
-              <section class="editor-render-panel" aria-labelledby="editor-render-title">
+              <section class="editor-render-panel" aria-label="Create edited output">
                 <div class="editor-render-head">
-                  <div>
-                    <strong id="editor-render-title">Create edited output</strong>
-                    <p class="editor-foundation-note">Creates a new MP4 locally. To closely match arbitrary cut times, this version re-encodes the edited output. Your staged source is unchanged.</p>
-                  </div>
-                  <button id="create-edited-file" class="button mini" type="button" disabled>Create Edited File</button>
+                  <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
+                  <p class="editor-foundation-note">Creates a new MP4 locally. To closely match arbitrary cut times, this version re-encodes the edited output. Your staged source is unchanged.</p>
                 </div>
 
                 <p id="editor-render-noop" class="editor-render-noop">Move the start or end before creating an edited file.</p>
@@ -427,12 +423,12 @@
 
                 <section id="editor-edited-output" class="editor-edited-output" aria-live="polite" hidden>
                   <div>
-                    <p class="eyebrow">EDITED FILE READY</p>
+                    <p class="eyebrow">DOWNLOAD EDITED FILE</p>
                     <h4 id="editor-output-filename">Edited video.mp4</h4>
                     <p id="editor-output-facts" class="help"></p>
                     <p id="editor-output-stale" class="editor-output-stale" hidden>Range changed — create the edited file again to update it. This download was created from the previous range.</p>
                   </div>
-                  <a id="download-edited-file" class="button mini" href="#">Download Edited File</a>
+                  <a id="download-edited-file" class="button secondary mini" href="#">Download</a>
                 </section>
               </section>
             </div>
