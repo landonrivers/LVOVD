@@ -11,10 +11,15 @@ const {
   MAX_LOCAL_MEDIA_BYTES,
   WORKSPACE_CANCELLED_CODE,
   normalizeDisplayFilename,
+  normalizeEditPlan,
+  editedOutputFilename,
   parseFrameRate,
   normalizeInspection,
   isDirectPlaybackCompatible,
   playbackProxyArgs,
+  editedOutputArgs,
+  renderProgressPercent,
+  validateEditedOutputInspection,
   parseByteRange,
   createMediaWorkspaceManager
 } = require('../media-workspace');
@@ -23,8 +28,9 @@ const DIRECT_INSPECTION = {
   durationSeconds: 12.5,
   format: 'QuickTime / MOV',
   formatNames: ['mov', 'mp4'],
-  video: { codec: 'h264', width: 1280, height: 720, frameRate: 30 },
-  audio: { codec: 'aac' }
+  video: { streamIndex: 0, codec: 'h264', width: 1280, height: 720, frameRate: 30 },
+  audio: { streamIndex: 1, codec: 'aac' },
+  trackCounts: { audio: 1, subtitle: 0 }
 };
 
 const PROXY_INSPECTION = {
@@ -64,22 +70,24 @@ test('ffprobe inspection normalization keeps only finite video facts', () => {
       format_long_name: 'QuickTime / MOV'
     },
     streams: [
-      { codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, avg_frame_rate: '30000/1001' },
-      { codec_type: 'audio', codec_name: 'aac' }
+      { index: 2, codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, avg_frame_rate: '30000/1001' },
+      { index: 5, codec_type: 'audio', codec_name: 'aac' },
+      { index: 7, codec_type: 'subtitle', codec_name: 'mov_text' }
     ]
   });
 
   assert.equal(normalized.durationSeconds, 83.501);
   assert.deepEqual(normalized.formatNames.slice(0, 2), ['mov', 'mp4']);
-  assert.deepEqual(normalized.video, { codec: 'h264', width: 1920, height: 1080, frameRate: 29.97 });
-  assert.deepEqual(normalized.audio, { codec: 'aac' });
+  assert.deepEqual(normalized.video, { streamIndex: 2, codec: 'h264', width: 1920, height: 1080, frameRate: 29.97 });
+  assert.deepEqual(normalized.audio, { streamIndex: 5, codec: 'aac' });
+  assert.deepEqual(normalized.trackCounts, { audio: 1, subtitle: 1 });
   assert.equal(parseFrameRate('0/0'), null);
   assert.equal(isDirectPlaybackCompatible(normalized), true);
 });
 
 test('ISO Base Media brands produce truthful MP4 and MOV container labels without extension authority', () => {
   const commonVideo = [
-    { codec_type: 'video', codec_name: 'h264', width: 1280, height: 720 }
+    { index: 0, codec_type: 'video', codec_name: 'h264', width: 1280, height: 720 }
   ];
   const mp4 = normalizeInspection({
     format: {
@@ -112,8 +120,8 @@ test('inspection ignores attached cover art and timed-thumbnail-only video strea
       () => normalizeInspection({
         format: { duration: '180', format_name: 'mp3' },
         streams: [
-          { codec_type: 'audio', codec_name: 'mp3' },
-          { codec_type: 'video', codec_name: 'mjpeg', width: 1200, height: 1200, disposition }
+          { index: 0, codec_type: 'audio', codec_name: 'mp3' },
+          { index: 1, codec_type: 'video', codec_name: 'mjpeg', width: 1200, height: 1200, disposition }
         ]
       }),
       (error) => error?.workspaceFailure?.category === 'local_media_invalid'
@@ -127,27 +135,28 @@ test('inspection selects real video instead of attached artwork and preserves no
     format: { duration: '42', format_name: 'mov,mp4' },
     streams: [
       {
-        codec_type: 'video', codec_name: 'mjpeg', width: 1200, height: 1200,
+        index: 0, codec_type: 'video', codec_name: 'mjpeg', width: 1200, height: 1200,
         disposition: { attached_pic: 1 }
       },
-      { codec_type: 'video', codec_name: 'h264', width: 1280, height: 720, avg_frame_rate: '24/1' },
-      { codec_type: 'audio', codec_name: 'aac' }
+      { index: 3, codec_type: 'video', codec_name: 'h264', width: 1280, height: 720, avg_frame_rate: '24/1' },
+      { index: 6, codec_type: 'audio', codec_name: 'aac' }
     ]
   });
   const normal = normalizeInspection({
     format: { duration: '5', format_name: 'matroska' },
-    streams: [{ codec_type: 'video', codec_name: 'ffv1', width: 640, height: 360 }]
+    streams: [{ index: 4, codec_type: 'video', codec_name: 'ffv1', width: 640, height: 360 }]
   });
 
-  assert.deepEqual(withArtwork.video, { codec: 'h264', width: 1280, height: 720, frameRate: 24 });
-  assert.deepEqual(normal.video, { codec: 'ffv1', width: 640, height: 360, frameRate: null });
+  assert.deepEqual(withArtwork.video, { streamIndex: 3, codec: 'h264', width: 1280, height: 720, frameRate: 24 });
+  assert.deepEqual(withArtwork.audio, { streamIndex: 6, codec: 'aac' });
+  assert.deepEqual(normal.video, { streamIndex: 4, codec: 'ffv1', width: 640, height: 360, frameRate: null });
 });
 
 test('inspection falls back to the selected real video duration when format duration is unusable', () => {
   const normalized = normalizeInspection({
     format: { duration: 'N/A', format_name: 'matroska' },
     streams: [
-      { codec_type: 'video', codec_name: 'h264', width: 640, height: 360, duration: '4.25' }
+      { index: 0, codec_type: 'video', codec_name: 'h264', width: 640, height: 360, duration: '4.25' }
     ]
   });
 
@@ -161,7 +170,7 @@ test('inspection rejects non-video media and missing duration clearly', () => {
       && /video stream/i.test(error.workspaceFailure.explanation)
   );
   assert.throws(
-    () => normalizeInspection({ format: {}, streams: [{ codec_type: 'video', codec_name: 'h264', width: 640, height: 360 }] }),
+    () => normalizeInspection({ format: {}, streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 640, height: 360 }] }),
     (error) => error?.workspaceFailure?.category === 'local_media_invalid'
       && /duration/i.test(error.workspaceFailure.title)
   );
@@ -273,8 +282,13 @@ test('direct playback policy requires MP4-family H.264 with AAC or no audio', ()
 });
 
 test('playback proxy arguments are bounded H.264/AAC preview settings without upscaling intent', () => {
-  const args = playbackProxyArgs('/private/source.mkv', '/private/proxy.mp4', true);
+  const args = playbackProxyArgs('/private/source.mkv', '/private/proxy.mp4', {
+    ...PROXY_INSPECTION,
+    video: { ...PROXY_INSPECTION.video, streamIndex: 4 },
+    audio: { ...PROXY_INSPECTION.audio, streamIndex: 7 }
+  });
   assert.deepEqual(args.slice(0, 6), ['-y', '-hide_banner', '-loglevel', 'error', '-i', '/private/source.mkv']);
+  assert.deepEqual(args.slice(6, 10), ['-map', '0:4', '-map', '0:7']);
   assert.ok(args.includes('libx264'));
   assert.ok(args.includes('veryfast'));
   assert.ok(args.includes('28'));
@@ -282,6 +296,89 @@ test('playback proxy arguments are bounded H.264/AAC preview settings without up
   assert.ok(args.includes('128k'));
   assert.ok(args.includes('+faststart'));
   assert.match(args[args.indexOf('-vf') + 1], /min\(1280,iw\).*min\(720,ih\)/);
+});
+
+test('edit plans are normalized to milliseconds and reject malformed, unsafe, or no-op ranges', () => {
+  assert.deepEqual(
+    normalizeEditPlan({
+      version: 1,
+      keepRanges: [{ startSeconds: 1.23449, endSeconds: 11.11151 }]
+    }, 12.5),
+    { version: 1, keepRanges: [{ startSeconds: 1.234, endSeconds: 11.112 }] }
+  );
+
+  const invalidPlans = [
+    null,
+    { version: 2, keepRanges: [{ startSeconds: 1, endSeconds: 2 }] },
+    { version: 1, keepRanges: [] },
+    { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 2 }, { startSeconds: 3, endSeconds: 4 }] },
+    { version: 1, keepRanges: [{ startSeconds: '1', endSeconds: 2 }] },
+    { version: 1, keepRanges: [{ startSeconds: Number.NaN, endSeconds: 2 }] },
+    { version: 1, keepRanges: [{ startSeconds: -1, endSeconds: 2 }] },
+    { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 13 }] },
+    { version: 1, keepRanges: [{ startSeconds: 3, endSeconds: 3 }] },
+    { version: 1, keepRanges: [{ startSeconds: 4, endSeconds: 3 }] }
+  ];
+  for (const plan of invalidPlans) {
+    assert.throws(() => normalizeEditPlan(plan, 12.5), (error) => error?.statusCode === 422);
+  }
+  assert.throws(
+    () => normalizeEditPlan({ version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12.5 }] }, 12.5),
+    (error) => error?.statusCode === 422 && /start or end/i.test(error.message)
+  );
+});
+
+test('edited output naming remains path-safe and deterministic', () => {
+  assert.equal(editedOutputFilename('C:\\private\\family.mov'), 'family - edited.mp4');
+  assert.equal(editedOutputFilename('../../secret.mkv'), 'secret - edited.mp4');
+  assert.ok(editedOutputFilename(`${'x'.repeat(300)}.mp4`).length <= 255);
+});
+
+test('edited output arguments always re-encode the exact selected streams to the fixed MP4 profile', () => {
+  const plan = { version: 1, keepRanges: [{ startSeconds: 1.25, endSeconds: 10.5 }] };
+  const args = editedOutputArgs('/private/original.mkv', '/private/edited.mp4', {
+    ...PROXY_INSPECTION,
+    video: { ...PROXY_INSPECTION.video, streamIndex: 5 },
+    audio: { ...PROXY_INSPECTION.audio, streamIndex: 9 }
+  }, plan);
+
+  assert.deepEqual(args.slice(0, 6), ['-y', '-hide_banner', '-loglevel', 'error', '-i', '/private/original.mkv']);
+  assert.deepEqual(args.slice(6, 14), ['-ss', '1.25', '-t', '9.25', '-map', '0:5', '-map', '0:9']);
+  assert.equal(args[args.indexOf('-preset') + 1], 'medium');
+  assert.equal(args[args.indexOf('-crf') + 1], '18');
+  assert.equal(args[args.indexOf('-pix_fmt') + 1], 'yuv420p');
+  assert.equal(args[args.indexOf('-b:a') + 1], '256k');
+  assert.equal(args[args.indexOf('-movflags') + 1], '+faststart');
+  assert.match(args[args.indexOf('-vf') + 1], /trunc\(iw\/2\)\*2.*trunc\(ih\/2\)\*2/);
+  assert.equal(args.includes('copy'), false);
+
+  const silentArgs = editedOutputArgs('/private/original.mkv', '/private/edited.mp4', {
+    ...DIRECT_INSPECTION,
+    audio: null
+  }, plan);
+  assert.equal(silentArgs.includes('-an'), true);
+  assert.equal(silentArgs.includes('-c:a'), false);
+});
+
+test('render progress is finite, bounded below completion, and output inspection enforces the final contract', () => {
+  assert.equal(renderProgressPercent(5, 10), 50);
+  assert.equal(renderProgressPercent(-1, 10), 0);
+  assert.equal(renderProgressPercent(20, 10), 99);
+  assert.equal(renderProgressPercent(Number.NaN, 10), null);
+  assert.doesNotThrow(() => validateEditedOutputInspection(DIRECT_INSPECTION, { expectAudio: true }));
+  assert.doesNotThrow(() => validateEditedOutputInspection({ ...DIRECT_INSPECTION, audio: null }));
+  assert.throws(
+    () => validateEditedOutputInspection({ ...DIRECT_INSPECTION, video: { ...DIRECT_INSPECTION.video, codec: 'hevc' } }),
+    (error) => error?.localFailure?.operation === 'output_collection'
+  );
+  assert.throws(
+    () => validateEditedOutputInspection({ ...DIRECT_INSPECTION, video: { ...DIRECT_INSPECTION.video, width: 1279 } }),
+    (error) => error?.localFailure?.reason === 'output_inconsistent'
+  );
+  assert.throws(
+    () => validateEditedOutputInspection({ ...DIRECT_INSPECTION, audio: null }, { expectAudio: true }),
+    /AAC audio/i
+  );
 });
 
 test('byte Range parsing supports closed, open-ended, and suffix requests', () => {
@@ -428,6 +525,20 @@ test('explicit discard and inactivity expiry honor lease touches for terminal wo
   });
   const ready = await manager.receiveLocalStream(Readable.from('ready'), { displayName: 'ready.mp4' });
   await waitUntil(() => ready.status === 'ready', 'ready workspace');
+  const readyDir = ready.tempDir;
+  const proxyPath = path.join(readyDir, 'synthetic-proxy.mp4');
+  const outputPath = path.join(readyDir, 'synthetic-edited.mp4');
+  await fsp.writeFile(proxyPath, 'proxy');
+  await fsp.writeFile(outputPath, 'edited output');
+  manager.registerAsset(ready, {
+    role: 'playback-proxy', filePath: proxyPath, size: 5, mime: 'video/mp4', playable: true
+  });
+  const output = manager.registerAsset(ready, {
+    role: 'edited-output', filePath: outputPath, size: 13, mime: 'video/mp4', playable: false,
+    filename: 'ready - edited.mp4', inspection: DIRECT_INSPECTION,
+    editPlan: { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 10 }] }
+  });
+  ready.render.outputAssetId = output.id;
   const active = await manager.createWorkspace({ displayName: 'active.mp4' });
   active.status = 'inspecting';
   active.phase = 'inspecting';
@@ -443,6 +554,7 @@ test('explicit discard and inactivity expiry honor lease touches for terminal wo
   const expired = await manager.cleanupExpired(now);
   assert.deepEqual(expired, [ready.id]);
   assert.equal(manager.workspaces.has(ready.id), false);
+  await assert.rejects(fsp.access(readyDir));
   assert.equal(manager.workspaces.has(active.id), true);
 
   assert.equal(await manager.discard(active.id), true);

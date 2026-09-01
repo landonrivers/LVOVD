@@ -38,6 +38,12 @@ function workspaceUserError(message, failure, statusCode = 422) {
   return error;
 }
 
+function workspaceRequestError(message, statusCode = 422) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
 function workspaceCancelledError() {
   const error = new Error('Local media workspace cancelled.');
   error.code = WORKSPACE_CANCELLED_CODE;
@@ -65,6 +71,51 @@ function normalizeClaimedContentType(value) {
 
 function roundMilliseconds(value) {
   return Math.round(Number(value) * 1000) / 1000;
+}
+
+function normalizeEditPlan(rawPlan, durationSeconds) {
+  const duration = roundMilliseconds(durationSeconds);
+  if (!rawPlan || typeof rawPlan !== 'object' || Array.isArray(rawPlan)) {
+    throw workspaceRequestError('Edit plan must be an object.');
+  }
+  if (rawPlan.version !== 1) {
+    throw workspaceRequestError('Edit plan version 1 is required.');
+  }
+  if (!Array.isArray(rawPlan.keepRanges) || rawPlan.keepRanges.length !== 1) {
+    throw workspaceRequestError('This editor currently requires exactly one retained range.');
+  }
+  const range = rawPlan.keepRanges[0];
+  if (!range || typeof range !== 'object' || Array.isArray(range)
+    || typeof range.startSeconds !== 'number' || typeof range.endSeconds !== 'number') {
+    throw workspaceRequestError('The retained range must contain numeric start and end times.');
+  }
+  const startSeconds = roundMilliseconds(range.startSeconds);
+  const endSeconds = roundMilliseconds(range.endSeconds);
+  if (![duration, startSeconds, endSeconds].every(Number.isFinite) || duration <= 0) {
+    throw workspaceRequestError('The retained range and media duration must be finite numbers.');
+  }
+  if (startSeconds < 0 || endSeconds > duration) {
+    throw workspaceRequestError('The retained range must stay within the inspected media duration.');
+  }
+  if (startSeconds >= endSeconds) {
+    throw workspaceRequestError('The retained range end must be after its start.');
+  }
+  if (startSeconds === 0 && endSeconds === duration) {
+    throw workspaceRequestError('Move the start or end before creating an edited file.');
+  }
+  return {
+    version: 1,
+    keepRanges: [{ startSeconds, endSeconds }]
+  };
+}
+
+function editedOutputFilename(sourceDisplayName) {
+  const safeName = normalizeDisplayFilename(sourceDisplayName);
+  const extension = path.extname(safeName);
+  const suffix = ' - edited.mp4';
+  const stem = (path.basename(safeName, extension).trim() || 'Local video')
+    .slice(0, Math.max(1, 255 - suffix.length));
+  return `${stem}${suffix}`;
 }
 
 function parseFrameRate(value) {
@@ -109,6 +160,7 @@ function normalizedContainerLabel(format, formatNames) {
 function normalizeInspection(raw = {}) {
   const streams = Array.isArray(raw.streams) ? raw.streams : [];
   const video = streams.find((stream) => stream?.codec_type === 'video'
+    && Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
     && Number(stream.width) > 0 && Number(stream.height) > 0
     && Number(stream.disposition?.attached_pic) !== 1
     && Number(stream.disposition?.timed_thumbnails) !== 1);
@@ -141,7 +193,11 @@ function normalizeInspection(raw = {}) {
     );
   }
 
-  const audio = streams.find((stream) => stream?.codec_type === 'audio') || null;
+  const audioStreams = streams.filter((stream) => stream?.codec_type === 'audio');
+  const audio = audioStreams.find((stream) => (
+    Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
+  )) || null;
+  const subtitleTrackCount = streams.filter((stream) => stream?.codec_type === 'subtitle').length;
   const formatName = String(raw.format?.format_name || '').trim().toLowerCase();
   const formatNames = formatName.split(',').map((name) => name.trim()).filter(Boolean).slice(0, 20);
   const displayFormat = normalizedContainerLabel(raw.format || {}, formatNames);
@@ -151,14 +207,20 @@ function normalizeInspection(raw = {}) {
     format: displayFormat,
     formatNames,
     video: {
+      streamIndex: Number(video.index),
       codec: String(video.codec_name || 'unknown').trim().toLowerCase().slice(0, 80),
       width: Math.floor(Number(video.width)),
       height: Math.floor(Number(video.height)),
       frameRate: parseFrameRate(video.avg_frame_rate || video.r_frame_rate)
     },
     audio: audio ? {
+      streamIndex: Number(audio.index),
       codec: String(audio.codec_name || 'unknown').trim().toLowerCase().slice(0, 80)
-    } : null
+    } : null,
+    trackCounts: {
+      audio: audioStreams.length,
+      subtitle: subtitleTrackCount
+    }
   };
 }
 
@@ -171,13 +233,13 @@ function isDirectPlaybackCompatible(inspection) {
     && (!inspection.audio || inspection.audio.codec === 'aac'));
 }
 
-function playbackProxyArgs(inputPath, outputPath, hasAudio) {
+function playbackProxyArgs(inputPath, outputPath, inspection) {
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error',
     '-i', inputPath,
-    '-map', '0:v:0'
+    '-map', `0:${inspection.video.streamIndex}`
   ];
-  if (hasAudio) args.push('-map', '0:a:0?');
+  if (inspection.audio) args.push('-map', `0:${inspection.audio.streamIndex}`);
   args.push(
     '-vf', "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
     '-c:v', 'libx264',
@@ -185,10 +247,82 @@ function playbackProxyArgs(inputPath, outputPath, hasAudio) {
     '-crf', '28',
     '-pix_fmt', 'yuv420p'
   );
-  if (hasAudio) args.push('-c:a', 'aac', '-b:a', '128k');
+  if (inspection.audio) args.push('-c:a', 'aac', '-b:a', '128k');
   else args.push('-an');
   args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
   return args;
+}
+
+function editedOutputArgs(inputPath, outputPath, inspection, editPlan) {
+  const range = editPlan.keepRanges[0];
+  const retainedDuration = roundMilliseconds(range.endSeconds - range.startSeconds);
+  const args = [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-i', inputPath,
+    '-ss', String(range.startSeconds),
+    '-t', String(retainedDuration),
+    '-map', `0:${inspection.video.streamIndex}`
+  ];
+  if (inspection.audio) args.push('-map', `0:${inspection.audio.streamIndex}`);
+  args.push(
+    '-vf', "scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'",
+    '-c:v', 'libx264',
+    '-preset', 'medium',
+    '-crf', '18',
+    '-pix_fmt', 'yuv420p'
+  );
+  if (inspection.audio) args.push('-c:a', 'aac', '-b:a', '256k');
+  else args.push('-an');
+  args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
+  return args;
+}
+
+function renderProgressPercent(outputSeconds, retainedDurationSeconds) {
+  const output = Number(outputSeconds);
+  const duration = Number(retainedDurationSeconds);
+  if (!Number.isFinite(output) || !Number.isFinite(duration) || duration <= 0) return null;
+  return Math.max(0, Math.min(99, output / duration * 100));
+}
+
+function createFfmpegProgressHandler(durationSeconds, onPercent) {
+  const maxBufferCharacters = 64 * 1024;
+  let buffer = '';
+  return (chunk) => {
+    buffer += chunk.toString('utf8');
+    let newline;
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      const match = line.match(/^out_time_(?:us|ms)=(\d+)$/);
+      if (!match) continue;
+      const percent = renderProgressPercent(Number(match[1]) / 1_000_000, durationSeconds);
+      if (percent != null) onPercent(percent);
+    }
+    if (buffer.length > maxBufferCharacters) buffer = buffer.slice(-maxBufferCharacters);
+  };
+}
+
+function outputCollectionError(message) {
+  return withLocalFailure(new Error(message), {
+    operation: 'output_collection',
+    reason: 'output_inconsistent'
+  });
+}
+
+function validateEditedOutputInspection(inspection, { expectAudio = false } = {}) {
+  const mp4 = (inspection?.formatNames || []).some((name) => String(name).toLowerCase() === 'mp4');
+  if (!mp4 || inspection?.video?.codec !== 'h264'
+    || !Number.isFinite(inspection.durationSeconds) || inspection.durationSeconds <= 0
+    || inspection.video.width % 2 !== 0 || inspection.video.height % 2 !== 0) {
+    throw outputCollectionError('The edited output did not validate as a usable even-dimension H.264 MP4.');
+  }
+  if (expectAudio && inspection.audio?.codec !== 'aac') {
+    throw outputCollectionError('The edited output did not contain the expected AAC audio stream.');
+  }
+  if (!expectAudio && inspection.audio) {
+    throw outputCollectionError('The edited output unexpectedly contained an audio stream.');
+  }
+  return inspection;
 }
 
 function rangeNotSatisfiable() {
@@ -245,7 +379,9 @@ class MediaWorkspaceManager {
     createWriteStream = fs.createWriteStream,
     spawnProcess = spawn,
     inspectAsset = null,
-    createProxyAsset = null
+    createProxyAsset = null,
+    inspectOutputAsset = null,
+    createEditedAsset = null
   } = {}) {
     this.tempDir = tempDir;
     this.maxBytes = maxBytes;
@@ -257,6 +393,8 @@ class MediaWorkspaceManager {
     this.spawnProcess = spawnProcess;
     this.inspectAsset = inspectAsset || this.defaultInspectAsset.bind(this);
     this.createProxyAsset = createProxyAsset || this.defaultCreateProxyAsset.bind(this);
+    this.inspectOutputAsset = inspectOutputAsset || this.defaultInspectOutputAsset.bind(this);
+    this.createEditedAsset = createEditedAsset || this.defaultCreateEditedAsset.bind(this);
     this.workspaces = new Map();
     this.rootPromise = null;
   }
@@ -307,7 +445,15 @@ class MediaWorkspaceManager {
       abortController: new AbortController(),
       cancelRequested: false,
       activeOperation: 'receiving',
-      activePromise: null
+      activePromise: null,
+      render: {
+        status: 'idle',
+        percent: null,
+        message: 'Move the start or end before creating an edited file.',
+        failure: null,
+        requestedPlan: null,
+        outputAssetId: null
+      }
     };
     this.workspaces.set(workspace.id, workspace);
     return workspace;
@@ -326,6 +472,9 @@ class MediaWorkspaceManager {
   publicWorkspace(workspace) {
     if (!workspace) return null;
     const playback = workspace.playbackAssetId ? workspace.assets.get(workspace.playbackAssetId) : null;
+    const editedOutput = workspace.render.outputAssetId
+      ? workspace.assets.get(workspace.render.outputAssetId)
+      : null;
     return {
       id: workspace.id,
       status: workspace.status,
@@ -356,6 +505,25 @@ class MediaWorkspaceManager {
         proxy: workspace.playbackProxy,
         url: `/api/workspace/media?workspace=${encodeURIComponent(workspace.id)}&asset=${encodeURIComponent(playback.id)}`
       } : null,
+      render: {
+        status: workspace.render.status,
+        percent: Number.isFinite(workspace.render.percent) ? workspace.render.percent : null,
+        message: workspace.render.message,
+        failure: workspace.render.failure,
+        requestedPlan: workspace.render.requestedPlan
+          ? structuredClone(workspace.render.requestedPlan)
+          : null
+      },
+      editedOutput: editedOutput ? {
+        assetId: editedOutput.id,
+        role: editedOutput.role,
+        filename: editedOutput.filename,
+        size: editedOutput.size,
+        mime: editedOutput.mime,
+        inspection: structuredClone(editedOutput.inspection),
+        editPlan: structuredClone(editedOutput.editPlan),
+        downloadUrl: `/api/workspace/output?workspace=${encodeURIComponent(workspace.id)}&asset=${encodeURIComponent(editedOutput.id)}`
+      } : null,
       failure: workspace.failure
     };
   }
@@ -369,6 +537,12 @@ class MediaWorkspaceManager {
 
   update(workspace, patch) {
     Object.assign(workspace, patch, { updatedAt: this.now() });
+    this.emit(workspace);
+  }
+
+  updateRender(workspace, patch) {
+    workspace.render = { ...workspace.render, ...patch };
+    workspace.updatedAt = this.now();
     this.emit(workspace);
   }
 
@@ -416,7 +590,10 @@ class MediaWorkspaceManager {
       filePath: rawAsset.filePath,
       size: rawAsset.size,
       mime: rawAsset.mime || 'application/octet-stream',
-      playable: rawAsset.playable === true
+      playable: rawAsset.playable === true,
+      filename: rawAsset.filename ? normalizeDisplayFilename(rawAsset.filename) : null,
+      inspection: rawAsset.inspection ? structuredClone(rawAsset.inspection) : null,
+      editPlan: rawAsset.editPlan ? structuredClone(rawAsset.editPlan) : null
     };
     workspace.assets.set(asset.id, asset);
     return asset;
@@ -695,32 +872,15 @@ class MediaWorkspaceManager {
   async defaultCreateProxyAsset(workspace, sourceAsset, inspection) {
     const partialPath = path.join(workspace.tempDir, 'playback-proxy.partial.mp4');
     const finalPath = path.join(workspace.tempDir, 'playback-proxy.mp4');
-    const maxProgressBufferCharacters = 64 * 1024;
-    let progressBuffer = '';
-    const onStdout = (chunk) => {
-      progressBuffer += chunk.toString('utf8');
-      let newline;
-      while ((newline = progressBuffer.indexOf('\n')) !== -1) {
-        const line = progressBuffer.slice(0, newline).trim();
-        progressBuffer = progressBuffer.slice(newline + 1);
-        const match = line.match(/^out_time_(?:us|ms)=(\d+)$/);
-        if (!match) continue;
-        const seconds = Number(match[1]) / 1_000_000;
-        if (!Number.isFinite(seconds) || !inspection.durationSeconds) continue;
-        this.update(workspace, {
-          percent: Math.max(0, Math.min(99, seconds / inspection.durationSeconds * 100))
-        });
-      }
-      if (progressBuffer.length > maxProgressBufferCharacters) {
-        progressBuffer = progressBuffer.slice(-maxProgressBufferCharacters);
-      }
-    };
+    const onStdout = createFfmpegProgressHandler(inspection.durationSeconds, (percent) => {
+      this.update(workspace, { percent });
+    });
 
     try {
       await this.runOwnedProcess(
         workspace,
         'ffmpeg',
-        playbackProxyArgs(sourceAsset.filePath, partialPath, Boolean(inspection.audio)),
+        playbackProxyArgs(sourceAsset.filePath, partialPath, inspection),
         { operation: 'ffmpeg_processing', tool: 'ffmpeg', captureStdout: false, onStdout }
       );
       await this.fs.rename(partialPath, finalPath);
@@ -731,6 +891,183 @@ class MediaWorkspaceManager {
       await this.fs.rm(finalPath, { force: true }).catch(() => {});
       throw error;
     }
+  }
+
+  async defaultInspectOutputAsset(workspace, outputAsset) {
+    try {
+      return await this.defaultInspectAsset(workspace, outputAsset);
+    } catch (error) {
+      if (isWorkspaceCancellation(error) || error?.localFailure?.operation === 'process_start') throw error;
+      throw outputCollectionError('LVOVD could not validate the generated edited output.');
+    }
+  }
+
+  async defaultCreateEditedAsset(workspace, sourceAsset, inspection, editPlan, attempt) {
+    const retainedDuration = roundMilliseconds(
+      editPlan.keepRanges[0].endSeconds - editPlan.keepRanges[0].startSeconds
+    );
+    const onStdout = createFfmpegProgressHandler(retainedDuration, (percent) => {
+      this.updateRender(workspace, {
+        percent,
+        message: `Creating edited file… ${Math.floor(percent)}%`
+      });
+    });
+
+    await this.runOwnedProcess(
+      workspace,
+      'ffmpeg',
+      editedOutputArgs(sourceAsset.filePath, attempt.partialPath, inspection, editPlan),
+      { operation: 'ffmpeg_processing', tool: 'ffmpeg', captureStdout: false, onStdout }
+    );
+    try {
+      await this.fs.rename(attempt.partialPath, attempt.finalPath);
+      const stat = await this.fs.stat(attempt.finalPath);
+      return { filePath: attempt.finalPath, size: stat.size };
+    } catch (error) {
+      throw withLocalFailure(error, { operation: 'output_collection' });
+    }
+  }
+
+  startRender(workspaceId, rawEditPlan) {
+    const workspace = this.get(workspaceId);
+    if (!workspace) throw workspaceRequestError('Local media workspace not found or expired.', 404);
+    const sourceAsset = workspace.assets.get(workspace.sourceAssetId);
+    if (workspace.status !== 'ready' || !sourceAsset || !workspace.inspection) {
+      throw workspaceRequestError('The local media workspace is not ready to create an edited file.', 409);
+    }
+    if (workspace.activeOperation) {
+      throw workspaceRequestError('A local workspace operation is already running.', 409);
+    }
+
+    const editPlan = normalizeEditPlan(rawEditPlan, workspace.inspection.durationSeconds);
+    const attemptId = crypto.randomUUID();
+    const attempt = {
+      id: attemptId,
+      partialPath: path.join(workspace.tempDir, `edited-${attemptId}.partial.mp4`),
+      finalPath: path.join(workspace.tempDir, `edited-${attemptId}.mp4`)
+    };
+    workspace.abortController = new AbortController();
+    workspace.cancelRequested = false;
+    workspace.activeOperation = 'rendering';
+    this.updateRender(workspace, {
+      status: 'rendering',
+      percent: 0,
+      message: 'Creating edited file… 0%',
+      failure: null,
+      requestedPlan: structuredClone(editPlan)
+    });
+    workspace.activePromise = this.performRender(workspace, sourceAsset, editPlan, attempt);
+    workspace.activePromise.catch(() => {});
+    return workspace;
+  }
+
+  async performRender(workspace, sourceAsset, editPlan, attempt) {
+    const previousOutputId = workspace.render.outputAssetId;
+    try {
+      const created = await this.createEditedAsset(
+        workspace,
+        sourceAsset,
+        workspace.inspection,
+        editPlan,
+        attempt
+      );
+      if (workspace.cancelRequested) throw workspaceCancelledError();
+      if (!created?.filePath || !isPathInside(workspace.tempDir, created.filePath)) {
+        throw outputCollectionError('The edited output was not created inside its authoritative workspace.');
+      }
+      let stat;
+      try {
+        stat = await this.fs.stat(created.filePath);
+      } catch (error) {
+        throw withLocalFailure(error, { operation: 'output_collection' });
+      }
+      if (!stat.isFile() || stat.size <= 0) {
+        throw outputCollectionError('The edited output file is missing or empty.');
+      }
+      const outputInspection = await this.inspectOutputAsset(workspace, {
+        role: 'edited-output',
+        filePath: created.filePath,
+        size: stat.size
+      });
+      if (workspace.cancelRequested) throw workspaceCancelledError();
+      validateEditedOutputInspection(outputInspection, { expectAudio: Boolean(workspace.inspection.audio) });
+
+      const outputAsset = this.registerAsset(workspace, {
+        role: 'edited-output',
+        filePath: created.filePath,
+        size: stat.size,
+        mime: 'video/mp4',
+        playable: false,
+        filename: editedOutputFilename(workspace.source.displayName),
+        inspection: outputInspection,
+        editPlan
+      });
+      workspace.render.outputAssetId = outputAsset.id;
+      if (previousOutputId && previousOutputId !== outputAsset.id) {
+        const previous = workspace.assets.get(previousOutputId);
+        workspace.assets.delete(previousOutputId);
+        if (previous?.filePath) await this.fs.rm(previous.filePath, { force: true }).catch(() => {});
+      }
+      this.updateRender(workspace, {
+        status: 'ready',
+        percent: 100,
+        message: 'Edited file ready.',
+        failure: null,
+        requestedPlan: structuredClone(editPlan)
+      });
+    } catch (error) {
+      await this.fs.rm(attempt.partialPath, { force: true }).catch(() => {});
+      await this.fs.rm(attempt.finalPath, { force: true }).catch(() => {});
+      if (workspace.cancelRequested || isWorkspaceCancellation(error)) {
+        this.updateRender(workspace, {
+          status: 'cancelled',
+          percent: null,
+          message: 'Edited-file creation cancelled. The editor and staged source are still available.',
+          failure: null
+        });
+      } else {
+        const failure = this.failureFor(error);
+        this.updateRender(workspace, {
+          status: 'error',
+          percent: null,
+          message: failure.title,
+          failure
+        });
+      }
+    } finally {
+      workspace.child = null;
+      workspace.activeOperation = null;
+      workspace.activePromise = null;
+    }
+  }
+
+  async cancelRender(workspaceId) {
+    const workspace = this.get(workspaceId);
+    if (!workspace) throw workspaceRequestError('Local media workspace not found or expired.', 404);
+    if (workspace.activeOperation !== 'rendering'
+      || !['rendering', 'cancelling'].includes(workspace.render.status)) {
+      throw workspaceRequestError('No edited-file render is currently running.', 409);
+    }
+    workspace.cancelRequested = true;
+    this.updateRender(workspace, {
+      status: 'cancelling',
+      percent: null,
+      message: 'Cancelling edited-file creation…'
+    });
+    if (!workspace.abortController.signal.aborted) workspace.abortController.abort();
+    if (workspace.child) {
+      try { workspace.child.kill(); } catch {}
+    }
+    if (workspace.activePromise) await workspace.activePromise.catch(() => {});
+    return workspace;
+  }
+
+  resolveOutputAsset(workspaceId, assetId) {
+    const workspace = this.get(workspaceId);
+    if (!workspace || !assetId || assetId !== workspace.render.outputAssetId) return null;
+    const asset = workspace.assets.get(assetId) || null;
+    if (!asset || asset.role !== 'edited-output' || !asset.filePath || !asset.filename) return null;
+    return { workspace, asset };
   }
 
   resolvePlaybackAsset(workspaceId, assetId) {
@@ -835,6 +1172,7 @@ class MediaWorkspaceManager {
     workspace.assets.clear();
     workspace.sourceAssetId = null;
     workspace.playbackAssetId = null;
+    workspace.render.outputAssetId = null;
   }
 
   closeListeners(workspace) {
@@ -848,17 +1186,26 @@ class MediaWorkspaceManager {
     const workspace = this.get(workspaceId, { touch: false });
     if (!workspace) return false;
     if (workspace.activeOperation) {
+      const operation = workspace.activeOperation;
       workspace.cancelRequested = true;
       if (!workspace.abortController.signal.aborted) workspace.abortController.abort();
       if (workspace.child) {
         try { workspace.child.kill(); } catch {}
       }
-      this.update(workspace, {
-        status: 'cancelling',
-        phase: 'cancelling',
-        message: 'Cancelling local media preparation…',
-        percent: null
-      });
+      if (operation === 'rendering') {
+        this.updateRender(workspace, {
+          status: 'cancelling',
+          percent: null,
+          message: 'Cancelling edited-file creation before discarding the workspace…'
+        });
+      } else {
+        this.update(workspace, {
+          status: 'cancelling',
+          phase: 'cancelling',
+          message: 'Cancelling local media preparation…',
+          percent: null
+        });
+      }
       if (workspace.activePromise) await workspace.activePromise.catch(() => {});
     }
     await this.removeWorkspaceFiles(workspace);
@@ -899,10 +1246,15 @@ module.exports = {
   MEDIA_WORKSPACE_TTL_MS,
   WORKSPACE_CANCELLED_CODE,
   normalizeDisplayFilename,
+  normalizeEditPlan,
+  editedOutputFilename,
   parseFrameRate,
   normalizeInspection,
   isDirectPlaybackCompatible,
   playbackProxyArgs,
+  editedOutputArgs,
+  renderProgressPercent,
+  validateEditedOutputInspection,
   parseByteRange,
   createMediaWorkspaceManager,
   MediaWorkspaceManager

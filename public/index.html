@@ -24,10 +24,10 @@
       <p class="intro">A Locally Hosted Video Downloader Which You'll Use Responsibly</p>
 
       <form id="lookup-form" class="lookup-form">
-        <label for="video-url">Media URL</label>
+        <label class="workflow-heading" for="video-url">Download From Media URL</label>
         <div class="input-row">
           <input id="video-url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://example.com/media/..." />
-          <button id="preview-button" class="button secondary" type="submit">Preview</button>
+          <button id="preview-button" class="button secondary lookup-submit" type="submit">Preview</button>
         </div>
       </form>
 
@@ -270,16 +270,11 @@
       </section>
 
       <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
-        <div class="section-head workspace-heading">
-          <div>
-            <p class="eyebrow">LOCAL EDIT WORKSPACE</p>
-            <h2 id="media-workspace-title">Edit Media</h2>
-            <p class="help">Choose or drop one local video. It stays on this computer, but LVOVD copies it into temporary local storage so the browser editor can use it.</p>
-          </div>
-          <span class="tag">Edit preview · No output yet</span>
+        <div class="workspace-heading">
+          <h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File</h2>
         </div>
 
-        <div class="workspace-storage-note">
+        <div id="workspace-storage-note" class="workspace-storage-note" hidden>
           <strong>Temporary disk use</strong>
           <span>Large files can temporarily require roughly another copy's worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.</span>
         </div>
@@ -320,6 +315,7 @@
               <h3 id="editor-media-name">Local video</h3>
               <p id="editor-media-facts" class="help"></p>
               <p id="editor-proxy-note" class="editor-proxy-note"></p>
+              <p id="editor-track-warning" class="editor-track-warning" hidden>This edited output uses the primary video/audio track. Additional audio or subtitle tracks are not included yet.</p>
             </div>
             <button id="workspace-discard" class="button secondary mini" type="button">Discard</button>
           </div>
@@ -371,7 +367,7 @@
                     <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
                   </label>
                   <div class="editor-boundary-actions">
-                    <button id="set-start-playhead" class="button secondary mini" type="button">Set Start Here</button>
+                    <button id="set-start-playhead" class="button secondary mini" type="button">Set Start</button>
                     <button id="go-to-start" class="button secondary mini" type="button">Go to Start</button>
                   </div>
                   <small id="editor-start-error" class="field-error" aria-live="polite"></small>
@@ -382,18 +378,54 @@
                     <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
                   </label>
                   <div class="editor-boundary-actions">
-                    <button id="set-end-playhead" class="button secondary mini" type="button">Set End Here</button>
+                    <button id="set-end-playhead" class="button secondary mini" type="button">Set End</button>
                     <button id="go-to-end" class="button secondary mini" type="button">Go to End</button>
                   </div>
                   <small id="editor-end-error" class="field-error" aria-live="polite"></small>
                 </div>
+                <div class="timeline-range-actions">
+                  <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
+                </div>
               </div>
 
-              <div class="timeline-range-actions">
-                <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
-              </div>
+              <section class="editor-render-panel" aria-label="Create edited output">
+                <div class="editor-render-head">
+                  <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
+                  <p class="editor-foundation-note">Creates a new MP4 locally. To closely match arbitrary cut times, this version re-encodes the edited output. Your staged source is unchanged.</p>
+                </div>
 
-              <p class="editor-foundation-note">This editor records one retained range for preview. It does not create, download, or save an edited file yet.</p>
+                <p id="editor-render-noop" class="editor-render-noop">Move the start or end before creating an edited file.</p>
+
+                <div id="editor-render-progress" class="workspace-progress editor-render-progress" aria-live="polite" hidden>
+                  <div class="progress-head">
+                    <div>
+                      <strong id="editor-render-progress-label">Creating edited file…</strong>
+                      <span>Re-encoding locally for the selected boundaries.</span>
+                    </div>
+                    <button id="cancel-edited-render" class="text-button" type="button">Cancel Render</button>
+                  </div>
+                  <div class="progress-track" aria-hidden="true"><div id="editor-render-progress-bar" class="progress-bar"></div></div>
+                </div>
+
+                <section id="editor-render-failure" class="preview-error editor-render-failure" aria-live="polite" hidden>
+                  <div>
+                    <p class="eyebrow">EDITED FILE RESULT</p>
+                    <h4 id="editor-render-failure-title">Edited-file creation failed</h4>
+                    <p id="editor-render-failure-explanation" class="error-message"></p>
+                    <p id="editor-render-failure-help" class="help"></p>
+                  </div>
+                </section>
+
+                <section id="editor-edited-output" class="editor-edited-output" aria-live="polite" hidden>
+                  <div>
+                    <p class="eyebrow">DOWNLOAD EDITED FILE</p>
+                    <h4 id="editor-output-filename">Edited video.mp4</h4>
+                    <p id="editor-output-facts" class="help"></p>
+                    <p id="editor-output-stale" class="editor-output-stale" hidden>Range changed — create the edited file again to update it. This download was created from the previous range.</p>
+                  </div>
+                  <a id="download-edited-file" class="button secondary mini" href="#">Download</a>
+                </section>
+              </section>
             </div>
           </div>
         </section>
