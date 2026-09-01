@@ -64,6 +64,78 @@ test('local filename handling keeps bounded display metadata out of filesystem a
   assert.equal(normalizeDisplayFilename(`x${'a'.repeat(400)}.mp4`).length, 255);
 });
 
+test('URL acquisition workspaces adopt one contained source through the shared preparation path', async (t) => {
+  const dir = await sandbox(t);
+  const manager = createMediaWorkspaceManager({
+    tempDir: dir,
+    inspectAsset: async () => DIRECT_INSPECTION
+  });
+  const workspace = await manager.createUrlWorkspace({
+    displayName: 'Preview title',
+    sourceName: 'Example source',
+    waiting: true
+  });
+  assert.equal(workspace.status, 'waiting');
+  assert.equal(workspace.activeOperation, 'acquiring');
+  assert.equal(manager.publicWorkspace(workspace).source.origin, 'url');
+  assert.equal(manager.publicWorkspace(workspace).source.sourceName, 'Example source');
+
+  const sourcePath = path.join(workspace.tempDir, 'original-source.mp4');
+  const bytes = Buffer.from('synthetic URL-acquired video');
+  await fsp.writeFile(sourcePath, bytes);
+  await manager.adoptAcquiredFile(workspace.id, sourcePath, { displayName: 'Preview title.mp4' });
+
+  const snapshot = manager.publicWorkspace(workspace);
+  assert.equal(snapshot.status, 'ready');
+  assert.equal(snapshot.source.name, 'Preview title.mp4');
+  assert.equal(snapshot.source.size, bytes.length);
+  assert.equal(snapshot.source.origin, 'url');
+  assert.equal(snapshot.playback.role, 'source');
+  assert.deepEqual(snapshot.assets.map((asset) => asset.role), ['source']);
+});
+
+test('URL source adoption rejects paths outside the workspace and enforces the byte limit', async (t) => {
+  const dir = await sandbox(t);
+  const manager = createMediaWorkspaceManager({
+    tempDir: dir,
+    maxBytes: 8,
+    inspectAsset: async () => DIRECT_INSPECTION
+  });
+  const outside = path.join(dir, 'outside.mp4');
+  await fsp.writeFile(outside, 'small');
+  const first = await manager.createUrlWorkspace({ displayName: 'outside' });
+  await assert.rejects(
+    manager.adoptAcquiredFile(first.id, outside),
+    /authoritative workspace/i
+  );
+
+  const second = await manager.createUrlWorkspace({ displayName: 'large' });
+  const tooLarge = path.join(second.tempDir, 'original-source.mp4');
+  await fsp.writeFile(tooLarge, 'more than eight bytes');
+  await assert.rejects(
+    manager.adoptAcquiredFile(second.id, tooLarge),
+    (error) => error?.workspaceFailure?.category === 'local_media_too_large'
+  );
+});
+
+test('discarding a queued URL workspace is prompt and prevents later source adoption', async (t) => {
+  const dir = await sandbox(t);
+  const manager = createMediaWorkspaceManager({ tempDir: dir, inspectAsset: async () => DIRECT_INSPECTION });
+  const workspace = await manager.createUrlWorkspace({ displayName: 'Queued video', waiting: true });
+  workspace.activePromise = new Promise(() => {});
+
+  await Promise.race([
+    manager.discard(workspace.id),
+    new Promise((_resolve, reject) => setTimeout(() => reject(new Error('queued discard blocked')), 100))
+  ]);
+  assert.equal(manager.get(workspace.id, { touch: false }), null);
+  assert.equal(workspace.abortController.signal.aborted, true);
+  await assert.rejects(
+    manager.adoptAcquiredFile(workspace.id, path.join(dir, 'never-spawned.mp4')),
+    (error) => error?.code === WORKSPACE_CANCELLED_CODE
+  );
+});
+
 test('ffprobe inspection normalization keeps only finite video facts', () => {
   const normalized = normalizeInspection({
     format: {

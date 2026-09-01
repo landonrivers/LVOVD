@@ -53,6 +53,8 @@ const sponsorDetails = $('#sponsor-details');
 const sponsorMode = $('#sponsor-mode');
 const sponsorCategories = $('#sponsor-categories');
 const downloadButton = $('#download-button');
+const openEditorButton = $('#open-editor-button');
+const openEditorNote = $('#open-editor-note');
 const progressPanel = $('#download-progress');
 const progressStage = $('#progress-stage');
 const progressItem = $('#progress-item');
@@ -75,6 +77,7 @@ let currentInfo = null;
 let progressSource = null;
 let activeJobId = null;
 let autoDownloadStarted = false;
+let editorWorkspaceState = { active: false, status: 'idle', origin: null };
 const trackedJobs = new Map();
 const queueSources = new Map();
 const autoDownloadedQueueJobs = new Set();
@@ -1106,6 +1109,35 @@ function updateDownloadLabel() {
   }
 }
 
+function editorEligibility() {
+  if (!currentInfo) return { eligible: false, reason: '' };
+  if (editorWorkspaceState.active) {
+    return { eligible: false, reason: 'Discard the current editor workspace before opening another video.' };
+  }
+  if (currentInfo.kind !== 'media') {
+    return { eligible: false, reason: 'Collections and playlists cannot be opened in the editor.' };
+  }
+  if (currentInfo.capabilities?.live?.isLive) {
+    return { eligible: false, reason: 'Live media cannot be opened in the editor.' };
+  }
+  const content = selectedValue('content') || 'av';
+  if (!['av', 'video'].includes(content)) {
+    return { eligible: false, reason: 'Choose Video + Audio or Video Only to open this media in the editor.' };
+  }
+  if (!currentInfo.capabilities?.media?.video) {
+    return { eligible: false, reason: 'This Preview did not report usable video for the editor.' };
+  }
+  return { eligible: true, reason: '' };
+}
+
+function updateEditorAction() {
+  if (!openEditorButton || !openEditorNote) return;
+  const state = editorEligibility();
+  openEditorButton.disabled = !state.eligible || editorWorkspaceState.status === 'starting';
+  openEditorNote.textContent = state.reason;
+  openEditorNote.hidden = !state.reason;
+}
+
 function updateOptionVisibility() {
   const content = selectedValue('content') || 'av';
   const isPlaylist = currentInfo?.kind === 'playlist';
@@ -1125,6 +1157,7 @@ function updateOptionVisibility() {
   updateResolutionSelect();
   updateRangeVisibility();
   updateDownloadLabel();
+  updateEditorAction();
 }
 
 function setControlsDisabled(disabled) {
@@ -1280,6 +1313,19 @@ function buildRequestOptions() {
   return options;
 }
 
+function buildEditorAcquisition() {
+  const content = selectedValue('content') || 'av';
+  if (!['av', 'video'].includes(content)) {
+    throw new Error('Choose Video + Audio or Video Only to open this media in the editor.');
+  }
+  return {
+    content,
+    profile: selectedValue('profile') || 'compatible',
+    maxHeight: resolutionSelect.value ? Number(resolutionSelect.value) : null,
+    sourceFormat: currentSourceFormatSelection(content)
+  };
+}
+
 async function startDownload() {
   if (!currentUrl || !currentInfo) return;
   let options;
@@ -1342,6 +1388,33 @@ async function startDownload() {
     progressStage.textContent = error.message;
     setControlsDisabled(false);
   }
+}
+
+function openPreviewInEditor() {
+  const eligibility = editorEligibility();
+  if (!eligibility.eligible) {
+    if (eligibility.reason) setStatus(eligibility.reason, 'error');
+    return;
+  }
+  let acquisition;
+  try {
+    acquisition = buildEditorAcquisition();
+  } catch (error) {
+    setStatus(error.message, 'error');
+    return;
+  }
+  editorWorkspaceState = { active: false, status: 'starting', origin: 'url' };
+  updateEditorAction();
+  document.dispatchEvent(new CustomEvent('lvovd:workspace-acquire-url', {
+    detail: {
+      url: currentUrl,
+      acquisition,
+      display: {
+        title: currentInfo.title || 'Acquired video',
+        sourceName: currentInfo.source?.name || currentInfo.source?.hostname || 'media source'
+      }
+    }
+  }));
 }
 
 async function clearActiveJob() {
@@ -1417,10 +1490,20 @@ document.addEventListener('lvovd:history-confirmed', (event) => {
   const statusValue = event.detail?.status;
   retireHistoryBackedQueueJob(jobId, statusValue);
 });
+document.addEventListener('lvovd:workspace-state', (event) => {
+  editorWorkspaceState = {
+    active: Boolean(event.detail?.active),
+    status: event.detail?.status || 'idle',
+    origin: event.detail?.origin || null
+  };
+  updateEditorAction();
+});
 downloadButton.addEventListener('click', startDownload);
+openEditorButton.addEventListener('click', openPreviewInEditor);
 clearJobButton.addEventListener('click', clearActiveJob);
 recheck.addEventListener('click', checkHealth);
 
 setChoiceClasses('content');
 setChoiceClasses('profile');
+updateEditorAction();
 checkHealth();

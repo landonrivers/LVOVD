@@ -22,6 +22,7 @@ const {
   sourceFormatSelector
 } = require('./source-format-selection');
 const {
+  MAX_LOCAL_MEDIA_BYTES,
   createMediaWorkspaceManager
 } = require('./media-workspace');
 
@@ -51,6 +52,7 @@ const SPONSOR_CATEGORIES = new Set([
 
 const YTDLP_PATH = process.env.YTDLP_PATH || '';
 const YTDLP_COMMON_ARGS = ['--js-runtimes', 'node', '--no-colors'];
+const WORKSPACE_PROGRESS_TEMPLATE = 'download:__LVOVD_WORKSPACE_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress._percent_str)s';
 
 function withFailureScope(error, failureScope) {
   const scoped = error instanceof Error ? error : new Error(String(error || 'Download failed.'));
@@ -782,6 +784,52 @@ function normalizeOptions(raw = {}) {
   return { content, profile, audioFormat, maxHeight, range, extras, sponsor, sourceFormat };
 }
 
+function assertOnlyKeys(value, allowed, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  const unexpected = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unexpected.length) throw new Error(`${label} contains unsupported fields.`);
+}
+
+function normalizeWorkspaceAcquisition(raw = {}) {
+  assertOnlyKeys(raw, new Set(['content', 'profile', 'maxHeight', 'sourceFormat']), 'Edit acquisition');
+  const content = raw.content;
+  if (!['av', 'video'].includes(content)) {
+    throw new Error('Open in Editor is available only for Video + Audio or Video Only media.');
+  }
+  for (const field of ['profile', 'maxHeight', 'sourceFormat']) {
+    if (!Object.prototype.hasOwnProperty.call(raw, field)) {
+      throw new Error('Edit acquisition is missing required fields.');
+    }
+  }
+  if (!PROFILES.has(raw.profile)) throw new Error('Choose a valid editor video profile.');
+  const profile = raw.profile;
+  const maxHeight = raw.maxHeight == null || raw.maxHeight === '' ? null : Number(raw.maxHeight);
+  if (maxHeight != null && (!Number.isInteger(maxHeight) || maxHeight < 144 || maxHeight > 8640)) {
+    throw new Error('Resolution must be a valid video height.');
+  }
+  const sourceFormat = normalizeSourceFormatSelection(raw.sourceFormat, content);
+  return { content, profile, maxHeight, sourceFormat };
+}
+
+function normalizeWorkspaceDisplay(raw) {
+  assertOnlyKeys(raw, new Set(['title', 'sourceName']), 'Edit display');
+  for (const field of ['title', 'sourceName']) {
+    if (!Object.prototype.hasOwnProperty.call(raw, field)) {
+      throw new Error('Edit display is missing required fields.');
+    }
+  }
+  const clean = (value, fallback, maxLength) => String(value || fallback)
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, maxLength) || fallback;
+  return {
+    title: clean(raw.title, 'Acquired video', 255),
+    sourceName: clean(raw.sourceName, 'media source', 120)
+  };
+}
+
 function normalizeSelection(raw = {}) {
   const urls = [...new Set((Array.isArray(raw.entryUrls) ? raw.entryUrls : []).map(safeMediaUrl).filter(Boolean))];
   if (urls.length > MAX_PLAYLIST_SELECTION) throw new Error(`Choose no more than ${MAX_PLAYLIST_SELECTION} playlist videos at a time.`);
@@ -861,6 +909,33 @@ function buildYtdlpArgs(task, options, outputTemplate, progressTemplate) {
   }
 
   args.push(task.url);
+  return args;
+}
+
+function buildWorkspaceAcquisitionArgs(videoUrl, acquisition, outputTemplate) {
+  const args = [
+    ...YTDLP_COMMON_ARGS,
+    '--no-playlist',
+    '--match-filter', '!is_live',
+    '--newline',
+    '--no-warnings',
+    '--progress',
+    '--no-simulate',
+    '--max-filesize', String(MAX_LOCAL_MEDIA_BYTES),
+    '--output', outputTemplate,
+    '--progress-template', WORKSPACE_PROGRESS_TEMPLATE,
+    '--format', formatSelector(acquisition)
+  ];
+  if (acquisition.content === 'av') {
+    const separate = acquisition.sourceFormat?.mode === 'manual'
+      ? acquisition.sourceFormat.type === 'separate'
+      : true;
+    if (separate) {
+      args.push('--merge-output-format', acquisition.profile === 'compatible'
+        && acquisition.sourceFormat?.mode !== 'manual' ? 'mp4' : 'mkv');
+    }
+  }
+  args.push(videoUrl);
   return args;
 }
 
@@ -951,6 +1026,247 @@ function progressLabel(vcodec, acodec, formatId) {
   if (hasVideo && !hasAudio) return formatId ? `Video stream (${formatId})` : 'Video stream';
   if (!hasVideo && hasAudio) return formatId ? `Audio stream (${formatId})` : 'Audio stream';
   return formatId ? `Media stream (${formatId})` : 'Media stream';
+}
+
+function workspaceCancelledError() {
+  const error = new Error('URL media acquisition cancelled.');
+  error.code = 'LVOVD_WORKSPACE_CANCELLED';
+  return error;
+}
+
+function workspaceDisplayFilename(title, sourcePath) {
+  const extension = path.extname(sourcePath).replace(/[^.A-Za-z0-9]/g, '').slice(0, 16);
+  const existingExtension = path.extname(String(title || ''));
+  const stem = existingExtension
+    ? String(title).slice(0, -existingExtension.length)
+    : String(title || 'Acquired video');
+  return `${stem || 'Acquired video'}${extension}`;
+}
+
+async function findWorkspaceAcquiredFile(workspace) {
+  const entries = await localOperation(
+    () => fsp.readdir(workspace.tempDir, { withFileTypes: true }),
+    { operation: 'output_collection' }
+  );
+  const candidates = entries
+    .filter((entry) => entry.isFile()
+      && /^source\./i.test(entry.name)
+      && !/\.(part|ytdl|temp)$/i.test(entry.name)
+      && !/\.f\d+\./i.test(entry.name))
+    .map((entry) => path.join(workspace.tempDir, entry.name));
+  if (candidates.length !== 1) {
+    throw localFailureError(
+      candidates.length
+        ? 'yt-dlp produced multiple final source files for one editor workspace.'
+        : 'yt-dlp completed without producing an editor source file.',
+      { operation: 'output_collection', reason: 'output_inconsistent' }
+    );
+  }
+  return candidates[0];
+}
+
+async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display, {
+  spawnProcess = spawn
+} = {}) {
+  if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) return;
+  if (!YTDLP_PATH) {
+    throw localFailureError(
+      'LVOVD-managed yt-dlp is not ready. Start LVOVD through server.js.',
+      { operation: 'process_start', tool: 'yt-dlp' }
+    );
+  }
+
+  mediaWorkspaces.update(workspace, {
+    status: 'acquiring',
+    phase: 'acquiring',
+    message: `Acquiring video from ${display.sourceName}…`,
+    percent: null,
+    bytesReceived: 0,
+    bytesTotal: null
+  });
+  const outputTemplate = path.join(workspace.tempDir, 'source.%(ext)s');
+  const args = buildWorkspaceAcquisitionArgs(videoUrl, acquisition, outputTemplate);
+
+  await new Promise((resolve, reject) => {
+    if (workspace.cancelRequested || workspace.abortController.signal.aborted) {
+      reject(workspaceCancelledError());
+      return;
+    }
+    let child;
+    try {
+      child = spawnProcess(YTDLP_PATH, args, { windowsHide: true, shell: false });
+    } catch (error) {
+      reject(withLocalFailure(error, { operation: 'process_start', tool: 'yt-dlp' }));
+      return;
+    }
+    workspace.child = child;
+    const recentErrorLines = [];
+    let settled = false;
+    let sizeFailure = null;
+    let localProcessing = null;
+    let guardActive = false;
+    const signal = workspace.abortController.signal;
+    const sizeGuard = setInterval(async () => {
+      if (settled || guardActive || sizeFailure || !workspace.tempDir) return;
+      guardActive = true;
+      try {
+        const entries = await fsp.readdir(workspace.tempDir, { withFileTypes: true });
+        let total = 0;
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          const stat = await fsp.stat(path.join(workspace.tempDir, entry.name));
+          total += stat.size;
+          if (total > MAX_LOCAL_MEDIA_BYTES) {
+            sizeFailure = mediaWorkspaces.tooLargeError();
+            try { child.kill(); } catch {}
+            break;
+          }
+        }
+      } catch {}
+      finally { guardActive = false; }
+    }, 250);
+    sizeGuard.unref?.();
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(sizeGuard);
+      signal.removeEventListener('abort', onAbort);
+      if (workspace.child === child) workspace.child = null;
+      callback();
+    };
+    const onAbort = () => {
+      try { child.kill(); } catch {}
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    const stdoutReader = makeLineReader((line) => {
+      if (!line.startsWith('__LVOVD_WORKSPACE_PROGRESS__')) return;
+      const values = line.slice('__LVOVD_WORKSPACE_PROGRESS__'.length).split('|');
+      const downloadedBytes = parseMaybeNumber(values[0]);
+      const totalBytes = parseMaybeNumber(values[1]) ?? parseMaybeNumber(values[2]);
+      if ((downloadedBytes != null && downloadedBytes > MAX_LOCAL_MEDIA_BYTES)
+        || (totalBytes != null && totalBytes > MAX_LOCAL_MEDIA_BYTES)) {
+        sizeFailure = mediaWorkspaces.tooLargeError();
+        try { child.kill(); } catch {}
+        return;
+      }
+      const percentText = Number.parseFloat((values[5] || '').replace('%', '').trim());
+      const percent = Number.isFinite(percentText)
+        ? Math.max(0, Math.min(100, percentText))
+        : downloadedBytes != null && totalBytes
+          ? Math.max(0, Math.min(100, downloadedBytes / totalBytes * 100))
+          : null;
+      mediaWorkspaces.update(workspace, {
+        status: 'acquiring',
+        phase: 'acquiring',
+        message: `Acquiring video from ${display.sourceName}…`,
+        percent,
+        bytesReceived: downloadedBytes,
+        bytesTotal: totalBytes
+      });
+    });
+    const stderrReader = makeLineReader((line) => {
+      const trimmed = line.trim();
+      if (trimmed) {
+        recentErrorLines.push(trimmed);
+        if (recentErrorLines.length > 12) recentErrorLines.shift();
+      }
+      if (/larger than max-filesize|exceeds max_filesize/i.test(line)) {
+        sizeFailure = mediaWorkspaces.tooLargeError();
+      }
+      if (/\b(?:ENOSPC|No space left on device)\b/i.test(line)) {
+        localProcessing = { operation: 'local_file_operation', systemCode: 'ENOSPC' };
+      } else if (/\b(?:EACCES|EPERM)\b|\[Errno 13\]|Permission denied/i.test(line)) {
+        localProcessing = { operation: 'local_file_operation', systemCode: 'EACCES' };
+      } else if (/ffmpeg[^\r\n]*(?:not found|not installed|unable to find)/i.test(line)) {
+        localProcessing = { operation: 'process_start', tool: 'ffmpeg' };
+      }
+      if (/\[(Merger|VideoRemuxer|VideoConvertor|Fixup[^\]]*|MoveFiles)\]/i.test(line)) {
+        const processingEvidence = /\[(Merger|VideoRemuxer|VideoConvertor|Fixup[^\]]*)\]/i.test(line)
+          ? { operation: 'ffmpeg_processing', tool: 'ffmpeg' }
+          : { operation: 'local_file_operation', tool: 'yt-dlp' };
+        if (!localProcessing || processingEvidence.tool === 'ffmpeg') localProcessing = processingEvidence;
+        mediaWorkspaces.update(workspace, {
+          status: 'acquiring',
+          phase: 'processing',
+          message: 'Preparing the acquired source locally…',
+          percent: null
+        });
+      }
+    });
+    child.stdout.on('data', (chunk) => stdoutReader.push(chunk));
+    child.stderr.on('data', (chunk) => stderrReader.push(chunk));
+    child.on('error', (error) => finish(() => reject(error.code === 'ENOENT'
+      ? withLocalFailure(Object.assign(
+          new Error('The configured yt-dlp binary is missing. Restart LVOVD or run npm run update-ytdlp.'),
+          { code: error.code }
+        ), { operation: 'process_start', tool: 'yt-dlp' })
+      : withLocalFailure(error, { operation: 'process_start', tool: 'yt-dlp' }))));
+    child.on('close', (code) => {
+      stdoutReader.flush();
+      stderrReader.flush();
+      if (workspace.cancelRequested || signal.aborted) {
+        finish(() => reject(workspaceCancelledError()));
+        return;
+      }
+      if (sizeFailure) {
+        finish(() => reject(sizeFailure));
+        return;
+      }
+      if (code === 0) {
+        finish(resolve);
+        return;
+      }
+      const failure = new Error(recentErrorLines.at(-1) || `yt-dlp exited with code ${code}.`);
+      failure.diagnostic = recentErrorLines.join('\n');
+      finish(() => reject(localProcessing
+        ? withLocalFailure(failure, { ...localProcessing, exitCode: code })
+        : withFailureScope(failure, 'source')));
+    });
+  });
+
+  if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) return;
+  const acquiredPath = await findWorkspaceAcquiredFile(workspace);
+  const stat = await localOperation(
+    () => fsp.stat(acquiredPath),
+    { operation: 'output_collection' }
+  );
+  if (stat.size > MAX_LOCAL_MEDIA_BYTES) throw mediaWorkspaces.tooLargeError();
+  const extension = path.extname(acquiredPath).replace(/[^.A-Za-z0-9]/g, '').slice(0, 16) || '.bin';
+  const finalPath = path.join(workspace.tempDir, `original-source${extension}`);
+  await localOperation(
+    () => fsp.rename(acquiredPath, finalPath),
+    { operation: 'output_collection' }
+  );
+  await mediaWorkspaces.adoptAcquiredFile(workspace.id, finalPath, {
+    displayName: workspaceDisplayFilename(display.title, finalPath)
+  });
+}
+
+async function startWorkspaceAcquisition(videoUrl, rawAcquisition, rawDisplay = {}) {
+  const acquisition = normalizeWorkspaceAcquisition(rawAcquisition);
+  const display = normalizeWorkspaceDisplay(rawDisplay);
+  const waiting = remoteSourceRequests.size > 0;
+  const workspace = await mediaWorkspaces.createUrlWorkspace({
+    displayName: display.title,
+    sourceName: display.sourceName,
+    waiting
+  });
+  const queued = remoteSourceRequests.acquire(async () => {
+    if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) return;
+    try {
+      await runWorkspaceAcquisition(workspace, videoUrl, acquisition, display);
+    } catch (error) {
+      if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) return;
+      const failure = classifyFailure(error, {
+        sourceFormatMode: acquisition.sourceFormat?.mode
+      });
+      await mediaWorkspaces.failAcquisition(workspace, failure);
+    }
+  });
+  workspace.activePromise = queued;
+  queued.catch(() => {});
+  return workspace;
 }
 
 async function walkFiles(root) {
@@ -1652,6 +1968,29 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && requestUrl.pathname === '/api/workspace/url') {
+    try {
+      const body = await readJsonBody(req);
+      assertOnlyKeys(body, new Set(['url', 'acquisition', 'display']), 'URL editor request');
+      const videoUrl = parseMediaUrl(body.url);
+      const workspace = await startWorkspaceAcquisition(
+        videoUrl,
+        body.acquisition,
+        body.display
+      );
+      return json(res, 202, {
+        workspaceId: workspace.id,
+        workspace: mediaWorkspaces.publicWorkspace(workspace)
+      });
+    } catch (error) {
+      if (error?.failureScope === 'local' || error?.localFailure || error?.workspaceFailure) {
+        const details = error.workspaceFailure || classifyFailure(error, { scope: 'local' });
+        return json(res, error.statusCode || 500, { error: details.title, details });
+      }
+      return json(res, error.statusCode || 400, { error: error.message || 'Could not start URL media acquisition.' });
+    }
+  }
+
   if (req.method === 'POST' && requestUrl.pathname === '/api/workspace/local') {
     const declaredLength = req.headers['content-length'] == null
       ? null
@@ -1848,9 +2187,12 @@ module.exports = {
   classifyPreviewError,
   parseMediaUrl,
   normalizeOptions,
+  normalizeWorkspaceAcquisition,
+  normalizeWorkspaceDisplay,
   normalizeSelection,
   formatSelector,
   buildYtdlpArgs,
+  buildWorkspaceAcquisitionArgs,
   audioConversionArgs,
   resolveTasks,
   startDownload,
@@ -1866,6 +2208,8 @@ module.exports = {
   cleanupJob,
   settleDownloadFailure,
   runDownloadJob,
+  startWorkspaceAcquisition,
+  runWorkspaceAcquisition,
   streamPreparedFile,
   cleanupExpiredTemporaryWork,
   historyStore,

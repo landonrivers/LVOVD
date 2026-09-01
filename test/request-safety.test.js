@@ -54,7 +54,7 @@ test('serial task queue never overlaps work and continues after a failed task', 
   assert.equal(queue.size, 0);
 });
 
-test('source request coordinator serializes previews with downloads and coalesces duplicate previews', async () => {
+test('source request coordinator serializes previews, downloads, and editor acquisitions', async () => {
   const coordinator = createSourceRequestCoordinator();
   let active = 0;
   let maxActive = 0;
@@ -77,19 +77,22 @@ test('source request coordinator serializes previews with downloads and coalesce
     return 'duplicate';
   });
   const download = coordinator.download(work('download'));
+  const acquisition = coordinator.acquire(work('editor-acquisition'));
   const secondPreview = coordinator.preview('https://video.example/watch/two', work('preview-two'));
 
   assert.strictEqual(firstPreview, duplicatePreview);
-  assert.equal(coordinator.size, 3);
+  assert.equal(coordinator.size, 4);
   assert.equal(await firstPreview, 'preview-one');
   assert.equal(await duplicatePreview, 'preview-one');
   assert.equal(await download, 'download');
+  assert.equal(await acquisition, 'editor-acquisition');
   assert.equal(await secondPreview, 'preview-two');
   assert.equal(duplicateRuns, 0);
   assert.equal(maxActive, 1);
   assert.deepEqual(order, [
     'start:preview-one', 'end:preview-one',
     'start:download', 'end:download',
+    'start:editor-acquisition', 'end:editor-acquisition',
     'start:preview-two', 'end:preview-two'
   ]);
   assert.equal(coordinator.size, 0);

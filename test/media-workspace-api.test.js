@@ -271,6 +271,80 @@ test('shared edit-plan browser module is served before the editor runtime', asyn
   assert.match(response.body.toString('utf8'), /MAX_KEEP_RANGES/);
 });
 
+test('URL workspace route enforces the minimal editor acquisition contract', async () => {
+  const post = async (payload) => {
+    const body = Buffer.from(JSON.stringify(payload));
+    const response = await request('/api/workspace/url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': body.length
+      },
+      body
+    });
+    return { response, data: JSON.parse(response.body.toString('utf8')) };
+  };
+
+  const audio = await post({
+    url: 'https://media.example/audio',
+    acquisition: { content: 'audio', profile: 'compatible', maxHeight: null, sourceFormat: { mode: 'automatic' } },
+    display: { title: 'Audio', sourceName: 'Example' }
+  });
+  assert.equal(audio.response.status, 400);
+  assert.match(audio.data.error, /Video \+ Audio or Video Only/i);
+
+  const widened = await post({
+    url: 'https://media.example/video',
+    acquisition: {
+      content: 'video', profile: 'maximum', maxHeight: null, sourceFormat: { mode: 'automatic' },
+      range: { type: 'custom', start: 1, end: 2 }
+    },
+    display: { title: 'Video', sourceName: 'Example' }
+  });
+  assert.equal(widened.response.status, 400);
+  assert.match(widened.data.error, /unsupported fields/i);
+  assert.equal(mediaWorkspaces.workspaces.size, 0);
+});
+
+test('URL workspace starts promptly, reports local runtime failure in-workspace, and never creates History', async () => {
+  const historyBefore = await historyStore.list();
+  const downloadJobsBefore = jobs.size;
+  const body = Buffer.from(JSON.stringify({
+    url: 'https://media.example/video',
+    acquisition: {
+      content: 'video',
+      profile: 'maximum',
+      maxHeight: 720,
+      sourceFormat: { mode: 'automatic' }
+    },
+    display: { title: 'Remote clip', sourceName: 'Example source' }
+  }));
+  const response = await request('/api/workspace/url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': body.length },
+    body
+  });
+  assert.equal(response.status, 202);
+  const data = JSON.parse(response.body.toString('utf8'));
+  assert.match(data.workspaceId, /^[0-9a-f-]{36}$/i);
+  assert.equal(data.workspace.source.origin, 'url');
+  assert.equal(data.workspace.source.sourceName, 'Example source');
+  assert.ok(['waiting', 'acquiring'].includes(data.workspace.status));
+  assert.doesNotMatch(JSON.stringify(data), /media\.example\/video|workspace-|source\.\%\(ext\)/i);
+
+  const failed = await waitForWorkspace(data.workspaceId, new Set(['error']));
+  const snapshot = mediaWorkspaces.publicWorkspace(failed);
+  assert.equal(snapshot.status, 'error');
+  assert.ok(snapshot.failure);
+  assert.deepEqual(snapshot.assets, []);
+  assert.equal(jobs.size, downloadJobsBefore);
+  assert.deepEqual(await historyStore.list(), historyBefore);
+
+  const discarded = await request(`/api/workspace?workspace=${data.workspaceId}`, { method: 'DELETE' });
+  assert.equal(discarded.status, 200);
+  assert.equal(mediaWorkspaces.get(data.workspaceId, { touch: false }), null);
+});
+
 test('raw local intake returns an opaque workspace and direct media supports GET, HEAD, and byte ranges', async () => {
   const bytes = Buffer.from('synthetic-direct-video-bytes');
   const { response, data } = await upload(bytes, '..\\private\\camera.mp4', 'user/claimed-type');
