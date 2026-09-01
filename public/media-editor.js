@@ -518,7 +518,7 @@
     function showStorageNote(origin = 'local') {
       if (storageNoteCopy) {
         storageNoteCopy.textContent = origin === 'url'
-          ? 'LVOVD downloads this source once into temporary local storage for editing. A browser playback proxy may use additional temporary space. Nothing is sent to cloud storage by LVOVD.'
+          ? 'The selected media is downloaded into temporary local storage for editing. Editing after acquisition is local. The source service still sees the acquisition requests. A browser playback proxy may use additional temporary space. Nothing is uploaded to cloud storage by LVOVD.'
           : 'Large files can temporarily require roughly another copy\'s worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.';
       }
       storageNote.hidden = false;

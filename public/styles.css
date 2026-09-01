@@ -31,6 +31,8 @@ input:focus, select:focus { border-color: #7b57ef; box-shadow: 0 0 0 3px rgba(12
 .button:disabled { cursor: wait; opacity: .55; transform: none; }
 .button.secondary { background: #2a2934; color: white; }
 .button.secondary:hover { background: #343340; }
+.button.secondary.editor-action { color: #effff6; background: linear-gradient(135deg, #245f47, #2d7757); box-shadow: 0 8px 20px rgba(45,137,94,.14); }
+.button.secondary.editor-action:hover { background: linear-gradient(135deg, #2a6d51, #358b65); box-shadow: 0 9px 22px rgba(45,137,94,.18); }
 .lookup-form .lookup-submit { background: linear-gradient(135deg, #5f49b8, #7c3ca6); box-shadow: 0 8px 22px rgba(123,87,239,.18); }
 .lookup-form .lookup-submit:hover { background: linear-gradient(135deg, #7057cf, #9148bc); }
 .button.primary { color: white; background: linear-gradient(135deg, #ff003d, #d81fff); box-shadow: 0 10px 28px rgba(230,24,124,.2); }

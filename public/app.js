@@ -83,6 +83,7 @@ const queueSources = new Map();
 const autoDownloadedQueueJobs = new Set();
 const historyNotifiedJobs = new Set();
 const TERMINAL_JOB_STATUSES = new Set(['ready', 'error', 'cancelled']);
+const EDITOR_ELIGIBLE_NOTE = 'Edit Source Video opens the full media using the selected video source, profile, and resolution. Time Range, Extras, and SponsorBlock apply only to Download.';
 let queuePanel = null;
 let queueList = null;
 let queueSummary = null;
@@ -1184,8 +1185,8 @@ function updateEditorAction() {
   if (!openEditorButton || !openEditorNote) return;
   const state = editorEligibility();
   openEditorButton.disabled = !state.eligible || editorWorkspaceState.status === 'starting';
-  openEditorNote.textContent = state.reason;
-  openEditorNote.hidden = !state.reason;
+  openEditorNote.textContent = state.eligible ? EDITOR_ELIGIBLE_NOTE : state.reason;
+  openEditorNote.hidden = !openEditorNote.textContent;
 }
 
 function updateOptionVisibility() {
