@@ -23,6 +23,7 @@ const {
   retainedBoundaryTime,
   editPlansEqual,
   fullEditPlan,
+  fullAuthoringState,
   applyOuterBoundary,
   validatePendingCut,
   removePendingSection,
@@ -156,10 +157,10 @@ test('edited-output plan comparison identifies no-op and stale multi-range outpu
 });
 
 test('pending middle cuts remain separate until commit and can be restored or reset', () => {
-  const original = fullEditPlan(12);
+  const original = fullAuthoringState(12);
   const pending = { startSeconds: 3, endSeconds: 5 };
   assert.deepEqual(validatePendingCut(pending, 12), { valid: true, startSeconds: 3, endSeconds: 5 });
-  assert.deepEqual(original, { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12 }] });
+  assert.deepEqual(original.editPlan, { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12 }] });
 
   const removed = removePendingSection(original, pending, 12);
   assert.equal(removed.valid, true);
@@ -167,16 +168,27 @@ test('pending middle cuts remain separate until commit and can be restored or re
     { startSeconds: 0, endSeconds: 3 },
     { startSeconds: 5, endSeconds: 12 }
   ]);
-  assert.deepEqual(original.keepRanges, [{ startSeconds: 0, endSeconds: 12 }]);
+  assert.deepEqual(removed.authoringState.middleCutPlan, removed.editPlan);
+  assert.deepEqual(original.middleCutPlan.keepRanges, [{ startSeconds: 0, endSeconds: 12 }]);
   assert.deepEqual(timelineRegions(removed.editPlan, 12).removed, [{ startSeconds: 3, endSeconds: 5 }]);
 
-  const restored = restoreRemovedSection(removed.editPlan, { startSeconds: 3, endSeconds: 5 }, 12);
+  const restored = restoreRemovedSection(
+    removed.authoringState,
+    { startSeconds: 3, endSeconds: 5 },
+    12
+  );
   assert.equal(restored.valid, true);
   assert.deepEqual(restored.editPlan, fullEditPlan(12));
+  assert.deepEqual(fullAuthoringState(12), {
+    middleCutPlan: fullEditPlan(12),
+    outerStartSeconds: 0,
+    outerEndSeconds: 12,
+    editPlan: fullEditPlan(12)
+  });
 });
 
-test('outer controls intersect a multi-range plan and canonicalize boundaries in removed gaps', () => {
-  const plan = {
+test('outer controls intersect middle-cut authoring state and canonicalize removed-gap boundaries', () => {
+  const middleCutPlan = {
     version: 1,
     keepRanges: [
       { startSeconds: 0, endSeconds: 3 },
@@ -184,21 +196,143 @@ test('outer controls intersect a multi-range plan and canonicalize boundaries in
       { startSeconds: 10, endSeconds: 12 }
     ]
   };
-  const movedStart = applyOuterBoundary(plan, 'start', 4, 12);
+  const state = {
+    middleCutPlan,
+    outerStartSeconds: 0,
+    outerEndSeconds: 12,
+    editPlan: middleCutPlan
+  };
+  const movedStart = applyOuterBoundary(state, 'start', 4, 12);
   assert.equal(movedStart.valid, true);
   assert.equal(movedStart.boundarySeconds, 5);
   assert.deepEqual(movedStart.editPlan.keepRanges, [
     { startSeconds: 5, endSeconds: 8 },
     { startSeconds: 10, endSeconds: 12 }
   ]);
+  assert.deepEqual(movedStart.authoringState.middleCutPlan, middleCutPlan);
 
-  const movedEnd = applyOuterBoundary(plan, 'end', 9, 12);
+  const movedEnd = applyOuterBoundary(state, 'end', 9, 12);
   assert.equal(movedEnd.valid, true);
   assert.equal(movedEnd.boundarySeconds, 8);
   assert.deepEqual(movedEnd.editPlan.keepRanges, [
     { startSeconds: 0, endSeconds: 3 },
     { startSeconds: 5, endSeconds: 8 }
   ]);
+  assert.deepEqual(movedEnd.authoringState.middleCutPlan, middleCutPlan);
+});
+
+test('outer Start moves inward and outward without destroying committed middle cuts', () => {
+  const cut = removePendingSection(
+    fullAuthoringState(120),
+    { startSeconds: 30, endSeconds: 40 },
+    120
+  );
+  assert.equal(cut.valid, true);
+
+  const inward = applyOuterBoundary(cut.authoringState, 'start', 50, 120);
+  assert.equal(inward.valid, true);
+  assert.deepEqual(inward.editPlan.keepRanges, [{ startSeconds: 50, endSeconds: 120 }]);
+  assert.deepEqual(inward.authoringState.middleCutPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 120 }
+  ]);
+
+  const outward = applyOuterBoundary(inward.authoringState, 'start', 20, 120);
+  assert.equal(outward.valid, true);
+  assert.deepEqual(outward.editPlan.keepRanges, [
+    { startSeconds: 20, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 120 }
+  ]);
+  assert.notDeepEqual(outward.editPlan.keepRanges, [{ startSeconds: 50, endSeconds: 120 }]);
+  assert.notDeepEqual(outward.editPlan.keepRanges, [{ startSeconds: 20, endSeconds: 120 }]);
+});
+
+test('outer End moves inward and outward without destroying committed middle cuts', () => {
+  const cut = removePendingSection(
+    fullAuthoringState(120),
+    { startSeconds: 30, endSeconds: 40 },
+    120
+  );
+  const inward = applyOuterBoundary(cut.authoringState, 'end', 20, 120);
+  assert.equal(inward.valid, true);
+  assert.deepEqual(inward.editPlan.keepRanges, [{ startSeconds: 0, endSeconds: 20 }]);
+
+  const outward = applyOuterBoundary(inward.authoringState, 'end', 100, 120);
+  assert.equal(outward.valid, true);
+  assert.deepEqual(outward.editPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 100 }
+  ]);
+  assert.deepEqual(outward.authoringState.middleCutPlan, cut.authoringState.middleCutPlan);
+});
+
+test('outer gap snapping preserves hidden cuts for expansion and Restore', () => {
+  const cut = removePendingSection(
+    fullAuthoringState(120),
+    { startSeconds: 30, endSeconds: 40 },
+    120
+  );
+  const snappedStart = applyOuterBoundary(cut.authoringState, 'start', 35, 120);
+  assert.equal(snappedStart.boundarySeconds, 40);
+  assert.deepEqual(snappedStart.editPlan.keepRanges, [{ startSeconds: 40, endSeconds: 120 }]);
+
+  const expandedStart = applyOuterBoundary(snappedStart.authoringState, 'start', 20, 120);
+  assert.deepEqual(expandedStart.editPlan.keepRanges, [
+    { startSeconds: 20, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 120 }
+  ]);
+  assert.deepEqual(timelineRegions(expandedStart.editPlan, 120).removed, [
+    { startSeconds: 0, endSeconds: 20 },
+    { startSeconds: 30, endSeconds: 40 }
+  ]);
+
+  const restored = restoreRemovedSection(
+    expandedStart.authoringState,
+    { startSeconds: 30, endSeconds: 40 },
+    120
+  );
+  assert.equal(restored.valid, true);
+  assert.deepEqual(restored.authoringState.middleCutPlan, fullEditPlan(120));
+  assert.deepEqual(restored.editPlan.keepRanges, [{ startSeconds: 20, endSeconds: 120 }]);
+
+  const snappedEnd = applyOuterBoundary(cut.authoringState, 'end', 35, 120);
+  assert.equal(snappedEnd.boundarySeconds, 30);
+  const expandedEnd = applyOuterBoundary(snappedEnd.authoringState, 'end', 100, 120);
+  assert.deepEqual(expandedEnd.editPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 100 }
+  ]);
+});
+
+test('middle removals are clamped to outer output and full reset clears all authoring state', () => {
+  const trimmed = applyOuterBoundary(fullAuthoringState(120), 'start', 20, 120);
+  const outside = removePendingSection(
+    trimmed.authoringState,
+    { startSeconds: 5, endSeconds: 10 },
+    120
+  );
+  assert.equal(outside.valid, false);
+  assert.match(outside.reason, /outside the current retained output/i);
+
+  const crossing = removePendingSection(
+    trimmed.authoringState,
+    { startSeconds: 10, endSeconds: 25 },
+    120
+  );
+  assert.equal(crossing.valid, true);
+  assert.deepEqual(crossing.appliedCut, { startSeconds: 20, endSeconds: 25 });
+  assert.deepEqual(crossing.authoringState.middleCutPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 20 },
+    { startSeconds: 25, endSeconds: 120 }
+  ]);
+
+  const reset = fullAuthoringState(120);
+  assert.deepEqual(reset, {
+    middleCutPlan: fullEditPlan(120),
+    outerStartSeconds: 0,
+    outerEndSeconds: 120,
+    editPlan: fullEditPlan(120)
+  });
 });
 
 test('editor markup keeps the downloader primary and makes local timeline interactions explicit', () => {
@@ -318,8 +452,10 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /timelineRegionsLayer\.replaceChildren\(\)/);
   assert.match(source, /deriveInternalRemovedGaps\(editPlan\)/);
   assert.match(source, /pendingCut\[`\$\{handleDrag\.which\}Seconds`\]/);
-  assert.match(source, /removePendingSection\(editPlan, pendingCut, durationSeconds\)/);
-  assert.match(source, /restoreRemovedSection\(editPlan, gap, durationSeconds\)/);
+  assert.match(source, /removePendingSection\(authoringState, pendingCut, durationSeconds\)/);
+  assert.match(source, /restoreRemovedSection\(authoringState, gap, durationSeconds\)/);
+  assert.match(source, /authoringState = fullAuthoringState\(durationSeconds\)/);
+  assert.match(source, /const state = fullAuthoringState\(durationSeconds\);[\s\S]*?commitAuthoringState\(state, \{ clearPending: true \}\)/);
   assert.doesNotMatch(source, /downloadEditedFile\.click\(/);
   assert.match(source, /function resetWorkspaceUi\([\s\S]{0,100}closeProgressSource\(\)/);
   assert.match(source, /function releaseWorkspaceConnectionsForDiscard\(\)[\s\S]*?closeProgressSource\(\);[\s\S]*?video\.removeAttribute\('src'\);/);
