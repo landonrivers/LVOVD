@@ -280,7 +280,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .legend-retained { background: rgba(143,91,232,.72); }
 .legend-removed { background: repeating-linear-gradient(135deg, #1a1920, #1a1920 3px, #46414e 3px, #46414e 5px); }
 .legend-playhead { width: 2px !important; background: #ff315f; }
-.editor-exact-grid { width: fit-content; max-width: 100%; display: grid; grid-template-columns: repeat(2, minmax(142px,160px)) max-content; grid-template-areas: "start-field end-field ." "start-actions end-actions reset" "start-error end-error ."; column-gap: 12px; row-gap: 7px; margin-top: 17px; }
+.editor-exact-grid { width: fit-content; max-width: 100%; display: grid; grid-template-columns: repeat(2, minmax(180px,200px)) max-content; grid-template-areas: "start-field end-field ." "start-actions end-actions reset" "start-error end-error ."; column-gap: 12px; row-gap: 7px; margin-top: 17px; }
 .editor-exact-control { display: contents; }
 .editor-exact-control:first-child .field { grid-area: start-field; }
 .editor-exact-control:first-child .editor-boundary-actions { grid-area: start-actions; }
@@ -293,6 +293,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .editor-exact-control input.invalid { border-color: #d94f6b; box-shadow: 0 0 0 3px rgba(217,79,107,.1); }
 .editor-boundary-actions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
 .timeline-range-actions { grid-area: reset; display: flex; align-items: stretch; }
+.editor-boundary-actions .button, .timeline-range-actions .button { white-space: nowrap; }
 .field-error { min-height: 13px; color: #ff8d9f; font-size: 8px; line-height: 1.4; }
 .editor-foundation-note { margin: 12px 0 0; padding: 9px 11px; border-radius: 9px; background: rgba(255,255,255,.025); color: #827e8b; font-size: 9px; line-height: 1.5; }
 .editor-render-panel { margin-top: 16px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.08); }

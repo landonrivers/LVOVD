@@ -247,8 +247,10 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(styles, /\.timeline-ruler\.can-pan:hover[\s\S]*?\.timeline-ruler-ticks::after/);
   assert.match(styles, /\.timeline-ruler\.can-pan\s*\{\s*cursor:\s*grab/);
   assert.match(styles, /\.timeline-ruler\.panning\s*\{\s*cursor:\s*grabbing/);
+  assert.match(styles, /grid-template-columns:\s*repeat\(2,\s*minmax\(180px,200px\)\)\s*max-content/);
   assert.match(styles, /grid-template-areas:\s*"start-field end-field \."\s*"start-actions end-actions reset"/);
   assert.match(styles, /\.timeline-range-actions\s*\{\s*grid-area:\s*reset/);
+  assert.match(styles, /\.editor-boundary-actions \.button,\s*\.timeline-range-actions \.button\s*\{\s*white-space:\s*nowrap/);
   assert.match(styles, /grid-template-areas:\s*"start-field"\s*"start-actions"[\s\S]*?"reset"/);
   assert.doesNotMatch(source, /\/api\/info/);
   assert.doesNotMatch(source, /\/api\/download/);
