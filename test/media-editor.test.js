@@ -160,6 +160,72 @@ test('keyboard outer-bound adjustments clamp and preserve reversible middle-cut 
   assert.equal(adjustOuterBoundaryBy(cut.authoringState, 'end', 1, 10).boundarySeconds, 10);
 });
 
+test('keyboard Start moves outward across a removed gap without resurrecting it', () => {
+  const cut = removePendingSection(
+    fullAuthoringState(120),
+    { startSeconds: 30, endSeconds: 40 },
+    120
+  );
+  const snapped = applyOuterBoundary(cut.authoringState, 'start', 35, 120);
+  assert.equal(snapped.boundarySeconds, 40);
+
+  const first = adjustOuterBoundaryBy(snapped.authoringState, 'start', -0.1, 120);
+  assert.equal(first.boundarySeconds, 29.9);
+  assert.deepEqual(first.editPlan.keepRanges, [
+    { startSeconds: 29.9, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 120 }
+  ]);
+  assert.deepEqual(first.authoringState.middleCutPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 120 }
+  ]);
+
+  const second = adjustOuterBoundaryBy(first.authoringState, 'start', -0.1, 120);
+  assert.equal(second.boundarySeconds, 29.8);
+  assert.deepEqual(second.authoringState.middleCutPlan, first.authoringState.middleCutPlan);
+
+  const shifted = adjustOuterBoundaryBy(snapped.authoringState, 'start', -1, 120);
+  assert.equal(shifted.boundarySeconds, 29);
+  assert.deepEqual(shifted.authoringState.middleCutPlan, snapped.authoringState.middleCutPlan);
+
+  const inward = adjustOuterBoundaryBy(first.authoringState, 'start', 0.1, 120);
+  assert.equal(inward.boundarySeconds, 40);
+  assert.deepEqual(inward.editPlan.keepRanges, [{ startSeconds: 40, endSeconds: 120 }]);
+});
+
+test('keyboard End moves outward across a removed gap without resurrecting it', () => {
+  const cut = removePendingSection(
+    fullAuthoringState(120),
+    { startSeconds: 30, endSeconds: 40 },
+    120
+  );
+  const snapped = applyOuterBoundary(cut.authoringState, 'end', 35, 120);
+  assert.equal(snapped.boundarySeconds, 30);
+
+  const first = adjustOuterBoundaryBy(snapped.authoringState, 'end', 0.1, 120);
+  assert.equal(first.boundarySeconds, 40.1);
+  assert.deepEqual(first.editPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 40.1 }
+  ]);
+  assert.deepEqual(first.authoringState.middleCutPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 30 },
+    { startSeconds: 40, endSeconds: 120 }
+  ]);
+
+  const second = adjustOuterBoundaryBy(first.authoringState, 'end', 0.1, 120);
+  assert.equal(second.boundarySeconds, 40.2);
+  assert.deepEqual(second.authoringState.middleCutPlan, first.authoringState.middleCutPlan);
+
+  const shifted = adjustOuterBoundaryBy(snapped.authoringState, 'end', 1, 120);
+  assert.equal(shifted.boundarySeconds, 41);
+  assert.deepEqual(shifted.authoringState.middleCutPlan, snapped.authoringState.middleCutPlan);
+
+  const inward = adjustOuterBoundaryBy(first.authoringState, 'end', -0.1, 120);
+  assert.equal(inward.boundarySeconds, 30);
+  assert.deepEqual(inward.editPlan.keepRanges, [{ startSeconds: 0, endSeconds: 30 }]);
+});
+
 test('keyboard pending-cut adjustments update the same bounded pending state', () => {
   const pending = { startSeconds: 2, endSeconds: 8 };
   const startMoved = adjustPendingCutBoundary(pending, 'start', 0.1, 10);

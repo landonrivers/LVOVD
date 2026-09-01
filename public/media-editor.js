@@ -328,12 +328,29 @@
       || !Number.isFinite(current) || !Number.isFinite(delta)) {
       return { valid: false, reason: 'A finite retained boundary adjustment is required.' };
     }
-    return applyOuterBoundary(
+    const requested = roundMilliseconds(clamp(current + delta, 0, duration));
+    const ordinary = applyOuterBoundary(
       state,
       boundary,
-      roundMilliseconds(clamp(current + delta, 0, duration)),
+      requested,
       duration
     );
+    const movingOutward = boundary === 'start' ? delta < 0 : delta > 0;
+    if (!movingOutward || !ordinary.valid || ordinary.boundarySeconds !== current || requested === current) {
+      return ordinary;
+    }
+
+    const ranges = state.middleCutPlan?.keepRanges;
+    if (!Array.isArray(ranges)) return ordinary;
+    const adjacent = boundary === 'start'
+      ? [...ranges].reverse().find((range) => range.endSeconds <= requested)
+      : ranges.find((range) => range.startSeconds >= requested);
+    if (!adjacent) return ordinary;
+
+    const gapTarget = boundary === 'start'
+      ? Math.max(adjacent.startSeconds, roundMilliseconds(adjacent.endSeconds + delta))
+      : Math.min(adjacent.endSeconds, roundMilliseconds(adjacent.startSeconds + delta));
+    return applyOuterBoundary(state, boundary, gapTarget, duration);
   }
 
   function validatePendingCut(pendingCut, durationSeconds) {
