@@ -10,7 +10,12 @@ const fsp = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 
-const { MAX_LOCAL_MEDIA_BYTES, WORKSPACE_CANCELLED_CODE, normalizeInspection } = require('../media-workspace');
+const {
+  MAX_LOCAL_MEDIA_BYTES,
+  WORKSPACE_CANCELLED_CODE,
+  normalizeInspection,
+  totalRetainedDuration
+} = require('../media-workspace');
 const { mediaWorkspaces, historyStore, jobs } = require('../app-server');
 const { server } = require('../server');
 
@@ -57,7 +62,10 @@ test.beforeEach(async () => {
   await mediaWorkspaces.clearAll();
   mediaWorkspaces.inspectAsset = async () => directInspection;
   mediaWorkspaces.createProxyAsset = originalCreateProxyAsset;
-  mediaWorkspaces.inspectOutputAsset = async () => editedInspection;
+  mediaWorkspaces.inspectOutputAsset = async (workspace) => ({
+    ...editedInspection,
+    durationSeconds: totalRetainedDuration(workspace.render.requestedPlan)
+  });
   mediaWorkspaces.createEditedAsset = async (_workspace, _source, _inspection, _plan, attempt) => {
     const bytes = Buffer.from('synthetic-edited-output');
     await fsp.writeFile(attempt.finalPath, bytes);
@@ -256,6 +264,13 @@ function within(promise, label, timeoutMs = 2000) {
   });
 }
 
+test('shared edit-plan browser module is served before the editor runtime', async () => {
+  const response = await request('/edit-plan.js');
+  assert.equal(response.status, 200);
+  assert.match(response.headers['content-type'], /^text\/javascript/);
+  assert.match(response.body.toString('utf8'), /MAX_KEEP_RANGES/);
+});
+
 test('raw local intake returns an opaque workspace and direct media supports GET, HEAD, and byte ranges', async () => {
   const bytes = Buffer.from('synthetic-direct-video-bytes');
   const { response, data } = await upload(bytes, '..\\private\\camera.mp4', 'user/claimed-type');
@@ -382,13 +397,28 @@ test('render API validates one changed range, uses the source asset, and securel
     { version: 1, keepRanges: [{ startSeconds: -1, endSeconds: 4 }] },
     { version: 1, keepRanges: [{ startSeconds: 4, endSeconds: 4 }] },
     { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 9 }] },
-    { version: 1, keepRanges: [] }
+    { version: 1, keepRanges: [] },
+    { version: 1, keepRanges: [{ startSeconds: 4, endSeconds: 5 }, { startSeconds: 1, endSeconds: 2 }] },
+    { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 4 }, { startSeconds: 3, endSeconds: 5 }] },
+    {
+      version: 1,
+      keepRanges: Array.from({ length: 51 }, (_unused, index) => ({
+        startSeconds: index * 0.15,
+        endSeconds: index * 0.15 + 0.1
+      }))
+    }
   ]) {
     const invalid = await startRender(workspace.id, editPlan);
     assert.equal(invalid.response.status, 422);
   }
 
-  const plan = { version: 1, keepRanges: [{ startSeconds: 0.5, endSeconds: 7.25 }] };
+  const plan = {
+    version: 1,
+    keepRanges: [
+      { startSeconds: 0.5, endSeconds: 3 },
+      { startSeconds: 4, endSeconds: 7.25 }
+    ]
+  };
   const started = await startRender(workspace.id, plan);
   assert.equal(started.response.status, 202);
   assert.equal(started.data.workspace.status, 'ready');
@@ -461,7 +491,10 @@ test('render cancellation preserves the ready editor, cleans partial output, and
     });
   };
 
-  const plan = { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 10 }] };
+  const plan = {
+    version: 1,
+    keepRanges: [{ startSeconds: 1, endSeconds: 4 }, { startSeconds: 6, endSeconds: 10 }]
+  };
   assert.equal((await startRender(workspace.id, plan)).response.status, 202);
   await waitForRender(workspace.id, new Set(['rendering']));
   const cancelled = await request(`/api/workspace/render?workspace=${workspace.id}`, { method: 'DELETE' });
@@ -492,7 +525,10 @@ test('render cancellation preserves the ready editor, cleans partial output, and
 test('successful rerender atomically replaces output while failed or cancelled attempts preserve the last success', async () => {
   const { data } = await upload(Buffer.from('ready rerender source'), 'rerender.mp4');
   const workspace = await waitForWorkspace(data.workspaceId);
-  const firstPlan = { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 10 }] };
+  const firstPlan = {
+    version: 1,
+    keepRanges: [{ startSeconds: 1, endSeconds: 4 }, { startSeconds: 6, endSeconds: 10 }]
+  };
   await startRender(workspace.id, firstPlan);
   await waitForRender(workspace.id, new Set(['ready']));
   const firstAsset = workspace.assets.get(workspace.render.outputAssetId);
@@ -503,7 +539,10 @@ test('successful rerender atomically replaces output while failed or cancelled a
     await fsp.writeFile(attempt.finalPath, bytes);
     return { filePath: attempt.finalPath, size: bytes.length };
   };
-  const secondPlan = { version: 1, keepRanges: [{ startSeconds: 2, endSeconds: 9 }] };
+  const secondPlan = {
+    version: 1,
+    keepRanges: [{ startSeconds: 2, endSeconds: 4 }, { startSeconds: 6, endSeconds: 9 }]
+  };
   await startRender(workspace.id, secondPlan);
   await waitForRender(workspace.id, new Set(['ready']));
   const replacementId = workspace.render.outputAssetId;
@@ -552,7 +591,10 @@ test('successful rerender atomically replaces output while failed or cancelled a
 test('discard during rendering cancels the attempt and invalidates source, playback, and prior output URLs', async () => {
   const { data } = await upload(Buffer.from('discard render source'), 'discard.mp4');
   const workspace = await waitForWorkspace(data.workspaceId);
-  const plan = { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 10 }] };
+  const plan = {
+    version: 1,
+    keepRanges: [{ startSeconds: 1, endSeconds: 4 }, { startSeconds: 6, endSeconds: 10 }]
+  };
   await startRender(workspace.id, plan);
   await waitForRender(workspace.id, new Set(['ready']));
   const snapshot = mediaWorkspaces.publicWorkspace(workspace);

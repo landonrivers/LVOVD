@@ -22,6 +22,12 @@ const {
   retainedRangeWithPlayhead,
   retainedBoundaryTime,
   editPlansEqual,
+  fullEditPlan,
+  applyOuterBoundary,
+  validatePendingCut,
+  removePendingSection,
+  restoreRemovedSection,
+  timelineRegions,
   isFullDurationEditPlan
 } = require('../public/media-editor');
 
@@ -133,14 +139,66 @@ test('range reset, set-boundary, and go-to-boundary actions keep range and playh
   assert.equal(playheadSeconds, 6.125);
 });
 
-test('edited-output plan comparison identifies no-op and stale one-range output deterministically', () => {
+test('edited-output plan comparison identifies no-op and stale multi-range output deterministically', () => {
   const full = { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12.346 }] };
-  const trimmed = { version: 1, keepRanges: [{ startSeconds: 1.25, endSeconds: 11 }] };
+  const trimmed = {
+    version: 1,
+    keepRanges: [{ startSeconds: 1.25, endSeconds: 5 }, { startSeconds: 7, endSeconds: 11 }]
+  };
   assert.equal(isFullDurationEditPlan(full, 12.3456), true);
   assert.equal(isFullDurationEditPlan(trimmed, 12.3456), false);
   assert.equal(editPlansEqual(trimmed, structuredClone(trimmed)), true);
-  assert.equal(editPlansEqual(trimmed, { version: 1, keepRanges: [{ startSeconds: 1.25, endSeconds: 10 }] }), false);
+  assert.equal(editPlansEqual(trimmed, {
+    version: 1,
+    keepRanges: [{ startSeconds: 1.25, endSeconds: 5 }, { startSeconds: 8, endSeconds: 11 }]
+  }), false);
   assert.equal(editPlansEqual(trimmed, { version: 2, keepRanges: trimmed.keepRanges }), false);
+});
+
+test('pending middle cuts remain separate until commit and can be restored or reset', () => {
+  const original = fullEditPlan(12);
+  const pending = { startSeconds: 3, endSeconds: 5 };
+  assert.deepEqual(validatePendingCut(pending, 12), { valid: true, startSeconds: 3, endSeconds: 5 });
+  assert.deepEqual(original, { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12 }] });
+
+  const removed = removePendingSection(original, pending, 12);
+  assert.equal(removed.valid, true);
+  assert.deepEqual(removed.editPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 3 },
+    { startSeconds: 5, endSeconds: 12 }
+  ]);
+  assert.deepEqual(original.keepRanges, [{ startSeconds: 0, endSeconds: 12 }]);
+  assert.deepEqual(timelineRegions(removed.editPlan, 12).removed, [{ startSeconds: 3, endSeconds: 5 }]);
+
+  const restored = restoreRemovedSection(removed.editPlan, { startSeconds: 3, endSeconds: 5 }, 12);
+  assert.equal(restored.valid, true);
+  assert.deepEqual(restored.editPlan, fullEditPlan(12));
+});
+
+test('outer controls intersect a multi-range plan and canonicalize boundaries in removed gaps', () => {
+  const plan = {
+    version: 1,
+    keepRanges: [
+      { startSeconds: 0, endSeconds: 3 },
+      { startSeconds: 5, endSeconds: 8 },
+      { startSeconds: 10, endSeconds: 12 }
+    ]
+  };
+  const movedStart = applyOuterBoundary(plan, 'start', 4, 12);
+  assert.equal(movedStart.valid, true);
+  assert.equal(movedStart.boundarySeconds, 5);
+  assert.deepEqual(movedStart.editPlan.keepRanges, [
+    { startSeconds: 5, endSeconds: 8 },
+    { startSeconds: 10, endSeconds: 12 }
+  ]);
+
+  const movedEnd = applyOuterBoundary(plan, 'end', 9, 12);
+  assert.equal(movedEnd.valid, true);
+  assert.equal(movedEnd.boundarySeconds, 8);
+  assert.deepEqual(movedEnd.editPlan.keepRanges, [
+    { startSeconds: 0, endSeconds: 3 },
+    { startSeconds: 5, endSeconds: 8 }
+  ]);
 });
 
 test('editor markup keeps the downloader primary and makes local timeline interactions explicit', () => {
@@ -155,12 +213,13 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'editor-video',
     'timeline-ruler',
     'timeline-track',
-    'timeline-removed-before',
-    'timeline-retained',
-    'timeline-removed-after',
+    'timeline-regions',
+    'timeline-pending-cut',
     'timeline-playhead',
     'timeline-start-handle',
     'timeline-end-handle',
+    'timeline-cut-start-handle',
+    'timeline-cut-end-handle',
     'editor-start-time',
     'editor-end-time',
     'set-start-playhead',
@@ -168,6 +227,14 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'go-to-start',
     'go-to-end',
     'reset-range',
+    'cut-start-time',
+    'cut-end-time',
+    'set-cut-start',
+    'set-cut-end',
+    'remove-section',
+    'clear-pending-cut',
+    'removed-sections',
+    'removed-sections-list',
     'editor-track-warning',
     'create-edited-file',
     'editor-render-noop',
@@ -188,7 +255,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /id="create-edited-file" class="button secondary mini"[^>]*>Create Edited File<\/button>/);
   assert.match(html, />DOWNLOAD EDITED FILE<\/p>/);
   assert.match(html, /id="download-edited-file" class="button secondary mini"[^>]*>Download<\/a>/);
-  assert.match(html, /Move the start or end before creating an edited file/i);
+  assert.match(html, /Change the retained range or remove a section before creating an edited file/i);
   assert.match(html, /Range changed — create the edited file again to update it/i);
   assert.doesNotMatch(html, /Choose or drop one local video\. It stays on this computer/i);
   assert.match(html, /Nothing is sent to cloud storage/i);
@@ -196,6 +263,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
   assert.doesNotMatch(html, /id="media-file-input"[^>]*\baccept=/i);
   assert.doesNotMatch(source, /Roadmap 6A1/i);
+  assert.ok(html.indexOf('src="/edit-plan.js"') < html.indexOf('src="/media-editor.js"'));
   assert.ok(html.indexOf('id="lookup-form"') < html.indexOf('id="media-workspace-panel"'));
   assert.ok(html.indexOf('id="preview"') < html.indexOf('id="media-workspace-panel"'));
   assert.ok(html.indexOf('id="media-workspace-panel"') < html.indexOf('id="history-panel"'));
@@ -211,6 +279,12 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, />Set End<\/button>/);
   assert.match(html, />Go to End<\/button>/);
   assert.match(html, />Reset Range<\/button>/);
+  assert.match(html, />Remove a Section</);
+  assert.match(html, />Set Cut Start<\/button>/);
+  assert.match(html, />Set Cut End<\/button>/);
+  assert.match(html, />Remove Section<\/button>/);
+  assert.match(html, />Clear Cut<\/button>/);
+  assert.match(html, />Removed Sections</);
   assert.ok(html.indexOf('id="reset-range"') < html.indexOf('class="editor-render-panel"'));
   assert.ok(html.indexOf('id="create-edited-file"') < html.indexOf('Creates a new MP4 locally'));
   assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
@@ -241,18 +315,28 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /downloadEditedFile\.href = output\.downloadUrl/);
   assert.match(source, /downloadEditedFile\.download = output\.filename/);
   assert.match(source, /!editPlansEqual\(editPlan, output\.editPlan\)/);
+  assert.match(source, /timelineRegionsLayer\.replaceChildren\(\)/);
+  assert.match(source, /deriveInternalRemovedGaps\(editPlan\)/);
+  assert.match(source, /pendingCut\[`\$\{handleDrag\.which\}Seconds`\]/);
+  assert.match(source, /removePendingSection\(editPlan, pendingCut, durationSeconds\)/);
+  assert.match(source, /restoreRemovedSection\(editPlan, gap, durationSeconds\)/);
   assert.doesNotMatch(source, /downloadEditedFile\.click\(/);
   assert.match(source, /function resetWorkspaceUi\([\s\S]{0,100}closeProgressSource\(\)/);
   assert.match(source, /function releaseWorkspaceConnectionsForDiscard\(\)[\s\S]*?closeProgressSource\(\);[\s\S]*?video\.removeAttribute\('src'\);/);
-  const discardFlow = source.match(/async function discardWorkspace\(\) \{([\s\S]*?)\n    \}\n\n    function beginUpload/)?.[1];
-  assert.ok(discardFlow);
+  const discardStart = source.indexOf('async function discardWorkspace()');
+  const discardEnd = source.indexOf('async function startEditedRender()', discardStart);
+  const discardFlow = source.slice(discardStart, discardEnd);
+  assert.ok(discardStart >= 0 && discardEnd > discardStart);
   assert.ok(discardFlow.indexOf('releaseWorkspaceConnectionsForDiscard()') < discardFlow.indexOf('root.fetch('));
   assert.match(discardFlow, /restoreWorkspaceConnectionsAfterDiscardFailure\(id, connections\)/);
   assert.match(serverSource, /res\.write\(': keepalive\\n\\n'\);\s*mediaWorkspaces\.touch\(workspace\);/);
+  assert.match(serverSource, /'\/edit-plan\.js': \['edit-plan\.js', 'text\/javascript; charset=utf-8'\]/);
   assert.match(styles, /\.timeline-ruler-ticks::after[\s\S]*?height:\s*2px/);
   assert.match(styles, /\.timeline-ruler\.can-pan:hover[\s\S]*?\.timeline-ruler-ticks::after/);
   assert.match(styles, /\.timeline-ruler\.can-pan\s*\{\s*cursor:\s*grab/);
   assert.match(styles, /\.timeline-ruler\.panning\s*\{\s*cursor:\s*grabbing/);
+  assert.match(styles, /\.timeline-region\.pending-cut/);
+  assert.match(styles, /\.timeline-handle\.cut/);
   assert.match(styles, /\.lookup-form\s*\{[^}]*border:[^;}]*rgba\(169,148,255,\.22\)[^}]*background:\s*linear-gradient/);
   assert.doesNotMatch(styles, /\.lookup-form\s*\{[^}]*box-shadow:/);
   assert.match(styles, /\.lookup-form:focus-within\s*\{[^}]*border-color:[^;}]*rgba\(184,159,255,\.42\)/);

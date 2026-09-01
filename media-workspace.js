@@ -9,6 +9,19 @@ const { spawn } = require('node:child_process');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { classifyFailure } = require('./failure-classification');
+const {
+  MAX_KEEP_RANGES,
+  roundMilliseconds,
+  normalizeEditPlan: normalizeCanonicalEditPlan,
+  totalRetainedDuration,
+  subtractKeepRanges,
+  intersectKeepRanges,
+  deriveInternalRemovedGaps,
+  deriveRemovedRanges,
+  restoreInternalGap,
+  outerRetainedBounds,
+  isFullDurationEditPlan
+} = require('./public/edit-plan');
 
 const MAX_LOCAL_MEDIA_BYTES = 100 * 1024 * 1024 * 1024;
 const MEDIA_WORKSPACE_TTL_MS = 60 * 60 * 1000;
@@ -69,44 +82,15 @@ function normalizeClaimedContentType(value) {
   return text.slice(0, 200) || null;
 }
 
-function roundMilliseconds(value) {
-  return Math.round(Number(value) * 1000) / 1000;
-}
-
 function normalizeEditPlan(rawPlan, durationSeconds) {
-  const duration = roundMilliseconds(durationSeconds);
-  if (!rawPlan || typeof rawPlan !== 'object' || Array.isArray(rawPlan)) {
-    throw workspaceRequestError('Edit plan must be an object.');
+  try {
+    return normalizeCanonicalEditPlan(rawPlan, durationSeconds, { rejectNoop: true });
+  } catch (error) {
+    if (error?.code === 'LVOVD_EDIT_PLAN_INVALID') {
+      throw workspaceRequestError(error.message);
+    }
+    throw error;
   }
-  if (rawPlan.version !== 1) {
-    throw workspaceRequestError('Edit plan version 1 is required.');
-  }
-  if (!Array.isArray(rawPlan.keepRanges) || rawPlan.keepRanges.length !== 1) {
-    throw workspaceRequestError('This editor currently requires exactly one retained range.');
-  }
-  const range = rawPlan.keepRanges[0];
-  if (!range || typeof range !== 'object' || Array.isArray(range)
-    || typeof range.startSeconds !== 'number' || typeof range.endSeconds !== 'number') {
-    throw workspaceRequestError('The retained range must contain numeric start and end times.');
-  }
-  const startSeconds = roundMilliseconds(range.startSeconds);
-  const endSeconds = roundMilliseconds(range.endSeconds);
-  if (![duration, startSeconds, endSeconds].every(Number.isFinite) || duration <= 0) {
-    throw workspaceRequestError('The retained range and media duration must be finite numbers.');
-  }
-  if (startSeconds < 0 || endSeconds > duration) {
-    throw workspaceRequestError('The retained range must stay within the inspected media duration.');
-  }
-  if (startSeconds >= endSeconds) {
-    throw workspaceRequestError('The retained range end must be after its start.');
-  }
-  if (startSeconds === 0 && endSeconds === duration) {
-    throw workspaceRequestError('Move the start or end before creating an edited file.');
-  }
-  return {
-    version: 1,
-    keepRanges: [{ startSeconds, endSeconds }]
-  };
 }
 
 function editedOutputFilename(sourceDisplayName) {
@@ -254,18 +238,45 @@ function playbackProxyArgs(inputPath, outputPath, inspection) {
 }
 
 function editedOutputArgs(inputPath, outputPath, inspection, editPlan) {
-  const range = editPlan.keepRanges[0];
-  const retainedDuration = roundMilliseconds(range.endSeconds - range.startSeconds);
+  const ranges = editPlan.keepRanges;
+  const range = ranges[0];
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error',
-    '-i', inputPath,
-    '-ss', String(range.startSeconds),
-    '-t', String(retainedDuration),
-    '-map', `0:${inspection.video.streamIndex}`
+    '-i', inputPath
   ];
-  if (inspection.audio) args.push('-map', `0:${inspection.audio.streamIndex}`);
+  if (ranges.length === 1) {
+    const retainedDuration = roundMilliseconds(range.endSeconds - range.startSeconds);
+    args.push(
+      '-ss', String(range.startSeconds),
+      '-t', String(retainedDuration),
+      '-map', `0:${inspection.video.streamIndex}`
+    );
+    if (inspection.audio) args.push('-map', `0:${inspection.audio.streamIndex}`);
+    args.push('-vf', "scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'");
+  } else {
+    const filters = [];
+    for (let index = 0; index < ranges.length; index += 1) {
+      const current = ranges[index];
+      filters.push(
+        `[0:${inspection.video.streamIndex}]trim=start=${current.startSeconds}:end=${current.endSeconds},setpts=PTS-STARTPTS[v${index}]`
+      );
+      if (inspection.audio) {
+        filters.push(
+          `[0:${inspection.audio.streamIndex}]atrim=start=${current.startSeconds}:end=${current.endSeconds},asetpts=PTS-STARTPTS[a${index}]`
+        );
+      }
+    }
+    const concatInputs = ranges.map((_current, index) => (
+      inspection.audio ? `[v${index}][a${index}]` : `[v${index}]`
+    )).join('');
+    filters.push(
+      `${concatInputs}concat=n=${ranges.length}:v=1:a=${inspection.audio ? 1 : 0}[vcat]${inspection.audio ? '[acat]' : ''}`
+    );
+    filters.push("[vcat]scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'[vout]");
+    args.push('-filter_complex', filters.join(';'), '-map', '[vout]');
+    if (inspection.audio) args.push('-map', '[acat]');
+  }
   args.push(
-    '-vf', "scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'",
     '-c:v', 'libx264',
     '-preset', 'medium',
     '-crf', '18',
@@ -309,7 +320,10 @@ function outputCollectionError(message) {
   });
 }
 
-function validateEditedOutputInspection(inspection, { expectAudio = false } = {}) {
+function validateEditedOutputInspection(inspection, {
+  expectAudio = false,
+  expectedDurationSeconds = null
+} = {}) {
   const mp4 = (inspection?.formatNames || []).some((name) => String(name).toLowerCase() === 'mp4');
   if (!mp4 || inspection?.video?.codec !== 'h264'
     || !Number.isFinite(inspection.durationSeconds) || inspection.durationSeconds <= 0
@@ -321,6 +335,13 @@ function validateEditedOutputInspection(inspection, { expectAudio = false } = {}
   }
   if (!expectAudio && inspection.audio) {
     throw outputCollectionError('The edited output unexpectedly contained an audio stream.');
+  }
+  const expectedDuration = Number(expectedDurationSeconds);
+  if (Number.isFinite(expectedDuration) && expectedDuration > 0) {
+    const toleranceSeconds = Math.max(0.15, Math.min(1, expectedDuration * 0.01));
+    if (Math.abs(inspection.durationSeconds - expectedDuration) > toleranceSeconds) {
+      throw outputCollectionError('The edited output duration does not match the retained sections.');
+    }
   }
   return inspection;
 }
@@ -449,7 +470,7 @@ class MediaWorkspaceManager {
       render: {
         status: 'idle',
         percent: null,
-        message: 'Move the start or end before creating an edited file.',
+        message: 'Change the retained range or remove a section before creating an edited file.',
         failure: null,
         requestedPlan: null,
         outputAssetId: null
@@ -903,9 +924,7 @@ class MediaWorkspaceManager {
   }
 
   async defaultCreateEditedAsset(workspace, sourceAsset, inspection, editPlan, attempt) {
-    const retainedDuration = roundMilliseconds(
-      editPlan.keepRanges[0].endSeconds - editPlan.keepRanges[0].startSeconds
-    );
+    const retainedDuration = totalRetainedDuration(editPlan);
     const onStdout = createFfmpegProgressHandler(retainedDuration, (percent) => {
       this.updateRender(workspace, {
         percent,
@@ -990,7 +1009,10 @@ class MediaWorkspaceManager {
         size: stat.size
       });
       if (workspace.cancelRequested) throw workspaceCancelledError();
-      validateEditedOutputInspection(outputInspection, { expectAudio: Boolean(workspace.inspection.audio) });
+      validateEditedOutputInspection(outputInspection, {
+        expectAudio: Boolean(workspace.inspection.audio),
+        expectedDurationSeconds: totalRetainedDuration(editPlan)
+      });
 
       const outputAsset = this.registerAsset(workspace, {
         role: 'edited-output',
@@ -1245,8 +1267,17 @@ module.exports = {
   MAX_LOCAL_MEDIA_BYTES,
   MEDIA_WORKSPACE_TTL_MS,
   WORKSPACE_CANCELLED_CODE,
+  MAX_KEEP_RANGES,
   normalizeDisplayFilename,
   normalizeEditPlan,
+  totalRetainedDuration,
+  subtractKeepRanges,
+  intersectKeepRanges,
+  deriveInternalRemovedGaps,
+  deriveRemovedRanges,
+  restoreInternalGap,
+  outerRetainedBounds,
+  isFullDurationEditPlan,
   editedOutputFilename,
   parseFrameRate,
   normalizeInspection,

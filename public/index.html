@@ -346,17 +346,19 @@
               </div>
 
               <div id="timeline-track" class="timeline-track" role="group" tabindex="0" aria-label="Timeline seek control. Space plays or pauses; Left and Right Arrow seek five seconds." title="Click or drag to seek; use the handles to change the retained range">
-                <div id="timeline-removed-before" class="timeline-region removed"></div>
-                <div id="timeline-retained" class="timeline-region retained"></div>
-                <div id="timeline-removed-after" class="timeline-region removed"></div>
+                <div id="timeline-regions" class="timeline-regions" aria-hidden="true"></div>
+                <div id="timeline-pending-cut" class="timeline-region pending-cut" aria-hidden="true" hidden></div>
                 <div id="timeline-playhead" class="timeline-playhead" aria-hidden="true"></div>
                 <button id="timeline-start-handle" class="timeline-handle start" type="button" role="slider" aria-label="Retained range start" aria-valuemin="0"></button>
                 <button id="timeline-end-handle" class="timeline-handle end" type="button" role="slider" aria-label="Retained range end" aria-valuemin="0"></button>
+                <button id="timeline-cut-start-handle" class="timeline-handle cut start" type="button" role="slider" aria-label="Pending cut start" aria-valuemin="0" hidden></button>
+                <button id="timeline-cut-end-handle" class="timeline-handle cut end" type="button" role="slider" aria-label="Pending cut end" aria-valuemin="0" hidden></button>
               </div>
 
               <div class="timeline-legend" aria-hidden="true">
                 <span><i class="legend-retained"></i>Retained</span>
                 <span><i class="legend-removed"></i>Removed</span>
+                <span><i class="legend-pending-cut"></i>Pending removal</span>
                 <span><i class="legend-playhead"></i>Playhead</span>
               </div>
 
@@ -388,13 +390,44 @@
                 </div>
               </div>
 
+              <section class="middle-cut-panel" aria-labelledby="middle-cut-title">
+                <div class="middle-cut-heading">
+                  <h4 id="middle-cut-title">Remove a Section</h4>
+                  <p>Move the playhead to each boundary, inspect the highlighted section, then remove it.</p>
+                </div>
+                <div class="middle-cut-grid">
+                  <label class="field" for="cut-start-time">
+                    <span>Cut start</span>
+                    <input id="cut-start-time" type="text" inputmode="decimal" placeholder="00:00:00.000" aria-describedby="cut-start-error" />
+                  </label>
+                  <label class="field" for="cut-end-time">
+                    <span>Cut end</span>
+                    <input id="cut-end-time" type="text" inputmode="decimal" placeholder="00:00:00.000" aria-describedby="cut-end-error" />
+                  </label>
+                  <button id="set-cut-start" class="button secondary mini" type="button">Set Cut Start</button>
+                  <button id="set-cut-end" class="button secondary mini" type="button">Set Cut End</button>
+                  <small id="cut-start-error" class="field-error" aria-live="polite"></small>
+                  <small id="cut-end-error" class="field-error" aria-live="polite"></small>
+                </div>
+                <div class="middle-cut-actions">
+                  <button id="remove-section" class="button secondary mini" type="button" disabled>Remove Section</button>
+                  <button id="clear-pending-cut" class="text-button" type="button" disabled>Clear Cut</button>
+                  <small id="pending-cut-error" class="field-error" aria-live="polite"></small>
+                </div>
+              </section>
+
+              <section id="removed-sections" class="removed-sections" aria-labelledby="removed-sections-title" hidden>
+                <h4 id="removed-sections-title">Removed Sections</h4>
+                <div id="removed-sections-list" class="removed-sections-list"></div>
+              </section>
+
               <section class="editor-render-panel" aria-label="Create edited output">
                 <div class="editor-render-head">
                   <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
                   <p class="editor-foundation-note">Creates a new MP4 locally. To closely match arbitrary cut times, this version re-encodes the edited output. Your staged source is unchanged.</p>
                 </div>
 
-                <p id="editor-render-noop" class="editor-render-noop">Move the start or end before creating an edited file.</p>
+                <p id="editor-render-noop" class="editor-render-noop">Change the retained range or remove a section before creating an edited file.</p>
 
                 <div id="editor-render-progress" class="workspace-progress editor-render-progress" aria-live="polite" hidden>
                   <div class="progress-head">
@@ -464,6 +497,7 @@
   </main>
   <script src="/app.js" defer></script>
   <script src="/history-ui.js" defer></script>
+  <script src="/edit-plan.js" defer></script>
   <script src="/media-editor.js" defer></script>
 </body>
 </html>
