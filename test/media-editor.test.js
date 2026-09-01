@@ -257,7 +257,10 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(styles, /\.lookup-form\s*\{[^}]*box-shadow:/);
   assert.match(styles, /\.lookup-form:focus-within\s*\{[^}]*border-color:[^;}]*rgba\(184,159,255,\.42\)/);
   assert.match(styles, /\.lookup-form \.lookup-submit\s*\{[^}]*background:\s*linear-gradient/);
-  assert.match(styles, /\.workflow-heading\s*\{[^}]*font-size:\s*clamp\(15px,\s*2vw,\s*17px\)/);
+  assert.match(styles, /\.workflow-heading\s*\{[^}]*display:\s*block[^}]*font-size:\s*clamp\(15px,\s*2vw,\s*17px\)/);
+  assert.doesNotMatch(styles, /\.lookup-form label[^}]*font-size:/);
+  assert.match(styles, /\.media-workspace-panel\s*\{[^}]*padding:\s*clamp\(14px,\s*2vw,\s*18px\)/);
+  assert.match(styles, /#workspace-status:empty\s*\{\s*min-height:\s*0;\s*margin-top:\s*0/);
   assert.match(styles, /grid-template-columns:\s*repeat\(2,\s*minmax\(180px,200px\)\)\s*max-content/);
   assert.match(styles, /grid-template-areas:\s*"start-field end-field \."\s*"start-actions end-actions reset"/);
   assert.match(styles, /\.timeline-range-actions\s*\{\s*grid-area:\s*reset/);
