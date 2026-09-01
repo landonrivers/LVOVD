@@ -1514,6 +1514,7 @@ function serveStatic(reqPath, res) {
     '/': ['index.html', 'text/html; charset=utf-8'],
     '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
     '/history-ui.js': ['history-ui.js', 'text/javascript; charset=utf-8'],
+    '/edit-plan.js': ['edit-plan.js', 'text/javascript; charset=utf-8'],
     '/media-editor.js': ['media-editor.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };

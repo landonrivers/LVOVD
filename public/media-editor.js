@@ -1,20 +1,32 @@
 'use strict';
 
 (function attachMediaEditor(root, factory) {
-  const api = factory();
+  const editPlanApi = typeof module === 'object' && module.exports
+    ? require('./edit-plan')
+    : root?.LVOVDEditPlan;
+  const api = factory(editPlanApi);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root?.document) api.init(root);
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createMediaEditorApi() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createMediaEditorApi(editPlanApi) {
   const MAX_LOCAL_MEDIA_BYTES = 100 * 1024 * 1024 * 1024;
-  const MIN_SELECTION_SECONDS = 0.001;
+  const {
+    MAX_KEEP_RANGES,
+    MIN_RANGE_SECONDS,
+    roundMilliseconds,
+    normalizeEditPlan,
+    subtractKeepRanges,
+    intersectKeepRanges,
+    deriveInternalRemovedGaps,
+    deriveRemovedRanges,
+    restoreInternalGap,
+    outerRetainedBounds,
+    isFullDurationEditPlan
+  } = editPlanApi;
+  const MIN_SELECTION_SECONDS = MIN_RANGE_SECONDS;
   const MIN_VISIBLE_SECONDS = 0.25;
 
   function clamp(value, minimum, maximum) {
     return Math.min(maximum, Math.max(minimum, value));
-  }
-
-  function roundMilliseconds(value) {
-    return Math.round(Number(value) * 1000) / 1000;
   }
 
   function parseTimecode(value) {
@@ -194,6 +206,11 @@
     return { startSeconds: result.startSeconds, endSeconds: result.endSeconds };
   }
 
+  function fullEditPlan(durationSeconds) {
+    const range = fullRetainedRange(durationSeconds);
+    return range ? { version: 1, keepRanges: [range] } : null;
+  }
+
   function retainedRangeWithPlayhead(range, boundary, playheadSeconds) {
     if (!range || !['start', 'end'].includes(boundary)) return null;
     const playhead = roundMilliseconds(playheadSeconds);
@@ -221,12 +238,156 @@
     ));
   }
 
-  function isFullDurationEditPlan(plan, durationSeconds) {
+  function recomputeAuthoringState(state, durationSeconds) {
     const duration = roundMilliseconds(durationSeconds);
-    const range = plan?.version === 1 && Array.isArray(plan.keepRanges) && plan.keepRanges.length === 1
-      ? plan.keepRanges[0]
-      : null;
-    return Boolean(range && range.startSeconds === 0 && range.endSeconds === duration);
+    const middleCutPlan = normalizeEditPlan(state?.middleCutPlan, duration);
+    const outerStartSeconds = roundMilliseconds(state?.outerStartSeconds);
+    const outerEndSeconds = roundMilliseconds(state?.outerEndSeconds);
+    if (![duration, outerStartSeconds, outerEndSeconds].every(Number.isFinite) || duration <= 0) {
+      throw new Error('Finite outer boundaries and media duration are required.');
+    }
+    if (outerStartSeconds < 0 || outerEndSeconds > duration
+      || outerEndSeconds - outerStartSeconds < MIN_SELECTION_SECONDS) {
+      throw new Error('The retained end must be after the retained start within the media duration.');
+    }
+    const keepRanges = intersectKeepRanges(middleCutPlan, outerStartSeconds, outerEndSeconds);
+    if (!keepRanges.length) throw new Error('Keep at least one section of the video.');
+    const editPlan = normalizeEditPlan({ version: 1, keepRanges }, duration);
+    const bounds = outerRetainedBounds(editPlan);
+    return {
+      middleCutPlan,
+      outerStartSeconds: bounds.startSeconds,
+      outerEndSeconds: bounds.endSeconds,
+      editPlan
+    };
+  }
+
+  function fullAuthoringState(durationSeconds) {
+    const editPlan = fullEditPlan(durationSeconds);
+    if (!editPlan) return null;
+    const bounds = outerRetainedBounds(editPlan);
+    return {
+      middleCutPlan: editPlan,
+      outerStartSeconds: bounds.startSeconds,
+      outerEndSeconds: bounds.endSeconds,
+      editPlan
+    };
+  }
+
+  function applyOuterBoundary(state, boundary, value, durationSeconds) {
+    const requested = roundMilliseconds(value);
+    const duration = roundMilliseconds(durationSeconds);
+    if (!state?.middleCutPlan || !['start', 'end'].includes(boundary)
+      || !Number.isFinite(requested) || !Number.isFinite(duration) || duration <= 0) {
+      return { valid: false, reason: 'A finite retained boundary is required.' };
+    }
+    if (requested < 0 || requested > duration) {
+      return { valid: false, reason: `Use values between ${formatTimecode(0)} and ${formatTimecode(duration)}.` };
+    }
+    const outerStart = boundary === 'start' ? requested : state.outerStartSeconds;
+    const outerEnd = boundary === 'end' ? requested : state.outerEndSeconds;
+    if (outerEnd - outerStart < MIN_SELECTION_SECONDS) {
+      return { valid: false, reason: 'The retained end must be after the retained start.' };
+    }
+    let authoringState;
+    try {
+      authoringState = recomputeAuthoringState({
+        ...state,
+        outerStartSeconds: outerStart,
+        outerEndSeconds: outerEnd
+      }, duration);
+    } catch (error) {
+      return { valid: false, reason: error.message };
+    }
+    return {
+      valid: true,
+      authoringState,
+      editPlan: authoringState.editPlan,
+      boundarySeconds: authoringState[boundary === 'start' ? 'outerStartSeconds' : 'outerEndSeconds']
+    };
+  }
+
+  function validatePendingCut(pendingCut, durationSeconds) {
+    const start = roundMilliseconds(pendingCut?.startSeconds);
+    const end = roundMilliseconds(pendingCut?.endSeconds);
+    const duration = roundMilliseconds(durationSeconds);
+    if (![start, end, duration].every(Number.isFinite) || duration <= 0) {
+      return { valid: false, reason: 'Set both cut boundaries from the playhead or exact fields.' };
+    }
+    if (start < 0 || end > duration) {
+      return { valid: false, reason: `Use values between ${formatTimecode(0)} and ${formatTimecode(duration)}.` };
+    }
+    if (end - start < MIN_SELECTION_SECONDS) {
+      return { valid: false, reason: 'Cut End must be after Cut Start.' };
+    }
+    return { valid: true, startSeconds: start, endSeconds: end };
+  }
+
+  function removePendingSection(state, pendingCut, durationSeconds) {
+    const cut = validatePendingCut(pendingCut, durationSeconds);
+    if (!cut.valid) return cut;
+    if (!state?.middleCutPlan || !state?.editPlan) {
+      return { valid: false, reason: 'The local edit plan is unavailable.' };
+    }
+    const startSeconds = Math.max(cut.startSeconds, state.outerStartSeconds);
+    const endSeconds = Math.min(cut.endSeconds, state.outerEndSeconds);
+    if (endSeconds - startSeconds < MIN_SELECTION_SECONDS) {
+      return { valid: false, reason: 'That section is outside the current retained output.' };
+    }
+    const effectiveRanges = subtractKeepRanges(state.editPlan, startSeconds, endSeconds);
+    if (!effectiveRanges.length) return { valid: false, reason: 'A removal cannot discard all retained content.' };
+    if (editPlansEqual(state.editPlan, { version: 1, keepRanges: effectiveRanges })) {
+      return { valid: false, reason: 'That section is already outside the retained content.' };
+    }
+    const middleRanges = subtractKeepRanges(state.middleCutPlan, startSeconds, endSeconds);
+    if (middleRanges.length > MAX_KEEP_RANGES) {
+      return { valid: false, reason: `Keep the edit plan to ${MAX_KEEP_RANGES} retained sections or fewer.` };
+    }
+    let authoringState;
+    try {
+      authoringState = recomputeAuthoringState({
+        ...state,
+        middleCutPlan: normalizeEditPlan({ version: 1, keepRanges: middleRanges }, durationSeconds)
+      }, durationSeconds);
+    } catch (error) {
+      return { valid: false, reason: error.message };
+    }
+    return {
+      valid: true,
+      authoringState,
+      editPlan: authoringState.editPlan,
+      appliedCut: { startSeconds, endSeconds }
+    };
+  }
+
+  function restoreRemovedSection(state, gap, durationSeconds) {
+    const keepRanges = restoreInternalGap(
+      state?.middleCutPlan,
+      gap?.startSeconds,
+      gap?.endSeconds
+    );
+    if (!keepRanges) return { valid: false, reason: 'That removed section is no longer available to restore.' };
+    let authoringState;
+    try {
+      authoringState = recomputeAuthoringState({
+        ...state,
+        middleCutPlan: normalizeEditPlan({ version: 1, keepRanges }, durationSeconds)
+      }, durationSeconds);
+    } catch (error) {
+      return { valid: false, reason: error.message };
+    }
+    return {
+      valid: true,
+      authoringState,
+      editPlan: authoringState.editPlan
+    };
+  }
+
+  function timelineRegions(plan, durationSeconds) {
+    return {
+      retained: plan?.keepRanges?.map((range) => ({ ...range })) || [],
+      removed: deriveRemovedRanges(plan, 0, roundMilliseconds(durationSeconds))
+    };
   }
 
   function formatBytes(value) {
@@ -272,12 +433,13 @@
     const ruler = document.querySelector('#timeline-ruler');
     const rulerTicks = document.querySelector('#timeline-ruler-ticks');
     const track = document.querySelector('#timeline-track');
-    const removedBefore = document.querySelector('#timeline-removed-before');
-    const retained = document.querySelector('#timeline-retained');
-    const removedAfter = document.querySelector('#timeline-removed-after');
+    const timelineRegionsLayer = document.querySelector('#timeline-regions');
+    const pendingCutOverlay = document.querySelector('#timeline-pending-cut');
     const playhead = document.querySelector('#timeline-playhead');
     const startHandle = document.querySelector('#timeline-start-handle');
     const endHandle = document.querySelector('#timeline-end-handle');
+    const cutStartHandle = document.querySelector('#timeline-cut-start-handle');
+    const cutEndHandle = document.querySelector('#timeline-cut-end-handle');
     const visibleLabel = document.querySelector('#timeline-visible-label');
     const startField = document.querySelector('#editor-start-time');
     const endField = document.querySelector('#editor-end-time');
@@ -288,6 +450,17 @@
     const goToStart = document.querySelector('#go-to-start');
     const goToEnd = document.querySelector('#go-to-end');
     const resetRange = document.querySelector('#reset-range');
+    const cutStartField = document.querySelector('#cut-start-time');
+    const cutEndField = document.querySelector('#cut-end-time');
+    const cutStartError = document.querySelector('#cut-start-error');
+    const cutEndError = document.querySelector('#cut-end-error');
+    const pendingCutError = document.querySelector('#pending-cut-error');
+    const setCutStart = document.querySelector('#set-cut-start');
+    const setCutEnd = document.querySelector('#set-cut-end');
+    const removeSection = document.querySelector('#remove-section');
+    const clearPendingCutButton = document.querySelector('#clear-pending-cut');
+    const removedSections = document.querySelector('#removed-sections');
+    const removedSectionsList = document.querySelector('#removed-sections-list');
     const zoomIn = document.querySelector('#timeline-zoom-in');
     const zoomOut = document.querySelector('#timeline-zoom-out');
     const fit = document.querySelector('#timeline-fit');
@@ -313,7 +486,9 @@
     let activeWorkspaceId = null;
     let workspaceSnapshot = null;
     let durationSeconds = 0;
+    let authoringState = null;
     let editPlan = null;
+    let pendingCut = { startSeconds: null, endSeconds: null };
     let visibleWindow = { startSeconds: 0, endSeconds: 0 };
     let animationFrame = null;
     let seekPointer = null;
@@ -407,7 +582,7 @@
       }
 
       if (fullDuration) {
-        renderNoop.textContent = 'Move the start or end before creating an edited file.';
+        renderNoop.textContent = 'Change the retained range or remove a section before creating an edited file.';
         renderNoop.hidden = false;
       } else if (state.status === 'cancelled') {
         renderNoop.textContent = state.message || 'Edited-file creation cancelled. The editor is still available.';
@@ -476,11 +651,13 @@
       editor.hidden = true;
       trackWarning.hidden = true;
       durationSeconds = 0;
+      authoringState = null;
       editPlan = null;
+      pendingCut = { startSeconds: null, endSeconds: null };
       workspaceSnapshot = null;
       renderProgress.hidden = true;
       renderNoop.hidden = false;
-      renderNoop.textContent = 'Move the start or end before creating an edited file.';
+      renderNoop.textContent = 'Change the retained range or remove a section before creating an edited file.';
       editedOutput.hidden = true;
       createEditedFile.disabled = true;
       cancelEditedRender.disabled = false;
@@ -489,6 +666,16 @@
       clearRenderFailure();
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
+      setFieldError(cutStartField, cutStartError, '');
+      setFieldError(cutEndField, cutEndError, '');
+      cutStartField.value = '';
+      cutEndField.value = '';
+      pendingCutError.textContent = '';
+      pendingCutOverlay.hidden = true;
+      cutStartHandle.hidden = true;
+      cutEndHandle.hidden = true;
+      removedSections.hidden = true;
+      removedSectionsList.replaceChildren();
     }
 
     function resetWorkspaceUi(message = '') {
@@ -541,45 +728,129 @@
       clock.textContent = `${formatTimecode(current)} / ${formatTimecode(durationSeconds)}`;
     }
 
+    function appendTimelineRegion(kind, range) {
+      const startSeconds = Math.max(range.startSeconds, visibleWindow.startSeconds);
+      const endSeconds = Math.min(range.endSeconds, visibleWindow.endSeconds);
+      if (endSeconds <= startSeconds) return;
+      const region = document.createElement('div');
+      region.className = `timeline-region ${kind}`;
+      setSpan(region, startSeconds, endSeconds);
+      timelineRegionsLayer.appendChild(region);
+    }
+
+    function renderRemovedSections() {
+      removedSectionsList.replaceChildren();
+      const gaps = deriveInternalRemovedGaps(editPlan);
+      removedSections.hidden = gaps.length === 0;
+      for (const gap of gaps) {
+        const row = document.createElement('div');
+        row.className = 'removed-section-row';
+        const times = document.createElement('span');
+        times.className = 'removed-section-times';
+        times.textContent = `${formatTimecode(gap.startSeconds)} – ${formatTimecode(gap.endSeconds)}`;
+        const restore = document.createElement('button');
+        restore.className = 'text-button';
+        restore.type = 'button';
+        restore.textContent = 'Restore';
+        restore.addEventListener('click', () => {
+          const result = restoreRemovedSection(authoringState, gap, durationSeconds);
+          if (result.valid) commitAuthoringState(result.authoringState);
+        });
+        row.append(times, restore);
+        removedSectionsList.appendChild(row);
+      }
+    }
+
+    function renderPendingCut({ normalizeFields = true } = {}) {
+      const boundaries = [
+        ['start', pendingCut.startSeconds, cutStartHandle, cutStartField],
+        ['end', pendingCut.endSeconds, cutEndHandle, cutEndField]
+      ];
+      for (const [which, value, handle, field] of boundaries) {
+        const available = Number.isFinite(value);
+        const visible = available && value >= visibleWindow.startSeconds && value <= visibleWindow.endSeconds;
+        handle.hidden = !visible;
+        if (available) {
+          handle.style.left = `${timeToPercent(value, visibleWindow)}%`;
+          handle.setAttribute('aria-valuenow', String(value));
+          handle.setAttribute('aria-valuetext', formatTimecode(value));
+          if (normalizeFields) field.value = formatTimecode(value);
+        } else if (normalizeFields) {
+          field.value = '';
+        }
+        handle.setAttribute('aria-label', `Pending cut ${which}`);
+      }
+
+      const cut = validatePendingCut(pendingCut, durationSeconds);
+      pendingCutOverlay.hidden = !cut.valid;
+      if (cut.valid) {
+        const startSeconds = Math.max(cut.startSeconds, visibleWindow.startSeconds);
+        const endSeconds = Math.min(cut.endSeconds, visibleWindow.endSeconds);
+        pendingCutOverlay.hidden = endSeconds <= startSeconds;
+        if (!pendingCutOverlay.hidden) setSpan(pendingCutOverlay, startSeconds, endSeconds);
+      }
+
+      let removal = cut;
+      if (cut.valid) {
+        try { removal = removePendingSection(authoringState, pendingCut, durationSeconds); }
+        catch (error) { removal = { valid: false, reason: error.message }; }
+      }
+      removeSection.disabled = !removal.valid;
+      const hasBothBoundaries = Number.isFinite(pendingCut.startSeconds) && Number.isFinite(pendingCut.endSeconds);
+      pendingCutError.textContent = hasBothBoundaries && !removal.valid ? removal.reason : '';
+      clearPendingCutButton.disabled = !Number.isFinite(pendingCut.startSeconds)
+        && !Number.isFinite(pendingCut.endSeconds);
+    }
+
     function renderTimeline({ normalizeFields = true } = {}) {
       if (!editPlan) return;
-      const range = editPlan.keepRanges[0];
-      setSpan(removedBefore, visibleWindow.startSeconds, Math.min(range.startSeconds, visibleWindow.endSeconds));
-      setSpan(retained, Math.max(range.startSeconds, visibleWindow.startSeconds), Math.min(range.endSeconds, visibleWindow.endSeconds));
-      setSpan(removedAfter, Math.max(range.endSeconds, visibleWindow.startSeconds), visibleWindow.endSeconds);
+      timelineRegionsLayer.replaceChildren();
+      const regions = timelineRegions(editPlan, durationSeconds);
+      for (const range of regions.removed) appendTimelineRegion('removed', range);
+      for (const range of regions.retained) appendTimelineRegion('retained', range);
 
-      const startVisible = range.startSeconds >= visibleWindow.startSeconds && range.startSeconds <= visibleWindow.endSeconds;
-      const endVisible = range.endSeconds >= visibleWindow.startSeconds && range.endSeconds <= visibleWindow.endSeconds;
+      const bounds = outerRetainedBounds(editPlan);
+      const startVisible = bounds.startSeconds >= visibleWindow.startSeconds && bounds.startSeconds <= visibleWindow.endSeconds;
+      const endVisible = bounds.endSeconds >= visibleWindow.startSeconds && bounds.endSeconds <= visibleWindow.endSeconds;
       startHandle.hidden = !startVisible;
       endHandle.hidden = !endVisible;
-      startHandle.style.left = `${timeToPercent(range.startSeconds, visibleWindow)}%`;
-      endHandle.style.left = `${timeToPercent(range.endSeconds, visibleWindow)}%`;
-      startHandle.setAttribute('aria-valuenow', String(range.startSeconds));
-      endHandle.setAttribute('aria-valuenow', String(range.endSeconds));
-      startHandle.setAttribute('aria-valuetext', formatTimecode(range.startSeconds));
-      endHandle.setAttribute('aria-valuetext', formatTimecode(range.endSeconds));
+      startHandle.style.left = `${timeToPercent(bounds.startSeconds, visibleWindow)}%`;
+      endHandle.style.left = `${timeToPercent(bounds.endSeconds, visibleWindow)}%`;
+      startHandle.setAttribute('aria-valuenow', String(bounds.startSeconds));
+      endHandle.setAttribute('aria-valuenow', String(bounds.endSeconds));
+      startHandle.setAttribute('aria-valuetext', formatTimecode(bounds.startSeconds));
+      endHandle.setAttribute('aria-valuetext', formatTimecode(bounds.endSeconds));
       if (normalizeFields) {
-        startField.value = formatTimecode(range.startSeconds);
-        endField.value = formatTimecode(range.endSeconds);
+        startField.value = formatTimecode(bounds.startSeconds);
+        endField.value = formatTimecode(bounds.endSeconds);
       }
+      renderPendingCut({ normalizeFields });
+      renderRemovedSections();
       renderRuler();
       renderPlayhead();
     }
 
-    function commitSelection(startSeconds, endSeconds, { normalizeFields = true } = {}) {
-      const result = validateSelection(startSeconds, endSeconds, durationSeconds);
-      if (!result.valid) return result;
-      editPlan = {
-        version: 1,
-        keepRanges: [{
-          startSeconds: result.startSeconds,
-          endSeconds: result.endSeconds
-        }]
-      };
+    function commitAuthoringState(nextState, { normalizeFields = true, clearPending = false } = {}) {
+      try {
+        authoringState = recomputeAuthoringState(nextState, durationSeconds);
+        editPlan = authoringState.editPlan;
+      } catch (error) {
+        return { valid: false, reason: error.message };
+      }
+      if (clearPending) pendingCut = { startSeconds: null, endSeconds: null };
       renderTimeline({ normalizeFields });
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
       renderRenderState();
+      return { valid: true, authoringState, editPlan };
+    }
+
+    function commitOuterBoundary(which, value) {
+      let result;
+      try { result = applyOuterBoundary(authoringState, which, value, durationSeconds); }
+      catch (error) { return { valid: false, reason: error.message }; }
+      if (!result.valid) return result;
+      commitAuthoringState(result.authoringState);
       return result;
     }
 
@@ -598,17 +869,50 @@
         setFieldError(field, output, 'Use seconds, MM:SS.mmm, or HH:MM:SS.mmm.');
         return;
       }
-      const current = editPlan.keepRanges[0];
-      const result = commitSelection(
-        which === 'start' ? parsed : current.startSeconds,
-        which === 'end' ? parsed : current.endSeconds
-      );
+      const result = commitOuterBoundary(which, parsed);
       if (!result.valid) {
         setFieldError(field, output, result.reason);
         return;
       }
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
+    }
+
+    function commitCutExactField(which) {
+      if (!editPlan) return;
+      const field = which === 'start' ? cutStartField : cutEndField;
+      const output = which === 'start' ? cutStartError : cutEndError;
+      const parsed = parseTimecode(field.value);
+      if (parsed == null) {
+        setFieldError(field, output, 'Use seconds, MM:SS.mmm, or HH:MM:SS.mmm.');
+        return;
+      }
+      if (parsed < 0 || parsed > durationSeconds) {
+        setFieldError(field, output, `Use values between ${formatTimecode(0)} and ${formatTimecode(durationSeconds)}.`);
+        return;
+      }
+      pendingCut[`${which}Seconds`] = parsed;
+      setFieldError(field, output, '');
+      renderPendingCut();
+    }
+
+    function clearPendingCut() {
+      pendingCut = { startSeconds: null, endSeconds: null };
+      setFieldError(cutStartField, cutStartError, '');
+      setFieldError(cutEndField, cutEndError, '');
+      pendingCutError.textContent = '';
+      renderPendingCut();
+    }
+
+    function commitPendingCut() {
+      let result;
+      try { result = removePendingSection(authoringState, pendingCut, durationSeconds); }
+      catch (error) { result = { valid: false, reason: error.message }; }
+      if (!result.valid) {
+        pendingCutError.textContent = result.reason;
+        return;
+      }
+      commitAuthoringState(result.authoringState, { clearPending: true });
     }
 
     function defaultZoomAnchor() {
@@ -694,23 +998,28 @@
       renderPlayhead();
     }
 
-    function beginHandleDrag(event, which) {
+    function beginHandleDrag(event, which, kind = 'outer') {
       event.preventDefault();
       event.stopPropagation();
-      const handle = which === 'start' ? startHandle : endHandle;
+      const handle = kind === 'cut'
+        ? (which === 'start' ? cutStartHandle : cutEndHandle)
+        : (which === 'start' ? startHandle : endHandle);
       handle.setPointerCapture(event.pointerId);
-      handleDrag = { pointerId: event.pointerId, which, handle };
+      handleDrag = { pointerId: event.pointerId, which, kind, handle };
     }
 
     function moveHandle(event) {
       if (!handleDrag || event.pointerId !== handleDrag.pointerId || !editPlan) return;
-      const range = editPlan.keepRanges[0];
       const value = pointerTime(event, track);
-      if (handleDrag.which === 'start') {
-        commitSelection(clamp(value, 0, range.endSeconds - MIN_SELECTION_SECONDS), range.endSeconds);
-      } else {
-        commitSelection(range.startSeconds, clamp(value, range.startSeconds + MIN_SELECTION_SECONDS, durationSeconds));
+      if (handleDrag.kind === 'cut') {
+        pendingCut[`${handleDrag.which}Seconds`] = clamp(value, 0, durationSeconds);
+        const field = handleDrag.which === 'start' ? cutStartField : cutEndField;
+        const error = handleDrag.which === 'start' ? cutStartError : cutEndError;
+        setFieldError(field, error, '');
+        renderPendingCut();
+        return;
       }
+      commitOuterBoundary(handleDrag.which, value);
     }
 
     function endHandleDrag(event) {
@@ -771,13 +1080,13 @@
         return;
       }
 
-      editPlan = {
-        version: 1,
-        keepRanges: [{ startSeconds: 0, endSeconds: roundMilliseconds(durationSeconds) }]
-      };
+      authoringState = fullAuthoringState(durationSeconds);
+      editPlan = authoringState?.editPlan || null;
+      pendingCut = { startSeconds: null, endSeconds: null };
       visibleWindow = { startSeconds: 0, endSeconds: durationSeconds };
-      startHandle.setAttribute('aria-valuemax', String(durationSeconds));
-      endHandle.setAttribute('aria-valuemax', String(durationSeconds));
+      for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
+        handle.setAttribute('aria-valuemax', String(durationSeconds));
+      }
       mediaName.textContent = data.source?.name || 'Local video';
       const facts = [
         `${inspection.video.width}×${inspection.video.height}`,
@@ -1032,7 +1341,9 @@
     playhead.addEventListener('pointercancel', endPlayheadDrag);
     startHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'start'));
     endHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'end'));
-    for (const handle of [startHandle, endHandle]) {
+    cutStartHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'start', 'cut'));
+    cutEndHandle.addEventListener('pointerdown', (event) => beginHandleDrag(event, 'end', 'cut'));
+    for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
       handle.addEventListener('pointermove', moveHandle);
       handle.addEventListener('pointerup', endHandleDrag);
       handle.addEventListener('pointercancel', endHandleDrag);
@@ -1081,35 +1392,53 @@
         }
       });
     }
+    cutStartField.addEventListener('change', () => commitCutExactField('start'));
+    cutEndField.addEventListener('change', () => commitCutExactField('end'));
+    for (const [field, which] of [[cutStartField, 'start'], [cutEndField, 'end']]) {
+      field.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          commitCutExactField(which);
+        }
+      });
+    }
     setStart.addEventListener('click', () => {
       if (!editPlan) return;
-      const range = editPlan.keepRanges[0];
-      const next = retainedRangeWithPlayhead(range, 'start', video.currentTime);
-      const result = commitSelection(next.startSeconds, next.endSeconds);
+      const result = commitOuterBoundary('start', video.currentTime);
       setFieldError(startField, startError, result.valid ? '' : result.reason);
     });
     setEnd.addEventListener('click', () => {
       if (!editPlan) return;
-      const range = editPlan.keepRanges[0];
-      const next = retainedRangeWithPlayhead(range, 'end', video.currentTime);
-      const result = commitSelection(next.startSeconds, next.endSeconds);
+      const result = commitOuterBoundary('end', video.currentTime);
       setFieldError(endField, endError, result.valid ? '' : result.reason);
     });
     goToStart.addEventListener('click', () => {
       if (!editPlan) return;
-      video.currentTime = retainedBoundaryTime(editPlan.keepRanges[0], 'start', durationSeconds);
+      video.currentTime = retainedBoundaryTime(outerRetainedBounds(editPlan), 'start', durationSeconds);
       renderPlayhead();
     });
     goToEnd.addEventListener('click', () => {
       if (!editPlan) return;
-      video.currentTime = retainedBoundaryTime(editPlan.keepRanges[0], 'end', durationSeconds);
+      video.currentTime = retainedBoundaryTime(outerRetainedBounds(editPlan), 'end', durationSeconds);
       renderPlayhead();
     });
     resetRange.addEventListener('click', () => {
       if (!editPlan) return;
-      const range = fullRetainedRange(durationSeconds);
-      if (range) commitSelection(range.startSeconds, range.endSeconds);
+      const state = fullAuthoringState(durationSeconds);
+      if (state) commitAuthoringState(state, { clearPending: true });
     });
+    setCutStart.addEventListener('click', () => {
+      pendingCut.startSeconds = roundMilliseconds(clamp(video.currentTime, 0, durationSeconds));
+      setFieldError(cutStartField, cutStartError, '');
+      renderPendingCut();
+    });
+    setCutEnd.addEventListener('click', () => {
+      pendingCut.endSeconds = roundMilliseconds(clamp(video.currentTime, 0, durationSeconds));
+      setFieldError(cutEndField, cutEndError, '');
+      renderPendingCut();
+    });
+    removeSection.addEventListener('click', commitPendingCut);
+    clearPendingCutButton.addEventListener('click', clearPendingCut);
     createEditedFile.addEventListener('click', startEditedRender);
     cancelEditedRender.addEventListener('click', cancelRender);
     zoomIn.addEventListener('click', () => zoom(0.5));
@@ -1149,6 +1478,14 @@
     retainedRangeWithPlayhead,
     retainedBoundaryTime,
     editPlansEqual,
+    fullEditPlan,
+    recomputeAuthoringState,
+    fullAuthoringState,
+    applyOuterBoundary,
+    validatePendingCut,
+    removePendingSection,
+    restoreRemovedSection,
+    timelineRegions,
     isFullDurationEditPlan,
     init
   };

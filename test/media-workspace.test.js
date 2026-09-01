@@ -9,6 +9,7 @@ const { Readable, PassThrough } = require('node:stream');
 const { EventEmitter } = require('node:events');
 const {
   MAX_LOCAL_MEDIA_BYTES,
+  MAX_KEEP_RANGES,
   WORKSPACE_CANCELLED_CODE,
   normalizeDisplayFilename,
   normalizeEditPlan,
@@ -18,6 +19,7 @@ const {
   isDirectPlaybackCompatible,
   playbackProxyArgs,
   editedOutputArgs,
+  totalRetainedDuration,
   renderProgressPercent,
   validateEditedOutputInspection,
   parseByteRange,
@@ -306,12 +308,38 @@ test('edit plans are normalized to milliseconds and reject malformed, unsafe, or
     }, 12.5),
     { version: 1, keepRanges: [{ startSeconds: 1.234, endSeconds: 11.112 }] }
   );
+  assert.deepEqual(
+    normalizeEditPlan({
+      version: 1,
+      keepRanges: [
+        { startSeconds: 0.5, endSeconds: 3 },
+        { startSeconds: 4.25, endSeconds: 8 },
+        { startSeconds: 9, endSeconds: 12 }
+      ]
+    }, 12.5),
+    {
+      version: 1,
+      keepRanges: [
+        { startSeconds: 0.5, endSeconds: 3 },
+        { startSeconds: 4.25, endSeconds: 8 },
+        { startSeconds: 9, endSeconds: 12 }
+      ]
+    }
+  );
 
   const invalidPlans = [
     null,
     { version: 2, keepRanges: [{ startSeconds: 1, endSeconds: 2 }] },
     { version: 1, keepRanges: [] },
-    { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 2 }, { startSeconds: 3, endSeconds: 4 }] },
+    { version: 1, keepRanges: [{ startSeconds: 3, endSeconds: 4 }, { startSeconds: 1, endSeconds: 2 }] },
+    { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 4 }, { startSeconds: 3, endSeconds: 5 }] },
+    {
+      version: 1,
+      keepRanges: Array.from({ length: MAX_KEEP_RANGES + 1 }, (_unused, index) => ({
+        startSeconds: index * 0.2,
+        endSeconds: index * 0.2 + 0.1
+      }))
+    },
     { version: 1, keepRanges: [{ startSeconds: '1', endSeconds: 2 }] },
     { version: 1, keepRanges: [{ startSeconds: Number.NaN, endSeconds: 2 }] },
     { version: 1, keepRanges: [{ startSeconds: -1, endSeconds: 2 }] },
@@ -324,7 +352,7 @@ test('edit plans are normalized to milliseconds and reject malformed, unsafe, or
   }
   assert.throws(
     () => normalizeEditPlan({ version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 12.5 }] }, 12.5),
-    (error) => error?.statusCode === 422 && /start or end/i.test(error.message)
+    (error) => error?.statusCode === 422 && /outer boundary|remove a section/i.test(error.message)
   );
 });
 
@@ -360,6 +388,59 @@ test('edited output arguments always re-encode the exact selected streams to the
   assert.equal(silentArgs.includes('-c:a'), false);
 });
 
+test('multi-range edited output builds bounded A/V concat graphs in source order', () => {
+  const twoRangePlan = {
+    version: 1,
+    keepRanges: [{ startSeconds: 0, endSeconds: 2 }, { startSeconds: 4, endSeconds: 6 }]
+  };
+  const inspection = {
+    ...DIRECT_INSPECTION,
+    video: { ...DIRECT_INSPECTION.video, streamIndex: 5 },
+    audio: { ...DIRECT_INSPECTION.audio, streamIndex: 9 }
+  };
+  const args = editedOutputArgs('/private/original-source.mkv', '/private/edited.mp4', inspection, twoRangePlan);
+  const graph = args[args.indexOf('-filter_complex') + 1];
+  assert.equal(args[5], '/private/original-source.mkv');
+  assert.equal(args.includes('-ss'), false);
+  assert.match(graph, /^\[0:5\]trim=start=0:end=2,setpts=PTS-STARTPTS\[v0\];/);
+  assert.match(graph, /\[0:9\]atrim=start=0:end=2,asetpts=PTS-STARTPTS\[a0\]/);
+  assert.match(graph, /\[0:5\]trim=start=4:end=6,setpts=PTS-STARTPTS\[v1\]/);
+  assert.match(graph, /\[v0\]\[a0\]\[v1\]\[a1\]concat=n=2:v=1:a=1\[vcat\]\[acat\]/);
+  assert.deepEqual(args.slice(args.indexOf('-map'), args.indexOf('-map') + 4), ['-map', '[vout]', '-map', '[acat]']);
+  assert.equal(totalRetainedDuration(twoRangePlan), 4);
+  assert.equal(renderProgressPercent(2, totalRetainedDuration(twoRangePlan)), 50);
+
+  const threeRangePlan = {
+    version: 1,
+    keepRanges: [
+      { startSeconds: 0, endSeconds: 1 },
+      { startSeconds: 2.5, endSeconds: 4 },
+      { startSeconds: 7, endSeconds: 9.25 }
+    ]
+  };
+  const threeGraph = editedOutputArgs('source', 'output', inspection, threeRangePlan)[7];
+  assert.match(threeGraph, /\[v0\]\[a0\]\[v1\]\[a1\]\[v2\]\[a2\]concat=n=3:v=1:a=1/);
+  assert.equal(totalRetainedDuration(threeRangePlan), 4.75);
+});
+
+test('silent multi-range edited output concatenates only the authoritative video stream', () => {
+  const plan = {
+    version: 1,
+    keepRanges: [{ startSeconds: 1, endSeconds: 2 }, { startSeconds: 3, endSeconds: 5 }]
+  };
+  const args = editedOutputArgs('/authoritative/source.webm', '/workspace/output.mp4', {
+    ...DIRECT_INSPECTION,
+    video: { ...DIRECT_INSPECTION.video, streamIndex: 7 },
+    audio: null
+  }, plan);
+  const graph = args[args.indexOf('-filter_complex') + 1];
+  assert.match(graph, /\[0:7\]trim=start=1:end=2/);
+  assert.match(graph, /\[v0\]\[v1\]concat=n=2:v=1:a=0\[vcat\]/);
+  assert.doesNotMatch(graph, /atrim|\[acat\]/);
+  assert.equal(args.includes('-an'), true);
+  assert.equal(args.includes('-c:a'), false);
+});
+
 test('render progress is finite, bounded below completion, and output inspection enforces the final contract', () => {
   assert.equal(renderProgressPercent(5, 10), 50);
   assert.equal(renderProgressPercent(-1, 10), 0);
@@ -378,6 +459,17 @@ test('render progress is finite, bounded below completion, and output inspection
   assert.throws(
     () => validateEditedOutputInspection({ ...DIRECT_INSPECTION, audio: null }, { expectAudio: true }),
     /AAC audio/i
+  );
+  assert.doesNotThrow(() => validateEditedOutputInspection(
+    { ...DIRECT_INSPECTION, durationSeconds: 4.08 },
+    { expectAudio: true, expectedDurationSeconds: 4 }
+  ));
+  assert.throws(
+    () => validateEditedOutputInspection(
+      { ...DIRECT_INSPECTION, durationSeconds: 7 },
+      { expectAudio: true, expectedDurationSeconds: 4 }
+    ),
+    /duration does not match/i
   );
 });
 
