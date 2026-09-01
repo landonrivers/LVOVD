@@ -362,39 +362,39 @@
                 <span><i class="legend-playhead"></i>Playhead</span>
               </div>
 
-              <div class="editor-exact-grid">
-                <div class="editor-exact-control">
-                  <label class="field" for="editor-start-time">
-                    <span>Retained start</span>
-                    <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
-                  </label>
-                  <div class="editor-boundary-actions">
-                    <button id="set-start-playhead" class="button secondary mini" type="button">Set Start</button>
-                    <button id="go-to-start" class="button secondary mini" type="button">Go to Start</button>
+              <section class="editor-crop-panel" aria-labelledby="crop-video-title">
+                <h4 id="crop-video-title" class="editor-section-title">Crop Video Length</h4>
+                <div class="editor-exact-grid">
+                  <div class="editor-exact-control">
+                    <label class="field" for="editor-start-time">
+                      <span>Retained start</span>
+                      <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
+                    </label>
+                    <div class="editor-boundary-actions">
+                      <button id="set-start-playhead" class="button secondary mini" type="button">Set Start</button>
+                      <button id="go-to-start" class="button secondary mini" type="button">Go to Start</button>
+                    </div>
+                    <small id="editor-start-error" class="field-error" aria-live="polite"></small>
                   </div>
-                  <small id="editor-start-error" class="field-error" aria-live="polite"></small>
-                </div>
-                <div class="editor-exact-control">
-                  <label class="field" for="editor-end-time">
-                    <span>Retained end</span>
-                    <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
-                  </label>
-                  <div class="editor-boundary-actions">
-                    <button id="set-end-playhead" class="button secondary mini" type="button">Set End</button>
-                    <button id="go-to-end" class="button secondary mini" type="button">Go to End</button>
+                  <div class="editor-exact-control">
+                    <label class="field" for="editor-end-time">
+                      <span>Retained end</span>
+                      <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
+                    </label>
+                    <div class="editor-boundary-actions">
+                      <button id="set-end-playhead" class="button secondary mini" type="button">Set End</button>
+                      <button id="go-to-end" class="button secondary mini" type="button">Go to End</button>
+                    </div>
+                    <small id="editor-end-error" class="field-error" aria-live="polite"></small>
                   </div>
-                  <small id="editor-end-error" class="field-error" aria-live="polite"></small>
+                  <div class="timeline-range-actions">
+                    <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
+                  </div>
                 </div>
-                <div class="timeline-range-actions">
-                  <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
-                </div>
-              </div>
+              </section>
 
               <section class="middle-cut-panel" aria-labelledby="middle-cut-title">
-                <div class="middle-cut-heading">
-                  <h4 id="middle-cut-title">Remove a Section</h4>
-                  <p>Move the playhead to each boundary, inspect the highlighted section, then remove it.</p>
-                </div>
+                <h4 id="middle-cut-title" class="editor-section-title">Remove Section</h4>
                 <div class="middle-cut-grid">
                   <label class="field" for="cut-start-time">
                     <span>Cut start</span>

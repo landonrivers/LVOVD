@@ -413,13 +413,17 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, />Set End<\/button>/);
   assert.match(html, />Go to End<\/button>/);
   assert.match(html, />Reset Range<\/button>/);
-  assert.match(html, />Remove a Section</);
+  assert.match(html, /id="crop-video-title" class="editor-section-title">Crop Video Length<\/h4>/);
+  assert.match(html, /id="middle-cut-title" class="editor-section-title">Remove Section<\/h4>/);
+  assert.doesNotMatch(html, /Move the playhead to each boundary/i);
   assert.match(html, />Set Cut Start<\/button>/);
   assert.match(html, />Set Cut End<\/button>/);
   assert.match(html, />Remove Section<\/button>/);
   assert.match(html, />Clear Cut<\/button>/);
   assert.match(html, />Removed Sections</);
   assert.ok(html.indexOf('id="reset-range"') < html.indexOf('class="editor-render-panel"'));
+  assert.ok(html.indexOf('id="crop-video-title"') < html.indexOf('class="editor-exact-grid"'));
+  assert.ok(html.indexOf('class="editor-exact-grid"') < html.indexOf('id="middle-cut-title"'));
   assert.ok(html.indexOf('id="create-edited-file"') < html.indexOf('Creates a new MP4 locally'));
   assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
   assert.match(html, /id="timeline-track"[^>]*tabindex="0"/);
@@ -485,6 +489,9 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(styles, /grid-template-areas:\s*"start-field end-field \."\s*"start-actions end-actions reset"/);
   assert.match(styles, /\.timeline-range-actions\s*\{\s*grid-area:\s*reset/);
   assert.match(styles, /\.editor-boundary-actions \.button,\s*\.timeline-range-actions \.button\s*\{\s*white-space:\s*nowrap/);
+  assert.match(styles, /\.editor-section-title\s*\{[^}]*font-size:\s*16px/);
+  assert.match(styles, /\.middle-cut-panel\s*\{[^}]*padding:\s*0[^}]*border:\s*0[^}]*background:\s*none/);
+  assert.doesNotMatch(styles, /\.middle-cut-panel\s*\{[^}]*rgba\(255,197,72/);
   assert.match(styles, /grid-template-areas:\s*"start-field"\s*"start-actions"[\s\S]*?"reset"/);
   assert.doesNotMatch(source, /\/api\/info/);
   assert.doesNotMatch(source, /\/api\/download/);
