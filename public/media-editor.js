@@ -410,9 +410,11 @@
     if (!panel) return;
 
     const dropZone = document.querySelector('#media-drop-zone');
+    const workspaceTitle = document.querySelector('#media-workspace-title');
     const chooseButton = document.querySelector('#media-choose-button');
     const fileInput = document.querySelector('#media-file-input');
     const storageNote = document.querySelector('#workspace-storage-note');
+    const storageNoteCopy = storageNote?.querySelector('span');
     const workspaceStatus = document.querySelector('#workspace-status');
     const workspaceProgress = document.querySelector('#workspace-progress');
     const workspaceProgressBar = document.querySelector('#workspace-progress-bar');
@@ -482,6 +484,7 @@
     const downloadEditedFile = document.querySelector('#download-edited-file');
 
     let upload = null;
+    let urlRequestActive = false;
     let progressSource = null;
     let activeWorkspaceId = null;
     let workspaceSnapshot = null;
@@ -497,6 +500,29 @@
     let playheadDrag = null;
     let playheadSeekFrame = null;
     let pendingPlayheadTime = null;
+
+    function publishWorkspaceState(status = null, origin = null) {
+      const resolvedStatus = status || workspaceSnapshot?.status
+        || (upload ? 'uploading' : urlRequestActive ? 'starting' : 'idle');
+      const detail = {
+        active: Boolean(upload || urlRequestActive || activeWorkspaceId || resolvedStatus !== 'idle'),
+        status: resolvedStatus,
+        origin: origin || workspaceSnapshot?.source?.origin || (urlRequestActive ? 'url' : upload ? 'local' : null)
+      };
+      const event = typeof root.CustomEvent === 'function'
+        ? new root.CustomEvent('lvovd:workspace-state', { detail })
+        : { type: 'lvovd:workspace-state', detail };
+      document.dispatchEvent(event);
+    }
+
+    function showStorageNote(origin = 'local') {
+      if (storageNoteCopy) {
+        storageNoteCopy.textContent = origin === 'url'
+          ? 'The selected media is downloaded into temporary local storage for editing. Editing after acquisition is local. The source service still sees the acquisition requests. A browser playback proxy may use additional temporary space. Nothing is uploaded to cloud storage by LVOVD.'
+          : 'Large files can temporarily require roughly another copy\'s worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.';
+      }
+      storageNote.hidden = false;
+    }
 
     function setStatus(message, type = '') {
       workspaceStatus.textContent = message || '';
@@ -682,7 +708,9 @@
       closeProgressSource();
       resetEditor();
       upload = null;
+      urlRequestActive = false;
       activeWorkspaceId = null;
+      workspaceTitle.textContent = 'Edit Local Media File';
       fileInput.value = '';
       chooseButton.disabled = false;
       dropZone.hidden = false;
@@ -695,6 +723,7 @@
       discard.disabled = false;
       clearFailure();
       setStatus(message);
+      publishWorkspaceState('idle');
     }
 
     function setSpan(element, startSeconds, endSeconds) {
@@ -1045,8 +1074,19 @@
         && editPlan
       );
       workspaceSnapshot = data;
+      workspaceTitle.textContent = data.source?.origin === 'url' ? 'Edit Media' : 'Edit Local Media File';
+      showStorageNote(data.source?.origin || 'local');
+      publishWorkspaceState(data.status, data.source?.origin);
       const percent = Number.isFinite(data.percent) ? data.percent : null;
-      if (data.status === 'inspecting') {
+      if (data.status === 'waiting') {
+        setProgress(null, data.message || 'Waiting for another source request to finish…', true);
+        workspaceCancel.hidden = false;
+      } else if (data.status === 'acquiring') {
+        setProgress(percent, Number.isFinite(percent)
+          ? `${data.message || 'Acquiring video…'} ${percent.toFixed(0)}%`
+          : data.message || 'Acquiring video…', !Number.isFinite(percent));
+        workspaceCancel.hidden = false;
+      } else if (data.status === 'inspecting') {
         setProgress(null, 'Inspecting locally with ffprobe…', true);
         workspaceCancel.hidden = false;
       } else if (data.status === 'proxying') {
@@ -1097,8 +1137,8 @@
       ].filter(Boolean);
       mediaFacts.textContent = facts.join(' · ');
       proxyNote.textContent = data.playback.proxy
-        ? 'Playback uses a temporary local H.264/AAC proxy. The staged source remains separate and unchanged.'
-        : 'This staged source is directly compatible with browser playback; no proxy copy was needed.';
+        ? 'Playback uses a temporary local H.264/AAC proxy. The workspace source remains separate and unchanged.'
+        : 'This workspace source is directly compatible with browser playback; no proxy copy was needed.';
       proxyNote.classList.toggle('proxy', Boolean(data.playback.proxy));
       const trackCounts = inspection.trackCounts || {};
       trackWarning.hidden = !(Number(trackCounts.audio) > 1 || Number(trackCounts.subtitle) > 0);
@@ -1106,7 +1146,7 @@
       editor.hidden = false;
       chooseButton.disabled = true;
       dropZone.hidden = true;
-      setStatus('Local editor ready.', 'success');
+      setStatus(data.source?.origin === 'url' ? 'URL media is ready in the editor.' : 'Local editor ready.', 'success');
       clearFailure();
       renderTimeline();
       renderRenderState(data);
@@ -1239,7 +1279,9 @@
 
       chooseButton.disabled = true;
       dropZone.hidden = true;
-      storageNote.hidden = false;
+      workspaceTitle.textContent = 'Edit Local Media File';
+      showStorageNote('local');
+      publishWorkspaceState('uploading', 'local');
       workspaceCancel.textContent = 'Cancel';
       workspaceCancel.hidden = false;
       setStatus('Copying the selected file into LVOVD temporary storage…');
@@ -1279,6 +1321,47 @@
         if (data.workspace?.status !== 'error') startProgress(activeWorkspaceId);
       };
       xhr.send(file);
+    }
+
+    async function beginUrlAcquisition(detail) {
+      if (!detail || upload || urlRequestActive || activeWorkspaceId) {
+        publishWorkspaceState();
+        return;
+      }
+      urlRequestActive = true;
+      workspaceTitle.textContent = 'Edit Media';
+      chooseButton.disabled = true;
+      dropZone.hidden = true;
+      showStorageNote('url');
+      workspaceCancel.hidden = true;
+      clearFailure();
+      setStatus('Creating a temporary editor workspace…');
+      setProgress(null, 'Preparing URL media acquisition…', true);
+      publishWorkspaceState('starting', 'url');
+      panel.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      try {
+        const response = await root.fetch('/api/workspace/url', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(detail)
+        });
+        let data = null;
+        try { data = await response.json(); } catch {}
+        if (!response.ok) throw Object.assign(
+          new Error(data?.error || 'Could not start URL media acquisition.'),
+          { failure: data?.details }
+        );
+        urlRequestActive = false;
+        activeWorkspaceId = data.workspaceId;
+        workspaceCancel.textContent = 'Cancel preparation';
+        renderWorkspace(data.workspace);
+        if (data.workspace?.status !== 'error') startProgress(activeWorkspaceId);
+      } catch (error) {
+        urlRequestActive = false;
+        resetWorkspaceUi();
+        showFailure(error.failure, error.message || 'Could not start URL media acquisition.');
+      }
     }
 
     chooseButton.addEventListener('click', () => fileInput.click());
@@ -1456,9 +1539,13 @@
     workspaceCancel.addEventListener('click', discardWorkspace);
     failureDiscard.addEventListener('click', discardWorkspace);
     discard.addEventListener('click', discardWorkspace);
+    document.addEventListener('lvovd:workspace-acquire-url', (event) => {
+      beginUrlAcquisition(event.detail);
+    });
     root.addEventListener('resize', () => {
       if (editPlan) renderRuler();
     });
+    publishWorkspaceState('idle');
   }
 
   return {

@@ -56,6 +56,10 @@ function createSourceRequestCoordinator() {
       return queue.enqueue(task);
     },
 
+    acquire(task) {
+      return queue.enqueue(task);
+    },
+
     get size() {
       return queue.size;
     }

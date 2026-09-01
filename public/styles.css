@@ -31,10 +31,14 @@ input:focus, select:focus { border-color: #7b57ef; box-shadow: 0 0 0 3px rgba(12
 .button:disabled { cursor: wait; opacity: .55; transform: none; }
 .button.secondary { background: #2a2934; color: white; }
 .button.secondary:hover { background: #343340; }
+.button.secondary.editor-action { color: #effff6; background: linear-gradient(135deg, #245f47, #2d7757); box-shadow: 0 8px 20px rgba(45,137,94,.14); }
+.button.secondary.editor-action:hover { background: linear-gradient(135deg, #2a6d51, #358b65); box-shadow: 0 9px 22px rgba(45,137,94,.18); }
 .lookup-form .lookup-submit { background: linear-gradient(135deg, #5f49b8, #7c3ca6); box-shadow: 0 8px 22px rgba(123,87,239,.18); }
 .lookup-form .lookup-submit:hover { background: linear-gradient(135deg, #7057cf, #9148bc); }
 .button.primary { color: white; background: linear-gradient(135deg, #ff003d, #d81fff); box-shadow: 0 10px 28px rgba(230,24,124,.2); }
 .button.big { margin-top: 20px; min-height: 52px; padding: 0 24px; }
+.preview-actions { display: flex; align-items: stretch; gap: 10px; }
+.preview-actions .button { flex: 1 1 0; }
 .button.mini { min-height: 36px; padding: 0 12px; font-size: 11px; }
 .status { min-height: 24px; margin-top: 12px; font-size: 13px; color: #aaa8b5; }
 .status.error { color: #ff8d9f; }
@@ -156,8 +160,15 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .history-actions { flex: 0 0 auto; }
 .clear-button { margin-top: 11px; }
 .source-format-mode { margin-top: 12px; }
-.source-format-selection-summary { margin-top: 10px; color: #b8b2c6; }
-.source-format-row.selected { background: rgba(123,87,239,.09); box-shadow: inset 0 0 0 1px rgba(169,148,255,.2); }
+#source-formats .help { color: #bbb7c5; font-size: 12px; line-height: 1.55; }
+#source-formats .source-format-mode label { color: #d0ccd7; font-size: 12px; }
+.source-format-selection-summary, .source-formats-summary { margin-top: 10px; color: #c5c1ce; font-size: 12px; line-height: 1.55; }
+.source-format-list { gap: 10px; }
+.source-format-row { min-height: 72px; padding: 12px 13px; background: rgba(255,255,255,.035); }
+.source-format-row .source-format-copy { display: grid; gap: 4px; }
+.source-format-row strong.source-format-title { color: #f1eff5; font-size: 13px; line-height: 1.35; font-weight: 850; }
+.source-format-row small.source-format-details { margin: 0; color: #bbb8c5; font-size: 11px; line-height: 1.5; }
+.source-format-row.selected { background: rgba(123,87,239,.11); box-shadow: inset 0 0 0 1px rgba(169,148,255,.28); }
 .button.selected-source-format { background: rgba(123,87,239,.3); }
 .manual-overridden .choice-grid, .manual-overridden .field-row { opacity: .45; }
 .requirements { margin-top: 28px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.08); }
@@ -184,6 +195,8 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
   .input-row { grid-template-columns: 1fr; }
   .choice-grid.four { grid-template-columns: 1fr; }
   .button.secondary { width: 100%; }
+  .preview-actions { flex-direction: column; }
+  .preview-actions .button + .button { margin-top: 0; }
   .output-row { align-items: flex-start; flex-direction: column; }
   .output-row .button { width: 100%; }
   .queue-entry-main, .history-entry-main { width: 100%; }

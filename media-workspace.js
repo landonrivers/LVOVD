@@ -434,16 +434,28 @@ class MediaWorkspaceManager {
     return Number(this.clock());
   }
 
-  async createWorkspace({ displayName, claimedType = null, declaredLength = null } = {}) {
+  async createWorkspace({
+    displayName,
+    claimedType = null,
+    declaredLength = null,
+    origin = 'local',
+    sourceName = null,
+    waiting = false
+  } = {}) {
     const root = await this.workRoot();
     const tempDir = await this.fs.mkdtemp(path.join(root, 'workspace-'));
     const now = this.now();
+    const urlOrigin = origin === 'url';
     const workspace = {
       id: crypto.randomUUID(),
-      status: 'receiving',
-      phase: 'receiving',
-      message: 'Copying the local file into LVOVD temporary storage…',
-      percent: 0,
+      status: waiting ? 'waiting' : urlOrigin ? 'acquiring' : 'receiving',
+      phase: waiting ? 'waiting' : urlOrigin ? 'acquiring' : 'receiving',
+      message: waiting
+        ? 'Waiting for another source request to finish…'
+        : urlOrigin
+          ? 'Preparing URL media acquisition…'
+          : 'Copying the local file into LVOVD temporary storage…',
+      percent: waiting || urlOrigin ? null : 0,
       bytesReceived: 0,
       bytesTotal: declaredLength,
       createdAt: now,
@@ -452,7 +464,9 @@ class MediaWorkspaceManager {
       source: {
         displayName: normalizeDisplayFilename(displayName),
         claimedType: normalizeClaimedContentType(claimedType),
-        size: null
+        size: null,
+        origin: urlOrigin ? 'url' : 'local',
+        sourceName: sourceName ? String(sourceName).slice(0, 120) : null
       },
       tempDir,
       assets: new Map(),
@@ -465,7 +479,7 @@ class MediaWorkspaceManager {
       child: null,
       abortController: new AbortController(),
       cancelRequested: false,
-      activeOperation: 'receiving',
+      activeOperation: urlOrigin ? 'acquiring' : 'receiving',
       activePromise: null,
       render: {
         status: 'idle',
@@ -509,7 +523,9 @@ class MediaWorkspaceManager {
       lastAccessAt: new Date(workspace.lastAccessAt).toISOString(),
       source: {
         name: workspace.source.displayName,
-        size: workspace.source.size
+        size: workspace.source.size,
+        origin: workspace.source.origin,
+        sourceName: workspace.source.sourceName
       },
       inspection: workspace.inspection,
       assets: [...workspace.assets.values()].map((asset) => ({
@@ -618,6 +634,81 @@ class MediaWorkspaceManager {
     };
     workspace.assets.set(asset.id, asset);
     return asset;
+  }
+
+  async createUrlWorkspace({ displayName, sourceName = null, waiting = false } = {}) {
+    try {
+      return await this.createWorkspace({
+        displayName,
+        origin: 'url',
+        sourceName,
+        waiting
+      });
+    } catch (error) {
+      throw withLocalFailure(error, { operation: 'workspace_creation' });
+    }
+  }
+
+  async adoptAcquiredFile(workspaceId, filePath, { displayName = null } = {}) {
+    const workspace = this.get(workspaceId, { touch: false });
+    if (!workspace || workspace.cancelRequested) throw workspaceCancelledError();
+    if (!filePath || !isPathInside(workspace.tempDir, filePath)) {
+      throw withLocalFailure(
+        new Error('Acquired media was not contained inside its authoritative workspace.'),
+        { operation: 'output_collection', reason: 'output_inconsistent' }
+      );
+    }
+
+    let stat;
+    try {
+      stat = await this.fs.stat(filePath);
+    } catch (error) {
+      throw withLocalFailure(error, { operation: 'output_collection' });
+    }
+    if (!stat.isFile() || stat.size <= 0) {
+      throw withLocalFailure(
+        new Error('Source acquisition completed without a usable media file.'),
+        { operation: 'output_collection', reason: 'output_inconsistent' }
+      );
+    }
+    if (stat.size > this.maxBytes) throw this.tooLargeError();
+
+    const sourceAsset = this.registerAsset(workspace, {
+      role: 'source',
+      filePath,
+      size: stat.size,
+      mime: 'application/octet-stream',
+      playable: false
+    });
+    workspace.source.size = stat.size;
+    if (displayName) workspace.source.displayName = normalizeDisplayFilename(displayName);
+    workspace.sourceAssetId = sourceAsset.id;
+    workspace.activeOperation = 'inspecting';
+    this.update(workspace, {
+      status: 'inspecting',
+      phase: 'inspecting',
+      message: 'Inspecting the acquired video locally…',
+      percent: null,
+      bytesReceived: stat.size,
+      bytesTotal: stat.size
+    });
+    await this.prepareWorkspace(workspace);
+    return workspace;
+  }
+
+  async failAcquisition(workspace, failure) {
+    if (!workspace || !this.workspaces.has(workspace.id)) return;
+    workspace.child = null;
+    workspace.activeOperation = null;
+    workspace.activePromise = null;
+    await this.removeWorkspaceFiles(workspace);
+    this.update(workspace, {
+      status: 'error',
+      phase: 'error',
+      message: failure.title,
+      percent: null,
+      failure
+    });
   }
 
   async receiveLocalStream(readable, {
@@ -1209,6 +1300,9 @@ class MediaWorkspaceManager {
     if (!workspace) return false;
     if (workspace.activeOperation) {
       const operation = workspace.activeOperation;
+      const queuedAcquisition = operation === 'acquiring'
+        && workspace.status === 'waiting'
+        && !workspace.child;
       workspace.cancelRequested = true;
       if (!workspace.abortController.signal.aborted) workspace.abortController.abort();
       if (workspace.child) {
@@ -1228,7 +1322,9 @@ class MediaWorkspaceManager {
           percent: null
         });
       }
-      if (workspace.activePromise) await workspace.activePromise.catch(() => {});
+      if (workspace.activePromise && !queuedAcquisition) {
+        await workspace.activePromise.catch(() => {});
+      }
     }
     await this.removeWorkspaceFiles(workspace);
     this.update(workspace, {
@@ -1246,7 +1342,7 @@ class MediaWorkspaceManager {
   async cleanupExpired(now = this.now()) {
     const removed = [];
     for (const workspace of this.workspaces.values()) {
-      if (workspace.activeOperation || ['receiving', 'inspecting', 'proxying', 'cancelling'].includes(workspace.status)) continue;
+      if (workspace.activeOperation || ['waiting', 'acquiring', 'receiving', 'inspecting', 'proxying', 'cancelling'].includes(workspace.status)) continue;
       if (now - workspace.lastAccessAt < this.ttlMs) continue;
       await this.discard(workspace.id, { expired: true });
       removed.push(workspace.id);

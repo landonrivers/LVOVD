@@ -2,17 +2,96 @@ process.env.YTDLP_PATH = process.platform === 'win32' ? 'C:\\fake\\yt-dlp.exe' :
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const {
   sourceSummary,
   capabilitySummary,
   classifyPreviewError,
   parseMediaUrl,
   normalizeOptions,
+  normalizeWorkspaceAcquisition,
+  normalizeWorkspaceDisplay,
   normalizeSelection,
   formatSelector,
   buildYtdlpArgs,
+  buildWorkspaceAcquisitionArgs,
   audioConversionArgs
 } = require('../server');
+const pathForTest = (...parts) => path.join(...parts);
+
+test('URL editor acquisition accepts only the bounded video acquisition contract', () => {
+  assert.deepEqual(normalizeWorkspaceAcquisition({
+    content: 'av',
+    profile: 'compatible',
+    maxHeight: 1080,
+    sourceFormat: { mode: 'automatic' }
+  }), {
+    content: 'av',
+    profile: 'compatible',
+    maxHeight: 1080,
+    sourceFormat: { mode: 'automatic' }
+  });
+  assert.throws(() => normalizeWorkspaceAcquisition({ content: 'audio' }), /Video \+ Audio or Video Only/i);
+  assert.throws(() => normalizeWorkspaceAcquisition({ content: 'extras' }), /Video \+ Audio or Video Only/i);
+  assert.throws(() => normalizeWorkspaceAcquisition({
+    content: 'video',
+    range: { type: 'custom' }
+  }), /unsupported fields/i);
+  assert.throws(() => normalizeWorkspaceDisplay({ title: 'Video', url: 'https://private.example' }), /unsupported fields/i);
+});
+
+test('URL editor yt-dlp arguments acquire one bounded source without download-only mutations', () => {
+  const url = 'https://video.example/watch/example';
+  const output = pathForTest('workspace', 'source.%(ext)s');
+  const args = buildWorkspaceAcquisitionArgs(url, normalizeWorkspaceAcquisition({
+    content: 'av',
+    profile: 'compatible',
+    maxHeight: 720,
+    sourceFormat: { mode: 'automatic' }
+  }), output);
+  assert.equal(args[args.indexOf('--output') + 1], output);
+  assert.equal(args[args.indexOf('--match-filter') + 1], '!is_live');
+  assert.equal(args[args.indexOf('--merge-output-format') + 1], 'mp4');
+  assert.match(args[args.indexOf('--format') + 1], /height<=\?720/);
+  assert.equal(args.at(-1), url);
+  for (const forbidden of [
+    '--download-sections', '--sponsorblock-mark', '--sponsorblock-remove',
+    '--write-thumbnail', '--write-info-json', '--write-subs', '--write-auto-subs',
+    '--remux-video', '--extract-audio'
+  ]) assert.equal(args.includes(forbidden), false, forbidden);
+});
+
+test('URL editor temporary merge policy preserves manual choice and practical containers', () => {
+  const url = 'https://video.example/watch/example';
+  const output = pathForTest('workspace', 'source.%(ext)s');
+  const maximum = buildWorkspaceAcquisitionArgs(url, normalizeWorkspaceAcquisition({
+    content: 'av', profile: 'maximum', maxHeight: null, sourceFormat: { mode: 'automatic' }
+  }), output);
+  assert.equal(maximum[maximum.indexOf('--merge-output-format') + 1], 'mkv');
+
+  const manualSeparate = buildWorkspaceAcquisitionArgs(url, normalizeWorkspaceAcquisition({
+    content: 'av',
+    profile: 'compatible',
+    maxHeight: null,
+    sourceFormat: { mode: 'manual', type: 'separate', videoId: '137', audioId: '140' }
+  }), output);
+  assert.equal(manualSeparate[manualSeparate.indexOf('--format') + 1], '137+140');
+  assert.equal(manualSeparate[manualSeparate.indexOf('--merge-output-format') + 1], 'mkv');
+
+  const combined = buildWorkspaceAcquisitionArgs(url, normalizeWorkspaceAcquisition({
+    content: 'av',
+    profile: 'compatible',
+    maxHeight: null,
+    sourceFormat: { mode: 'manual', type: 'combined', combinedId: '22' }
+  }), output);
+  assert.equal(combined[combined.indexOf('--format') + 1], '22');
+  assert.equal(combined.includes('--merge-output-format'), false);
+
+  const video = buildWorkspaceAcquisitionArgs(url, normalizeWorkspaceAcquisition({
+    content: 'video', profile: 'maximum', maxHeight: null, sourceFormat: { mode: 'automatic' }
+  }), output);
+  assert.equal(video.includes('--merge-output-format'), false);
+});
 
 test('compatible AV prefers H.264 + AAC and respects a resolution cap', () => {
   const options = normalizeOptions({ content: 'av', profile: 'compatible', maxHeight: 1080 });
