@@ -147,6 +147,7 @@ test('source format Preview metadata marks only unambiguous literal ids selectab
 
 test('browser manual format UI stays capability-driven and queue-visible', () => {
   const app = read('public/app.js');
+  const styles = read('public/styles.css');
   assert.match(app, /Manual source override/);
   assert.match(app, /function currentSourceFormatSelection\(content\)/);
   assert.match(app, /format\.selectable/);
@@ -154,6 +155,14 @@ test('browser manual format UI stays capability-driven and queue-visible', () =>
   assert.match(app, /sourceFormat: currentSourceFormatSelection\(content\)/);
   assert.match(app, /Manual source \$\{selection\.videoId\} \+ \$\{selection\.audioId\}/);
   assert.match(app, /videoOptions\.classList\.toggle\('manual-overridden'/);
+  assert.match(app, /function friendlySourceCodec\(codec, mediaType\)/);
+  assert.match(app, /\[\/\^\(\?:avc1\|avc3\|h264\)\//);
+  assert.match(app, /strong\.textContent = sourceFormatTitle\(format\)/);
+  assert.doesNotMatch(app, /strong\.textContent = `Format \$\{format\.id\}/);
+  assert.doesNotMatch(app, /textContent = `(?:Format|Source ID) \$\{format\.id\}/);
+  assert.match(styles, /#source-formats \.help \{ color: #bbb7c5; font-size: 12px/);
+  assert.match(styles, /source-format-title \{ color: #f1eff5; font-size: 13px/);
+  assert.match(styles, /source-format-details \{[^}]*color: #bbb8c5; font-size: 11px/);
   assert.doesNotMatch(app, /raw format selector|format selector textbox|sourceFormatSelectorInput/);
 });
 

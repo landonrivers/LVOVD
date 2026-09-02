@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - master
+      - roadmap/6-local-edit-staging
   workflow_dispatch:
   pull_request:
     branches:
       - master
+      - roadmap/6-local-edit-staging
     types:
       - opened
       - reopened

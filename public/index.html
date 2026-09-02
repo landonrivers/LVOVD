@@ -24,10 +24,10 @@
       <p class="intro">A Locally Hosted Video Downloader Which You'll Use Responsibly</p>
 
       <form id="lookup-form" class="lookup-form">
-        <label for="video-url">Video URL</label>
+        <label class="workflow-heading" for="video-url">Download From Media URL</label>
         <div class="input-row">
-          <input id="video-url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://example.com/video/..." />
-          <button id="preview-button" class="button secondary" type="submit">Preview</button>
+          <input id="video-url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://example.com/media/..." />
+          <button id="preview-button" class="button secondary lookup-submit" type="submit">Preview</button>
         </div>
       </form>
 
@@ -242,7 +242,11 @@
             </div>
           </details>
 
-          <button id="download-button" class="button primary big" type="button">Download video + audio</button>
+          <div class="preview-actions">
+            <button id="download-button" class="button primary big" type="button">Download video + audio</button>
+            <button id="open-editor-button" class="button secondary editor-action big" type="button">Edit Source Video</button>
+          </div>
+          <p id="open-editor-note" class="download-note" hidden></p>
           <p class="download-note">Prepared files live only in your local temporary folder and are automatically cleaned up after about an hour while the server is running.</p>
 
           <section id="download-progress" class="download-progress" aria-live="polite" hidden>
@@ -267,6 +271,201 @@
             <button id="clear-job" class="text-button clear-button" type="button" hidden>Clear prepared files now</button>
           </section>
         </div>
+      </section>
+
+      <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
+        <div class="workspace-heading">
+          <h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File</h2>
+        </div>
+
+        <div id="workspace-storage-note" class="workspace-storage-note" hidden>
+          <strong>Temporary disk use</strong>
+          <span>Large files can temporarily require roughly another copy's worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.</span>
+        </div>
+
+        <div id="media-drop-zone" class="media-drop-zone">
+          <input id="media-file-input" type="file" hidden />
+          <div class="drop-glyph" aria-hidden="true">＋</div>
+          <div>
+            <strong>Drop one local video here</strong>
+            <span>or choose a file up to 100 GiB</span>
+          </div>
+          <button id="media-choose-button" class="button secondary" type="button">Choose File</button>
+        </div>
+
+        <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+
+        <section id="workspace-progress" class="workspace-progress" aria-live="polite" hidden>
+          <div class="progress-head">
+            <strong id="workspace-progress-label">Copying local media…</strong>
+            <button id="workspace-cancel" class="text-button" type="button">Cancel</button>
+          </div>
+          <div class="progress-track" aria-hidden="true"><div id="workspace-progress-bar" class="progress-bar"></div></div>
+        </section>
+
+        <section id="workspace-failure" class="preview-error workspace-failure" hidden>
+          <div>
+            <p class="eyebrow">LOCAL MEDIA RESULT</p>
+            <h3 id="workspace-failure-title">Local media preparation failed</h3>
+            <p id="workspace-failure-explanation" class="error-message"></p>
+            <p id="workspace-failure-help" class="help"></p>
+            <button id="workspace-failure-discard" class="button secondary mini workspace-failure-action" type="button" hidden>Discard failed workspace</button>
+          </div>
+        </section>
+
+        <section id="media-editor" class="media-editor" hidden>
+          <div class="editor-head">
+            <div>
+              <h3 id="editor-media-name">Local video</h3>
+              <p id="editor-media-facts" class="help"></p>
+              <p id="editor-proxy-note" class="editor-proxy-note"></p>
+              <p id="editor-track-warning" class="editor-track-warning" hidden>This edited output uses the primary video/audio track. Additional audio or subtitle tracks are not included yet.</p>
+            </div>
+            <button id="workspace-discard" class="button secondary mini" type="button">Discard</button>
+          </div>
+
+          <div class="editor-layout">
+            <div class="editor-player">
+              <video id="editor-video" controls preload="metadata" playsinline tabindex="0"></video>
+              <div id="editor-clock" class="editor-clock">00:00:00.000 / 00:00:00.000</div>
+            </div>
+
+            <div class="timeline-editor">
+              <div class="timeline-toolbar">
+                <div>
+                  <strong>Timeline</strong>
+                  <span id="timeline-visible-label">Showing full timeline</span>
+                </div>
+                <div class="inline-actions">
+                  <button id="timeline-zoom-in" class="text-button" type="button">Zoom In</button>
+                  <button id="timeline-zoom-out" class="text-button" type="button">Zoom Out</button>
+                  <button id="timeline-fit" class="text-button" type="button">Full Timeline</button>
+                </div>
+              </div>
+
+              <p class="timeline-interaction-hint">Click or drag the timeline to seek · Drag the time ruler to pan when zoomed</p>
+
+              <div id="timeline-ruler" class="timeline-ruler" title="Drag to pan while zoomed">
+                <div id="timeline-ruler-ticks" class="timeline-ruler-ticks"></div>
+              </div>
+
+              <div id="timeline-track" class="timeline-track" role="group" tabindex="0" aria-label="Timeline seek control. Space plays or pauses; Left and Right Arrow seek five seconds." title="Click or drag to seek; use the handles to change the retained range">
+                <div id="timeline-regions" class="timeline-regions" aria-hidden="true"></div>
+                <div id="timeline-pending-cut" class="timeline-region pending-cut" aria-hidden="true" hidden></div>
+                <div id="timeline-playhead" class="timeline-playhead" aria-hidden="true"></div>
+                <button id="timeline-start-handle" class="timeline-handle start" type="button" role="slider" aria-orientation="horizontal" aria-label="Retained range start" aria-valuemin="0"></button>
+                <button id="timeline-end-handle" class="timeline-handle end" type="button" role="slider" aria-orientation="horizontal" aria-label="Retained range end" aria-valuemin="0"></button>
+                <button id="timeline-cut-start-handle" class="timeline-handle cut start" type="button" role="slider" aria-orientation="horizontal" aria-label="Pending cut start" aria-valuemin="0" hidden></button>
+                <button id="timeline-cut-end-handle" class="timeline-handle cut end" type="button" role="slider" aria-orientation="horizontal" aria-label="Pending cut end" aria-valuemin="0" hidden></button>
+              </div>
+
+              <div class="timeline-legend" aria-hidden="true">
+                <span><i class="legend-retained"></i>Retained</span>
+                <span><i class="legend-removed"></i>Removed</span>
+                <span><i class="legend-pending-cut"></i>Pending removal</span>
+                <span><i class="legend-playhead"></i>Playhead</span>
+              </div>
+
+              <section class="editor-crop-panel" aria-labelledby="crop-video-title">
+                <h4 id="crop-video-title" class="editor-section-title">Crop Video Length</h4>
+                <div class="editor-exact-grid">
+                  <div class="editor-exact-control">
+                    <label class="field" for="editor-start-time">
+                      <span>Retained start</span>
+                      <input id="editor-start-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-start-error" />
+                    </label>
+                    <div class="editor-boundary-actions">
+                      <button id="set-start-playhead" class="button secondary mini" type="button">Set Start</button>
+                      <button id="go-to-start" class="button secondary mini" type="button">Go to Start</button>
+                    </div>
+                    <small id="editor-start-error" class="field-error" aria-live="polite"></small>
+                  </div>
+                  <div class="editor-exact-control">
+                    <label class="field" for="editor-end-time">
+                      <span>Retained end</span>
+                      <input id="editor-end-time" type="text" inputmode="decimal" value="00:00:00.000" aria-describedby="editor-end-error" />
+                    </label>
+                    <div class="editor-boundary-actions">
+                      <button id="set-end-playhead" class="button secondary mini" type="button">Set End</button>
+                      <button id="go-to-end" class="button secondary mini" type="button">Go to End</button>
+                    </div>
+                    <small id="editor-end-error" class="field-error" aria-live="polite"></small>
+                  </div>
+                  <div class="timeline-range-actions">
+                    <button id="reset-range" class="button secondary mini" type="button">Reset Range</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="middle-cut-panel" aria-labelledby="middle-cut-title">
+                <h4 id="middle-cut-title" class="editor-section-title">Remove Section</h4>
+                <div class="middle-cut-grid">
+                  <label class="field" for="cut-start-time">
+                    <span>Cut start</span>
+                    <input id="cut-start-time" type="text" inputmode="decimal" placeholder="00:00:00.000" aria-describedby="cut-start-error" />
+                  </label>
+                  <label class="field" for="cut-end-time">
+                    <span>Cut end</span>
+                    <input id="cut-end-time" type="text" inputmode="decimal" placeholder="00:00:00.000" aria-describedby="cut-end-error" />
+                  </label>
+                  <button id="set-cut-start" class="button secondary mini" type="button">Set Cut Start</button>
+                  <button id="set-cut-end" class="button secondary mini" type="button">Set Cut End</button>
+                  <small id="cut-start-error" class="field-error" aria-live="polite"></small>
+                  <small id="cut-end-error" class="field-error" aria-live="polite"></small>
+                </div>
+                <div class="middle-cut-actions">
+                  <button id="remove-section" class="button secondary mini" type="button" disabled>Remove Section</button>
+                  <button id="clear-pending-cut" class="text-button" type="button" disabled>Clear Cut</button>
+                  <small id="pending-cut-error" class="field-error" aria-live="polite"></small>
+                </div>
+              </section>
+
+              <section id="removed-sections" class="removed-sections" aria-labelledby="removed-sections-title" hidden>
+                <h4 id="removed-sections-title">Removed Sections</h4>
+                <div id="removed-sections-list" class="removed-sections-list"></div>
+              </section>
+
+              <section class="editor-render-panel" aria-label="Create edited output">
+                <div class="editor-render-head">
+                  <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
+                  <p class="editor-foundation-note">Creates a high-quality H.264 MP4 locally, with AAC audio when the source has audio. LVOVD re-encodes edits to closely match arbitrary cut times. Your workspace source is unchanged.</p>
+                </div>
+
+                <p id="editor-render-noop" class="editor-render-noop">Change the retained range or remove a section before creating an edited file.</p>
+
+                <div id="editor-render-progress" class="workspace-progress editor-render-progress" aria-live="polite" hidden>
+                  <div class="progress-head">
+                    <div>
+                      <strong id="editor-render-progress-label">Creating edited file…</strong>
+                      <span>Re-encoding locally for the selected boundaries.</span>
+                    </div>
+                    <button id="cancel-edited-render" class="text-button" type="button">Cancel Render</button>
+                  </div>
+                  <div class="progress-track" aria-hidden="true"><div id="editor-render-progress-bar" class="progress-bar"></div></div>
+                </div>
+
+                <section id="editor-render-failure" class="preview-error editor-render-failure" aria-live="polite" hidden>
+                  <div>
+                    <p class="eyebrow">EDITED FILE RESULT</p>
+                    <h4 id="editor-render-failure-title">Edited-file creation failed</h4>
+                    <p id="editor-render-failure-explanation" class="error-message"></p>
+                    <p id="editor-render-failure-help" class="help"></p>
+                  </div>
+                </section>
+
+                <section id="editor-edited-output" class="editor-edited-output" aria-live="polite" hidden>
+                  <div>
+                    <p class="eyebrow">DOWNLOAD EDITED FILE</p>
+                    <h4 id="editor-output-filename">Edited video.mp4</h4>
+                    <p id="editor-output-facts" class="help"></p>
+                    <p id="editor-output-stale" class="editor-output-stale" hidden>Range changed — create the edited file again to update it. This download was created from the previous range.</p>
+                  </div>
+                  <a id="download-edited-file" class="button secondary mini" href="#">Download</a>
+                </section>
+              </section>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section id="history-panel" class="download-progress" aria-live="polite">
@@ -302,5 +501,7 @@
   </main>
   <script src="/app.js" defer></script>
   <script src="/history-ui.js" defer></script>
+  <script src="/edit-plan.js" defer></script>
+  <script src="/media-editor.js" defer></script>
 </body>
 </html>

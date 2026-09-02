@@ -6,7 +6,7 @@ It is a product and architecture contract, not an implementation specification. 
 
 ## Core idea
 
-LVOVD should treat downloaded media and user-supplied local media as two ways to enter the same temporary **local media workspace**.
+LVOVD treats URL-acquired media and user-supplied local media as two ways to enter the same temporary **local media workspace**.
 
 The workspace is not a permanent media library. It owns temporary working assets, local inspection/playback support, edit or conversion plans, local FFmpeg work, cancellation, prepared outputs, and cleanup.
 
@@ -90,7 +90,7 @@ At minimum it should support:
 - click-to-seek and/or scrubbing;
 - visual start/end handles for a selected range;
 - visual indication of retained and removed portions;
-- later support for multiple authored cuts, including removal of middle sections;
+- multiple authored cuts, including removal and restoration of middle sections;
 - clear review of the intended edit before processing.
 
 The user should be able to understand what will remain and what will be removed without mentally translating a list of timecodes.
@@ -136,16 +136,9 @@ The browser should prevent or clearly reject invalid ranges, overlaps, negative 
 
 ## Processing and quality truth
 
-LVOVD should preserve quality when technically safe, but must not promise frame-perfect lossless cuts when the source codec/keyframe layout makes that impossible.
+The first public editing baseline produces a high-quality H.264 MP4, with AAC when the selected source has audio. It re-encodes locally so arbitrary authored boundaries can be honored closely, and leaves the workspace source unchanged. This output is not lossless and does not preserve arbitrary source codecs.
 
-The eventual processing policy should distinguish operations such as:
-
-- stream copy/remux when safe and sufficiently accurate;
-- re-encoding when exact cut placement or output compatibility requires it.
-
-The UI should explain the practical consequence in plain language, for example that an exact cut may require re-encoding while a faster lossless-style cut may be constrained by safe source boundaries.
-
-Timeline zoom and millisecond-level controls may provide precise edit intent; they do not imply that every codec can satisfy that intent without re-encoding.
+Conservative/keyframe-aware stream copy or remux remains a future optimization where it can be proven safe and sufficiently accurate. It is not a blocker for the first release. Timeline zoom and millisecond-level controls express precise edit intent; they do not imply frame-perfect or lossless processing.
 
 ## Browser playback and compatibility
 
@@ -191,41 +184,22 @@ They may eventually share local segment-processing machinery, but selecting or c
 
 ## History
 
-History should eventually record enough stable information to truthfully identify an edited or converted result and the relevant user choices, without storing temporary workspace paths, playback-proxy details, or unstable runtime state.
+The visible durable feature remains **Download History**. Edit workspace activity and edited outputs are not currently persisted there. The history schema does not store workspace IDs, temporary source paths, playback proxies, edited-output paths, or browser save paths.
 
-The exact History shape should be decided when real edited outputs are introduced rather than prematurely expanding the schema during workspace foundation work.
+Any future edited/converted-result history requires its own stable product and schema decision rather than leaking temporary workspace state into Download History.
 
-## First implementation direction
+## Implemented Roadmap #6 baseline
 
-The first implementation slice should prove the generic workspace and visual editing interaction rather than immediately attempting a complete editor.
+Roadmap #6 now implements the first focused editor release across its accepted slices:
 
-The current preferred boundary is:
+- **6A1 — workspace and visual timeline:** one chosen/dropped local video is copied into an opaque temporary workspace, inspected locally, and played directly or through a separate playback proxy; the browser provides a synchronized player/playhead, zoomable and pannable timeline, exact fields, reversible outer bounds, cancellation, Discard, inactivity expiry, and contained workspace media access;
+- **6B — real edited output:** changed plans can produce and download a locally rendered H.264 MP4 with AAC when audio exists, with streamed progress, cancellation/retry, post-render validation, stale-output detection, and atomic successful replacement;
+- **6C — multiple cuts:** the canonical version-1 keep-range plan supports sorted retained ranges, middle-section removal and Restore, generic retained/removed timeline rendering, and bounded multi-segment FFmpeg concatenation in chronological order;
+- **6A2 — URL Preview to Edit:** an eligible single, non-live Preview can use **Edit Source Video** to acquire the selected source/profile/resolution or Manual source choice once into the same workspace, serialized with Preview and Download source work and without changing normal Download or durable History.
 
-### 6A — Local Media Workspace & Visual Timeline Foundation
+The original workspace source remains final-render authority; a playback proxy is never the render source. Download Time Range and SponsorBlock remain separate Download behavior and do not silently seed editor cuts.
 
-Candidate goals:
-
-- preserve the existing normal Download path;
-- allow a single-media URL Preview to enter an Edit path without a second provider acquisition;
-- allow a user to choose/drop a local video into the same workspace;
-- establish temporary workspace ownership, cancellation, discard, expiry, and cleanup;
-- inspect enough local media metadata to support the workspace safely;
-- provide secure seekable local playback, including an explicit strategy for browser-incompatible codecs;
-- provide the initial editor shell with player, synchronized playhead, timeline, seeking/scrubbing, zoomable visible time window, one visual selection, exact start/end fields, and bidirectional synchronization between fields and handles;
-- show the proposed selected/removed region visually;
-- do not render destructive edits yet unless the implementation review demonstrates that one small render is necessary to prove the architecture.
-
-The purpose of 6A is to prove that the media lifecycle and the human editing interaction are both sound before committing to a larger FFmpeg editing pipeline.
-
-Likely later slices include:
-
-- first real start/end trim and prepared edited output;
-- multiple cuts / removal of middle segments;
-- quality-preservation and stream-copy/re-encode policy hardening;
-- playback compatibility/proxy hardening where evidence requires it;
-- clean handoff from Edit into Roadmap #7 Convert.
-
-These slice names and exact boundaries remain subject to the pre-implementation architecture review.
+Remaining deferred work includes conservative/keyframe-aware stream-copy optimization, richer track/subtitle preservation, evidence-driven playback and quality hardening, and the Roadmap #7 **Edit -> Convert** handoff. These are future enhancements, not missing requirements for the completed first editing baseline.
 
 ## Boundaries that remain in force
 
