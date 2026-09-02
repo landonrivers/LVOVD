@@ -6,7 +6,7 @@ You're here because you don't trust any of those browser extensions or sketchy s
 
 ![LVOVD in use](example.png)  
 
-LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL, preview what the source exposes, choose your download options, and **let your own computer do the work**.
+LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring one video into the local editor, and **let your own computer do the work**.
 
 > Use LVOVD only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
@@ -114,6 +114,10 @@ http://localhost:3000
 - Preview playlists/collections and choose individual entries.
 - Optionally use yt-dlp's SponsorBlock integration to mark or remove supported segment categories.
 - Show real yt-dlp download progress, speed, ETA, and processing stages.
+- Choose or drop one local video into a temporary editing workspace.
+- Use **Edit Source Video** after an eligible single, non-live URL Preview. URL Edit respects the selected source, Compatible/Maximum profile, resolution, and Manual source choice, then acquires that source once into temporary workspace storage.
+- Visually trim the overall Start/End, remove and restore multiple middle sections, and navigate with a zoomable/pannable timeline, draggable handles, keyboard controls, and exact time fields.
+- Create and download a real edited result while leaving the workspace source unchanged.
 
 ## Source compatibility
 
@@ -138,11 +142,21 @@ LVOVD does **not** bypass DRM, region restrictions, logins, or access controls.
 
 Video-only mode follows the same idea but produces no audio track.
 
+For **Edit Source Video**, Compatible/Maximum, the selected resolution, and any Manual source override control which source is acquired into the temporary editor workspace. They do not change the edited-output codec policy: edited results are currently H.264 MP4 with AAC when the acquired source has audio.
+
 ### Audio
 
 **Source Audio** keeps the best available source audio unchanged.
 
 Choosing MP3, M4A/AAC, Opus, FLAC, or WAV still downloads source audio first, then converts the local file with FFmpeg. The selected output format does not change remote media acquisition.
+
+### Local video editing
+
+The editor accepts one chosen/dropped local video, or an eligible single, non-live URL Preview through **Edit Source Video**. URL editing acquires the selected source once; it does not apply the Download-only Time Range, Extras, or SponsorBlock controls.
+
+The browser player and timeline let you set reversible outer Start/End bounds, remove and restore middle sections, seek, zoom, pan, drag handles, use exact time fields, and adjust focused handles with the keyboard. The final retained ranges stay in their original chronological order.
+
+**Create Edited File** produces a high-quality H.264 MP4 locally, with AAC when the source has audio. LVOVD re-encodes edited output to closely honor arbitrary authored cut times. This is not lossless, and it does not preserve arbitrary source codecs. The workspace source remains unchanged.
 
 ### Extras, ranges, chapters, and subtitles
 
@@ -174,6 +188,8 @@ The source website still sees normal network requests from your connection, incl
 
 **Preview also contacts the source:** it is LVOVD's compatibility/capability probe, not a local-only lookup. Download jobs are serialized so LVOVD does not run multiple remote acquisitions at once, and selected playlist items get a short randomized pause between them. If a source reports a request limit or rejects a download, LVOVD stops instead of automatically retrying through the batch. These safeguards reduce unnecessary request bursts, but they cannot guarantee that a source service will never throttle or reject your connection.
 
+**URL editing also contacts the source:** choosing **Edit Source Video** acquires the selected source once into temporary storage on this computer. The source service sees those acquisition requests. Playback, timeline editing, and rendering happen locally after acquisition, and LVOVD does not upload the workspace media to cloud storage.
+
 LVOVD is **not** a VPN, proxy, Tor client, anonymity service, DRM bypass, or access-control bypass.
 
 The default server bind is `127.0.0.1`, meaning other computers on your network cannot connect unless you deliberately change `HOST`.
@@ -184,17 +200,23 @@ LVOVD does not currently import browser cookies or your logged-in browser sessio
 
 ## Temporary files
 
-LVOVD prepares media inside a fresh, randomly named workspace under your operating system's temporary directory for each server run. Ready files remain available locally for about one hour while the server is running, and the UI provides **Clear prepared files now**. LVOVD cleans job files it still owns while the server is running. If the server stops before a job is cleaned—for example, because its terminal is closed—the operating system may retain that run's temporary folder until its normal temporary-file cleanup or manual removal.
+Download jobs prepare their intermediate and ready files inside process-owned temporary storage. Ready download files remain available locally for about one hour while the server is running, and the queue provides **Clear prepared files now**.
 
-Large downloads may require enough free space for both intermediate and finished files.
+Edit uses a separate temporary media workspace. Local-file intake copies the chosen file into that workspace; URL Edit downloads its selected source into the workspace once. A browser-compatible playback proxy and an edited output may each require additional temporary disk space. **Discard** removes the source, proxy, edited output, and other assets owned by that workspace. An idle workspace expires while the server is running; keeping the editor open and connected counts as activity.
+
+If the server stops before owned temporary data is cleaned—for example, because its terminal is closed—the operating system may retain that run's temporary folder until normal temporary-file cleanup or manual removal. Large downloads and editing sessions can therefore require space for the working source, intermediate/proxy data, and prepared output at the same time.
+
+The browser controls the final save destination for downloaded or edited files. That saved copy is outside LVOVD's temporary-workspace authority, and LVOVD does not know or clean its final path.
 
 ## Download history
 
-LVOVD keeps a small, versioned `history.json` file in the current user's local application-data directory. The persistence/API foundation records terminal **Ready**, **Failed**, and **Cancelled** jobs so useful metadata can survive a browser or server restart. A visible History panel and intentional **Use Again** workflow are the next UI slice; history does not silently start source requests or downloads.
+LVOVD keeps a small, versioned `history.json` file in the current user's local application-data directory. The visible **Download History** panel records terminal **Ready**, **Failed**, and **Cancelled** download jobs so useful metadata can survive a browser or server restart. Its intentional **Use Again** action returns through a fresh Preview and restores only choices that remain compatible; it never silently starts a source request or download.
 
 A history entry can include the source page URL (and selected playlist-item page URLs), normalized download choices, a bounded title/source label from Preview, output filename/type/size metadata, completion time, and failure information. It does **not** copy the media itself.
 
 LVOVD deliberately does not store temporary workspace paths, runtime `/api/download/file` links, yt-dlp internal media/CDN URLs, Preview thumbnail URLs, or active process/progress state in history. The browser still decides where its downloaded copy is saved, so LVOVD does not know or store that final path and does not currently provide **Open File/Open Folder** from history. Deleting history metadata does not delete files the browser saved elsewhere.
+
+Edit workspace activity and edited outputs are not currently persisted in Download History. History does not store Edit workspace IDs, temporary source paths, playback proxies, edited-output paths, or browser save paths.
 
 Default history locations are:
 
