@@ -168,6 +168,14 @@ Conversion controls should not clutter the normal editing timeline, and editing 
 
 Roadmap #7 remains responsible for conversion capability discovery, codec/container choices, batch conversion, image compatibility work, and similar conversion-specific behavior.
 
+### Implemented Roadmap 7A boundary
+
+The shared workspace now has a bounded server-owned purpose of `edit` or `convert`. Both purposes reuse opaque ownership, streamed local intake, the 100 GiB limit, cancellation, Discard, inactivity expiry, and contained cleanup. URL acquisition remains Edit-only.
+
+Generic local inspection can describe timed video, audio-only media, and conservative unsupported/unknown input without equating all media with editable video. Edit applies its existing stricter timed-video validation and direct-playback/proxy preparation after that generic probe, preserving its current behavior. Convert inspection accepts one local video or audio source, never creates a playback proxy, and keeps the original source inside its workspace.
+
+Roadmap 7A also performs process-lifetime cached, bounded discovery of the FFmpeg installed on `PATH` and uses normalized encoder, decoder, and muxer facts to assess the initial **Broad Compatibility MP4** video target. Raw FFmpeg listings and local paths are not browser data. The visible workflow is explicitly inspection-only; it creates no converted output, makes no provider request, and does not add workspace activity to Download History.
+
 ## Existing Custom Range and chapters
 
 LVOVD already has a quick Custom Range / chapter download path that uses yt-dlp download-section behavior.
