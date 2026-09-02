@@ -1832,6 +1832,7 @@ function serveStatic(reqPath, res) {
     '/history-ui.js': ['history-ui.js', 'text/javascript; charset=utf-8'],
     '/edit-plan.js': ['edit-plan.js', 'text/javascript; charset=utf-8'],
     '/media-editor.js': ['media-editor.js', 'text/javascript; charset=utf-8'],
+    '/conversion-inspector.js': ['conversion-inspector.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };
   const route = routes[reqPath];
@@ -2003,6 +2004,31 @@ async function handleRequest(req, res) {
         displayName,
         claimedType: req.headers['content-type'],
         declaredLength
+      });
+      return json(res, 202, {
+        workspaceId: workspace.id,
+        workspace: mediaWorkspaces.publicWorkspace(workspace)
+      });
+    } catch (error) {
+      if (req.aborted || res.destroyed) return;
+      const details = mediaWorkspaces.failureFor(error);
+      return json(res, error.statusCode || 500, { error: details.title, details });
+    }
+  }
+
+  if (req.method === 'POST' && requestUrl.pathname === '/api/conversion/local') {
+    const declaredLength = req.headers['content-length'] == null
+      ? null
+      : Number(req.headers['content-length']);
+    let displayName = req.headers['x-lvovd-filename'] || 'Local media';
+    try { displayName = decodeURIComponent(displayName); } catch {}
+
+    try {
+      const workspace = await mediaWorkspaces.receiveLocalStream(req, {
+        displayName,
+        claimedType: req.headers['content-type'],
+        declaredLength,
+        purpose: 'convert'
       });
       return json(res, 202, {
         workspaceId: workspace.id,
