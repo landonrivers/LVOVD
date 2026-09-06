@@ -5,11 +5,13 @@ on:
     branches:
       - master
       - roadmap/6-local-edit-staging
+      - roadmap/7-local-convert-staging
   workflow_dispatch:
   pull_request:
     branches:
       - master
       - roadmap/6-local-edit-staging
+      - roadmap/7-local-convert-staging
     types:
       - opened
       - reopened

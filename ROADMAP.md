@@ -156,6 +156,8 @@ Potential uses:
 
 Capability discovery should inspect the **actual installed local conversion engine(s)** and expose only conversions that this installation can perform. FFmpeg is the natural primary engine because LVOVD already depends on it, but the product should not force every future image conversion through FFmpeg when a small, well-maintained local image library is demonstrably safer or more capable. No conversion path should require uploading the user's files to a cloud service.
 
+**Roadmap 7A — inspection foundation:** one chosen local video or audio file can now enter a purpose-bounded Convert workspace for generic local ffprobe inspection without creating an editor playback proxy. LVOVD caches bounded discovery of the installed FFmpeg encoders, decoders, and muxers, then explains whether a video is already compatible with the initial **Broad Compatibility MP4** target, needs remuxing or specific re-encoding, lacks enough metadata for a conclusion, or cannot be converted with the detected local capabilities. This slice is inspection-only: it does not create a converted output, and Roadmap #7 is not complete.
+
 This feature should remain clearly separate from source acquisition: changing the requested local output format must not alter or multiply remote source requests.
 
 ## Major milestone — Easier desktop distribution

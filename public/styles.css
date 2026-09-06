@@ -350,9 +350,36 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .editor-edited-output .button { flex: 0 0 auto; text-align: center; }
 .editor-output-stale { margin: 7px 0 0; color: #f0c66d; font-size: 9px; font-weight: 750; line-height: 1.45; }
 
+/* Roadmap 7A local conversion inspection foundation */
+.conversion-inspector-panel { margin: 28px 0; padding: clamp(14px, 2vw, 18px); border: 1px solid rgba(93,207,185,.2); border-radius: 18px; background: linear-gradient(145deg, rgba(45,150,135,.075), rgba(70,102,177,.035)); }
+.conversion-intro { max-width: 760px; margin: 6px 0 0; color: #aaa6b2; font-size: 11px; line-height: 1.55; }
+.conversion-storage-note { display: grid; grid-template-columns: auto 1fr; gap: 10px 13px; margin-top: 14px; padding: 11px 13px; border-radius: 11px; background: rgba(255,255,255,.03); color: #b5b1bd; font-size: 11px; line-height: 1.55; }
+.conversion-storage-note strong { color: #cfe5df; }
+.conversion-drop-zone { border-color: rgba(93,207,185,.34); }
+.conversion-drop-zone.dragover { border-color: #5fcfaf; background: rgba(47,155,126,.08); }
+.conversion-drop-zone .drop-glyph { background: rgba(52,170,143,.13); color: #9fe4d0; }
+#conversion-status:empty { min-height: 0; margin-top: 0; }
+.conversion-result { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.08); }
+.conversion-result-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.conversion-result-head h3 { color: #f0edf4; font-size: 17px; overflow-wrap: anywhere; }
+.conversion-facts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin: 14px 0 0; }
+.conversion-facts > div { min-width: 0; padding: 10px 11px; border: 1px solid rgba(255,255,255,.065); border-radius: 10px; background: rgba(7,9,12,.34); }
+.conversion-facts dt { color: #aaa6b2; font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+.conversion-facts dd { margin: 5px 0 0; color: #eeeaf2; font-size: 12px; font-weight: 750; line-height: 1.4; overflow-wrap: anywhere; }
+.conversion-assessment { margin-top: 12px; padding: 13px 14px; border: 1px solid rgba(105,193,153,.2); border-radius: 12px; background: rgba(35,132,81,.07); }
+.conversion-assessment h4 { margin-top: 4px; color: #b9ebd1; font-size: 14px; }
+.conversion-assessment .help { margin: 6px 0 0; color: #c1bdc8; font-size: 11px; line-height: 1.55; }
+.conversion-assessment[data-status="remux"], .conversion-assessment[data-status="reencode-audio"], .conversion-assessment[data-status="reencode-video"], .conversion-assessment[data-status="reencode-video-and-audio"] { border-color: rgba(218,177,83,.22); background: rgba(140,102,26,.07); }
+.conversion-assessment[data-status="remux"] h4, .conversion-assessment[data-status^="reencode"] h4 { color: #efd28e; }
+.conversion-assessment[data-status="unknown"], .conversion-assessment[data-status="unavailable"] { border-color: rgba(255,111,133,.2); background: rgba(137,32,52,.08); }
+.conversion-assessment[data-status="unknown"] h4, .conversion-assessment[data-status="unavailable"] h4 { color: #ffc2cd; }
+.conversion-assessment-missing { margin: 7px 0 0; color: #efb7c1; font-size: 10px; line-height: 1.5; }
+.conversion-inspection-only { margin: 11px 0 0; color: #a6a2ad; font-size: 10px; font-weight: 750; line-height: 1.5; }
+
 @media (max-width: 900px) {
   .editor-layout { grid-template-columns: 1fr; }
   .editor-player { max-width: 520px; }
+  .conversion-facts { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
 @media (max-width: 620px) {
@@ -367,4 +394,8 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
   .editor-boundary-actions .button, .timeline-range-actions .button { width: 100%; }
   .editor-render-head, .editor-edited-output { align-items: stretch; flex-direction: column; }
   .editor-render-head .button, .editor-edited-output .button { width: 100%; }
+  .conversion-storage-note { grid-template-columns: 1fr; }
+  .conversion-result-head { align-items: stretch; flex-direction: column; }
+  .conversion-result-head .button { width: 100%; }
+  .conversion-facts { grid-template-columns: 1fr; }
 }

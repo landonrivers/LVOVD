@@ -468,6 +468,66 @@
         </section>
       </section>
 
+      <section id="conversion-inspector-panel" class="conversion-inspector-panel" aria-labelledby="conversion-inspector-title">
+        <div class="workspace-heading">
+          <h2 id="conversion-inspector-title" class="workflow-heading">Inspect Local Media</h2>
+          <p class="conversion-intro">See what one local video or audio file contains and whether it could meet LVOVD's Broad Compatibility MP4 target.</p>
+        </div>
+
+        <div class="conversion-storage-note">
+          <strong>Temporary local copy</strong>
+          <span>LVOVD copies the chosen file into temporary workspace storage for inspection. Discard or inactivity expiry removes that copy. Nothing is uploaded to cloud storage.</span>
+        </div>
+
+        <div id="conversion-drop-zone" class="media-drop-zone conversion-drop-zone">
+          <input id="conversion-file-input" type="file" hidden />
+          <div class="drop-glyph" aria-hidden="true">＋</div>
+          <div>
+            <strong>Drop one local video or audio file here</strong>
+            <span>or choose a file up to 100 GiB</span>
+          </div>
+          <button id="conversion-choose-button" class="button secondary" type="button">Choose Media File</button>
+        </div>
+
+        <div id="conversion-status" class="status" role="status" aria-live="polite"></div>
+
+        <section id="conversion-progress" class="workspace-progress" aria-live="polite" hidden>
+          <div class="progress-head">
+            <strong id="conversion-progress-label">Copying local media…</strong>
+            <button id="conversion-cancel" class="text-button" type="button">Cancel</button>
+          </div>
+          <div class="progress-track" aria-hidden="true"><div id="conversion-progress-bar" class="progress-bar"></div></div>
+        </section>
+
+        <section id="conversion-failure" class="preview-error workspace-failure" hidden>
+          <div>
+            <p class="eyebrow">LOCAL INSPECTION RESULT</p>
+            <h3 id="conversion-failure-title">Local media inspection failed</h3>
+            <p id="conversion-failure-explanation" class="error-message"></p>
+            <p id="conversion-failure-help" class="help"></p>
+            <button id="conversion-failure-discard" class="button secondary mini workspace-failure-action" type="button" hidden>Discard failed workspace</button>
+          </div>
+        </section>
+
+        <section id="conversion-result" class="conversion-result" aria-live="polite" hidden>
+          <div class="conversion-result-head">
+            <div>
+              <p class="eyebrow">INSPECTION READY</p>
+              <h3 id="conversion-media-name">Local media</h3>
+            </div>
+            <button id="conversion-discard" class="button secondary mini" type="button">Discard</button>
+          </div>
+          <dl id="conversion-facts" class="conversion-facts"></dl>
+          <section id="conversion-assessment" class="conversion-assessment" aria-labelledby="conversion-assessment-target" hidden>
+            <p id="conversion-assessment-target" class="eyebrow">BROAD COMPATIBILITY MP4</p>
+            <h4 id="conversion-assessment-title"></h4>
+            <p id="conversion-assessment-explanation" class="help"></p>
+            <p id="conversion-assessment-missing" class="conversion-assessment-missing" hidden></p>
+          </section>
+          <p class="conversion-inspection-only">Inspection only — this release does not create a converted output.</p>
+        </section>
+      </section>
+
       <section id="history-panel" class="download-progress" aria-live="polite">
         <div class="progress-head">
           <div>
@@ -503,5 +563,6 @@
   <script src="/history-ui.js" defer></script>
   <script src="/edit-plan.js" defer></script>
   <script src="/media-editor.js" defer></script>
+  <script src="/conversion-inspector.js" defer></script>
 </body>
 </html>

@@ -115,6 +115,7 @@ http://localhost:3000
 - Optionally use yt-dlp's SponsorBlock integration to mark or remove supported segment categories.
 - Show real yt-dlp download progress, speed, ETA, and processing stages.
 - Choose or drop one local video into a temporary editing workspace.
+- Inspect one local video or audio file to see its media facts and a capability-aware **Broad Compatibility MP4** assessment. This inspection-only workflow does not create a converted output yet.
 - Use **Edit Source Video** after an eligible single, non-live URL Preview. URL Edit respects the selected source, Compatible/Maximum profile, resolution, and Manual source choice, then acquires that source once into temporary workspace storage.
 - Visually trim the overall Start/End, remove and restore multiple middle sections, and navigate with a zoomable/pannable timeline, draggable handles, keyboard controls, and exact time fields.
 - Create and download a real edited result while leaving the workspace source unchanged.
