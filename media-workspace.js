@@ -9,6 +9,7 @@ const { spawn } = require('node:child_process');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { classifyFailure } = require('./failure-classification');
+const { localMediaInputArgs } = require('./local-media-input');
 const {
   MAX_KEEP_RANGES,
   roundMilliseconds,
@@ -26,6 +27,8 @@ const {
 const MAX_LOCAL_MEDIA_BYTES = 100 * 1024 * 1024 * 1024;
 const MEDIA_WORKSPACE_TTL_MS = 60 * 60 * 1000;
 const WORKSPACE_CANCELLED_CODE = 'LVOVD_WORKSPACE_CANCELLED';
+const CLEANUP_RETRY_DELAYS_MS = Object.freeze([100, 500]);
+const TRANSIENT_CLEANUP_CODES = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY', 'EMFILE', 'ENFILE']);
 
 function normalizedFailure(category, title, explanation, help) {
   return { category, title, explanation, help };
@@ -55,6 +58,18 @@ function workspaceRequestError(message, statusCode = 422) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function unsupportedLocalInputError() {
+  return workspaceUserError(
+    'This local input type is not supported.',
+    normalizedFailure(
+      'local_media_unsupported',
+      'Choose a self-contained video file',
+      'Local editing does not open playlists, reference media, or containers outside its supported local-input policy.',
+      'Choose a self-contained MP4, MOV, Matroska/WebM, or another supported video file. Renaming a file does not change its media type.'
+    )
+  );
 }
 
 function workspaceCancelledError() {
@@ -220,6 +235,7 @@ function isDirectPlaybackCompatible(inspection) {
 function playbackProxyArgs(inputPath, outputPath, inspection) {
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error',
+    ...localMediaInputArgs(inspection),
     '-i', inputPath,
     '-map', `0:${inspection.video.streamIndex}`
   ];
@@ -242,6 +258,7 @@ function editedOutputArgs(inputPath, outputPath, inspection, editPlan) {
   const range = ranges[0];
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error',
+    ...localMediaInputArgs(inspection),
     '-i', inputPath
   ];
   if (ranges.length === 1) {
@@ -402,7 +419,8 @@ class MediaWorkspaceManager {
     inspectAsset = null,
     createProxyAsset = null,
     inspectOutputAsset = null,
-    createEditedAsset = null
+    createEditedAsset = null,
+    cleanupRetryDelaysMs = CLEANUP_RETRY_DELAYS_MS
   } = {}) {
     this.tempDir = tempDir;
     this.maxBytes = maxBytes;
@@ -417,6 +435,9 @@ class MediaWorkspaceManager {
     this.inspectOutputAsset = inspectOutputAsset || this.defaultInspectOutputAsset.bind(this);
     this.createEditedAsset = createEditedAsset || this.defaultCreateEditedAsset.bind(this);
     this.workspaces = new Map();
+    this.discards = new Map();
+    this.cleanupPending = new Map();
+    this.cleanupRetryDelaysMs = [...cleanupRetryDelaysMs];
     this.rootPromise = null;
   }
 
@@ -476,6 +497,8 @@ class MediaWorkspaceManager {
       playbackProxy: false,
       failure: null,
       listeners: new Set(),
+      readStreams: new Map(),
+      cleanupRecord: null,
       child: null,
       abortController: new AbortController(),
       cancelRequested: false,
@@ -561,7 +584,8 @@ class MediaWorkspaceManager {
         editPlan: structuredClone(editedOutput.editPlan),
         downloadUrl: `/api/workspace/output?workspace=${encodeURIComponent(workspace.id)}&asset=${encodeURIComponent(editedOutput.id)}`
       } : null,
-      failure: workspace.failure
+      failure: workspace.failure,
+      cleanup: workspace.cleanupRecord ? this.cleanupStatus(workspace) : null
     };
   }
 
@@ -699,9 +723,9 @@ class MediaWorkspaceManager {
   async failAcquisition(workspace, failure) {
     if (!workspace || !this.workspaces.has(workspace.id)) return;
     workspace.child = null;
+    await this.removeWorkspaceFiles(workspace);
     workspace.activeOperation = null;
     workspace.activePromise = null;
-    await this.removeWorkspaceFiles(workspace);
     this.update(workspace, {
       status: 'error',
       phase: 'error',
@@ -778,7 +802,10 @@ class MediaWorkspaceManager {
     } catch (error) {
       await this.removeWorkspaceFiles(workspace);
       this.workspaces.delete(workspace.id);
-      if (readable.aborted || isWorkspaceCancellation(error)) throw workspaceCancelledError();
+      if (readable.aborted || isWorkspaceCancellation(error)) {
+        throw Object.assign(workspaceCancelledError(), { cleanup: this.cleanupStatus(workspace) });
+      }
+      error.cleanup = this.cleanupStatus(workspace);
       if (error?.workspaceFailure) throw error;
       throw withLocalFailure(error, { operation: 'local_file_operation' });
     }
@@ -829,10 +856,10 @@ class MediaWorkspaceManager {
       });
     } catch (error) {
       workspace.child = null;
-      workspace.activeOperation = null;
-      workspace.activePromise = null;
       if (workspace.cancelRequested || isWorkspaceCancellation(error)) {
         await this.removeWorkspaceFiles(workspace);
+        workspace.activeOperation = null;
+        workspace.activePromise = null;
         this.update(workspace, {
           status: 'cancelled',
           phase: 'cancelled',
@@ -845,6 +872,8 @@ class MediaWorkspaceManager {
 
       const failure = this.failureFor(error);
       await this.removeWorkspaceFiles(workspace);
+      workspace.activeOperation = null;
+      workspace.activePromise = null;
       this.update(workspace, {
         status: 'error',
         phase: 'error',
@@ -881,6 +910,7 @@ class MediaWorkspaceManager {
       let stdoutBytes = 0;
       let stderrBytes = 0;
       let settled = false;
+      let outputLimitFailure = null;
       const signal = workspace.abortController.signal;
 
       const cleanup = () => {
@@ -899,17 +929,17 @@ class MediaWorkspaceManager {
       signal.addEventListener('abort', onAbort, { once: true });
 
       child.stdout.on('data', (chunk) => {
+        if (outputLimitFailure) return;
         if (onStdout) onStdout(chunk);
         if (!captureStdout) return;
         stdoutBytes += chunk.length;
         if (stdoutBytes <= maxStdoutBytes) {
           stdout.push(chunk);
         } else {
+          outputLimitFailure = withLocalFailure(
+            new Error(`${tool} returned too much output.`), { operation, tool }
+          );
           try { child.kill(); } catch {}
-          finish(() => reject(withLocalFailure(
-            new Error(`${tool} returned too much output.`),
-            { operation, tool }
-          )));
         }
       });
       child.stderr.on('data', (chunk) => {
@@ -923,6 +953,10 @@ class MediaWorkspaceManager {
         if (settled) return;
         if (workspace.cancelRequested || signal.aborted) {
           finish(() => reject(workspaceCancelledError()));
+          return;
+        }
+        if (outputLimitFailure) {
+          finish(() => reject(outputLimitFailure));
           return;
         }
         if (code === 0) {
@@ -945,7 +979,8 @@ class MediaWorkspaceManager {
     let result;
     try {
       result = await this.runOwnedProcess(workspace, 'ffprobe', [
-        '-v', 'error',
+        '-v', 'warning',
+        ...localMediaInputArgs(),
         '-show_format',
         '-show_streams',
         '-print_format', 'json',
@@ -953,6 +988,7 @@ class MediaWorkspaceManager {
       ], { operation: 'local_processing', tool: 'ffprobe' });
     } catch (error) {
       if (isWorkspaceCancellation(error) || error?.localFailure?.operation === 'process_start') throw error;
+      if (/Format not on whitelist|Skipped opening external track/i.test(error.diagnostic || '')) throw unsupportedLocalInputError();
       throw workspaceUserError(
         'ffprobe could not inspect the staged file as media.',
         normalizedFailure(
@@ -963,6 +999,10 @@ class MediaWorkspaceManager {
         )
       );
     }
+
+    // The MOV options already prevented dependency reads. Its explicit skipped-
+    // track diagnostic also prevents publishing a misleading Ready workspace.
+    if (/Skipped opening external track/i.test(result.stderr || '')) throw unsupportedLocalInputError();
 
     let raw;
     try {
@@ -1204,7 +1244,7 @@ class MediaWorkspaceManager {
       return;
     }
 
-    const { asset } = resolved;
+    const { workspace, asset } = resolved;
     let stat;
     try {
       stat = await this.fs.stat(asset.filePath);
@@ -1219,6 +1259,13 @@ class MediaWorkspaceManager {
         'Cache-Control': 'no-store'
       });
       res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
+
+    // Discard may have invalidated the workspace while stat was in flight.
+    if (!this.get(workspaceId, { touch: false })) {
+      res.writeHead(404, { 'Cache-Control': 'no-store' });
+      res.end();
       return;
     }
 
@@ -1254,6 +1301,7 @@ class MediaWorkspaceManager {
     await new Promise((resolve) => {
       let settled = false;
       const stream = this.createReadStream(asset.filePath, range ? { start: range.start, end: range.end } : undefined);
+      this.ownReadStream(workspace, stream, res);
       const finish = () => {
         if (settled) return;
         settled = true;
@@ -1264,6 +1312,7 @@ class MediaWorkspaceManager {
         finish();
       });
       stream.once('end', finish);
+      stream.once('close', finish);
       res.once('close', () => {
         if (!settled) stream.destroy();
         finish();
@@ -1272,20 +1321,111 @@ class MediaWorkspaceManager {
     });
   }
 
+  ownReadStream(workspace, stream, response) {
+    workspace.readStreams.set(stream, response);
+    stream.once('close', () => workspace.readStreams.delete(stream));
+  }
+
+  async releaseReadStreams(workspace) {
+    await Promise.all([...workspace.readStreams].map(([stream, response]) => {
+      if (stream.closed) return;
+      const closed = new Promise(resolve => stream.once('close', resolve));
+      stream.destroy();
+      if (!response.destroyed) response.destroy();
+      return closed;
+    }));
+  }
+
+  cleanupStatus(workspaceOrId) {
+    const record = typeof workspaceOrId === 'string'
+      ? this.cleanupPending.get(workspaceOrId)
+      : workspaceOrId?.cleanupRecord;
+    const status = record?.status || 'complete';
+    return {
+      status,
+      message: status === 'complete'
+        ? 'Temporary workspace files were removed.'
+        : status === 'pending'
+          ? 'Temporary-file cleanup is pending. Some local files may remain while LVOVD retries.'
+          : 'Some temporary files could not be removed. LVOVD retains their cleanup ownership for this server session.'
+    };
+  }
+
+  async attemptCleanup(record) {
+    if (record.promise) return record.promise;
+    if (record.status === 'complete') return;
+    record.status = 'pending';
+    record.promise = (async () => {
+      await this.releaseReadStreams(record.workspace);
+      record.attempts += 1;
+      try {
+        // Only directories created by createWorkspace enter this bookkeeping.
+        // Node's implicit retries are disabled; this record owns the budget.
+        await this.fs.rm(record.directory, { recursive: true, force: true, maxRetries: 0 });
+        record.status = 'complete';
+        record.directory = null;
+        record.assets.clear();
+        this.cleanupPending.delete(record.workspace.id);
+      } catch (error) {
+        record.systemCode = typeof error?.code === 'string' ? error.code : null;
+        const delay = this.cleanupRetryDelaysMs[record.attempts - 1];
+        if (TRANSIENT_CLEANUP_CODES.has(record.systemCode) && delay != null) {
+          record.timer = setTimeout(() => {
+            record.timer = null;
+            this.attemptCleanup(record).catch(() => {});
+          }, delay);
+          record.timer.unref?.();
+        } else {
+          // In particular, do not repeatedly retry EACCES. Keep ownership even
+          // after the bounded automatic budget ends; no successful cleanup claim.
+          record.status = 'failed';
+        }
+      }
+    })();
+    try { await record.promise; }
+    finally {
+      record.promise = null;
+      if (this.workspaces.has(record.workspace.id)) this.emit(record.workspace);
+    }
+  }
+
   async removeWorkspaceFiles(workspace) {
     if (!workspace) return;
-    if (workspace.child) {
-      try { workspace.child.kill(); } catch {}
-      workspace.child = null;
+    let record = workspace.cleanupRecord;
+    if (!record && workspace.tempDir) {
+      record = {
+        workspace,
+        directory: workspace.tempDir,
+        assets: workspace.assets,
+        status: 'pending',
+        attempts: 0,
+        promise: null,
+        timer: null,
+        systemCode: null
+      };
+      this.cleanupPending.set(workspace.id, record);
+      workspace.cleanupRecord = record;
+      // Transfer ownership before removing active asset authority. A failed rm
+      // must never restore these URLs or lose the path needed for deletion.
+      workspace.tempDir = null;
+      workspace.assets = new Map();
+      workspace.sourceAssetId = null;
+      workspace.playbackAssetId = null;
+      workspace.render.outputAssetId = null;
     }
-    if (workspace.tempDir) {
-      await this.fs.rm(workspace.tempDir, { recursive: true, force: true }).catch(() => {});
-    }
-    workspace.tempDir = null;
-    workspace.assets.clear();
-    workspace.sourceAssetId = null;
-    workspace.playbackAssetId = null;
-    workspace.render.outputAssetId = null;
+    if (!record) return;
+    if (record.promise) await record.promise;
+    else if (record.attempts === 0) await this.attemptCleanup(record);
+    return this.cleanupStatus(workspace);
+  }
+
+  // Explicit retry for an owned, exhausted record (also used by repeated
+  // DELETE). Automatic cleanup never replenishes its own bounded budget.
+  async retryCleanup(workspaceId) {
+    const record = this.cleanupPending.get(workspaceId);
+    if (!record || record.status !== 'failed') return;
+    record.attempts = 0;
+    await this.attemptCleanup(record);
   }
 
   closeListeners(workspace) {
@@ -1295,9 +1435,21 @@ class MediaWorkspaceManager {
     workspace.listeners.clear();
   }
 
-  async discard(workspaceId, { expired = false } = {}) {
+  discard(workspaceId, { expired = false } = {}) {
+    if (this.discards.has(workspaceId)) return this.discards.get(workspaceId);
     const workspace = this.get(workspaceId, { touch: false });
-    if (!workspace) return false;
+    if (!workspace) return Promise.resolve(false);
+    // Invalidate first, independently of process shutdown or physical deletion.
+    this.workspaces.delete(workspaceId);
+    this.closeListeners(workspace);
+    const task = this.discardOwnedWorkspace(workspace, expired);
+    this.discards.set(workspaceId, task);
+    task.finally(() => this.discards.delete(workspaceId)).catch(() => {});
+    return task;
+  }
+
+  async discardOwnedWorkspace(workspace, expired) {
+    const releasingStreams = this.releaseReadStreams(workspace);
     if (workspace.activeOperation) {
       const operation = workspace.activeOperation;
       const queuedAcquisition = operation === 'acquiring'
@@ -1326,6 +1478,7 @@ class MediaWorkspaceManager {
         await workspace.activePromise.catch(() => {});
       }
     }
+    await releasingStreams;
     await this.removeWorkspaceFiles(workspace);
     this.update(workspace, {
       status: expired ? 'expired' : 'discarded',
@@ -1334,8 +1487,6 @@ class MediaWorkspaceManager {
       percent: null,
       failure: null
     });
-    this.closeListeners(workspace);
-    this.workspaces.delete(workspace.id);
     return true;
   }
 

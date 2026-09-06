@@ -649,6 +649,17 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(source, /\/api\/download/);
 });
 
+test('cleanup-pending acknowledgement resets the editor without reconnecting invalidated playback', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'public', 'media-editor.js'), 'utf8');
+  const discard = source.slice(source.indexOf('async function discardWorkspace()'), source.indexOf('async function startEditedRender()'));
+  assert.match(discard, /if \(!response\.ok\) throw/);
+  assert.match(discard, /resetWorkspaceUi\(data\.cleanup && data\.cleanup\.status !== 'complete'/);
+  assert.match(discard, /Local media workspace discarded\. \$\{data\.cleanup\.message\}/);
+  assert.ok(discard.indexOf('catch (error)') < discard.indexOf('restoreWorkspaceConnectionsAfterDiscardFailure'));
+  assert.doesNotMatch(source, /partial temporary data was removed/);
+  assert.match(source, /failureHelp\.textContent \+= ` \$\{data\.cleanup\.message\}`/);
+});
+
 test('Preview editor action stays secondary, explains eligible or ineligible state, and sends only acquisition settings', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
