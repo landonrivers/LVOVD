@@ -175,7 +175,16 @@ function normalizeInspection(raw = {}) {
     );
   }
 
-  const formatDuration = Number(raw.format?.duration);
+  const formatName = String(raw.format?.format_name || '').trim().toLowerCase();
+  const formatNames = formatName.split(',').map((name) => name.trim()).filter(Boolean).slice(0, 20);
+  // FFmpeg's start_at_zero subtracts the demuxer's format start_time from BOTH
+  // streams. Keep that same origin for the editor's zero-based presentation.
+  const rawStart = Number(raw.format?.start_time);
+  const timeOriginSeconds = Number.isFinite(rawStart) ? rawStart : 0;
+  // MOV and Matroska report the presentation end, including a non-zero origin;
+  // MPEG-TS reports an elapsed duration already. Stream.duration is elapsed too.
+  const durationIncludesOrigin = formatNames.some(name => ['mov', 'mp4', 'matroska', 'webm'].includes(name));
+  const formatDuration = Number(raw.format?.duration) - (durationIncludesOrigin ? timeOriginSeconds : 0);
   const videoDuration = Number(video.duration);
   const duration = Number.isFinite(formatDuration) && formatDuration > 0
     ? formatDuration
@@ -197,12 +206,11 @@ function normalizeInspection(raw = {}) {
     Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
   )) || null;
   const subtitleTrackCount = streams.filter((stream) => stream?.codec_type === 'subtitle').length;
-  const formatName = String(raw.format?.format_name || '').trim().toLowerCase();
-  const formatNames = formatName.split(',').map((name) => name.trim()).filter(Boolean).slice(0, 20);
   const displayFormat = normalizedContainerLabel(raw.format || {}, formatNames);
 
   return {
     durationSeconds: roundMilliseconds(duration),
+    timeOriginSeconds,
     format: displayFormat,
     formatNames,
     video: {
@@ -228,13 +236,16 @@ function isDirectPlaybackCompatible(inspection) {
     ['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2'].includes(String(name).toLowerCase())
   ));
   return Boolean(mp4Family
+    // A shifted MP4 can expose its empty edit before media time zero. A proxy
+    // makes player.currentTime agree with FFmpeg's normalized source timeline.
+    && !inspection.timeOriginSeconds
     && inspection?.video?.codec === 'h264'
     && (!inspection.audio || inspection.audio.codec === 'aac'));
 }
 
 function playbackProxyArgs(inputPath, outputPath, inspection) {
   const args = [
-    '-y', '-hide_banner', '-loglevel', 'error',
+    '-y', '-hide_banner', '-loglevel', 'error', '-copyts', '-start_at_zero',
     ...localMediaInputArgs(inspection),
     '-i', inputPath,
     '-map', `0:${inspection.video.streamIndex}`
@@ -255,44 +266,43 @@ function playbackProxyArgs(inputPath, outputPath, inspection) {
 
 function editedOutputArgs(inputPath, outputPath, inspection, editPlan) {
   const ranges = editPlan.keepRanges;
-  const range = ranges[0];
   const args = [
-    '-y', '-hide_banner', '-loglevel', 'error',
+    '-y', '-hide_banner', '-loglevel', 'error', '-copyts', '-start_at_zero',
     ...localMediaInputArgs(inspection),
     '-i', inputPath
   ];
-  if (ranges.length === 1) {
-    const retainedDuration = roundMilliseconds(range.endSeconds - range.startSeconds);
-    args.push(
-      '-ss', String(range.startSeconds),
-      '-t', String(retainedDuration),
-      '-map', `0:${inspection.video.streamIndex}`
-    );
-    if (inspection.audio) args.push('-map', `0:${inspection.audio.streamIndex}`);
-    args.push('-vf', "scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'");
-  } else {
-    const filters = [];
-    for (let index = 0; index < ranges.length; index += 1) {
-      const current = ranges[index];
-      filters.push(
-        `[0:${inspection.video.streamIndex}]trim=start=${current.startSeconds}:end=${current.endSeconds},setpts=PTS-STARTPTS[v${index}]`
-      );
-      if (inspection.audio) {
-        filters.push(
-          `[0:${inspection.audio.streamIndex}]atrim=start=${current.startSeconds}:end=${current.endSeconds},asetpts=PTS-STARTPTS[a${index}]`
-        );
-      }
-    }
-    const concatInputs = ranges.map((_current, index) => (
-      inspection.audio ? `[v${index}][a${index}]` : `[v${index}]`
-    )).join('');
-    filters.push(
-      `${concatInputs}concat=n=${ranges.length}:v=1:a=${inspection.audio ? 1 : 0}[vcat]${inspection.audio ? '[acat]' : ''}`
-    );
-    filters.push("[vcat]scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'[vout]");
-    args.push('-filter_complex', filters.join(';'), '-map', '[vout]');
-    if (inspection.audio) args.push('-map', '[acat]');
+  // Map every video PTS directly: output = source - removed time so far.
+  // A/V concat instead advances by the longest actual stream segment, which
+  // accumulates frame-boundary rounding when authored cuts fall between frames.
+  // Compare integer microseconds: floating t comparisons can include a frame
+  // exactly at an excluded end, or turn a mapped zero into a negative tick.
+  const micros = seconds => Math.round(seconds * 1_000_000);
+  const selection = ranges.map(current => `gte(pts,${micros(current.startSeconds)})*lt(pts,${micros(current.endSeconds)})`).join('+');
+  const removed = ranges.map((current, index) => index === 0 ? String(micros(current.startSeconds))
+    : `gte(PTS,${micros(current.startSeconds)})*${micros(roundMilliseconds(current.startSeconds - ranges[index - 1].endSeconds))}`).join('+');
+  const filters = [
+    `[0:${inspection.video.streamIndex}]settb=AVTB,trim=end_pts=${micros(ranges.at(-1).endSeconds)},select='${selection}',setpts='PTS-(${removed})',scale=w='trunc(iw/2)*2':h='trunc(ih/2)*2'[vout]`
+  ];
+  if (inspection.audio) {
+    // Materialize timestamp gaps BEFORE cutting, including sections with no
+    // input audio frames. Padding is bounded by the last retained source end.
+    const split = ranges.map((_current, index) => `[as${index}]`).join('');
+    filters.push(`[0:${inspection.audio.streamIndex}]${presentationAudioFilter(ranges.at(-1).endSeconds)},asplit=${ranges.length}${split}`);
+    ranges.forEach((current, index) => {
+      filters.push(`[as${index}]atrim=start=${current.startSeconds}:end=${current.endSeconds},asetpts=PTS-${current.startSeconds}/TB[a${index}]`);
+    });
+    filters.push(`${ranges.map((_current, index) => `[a${index}]`).join('')}concat=n=${ranges.length}:v=0:a=1[acat]`);
   }
+  args.push('-filter_complex', filters.join(';'), '-map', '[vout]');
+  if (inspection.audio) args.push('-map', '[acat]');
+  // Preserve mapped frame timestamps, without imposing a new cadence. Older
+  // setpts clears frame durations: recover missing encoded packet durations
+  // from adjacent DTS so MOV does not discard the last presentation frame.
+  args.push('-fps_mode:v', 'vfr', '-enc_time_base:v', '1:1000000',
+    '-bsf:v', `setts=pts=PTS:dts=DTS:duration='if(gt(DURATION,0),DURATION,if(gt(NEXT_DTS,DTS),NEXT_DTS-DTS,if(eq(N,0),${totalRetainedDuration(editPlan)}/TB-PTS,DTS-PREV_OUTDTS)))'`);
+  // select/setpts may unset the filter's frame-rate hint. Restore the inspected
+  // cadence only in x264's header/level calculation; VFR PTS remain authoritative.
+  if (inspection.video.frameRate) args.push('-x264-params', `fps=${inspection.video.frameRate}`);
   args.push(
     '-c:v', 'libx264',
     '-preset', 'medium',
@@ -303,6 +313,12 @@ function editedOutputArgs(inputPath, outputPath, inspection, editPlan) {
   else args.push('-an');
   args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
   return args;
+}
+
+function presentationAudioFilter(endSeconds) {
+  // async=1 only fills/trims to PTS; it never stretches audio. The 1 ms hard
+  // threshold accommodates coarse container time bases without collapsing gaps.
+  return `aresample=async=1:first_pts=0:min_hard_comp=0.001,apad=whole_dur=${endSeconds},atrim=end=${endSeconds}`;
 }
 
 function renderProgressPercent(outputSeconds, retainedDurationSeconds) {
