@@ -21,3 +21,17 @@ test('Verify keeps master and future Roadmap 6 staging branch filters aligned', 
     );
   }
 });
+
+test('Verify requires real media tools and Windows runs the workspace cleanup regressions', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'verify.yml'), 'utf8');
+  const verify = workflow.slice(workflow.indexOf('  verify:'), workflow.indexOf('  windows-launcher:'));
+  assert.match(verify, /sudo apt-get install -y ffmpeg strace/);
+  assert.match(verify, /npm run update-ytdlp/);
+  assert.match(verify, /LVOVD_TRACE_LOCAL_INPUT: '1'/);
+  assert.match(verify, /run: npm run test:media/);
+  assert.doesNotMatch(verify, /continue-on-error|\|\| true/);
+  const windows = workflow.slice(workflow.indexOf('  windows-launcher:'));
+  for (const name of ['launcher', 'ytdlp-manager', 'media-workspace', 'media-workspace-api', 'workspace-cleanup']) {
+    assert.ok(windows.includes(`test/${name}.test.js`));
+  }
+});

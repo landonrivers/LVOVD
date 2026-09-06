@@ -198,11 +198,15 @@ The default server bind is `127.0.0.1`, meaning other computers on your network 
 
 LVOVD does not currently import browser cookies or your logged-in browser session. Private, age-gated, members-only, or otherwise authenticated media may therefore fail even when yt-dlp recognizes the service.
 
+LVOVD passes `--ignore-config` to its yt-dlp operations. Unrelated user/system yt-dlp option files are not inherited; use LVOVD's explicit download choices instead. Default extractor-plugin discovery and the `YTDLP_PATH` custom-executable override remain available.
+
 ## Temporary files
 
 Download jobs prepare their intermediate and ready files inside process-owned temporary storage. Ready download files remain available locally for about one hour while the server is running, and the queue provides **Clear prepared files now**.
 
-Edit uses a separate temporary media workspace. Local-file intake copies the chosen file into that workspace; URL Edit downloads its selected source into the workspace once. A browser-compatible playback proxy and an edited output may each require additional temporary disk space. **Discard** removes the source, proxy, edited output, and other assets owned by that workspace. An idle workspace expires while the server is running; keeping the editor open and connected counts as activity.
+Edit uses a separate temporary media workspace. Local-file intake copies the chosen file into that workspace; URL Edit downloads its selected source into the workspace once. A browser-compatible playback proxy and an edited output may each require additional temporary disk space. **Discard** immediately invalidates workspace access and attempts to remove the source, proxy, edited output, and other owned assets. If deletion fails, LVOVD reports cleanup as pending or unsuccessful and retains ownership in memory. Transient lock failures receive at most two automatic retries; permission failures are not retried indefinitely. New work can begin after logical Discard even if some old temporary files remain. An idle workspace expires while the server is running; keeping the editor open and connected counts as activity.
+
+Local editing accepts self-contained media in a bounded set of containers, including normal MP4/MOV, Matroska/WebM, AVI, and MPEG-TS. Playlists/reference inputs and unlisted containers (including MXF and raw elementary video) are rejected with a local-input explanation, regardless of filename or browser MIME type. MOV external tracks are disabled. This policy covers inspection, playback proxies, and edited rendering; it does not restrict yt-dlp's normal remote HLS/DASH acquisition. See [SECURITY.md](SECURITY.md#local-media-input-and-cleanup-boundaries) for the exact policy and limitations.
 
 If the server stops before owned temporary data is cleaned—for example, because its terminal is closed—the operating system may retain that run's temporary folder until normal temporary-file cleanup or manual removal. Large downloads and editing sessions can therefore require space for the working source, intermediate/proxy data, and prepared output at the same time.
 

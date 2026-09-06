@@ -25,6 +25,7 @@ const {
   parseByteRange,
   createMediaWorkspaceManager
 } = require('../media-workspace');
+const { localMediaInputArgs } = require('../local-media-input');
 
 const DIRECT_INSPECTION = {
   durationSeconds: 12.5,
@@ -322,13 +323,17 @@ test('streamed FFmpeg progress can exceed the captured-output limit without accu
 test('commands that return captured stdout retain their bounded-output safety limit', async (t) => {
   const tempDir = await sandbox(t);
   let killCount = 0;
+  let closed = false;
   const manager = createMediaWorkspaceManager({
     tempDir,
     spawnProcess() {
       const child = new EventEmitter();
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
-      child.kill = () => { killCount += 1; };
+      child.kill = () => {
+        killCount += 1;
+        setImmediate(() => { closed = true; child.emit('close', 1); });
+      };
       queueMicrotask(() => child.stdout.write(Buffer.alloc(33)));
       return child;
     }
@@ -345,6 +350,7 @@ test('commands that return captured stdout retain their bounded-output safety li
     /too much output/i
   );
   assert.equal(killCount, 1);
+  assert.equal(closed, true, 'cleanup must not start until the stopped child has closed');
 });
 
 test('direct playback policy requires MP4-family H.264 with AAC or no audio', () => {
@@ -361,8 +367,10 @@ test('playback proxy arguments are bounded H.264/AAC preview settings without up
     video: { ...PROXY_INSPECTION.video, streamIndex: 4 },
     audio: { ...PROXY_INSPECTION.audio, streamIndex: 7 }
   });
-  assert.deepEqual(args.slice(0, 6), ['-y', '-hide_banner', '-loglevel', 'error', '-i', '/private/source.mkv']);
-  assert.deepEqual(args.slice(6, 10), ['-map', '0:4', '-map', '0:7']);
+  const inputIndex = args.indexOf('-i');
+  assert.deepEqual(args.slice(0, inputIndex), ['-y', '-hide_banner', '-loglevel', 'error', ...localMediaInputArgs(PROXY_INSPECTION)]);
+  assert.equal(args[inputIndex + 1], '/private/source.mkv');
+  assert.deepEqual(args.slice(inputIndex + 2, inputIndex + 6), ['-map', '0:4', '-map', '0:7']);
   assert.ok(args.includes('libx264'));
   assert.ok(args.includes('veryfast'));
   assert.ok(args.includes('28'));
@@ -442,8 +450,10 @@ test('edited output arguments always re-encode the exact selected streams to the
     audio: { ...PROXY_INSPECTION.audio, streamIndex: 9 }
   }, plan);
 
-  assert.deepEqual(args.slice(0, 6), ['-y', '-hide_banner', '-loglevel', 'error', '-i', '/private/original.mkv']);
-  assert.deepEqual(args.slice(6, 14), ['-ss', '1.25', '-t', '9.25', '-map', '0:5', '-map', '0:9']);
+  const inputIndex = args.indexOf('-i');
+  assert.deepEqual(args.slice(0, inputIndex), ['-y', '-hide_banner', '-loglevel', 'error', ...localMediaInputArgs(PROXY_INSPECTION)]);
+  assert.equal(args[inputIndex + 1], '/private/original.mkv');
+  assert.deepEqual(args.slice(inputIndex + 2, inputIndex + 10), ['-ss', '1.25', '-t', '9.25', '-map', '0:5', '-map', '0:9']);
   assert.equal(args[args.indexOf('-preset') + 1], 'medium');
   assert.equal(args[args.indexOf('-crf') + 1], '18');
   assert.equal(args[args.indexOf('-pix_fmt') + 1], 'yuv420p');
@@ -472,7 +482,7 @@ test('multi-range edited output builds bounded A/V concat graphs in source order
   };
   const args = editedOutputArgs('/private/original-source.mkv', '/private/edited.mp4', inspection, twoRangePlan);
   const graph = args[args.indexOf('-filter_complex') + 1];
-  assert.equal(args[5], '/private/original-source.mkv');
+  assert.equal(args[args.indexOf('-i') + 1], '/private/original-source.mkv');
   assert.equal(args.includes('-ss'), false);
   assert.match(graph, /^\[0:5\]trim=start=0:end=2,setpts=PTS-STARTPTS\[v0\];/);
   assert.match(graph, /\[0:9\]atrim=start=0:end=2,asetpts=PTS-STARTPTS\[a0\]/);
@@ -490,7 +500,8 @@ test('multi-range edited output builds bounded A/V concat graphs in source order
       { startSeconds: 7, endSeconds: 9.25 }
     ]
   };
-  const threeGraph = editedOutputArgs('source', 'output', inspection, threeRangePlan)[7];
+  const threeArgs = editedOutputArgs('source', 'output', inspection, threeRangePlan);
+  const threeGraph = threeArgs[threeArgs.indexOf('-filter_complex') + 1];
   assert.match(threeGraph, /\[v0\]\[a0\]\[v1\]\[a1\]\[v2\]\[a2\]concat=n=3:v=1:a=1/);
   assert.equal(totalRetainedDuration(threeRangePlan), 4.75);
 });
