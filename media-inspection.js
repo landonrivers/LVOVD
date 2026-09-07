@@ -128,6 +128,50 @@ function normalizedDuration(raw, video, audio, formatNames, timeOriginSeconds) {
   return Number.isFinite(duration) && duration > 0 ? duration : null;
 }
 
+function streamTiming(stream, origin, formatNames) {
+  const sampleClock = stream.codec_type === 'audio' && formatNames.some(name => ['wav', 'aiff', 'flac', 'aac', 'mp3'].includes(name));
+  // Sample-clock audio formats start at sample zero when they report no PTS.
+  const start = finiteNumber(stream.start_time) ?? (sampleClock ? origin : null);
+  // Matroska commonly supplies a bounded DURATION tag instead of stream.duration.
+  // That tag is the stream's presentation endpoint, including its timestamp shift.
+  const tag = typeof stream.tags?.DURATION === 'string' ? stream.tags.DURATION.match(/^(\d{1,8}):(\d{2}):(\d{2}(?:\.\d{1,9})?)$/) : null;
+  const endpoint = tag ? Number(tag[1]) * 3600 + Number(tag[2]) * 60 + Number(tag[3]) : null;
+  const taggedDuration = endpoint != null && start != null && formatNames.some(name => ['matroska', 'webm'].includes(name))
+    ? finitePositive(endpoint - start) : null;
+  return {
+    startSeconds: start == null ? null : roundMetadataNumber(start - origin),
+    durationSeconds: finitePositive(stream.duration) ?? taggedDuration
+  };
+}
+
+function videoFidelity(stream) {
+  const side = Array.isArray(stream.side_data_list) ? stream.side_data_list.slice(0, 32) : [];
+  const matrix = side.find(item => item.side_data_type === 'Display Matrix');
+  const rotation = finiteNumber(matrix?.rotation ?? stream.tags?.rotate);
+  let supported = rotation == null || Math.abs(rotation / 90 - Math.round(rotation / 90)) < 0.001;
+  if (matrix?.displaymatrix) {
+    const entries = String(matrix.displaymatrix).slice(0, 1000).split(/\r?\n/)
+      .flatMap(line => line.includes(':') ? line.split(':').at(-1).trim().split(/\s+/).map(Number) : []);
+    // Standard orthogonal rotation only: no reflection, skew, translation, or perspective.
+    supported &&= entries.length === 9 && entries.every(Number.isFinite)
+      && [2, 5, 6, 7].every(index => entries[index] === 0) && entries[8] === 1073741824
+      && Math.abs(entries[0] * entries[4] - entries[1] * entries[3] - 65536 ** 2) < 65536
+      && [0, 1, 3, 4].every(index => [0, 65536].includes(Math.abs(entries[index])))
+      && rotation != null;
+  }
+  const transfer = boundedText(stream.color_transfer, 80, { lower: true });
+  const pixelFormat = boundedText(stream.pix_fmt, 80, { lower: true });
+  const alphaTag = finiteNumber(stream.tags?.alpha_mode);
+  return {
+    rotationDegrees: rotation == null ? null : ((Math.round(rotation) % 360) + 360) % 360,
+    orientationSupported: supported,
+    sampleAspectRatio: /^\d+:\d+$/.test(stream.sample_aspect_ratio || '') ? stream.sample_aspect_ratio : null,
+    colorTransfer: transfer,
+    hdr: ['smpte2084', 'arib-std-b67'].includes(transfer) || side.some(item => /DOVI|HDR Dynamic|Mastering display|Content light level/i.test(item.side_data_type || '')) ? true : null,
+    alpha: alphaTag === 1 || /^(yuva|gbrap|rgba|bgra|argb|abgr|ya\d|ayuv|vuya|pal8)/.test(pixelFormat || '') ? true : null
+  };
+}
+
 function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
   const streamsReported = Array.isArray(raw.streams);
   const streams = streamsReported ? raw.streams : [];
@@ -162,7 +206,9 @@ function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
       width: Math.floor(Number(videoCandidate.width)),
       height: Math.floor(Number(videoCandidate.height)),
       frameRate: parseFrameRate(videoCandidate.avg_frame_rate || videoCandidate.r_frame_rate),
-      pixelFormat: boundedText(videoCandidate.pix_fmt, 80, { lower: true })
+      pixelFormat: boundedText(videoCandidate.pix_fmt, 80, { lower: true }),
+      ...streamTiming(videoCandidate, timeOriginSeconds, formatNames),
+      ...videoFidelity(videoCandidate)
     } : null,
     audio: audioCandidate ? {
       streamIndex: usableStreamIndex(audioCandidate),
@@ -170,7 +216,9 @@ function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
       sampleRate: positiveInteger(audioCandidate.sample_rate),
       channels: positiveInteger(audioCandidate.channels),
       channelLayout: boundedText(audioCandidate.channel_layout, 80),
-      bitRate: finiteInteger(audioCandidate.bit_rate)
+      bitRate: finiteInteger(audioCandidate.bit_rate),
+      profile: boundedText(audioCandidate.profile, 80),
+      ...streamTiming(audioCandidate, timeOriginSeconds, formatNames)
     } : null,
     trackCounts: {
       video: streamsReported ? videoStreams.length : null,
@@ -178,7 +226,13 @@ function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
       subtitle: streamsReported
         ? streams.filter((stream) => stream?.codec_type === 'subtitle').length
         : null
-    }
+    },
+    extraStreams: streamsReported ? {
+      total: streams.length,
+      artwork: streams.filter(stream => stream.codec_type === 'video' && !isRealVideoStream(stream)).length,
+      other: streams.filter(stream => !['video', 'audio', 'subtitle'].includes(stream.codec_type)).length,
+      chapters: Array.isArray(raw.chapters) ? raw.chapters.length : null
+    } : null
   };
 }
 

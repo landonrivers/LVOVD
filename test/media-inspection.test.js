@@ -56,7 +56,8 @@ test('generic timed video normalization retains bounded product media facts', ()
       width: 1920,
       height: 1080,
       frameRate: 29.97,
-      pixelFormat: 'yuv420p'
+      pixelFormat: 'yuv420p', startSeconds: null, durationSeconds: null, rotationDegrees: null,
+      orientationSupported: true, sampleAspectRatio: null, colorTransfer: null, hdr: null, alpha: null
     },
     audio: {
       streamIndex: 4,
@@ -64,9 +65,10 @@ test('generic timed video normalization retains bounded product media facts', ()
       sampleRate: 48000,
       channels: 2,
       channelLayout: 'stereo',
-      bitRate: 256000
+      bitRate: 256000, profile: null, startSeconds: null, durationSeconds: null
     },
-    trackCounts: { video: 1, audio: 1, subtitle: 1 }
+    trackCounts: { video: 1, audio: 1, subtitle: 1 },
+    extraStreams: { total: 3, artwork: 0, other: 0, chapters: null }
   });
   assert.doesNotMatch(JSON.stringify(inspection), /private|never-expose/i);
 });
