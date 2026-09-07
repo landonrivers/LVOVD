@@ -4,19 +4,59 @@ const { spawn } = require('node:child_process');
 
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 
-function parseCodecCapabilities(output) {
-  const names = new Set();
-  for (const line of String(output || '').split(/\r?\n/)) {
-    const parts = line.trim().split(/\s+/);
-    if (!/^[VAS][A-Z.]{5}$/.test(parts[0] || '') || !parts[1] || parts[1] === '=') continue;
-    names.add(parts[1].toLowerCase());
+function capabilityLines(output) {
+  const text = String(output || '');
+  if (Buffer.byteLength(text) > DEFAULT_MAX_OUTPUT_BYTES) throw new Error('Capability listing is too large.');
+  const lines = text.split(/\r?\n/);
+  if (lines.length > 10000 || lines.some(line => line.length > 4096)) throw new Error('Capability listing is malformed.');
+  return lines;
+}
+
+function codecEntries(output) {
+  const entries = [];
+  for (const line of capabilityLines(output)) {
+    const match = line.match(/^\s*([VAS][A-Z.]{5})\s+([a-zA-Z0-9_][a-zA-Z0-9_.-]{0,79})\s+(.+)$/);
+    if (!match) continue;
+    const name = match[2].toLowerCase();
+    const codec = match[3].match(/\(codec ([a-zA-Z0-9_][a-zA-Z0-9_.-]{0,79})\)\s*$/)?.[1].toLowerCase() || name;
+    entries.push({ name, codec, description: match[3] });
   }
-  return names;
+  return entries;
+}
+
+function parseCodecCapabilities(output) {
+  return new Set(codecEntries(output).map(entry => entry.name));
+}
+
+function baselineSoftwareDecoder(name, description = '') {
+  // Listings advertise implementations, not working hardware. In particular,
+  // FFmpeg's native "av1" can require hwaccel despite its unqualified name:
+  // https://github.com/FFmpeg/FFmpeg/blob/n7.1/libavcodec/av1dec.c#L613-L622
+  return name !== 'av1' && !/(?:^|_)(?:nvenc|nvdec|cuvid|qsv|amf|vaapi|vdpau|videotoolbox|mediacodec|v4l2m2m|mmal|omx|rkmpp|vulkan|d3d11va|d3d12va)(?:_|$)/i.test(name)
+    && !/hardware|acceleration|cuvid|quick sync|nvdec|cuda/i.test(description);
+}
+
+function parseDecoderCapabilities(output) {
+  const codecs = new Map();
+  for (const { name, codec, description } of codecEntries(output)) {
+    if (!codecs.has(codec)) codecs.set(codec, []);
+    codecs.get(codec).push({ name, software: baselineSoftwareDecoder(name, description) });
+  }
+  return codecs;
+}
+
+function hasSoftwareDecoder(capabilities, codec) {
+  if (capabilities?.decoderCodecs instanceof Map) {
+    return capabilities.decoderCodecs.get(codec)?.some(decoder => decoder.software) === true;
+  }
+  // Same-name evidence remains supported for injected capabilities. Aliases
+  // require the listing's explicit codec relationship, never name guessing.
+  return capabilities?.decoders?.has(codec) === true && baselineSoftwareDecoder(codec);
 }
 
 function parseMuxerCapabilities(output) {
   const names = new Set();
-  for (const line of String(output || '').split(/\r?\n/)) {
+  for (const line of capabilityLines(output)) {
     const parts = line.trim().split(/\s+/);
     const flags = parts[0] || '';
     if (!flags.includes('E') || !/^[D.E]{1,3}$/.test(flags) || !parts[1] || parts[1] === '=') continue;
@@ -93,6 +133,7 @@ async function discoverFfmpegCapabilities({
       version: parseFfmpegVersion(`${versionResult.stdout}\n${versionResult.stderr}`),
       encoders: parseCodecCapabilities(`${encoderResult.stdout}\n${encoderResult.stderr}`),
       decoders: parseCodecCapabilities(`${decoderResult.stdout}\n${decoderResult.stderr}`),
+      decoderCodecs: parseDecoderCapabilities(`${decoderResult.stdout}\n${decoderResult.stderr}`),
       muxers: parseMuxerCapabilities(`${muxerResult.stdout}\n${muxerResult.stderr}`)
     };
   } catch {
@@ -133,6 +174,8 @@ const getFfmpegCapabilities = createFfmpegCapabilityDiscovery();
 module.exports = {
   DEFAULT_MAX_OUTPUT_BYTES,
   parseCodecCapabilities,
+  parseDecoderCapabilities,
+  hasSoftwareDecoder,
   parseMuxerCapabilities,
   parseFfmpegVersion,
   runBoundedCommand,

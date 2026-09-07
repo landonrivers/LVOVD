@@ -23,6 +23,7 @@ const VIDEO_INSPECTION = Object.freeze({
   durationSeconds: 8,
   sourceSize: 24,
   format: 'MP4',
+  container: { kind: 'mp4', evidence: 'brand' },
   formatNames: ['mov', 'mp4'],
   video: {
     streamIndex: 0,

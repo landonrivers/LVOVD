@@ -30,6 +30,7 @@
   }
 
   function formatBytes(value) {
+    if (value == null || (typeof value === 'string' && !value.trim())) return 'Unknown';
     const bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown';
     if (bytes < 1024) return `${bytes} B`;
@@ -212,7 +213,7 @@
       mediaName.textContent = data.source?.name || 'Local media';
       renderFacts(data);
       const compatibility = data.compatibility;
-      const showAssessment = inspection.mediaKind === 'video' && compatibility;
+      const showAssessment = compatibility && (inspection.mediaKind === 'video' || compatibility.status === 'unknown');
       assessment.hidden = !showAssessment;
       if (showAssessment) {
         assessment.dataset.status = compatibility.status || 'unknown';
@@ -249,6 +250,7 @@
         closeProgressSource();
         progress.hidden = true;
         showFailure(data.failure, data.message);
+        if (data.cleanup && data.cleanup.status !== 'complete') failureHelp.textContent += ` ${data.cleanup.message}`;
       } else if (data.status === 'ready') {
         renderReady(data);
       } else {
@@ -299,7 +301,8 @@
           return;
         }
         if (!response.ok) throw new Error(data?.error || 'Could not discard the inspection workspace.');
-        reset('Inspection workspace discarded.');
+        reset(data?.cleanup && data.cleanup.status !== 'complete'
+          ? `Inspection workspace discarded. ${data.cleanup.message}` : 'Inspection workspace discarded.');
       } catch (error) {
         cancelButton.disabled = false;
         failureDiscard.disabled = false;
@@ -352,7 +355,7 @@
       };
       xhr.onabort = () => {
         upload = null;
-        reset('Local media copy cancelled; partial temporary data was removed.');
+        reset('Local media copy cancelled. LVOVD will attempt to clean up the partial temporary copy.');
       };
       xhr.onload = () => {
         upload = null;
@@ -361,6 +364,7 @@
         if (xhr.status < 200 || xhr.status >= 300) {
           reset();
           showFailure(data?.details, data?.error || 'LVOVD could not inspect that local file.');
+          if (data?.cleanup && data.cleanup.status !== 'complete') failureHelp.textContent += ` ${data.cleanup.message}`;
           return;
         }
         activeWorkspaceId = data.workspaceId;

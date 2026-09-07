@@ -452,6 +452,7 @@ test('Convert API accepts video and audio inspection without playback, jobs, His
       durationSeconds: 6,
       sourceSize: workspace.source.size,
       format: 'MP4',
+      container: { kind: 'mp4', evidence: 'brand' },
       formatNames: ['mov', 'mp4'],
       video: {
         streamIndex: 0, codec: 'h264', profile: 'High', width: 640, height: 360,
