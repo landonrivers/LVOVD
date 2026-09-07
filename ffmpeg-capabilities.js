@@ -3,12 +3,29 @@
 const { spawn } = require('node:child_process');
 
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+const DEFAULT_COMMAND_TIMEOUT_MS = 5000;
+const DEFAULT_TERMINATION_GRACE_MS = 250;
+const DEFAULT_FAILURE_COOLDOWN_MS = 30000;
+
+function boundedLimit(value, fallback, maximum) {
+  return Number.isFinite(value) && value > 0 ? Math.min(Math.ceil(value), maximum) : fallback;
+}
+
+function discoveryError(reason) {
+  const messages = {
+    timeout: 'FFmpeg capability command timed out.',
+    'output-limit': 'FFmpeg capability output exceeded the bounded capture limit.',
+    'command-failed': 'FFmpeg capability command failed.',
+    unparseable: 'FFmpeg capability listings could not be recognized.'
+  };
+  return Object.assign(new Error(messages[reason] || messages['command-failed']), { discoveryReason: reason });
+}
 
 function capabilityLines(output) {
   const text = String(output || '');
-  if (Buffer.byteLength(text) > DEFAULT_MAX_OUTPUT_BYTES) throw new Error('Capability listing is too large.');
+  if (Buffer.byteLength(text) > DEFAULT_MAX_OUTPUT_BYTES) throw discoveryError('unparseable');
   const lines = text.split(/\r?\n/);
-  if (lines.length > 10000 || lines.some(line => line.length > 4096)) throw new Error('Capability listing is malformed.');
+  if (lines.length > 10000 || lines.some(line => line.length > 4096)) throw discoveryError('unparseable');
   return lines;
 }
 
@@ -66,15 +83,24 @@ function parseMuxerCapabilities(output) {
 }
 
 function parseFfmpegVersion(output) {
-  const match = String(output || '').match(/^ffmpeg version\s+([^\s]+)/im);
+  const match = String(output || '').match(/^ffmpeg version\s+([a-z0-9][a-z0-9._+~-]{0,119})(?:\s|$)/im);
   return match ? match[1].slice(0, 120) : null;
 }
 
-function runBoundedCommand(spawnProcess, args, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES) {
+function runBoundedCommand(spawnProcess, args, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES, {
+  timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
+  terminationGraceMs = DEFAULT_TERMINATION_GRACE_MS
+} = {}) {
+  const fixedCommand = Array.isArray(args) && ['-version', '-encoders', '-decoders', '-muxers',
+    '-hide_banner -encoders', '-hide_banner -decoders', '-hide_banner -muxers'].includes(args.join(' '));
+  if (!fixedCommand) return Promise.reject(discoveryError('command-failed'));
+  const byteLimit = boundedLimit(maxOutputBytes, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_MAX_OUTPUT_BYTES);
+  const deadlineMs = boundedLimit(timeoutMs, DEFAULT_COMMAND_TIMEOUT_MS, 30000);
+  const graceMs = boundedLimit(terminationGraceMs, DEFAULT_TERMINATION_GRACE_MS, 2000);
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawnProcess('ffmpeg', args, { windowsHide: true, shell: false });
+      child = spawnProcess('ffmpeg', args, { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       reject(error);
       return;
@@ -83,52 +109,104 @@ function runBoundedCommand(spawnProcess, args, maxOutputBytes = DEFAULT_MAX_OUTP
     const stderr = [];
     let totalBytes = 0;
     let settled = false;
-    const finish = (callback) => {
+    let failure = null;
+    let exited = false;
+    let deadline, escalation, finalWait;
+    const finish = (error, result) => {
       if (settled) return;
       settled = true;
-      callback();
+      clearTimeout(deadline);
+      clearTimeout(escalation);
+      clearTimeout(finalWait);
+      child.stdout.removeListener('data', onStdout);
+      child.stderr.removeListener('data', onStderr);
+      child.stdout.removeListener('error', onPipeError);
+      child.stderr.removeListener('error', onPipeError);
+      child.removeListener('error', onError);
+      child.removeListener('exit', onExit);
+      child.removeListener('close', onClose);
+      if (error) {
+        // A signal is only a request. If neither exit nor close was observed,
+        // report that fact and stop owning pipes that could keep Node waiting.
+        error.terminationConfirmed = exited;
+        child.stdout.destroy();
+        child.stderr.destroy();
+        child.unref?.();
+        reject(error);
+      } else resolve(result);
+    };
+    const stop = error => {
+      if (settled || failure) return;
+      failure = error;
+      clearTimeout(deadline);
+      if (exited) return finish(error);
+      escalation = setTimeout(() => {
+        // Windows treats these as forceful termination; POSIX gets a grace
+        // period before SIGKILL. Never wait indefinitely for a close event.
+        finalWait = setTimeout(() => finish(error), graceMs);
+        try { child.kill('SIGKILL'); } catch {}
+      }, graceMs);
+      try { child.kill('SIGTERM'); } catch {}
     };
     const capture = (target) => (chunk) => {
-      if (settled) return;
-      totalBytes += chunk.length;
-      if (totalBytes > maxOutputBytes) {
-        try { child.kill(); } catch {}
-        finish(() => reject(new Error('FFmpeg capability output exceeded the bounded capture limit.')));
-        return;
-      }
-      target.push(chunk);
+      if (settled || failure) return;
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += bytes.length;
+      if (totalBytes > byteLimit) return stop(discoveryError('output-limit'));
+      target.push(bytes);
     };
-    child.stdout.on('data', capture(stdout));
-    child.stderr.on('data', capture(stderr));
-    child.on('error', (error) => finish(() => reject(error)));
-    child.on('close', (code) => {
+    const onStdout = capture(stdout), onStderr = capture(stderr);
+    const onPipeError = () => stop(discoveryError('command-failed'));
+    const onError = error => {
+      if (failure) return;
+      if (!child.pid) finish(Object.assign(error, { discoveryReason: 'spawn-failed' }));
+      else stop(discoveryError('command-failed'));
+    };
+    const onExit = code => {
+      exited = true;
+      if (failure) finish(failure);
+      else if (code !== 0) stop(discoveryError('command-failed'));
+    };
+    const onClose = (code) => {
       if (settled) return;
-      const result = {
+      exited = true;
+      if (failure) return finish(failure);
+      if (code !== 0) return finish(discoveryError('command-failed'));
+      finish(null, {
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: Buffer.concat(stderr).toString('utf8')
-      };
-      if (code === 0) finish(() => resolve(result));
-      else finish(() => reject(new Error(`FFmpeg capability command exited with code ${code}.`)));
-    });
+      });
+    };
+    child.stdout.on('data', onStdout);
+    child.stderr.on('data', onStderr);
+    child.stdout.on('error', onPipeError);
+    child.stderr.on('error', onPipeError);
+    child.on('error', onError);
+    child.on('exit', onExit);
+    child.on('close', onClose);
+    deadline = setTimeout(() => stop(discoveryError('timeout')), deadlineMs);
   });
 }
 
 async function discoverFfmpegCapabilities({
   spawnProcess = spawn,
-  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES
+  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
+  timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
+  terminationGraceMs = DEFAULT_TERMINATION_GRACE_MS
 } = {}) {
   try {
-    const versionResult = await runBoundedCommand(spawnProcess, ['-version'], maxOutputBytes);
+    const limits = { timeoutMs, terminationGraceMs };
+    const versionResult = await runBoundedCommand(spawnProcess, ['-version'], maxOutputBytes, limits);
     const encoderResult = await runBoundedCommand(
-      spawnProcess, ['-hide_banner', '-encoders'], maxOutputBytes
+      spawnProcess, ['-hide_banner', '-encoders'], maxOutputBytes, limits
     );
     const decoderResult = await runBoundedCommand(
-      spawnProcess, ['-hide_banner', '-decoders'], maxOutputBytes
+      spawnProcess, ['-hide_banner', '-decoders'], maxOutputBytes, limits
     );
     const muxerResult = await runBoundedCommand(
-      spawnProcess, ['-hide_banner', '-muxers'], maxOutputBytes
+      spawnProcess, ['-hide_banner', '-muxers'], maxOutputBytes, limits
     );
-    return {
+    const capabilities = {
       available: true,
       version: parseFfmpegVersion(`${versionResult.stdout}\n${versionResult.stderr}`),
       encoders: parseCodecCapabilities(`${encoderResult.stdout}\n${encoderResult.stderr}`),
@@ -136,26 +214,57 @@ async function discoverFfmpegCapabilities({
       decoderCodecs: parseDecoderCapabilities(`${decoderResult.stdout}\n${decoderResult.stderr}`),
       muxers: parseMuxerCapabilities(`${muxerResult.stdout}\n${muxerResult.stderr}`)
     };
-  } catch {
+    if (!capabilities.version || !capabilities.encoders.size || !capabilities.decoders.size || !capabilities.muxers.size) {
+      throw discoveryError('unparseable');
+    }
+    return capabilities;
+  } catch (error) {
+    const failureReason = error?.discoveryReason || 'spawn-failed';
     return {
       available: false,
       version: null,
       encoders: new Set(),
       decoders: new Set(),
-      muxers: new Set()
+      muxers: new Set(),
+      decoderCodecs: new Map(),
+      failureReason,
+      terminationConfirmed: error?.terminationConfirmed ?? null
     };
   }
 }
 
-function createFfmpegCapabilityDiscovery(options = {}) {
+function createFfmpegCapabilityDiscovery({ clock = () => Date.now(), failureCooldownMs = DEFAULT_FAILURE_COOLDOWN_MS, ...options } = {}) {
   let cachedPromise = null;
+  let retryAfter = Infinity;
+  const cooldownMs = boundedLimit(failureCooldownMs, DEFAULT_FAILURE_COOLDOWN_MS, 60000);
   return function getFfmpegCapabilities() {
-    if (!cachedPromise) cachedPromise = discoverFfmpegCapabilities(options);
+    if (!cachedPromise || clock() >= retryAfter) {
+      retryAfter = Infinity;
+      cachedPromise = discoverFfmpegCapabilities(options).then(capabilities => {
+        retryAfter = capabilities.available ? Infinity : clock() + cooldownMs;
+        return capabilities;
+      });
+    }
     return cachedPromise;
   };
 }
 
 function publicCapabilitySummary(capabilities) {
+  if (capabilities?.available !== true) {
+    return {
+      available: false,
+      version: null,
+      broadMp4: { h264SoftwareEncoder: null, aacEncoder: null, mp4Muxer: null },
+      failure: {
+        category: 'local_capability_discovery_failed',
+        title: 'Could not check local conversion capabilities',
+        explanation: capabilities?.failureReason === 'timeout'
+          ? 'The local FFmpeg capability check exceeded its time limit.'
+          : 'LVOVD could not read usable capability information from the local FFmpeg installation.',
+        help: 'Check the local FFmpeg installation, then try inspecting again shortly.'
+      }
+    };
+  }
   const encoders = capabilities?.encoders || new Set();
   const muxers = capabilities?.muxers || new Set();
   return {
@@ -173,6 +282,9 @@ const getFfmpegCapabilities = createFfmpegCapabilityDiscovery();
 
 module.exports = {
   DEFAULT_MAX_OUTPUT_BYTES,
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_TERMINATION_GRACE_MS,
+  DEFAULT_FAILURE_COOLDOWN_MS,
   parseCodecCapabilities,
   parseDecoderCapabilities,
   hasSoftwareDecoder,

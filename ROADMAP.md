@@ -160,6 +160,8 @@ Capability discovery should inspect the **actual installed local conversion engi
 
 This feature should remain clearly separate from source acquisition: changing the requested local output format must not alter or multiply remote source requests.
 
+**September 6 audit remediation — A3/A6:** the converter development line integrates the accepted master runtime/input-boundary, cleanup, and common-clock editing fixes from PRs #39/#40. Inspection now distinguishes container brands from parser aliases, maps source codecs to advertised software decoder implementations, and preserves unknown metadata and reported stream presence. Capability discovery has command deadlines, bounded termination, successful process caching, and a short failure cooldown before a later request may retry; inability to check capabilities is distinct from a known missing requirement. Generated-media and Windows regressions cover these contracts, including shifted-source final-second editing. This corrects the 7A foundation; conversion output and the functional Roadmap 7B workflow remain deferred, and Roadmap #7 is not complete.
+
 ## Major milestone — Easier desktop distribution
 
 Reduce setup friction so normal users do not need to understand the runtime stack.

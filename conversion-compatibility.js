@@ -46,6 +46,10 @@ function missingCapabilities(status, inspection, capabilities) {
 
 function assessBroadCompatibilityMp4(inspection, capabilities) {
   const mediaKind = inspection?.mediaKind || (inspection?.video ? 'video' : inspection?.audio ? 'audio' : 'unsupported');
+  if (inspection?.trackCounts?.video == null && !inspection?.video) {
+    return result('unknown', 'Incomplete media metadata',
+      'LVOVD does not have enough reported stream metadata to determine whether this video target applies.');
+  }
   if ((inspection?.trackCounts?.video > 0 && (mediaKind !== 'video' || !inspection?.video)) || mediaKind === 'unknown') {
     return result('unknown', 'Incomplete video metadata',
       'A video stream was reported, but LVOVD lacks enough usable timing or stream metadata to assess it. This is not evidence of an audio-only source.');

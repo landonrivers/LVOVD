@@ -38,10 +38,11 @@ function boundedText(value, maxLength = 120, { lower = false } = {}) {
 }
 
 function parseFrameRate(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
   const text = String(value || '').trim();
   if (!text || text === '0/0') return null;
   const rational = text.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
-  const rate = rational ? Number(rational[1]) / Number(rational[2]) : Number(text);
+  const rate = rational ? Number(rational[1]) / Number(rational[2]) : finiteNumber(text);
   return Number.isFinite(rate) && rate > 0 ? roundMetadataNumber(rate) : null;
 }
 

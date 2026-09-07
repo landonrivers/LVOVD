@@ -176,6 +176,8 @@ Generic local inspection can describe timed video, audio-only media, and conserv
 
 Roadmap 7A also performs process-lifetime cached, bounded discovery of the FFmpeg installed on `PATH` and uses normalized encoder, decoder, and muxer facts to assess the initial **Broad Compatibility MP4** video target. Raw FFmpeg listings and local paths are not browser data. The visible workflow is explicitly inspection-only; it creates no converted output, makes no provider request, and does not add workspace activity to Download History.
 
+Successful capability discovery is cached for the process. Each listing command has a five-second deadline and bounded termination; failed checks settle with unknown capability evidence and are cached for a 30-second cooldown before another request may retry. Discard cancels only that workspace's wait. Assessment distinguishes actual container identity, codec-to-software-decoder evidence, and incomplete stream metadata; a known missing capability is different from a failed check. Generic inspection and the Edit adapter retain the same source origin and selected-stream endpoint duration used by the corrected editor.
+
 ## Existing Custom Range and chapters
 
 LVOVD already has a quick Custom Range / chapter download path that uses yt-dlp download-section behavior.

@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeMediaInspection } = require('../media-inspection');
+const { parseFrameRate } = require('../media-inspection');
 const { normalizeInspection } = require('../media-workspace');
 const { assessBroadCompatibilityMp4: assess } = require('../conversion-compatibility');
 const { parseDecoderCapabilities } = require('../ffmpeg-capabilities');
@@ -70,6 +71,19 @@ test('real zero survives only in fields permitting zero, and source stat size ta
   assert.equal(normalizeMediaInspection(raw, { sourceSize: 0 }).sourceSize, 0);
   for (const value of [null, undefined, '', ' ']) assert.equal(formatBytes(value), 'Unknown');
   assert.equal(formatBytes(0), '0 B');
+});
+
+test('frame-rate parsing rejects malformed numeric objects and preserves valid rational cadence', () => {
+  for (const value of [null, undefined, '', ' ', [], [30], {}, true, Infinity, 'NaN', '0/0', '30/0', '0x10']) {
+    assert.equal(parseFrameRate(value), null);
+  }
+  assert.equal(parseFrameRate('30000/1001'), 29.97);
+});
+
+test('unreported streams cannot prove that the video target is inapplicable', () => {
+  const inspection = normalizeMediaInspection({ format: {} });
+  assert.equal(inspection.trackCounts.video, null);
+  assert.equal(assess(inspection, COPY).status, 'unknown');
 });
 
 test('reported incomplete video is not audio-only, and Edit remains strict', () => {
