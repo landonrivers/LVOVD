@@ -177,18 +177,31 @@ function normalizeInspection(raw = {}) {
 
   const formatName = String(raw.format?.format_name || '').trim().toLowerCase();
   const formatNames = formatName.split(',').map((name) => name.trim()).filter(Boolean).slice(0, 20);
+  const audioStreams = streams.filter((stream) => stream?.codec_type === 'audio');
+  const audio = audioStreams.find((stream) => (
+    Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
+  )) || null;
   // FFmpeg's start_at_zero subtracts the demuxer's format start_time from BOTH
   // streams. Keep that same origin for the editor's zero-based presentation.
   const rawStart = Number(raw.format?.start_time);
   const timeOriginSeconds = Number.isFinite(rawStart) ? rawStart : 0;
-  // MOV and Matroska report the presentation end, including a non-zero origin;
-  // MPEG-TS reports an elapsed duration already. Stream.duration is elapsed too.
-  const durationIncludesOrigin = formatNames.some(name => ['mov', 'mp4', 'matroska', 'webm'].includes(name));
-  const formatDuration = Number(raw.format?.duration) - (durationIncludesOrigin ? timeOriginSeconds : 0);
-  const videoDuration = Number(video.duration);
-  const duration = Number.isFinite(formatDuration) && formatDuration > 0
-    ? formatDuration
-    : videoDuration;
+  // Stream.duration is elapsed: include each selected stream's start offset
+  // before measuring its endpoint from the common origin. MOV/MP4 format.duration
+  // can instead report either elapsed time or an absolute endpoint, so it must
+  // not override usable stream evidence. Never reset video and audio separately.
+  const streamEndpoints = [video, audio].filter(Boolean).map(stream => {
+    const elapsed = Number(stream.duration);
+    if (!Number.isFinite(elapsed) || elapsed <= 0) return NaN;
+    const start = String(stream.start_time ?? '').trim();
+    const streamStart = start && Number.isFinite(Number(start)) ? Number(start) : timeOriginSeconds;
+    return streamStart + elapsed - timeOriginSeconds;
+  }).filter(endpoint => Number.isFinite(endpoint) && endpoint > 0);
+  // Without usable stream durations, retain the Matroska/WebM presentation-end
+  // fallback; other demuxers' format duration is used as elapsed time. This
+  // bounded metadata fallback cannot resolve every ambiguous/missing timestamp.
+  const durationIncludesOrigin = formatNames.some(name => ['matroska', 'webm'].includes(name));
+  const duration = streamEndpoints.length ? Math.max(...streamEndpoints)
+    : Number(raw.format?.duration) - (durationIncludesOrigin ? timeOriginSeconds : 0);
   if (!Number.isFinite(duration) || duration <= 0) {
     throw workspaceUserError(
       'The staged video does not have a usable duration.',
@@ -201,10 +214,6 @@ function normalizeInspection(raw = {}) {
     );
   }
 
-  const audioStreams = streams.filter((stream) => stream?.codec_type === 'audio');
-  const audio = audioStreams.find((stream) => (
-    Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
-  )) || null;
   const subtitleTrackCount = streams.filter((stream) => stream?.codec_type === 'subtitle').length;
   const displayFormat = normalizedContainerLabel(raw.format || {}, formatNames);
 

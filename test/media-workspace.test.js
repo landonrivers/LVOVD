@@ -238,7 +238,7 @@ test('inspection falls back to the selected real video duration when format dura
   assert.equal(normalized.durationSeconds, 4.25);
 });
 
-test('inspection establishes one finite presentation origin and respects container duration semantics', () => {
+test('inspection establishes one finite presentation origin for selected stream endpoints', () => {
   const streams = [
     { index: 2, codec_type: 'video', codec_name: 'h264', width: 160, height: 90, start_time: '7', duration: '5' },
     { index: 9, codec_type: 'audio', codec_name: 'aac', start_time: '7.5' }
@@ -254,10 +254,117 @@ test('inspection establishes one finite presentation origin and respects contain
   for (const start_time of [undefined, 'N/A', 'Infinity']) {
     const inspection = normalizeInspection({ format: { format_name: 'mov,mp4', start_time, duration: '5' }, streams });
     assert.equal(inspection.timeOriginSeconds, 0, 'unavailable format start follows FFmpeg default, not a per-stream reset');
-    assert.equal(inspection.durationSeconds, 5);
+    assert.equal(inspection.durationSeconds, 12, 'known stream endpoints still lie on the shared zero-origin clock');
   }
   const fallback = normalizeInspection({ format: { format_name: 'matroska', start_time: '7', duration: 'N/A' }, streams });
   assert.equal(fallback.durationSeconds, 5, 'stream duration is elapsed and must not subtract the origin');
+});
+
+// Captured reviewer evidence: MOV/MP4 format.duration can be elapsed (5),
+// even at a positive origin. Other probes report the absolute endpoint instead.
+// Both shapes must work without requiring the capturing FFprobe build.
+for (const origin of [0, 0.5, 1, 2, 7]) {
+  for (const audio of [false, true]) {
+    for (const shape of ['elapsed', 'endpoint']) {
+      test(`inspection: MP4 ${shape} evidence, origin ${origin}, audio ${audio}`, () => {
+        const inspection = normalizeInspection({
+          format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', start_time: String(origin),
+            duration: String(shape === 'elapsed' ? 5 : origin + 5) },
+          streams: [
+            { index: 2, codec_type: 'video', codec_name: 'h264', width: 128, height: 96,
+              start_time: String(origin), duration: '5', avg_frame_rate: '10/1' },
+            ...(audio ? [{ index: 9, codec_type: 'audio', codec_name: 'aac',
+              start_time: String(origin + 0.478), duration: '4.521333' }] : [])
+          ]
+        });
+        assert.equal(inspection.timeOriginSeconds, origin);
+        assert.equal(inspection.durationSeconds, 5);
+        const plan = { version: 1, keepRanges: [{ startSeconds: 4, endSeconds: 5 }] };
+        assert.deepEqual(normalizeEditPlan(plan, inspection.durationSeconds), plan, 'the complete final second remains editable');
+        assert.equal(isDirectPlaybackCompatible(inspection), origin === 0);
+      });
+    }
+  }
+}
+
+test('inspection measures both selected stream endpoints from the common origin', () => {
+  const video = { index: 2, codec_type: 'video', codec_name: 'h264', width: 160, height: 90 };
+  const audio = { index: 9, codec_type: 'audio', codec_name: 'aac' };
+  for (const [videoStart, videoDuration, audioStart, audioDuration] of [
+    [1.5, 4.5, 1, 1], // Video itself starts after media zero.
+    [1, 4, 3, 3], // Later audio ends after video: its elapsed duration alone is insufficient.
+    [1, 5, 1.5, 1] // Missing audio tail must not shorten video.
+  ]) {
+    const inspection = normalizeInspection({
+      format: { format_name: 'mov,mp4', start_time: '1', duration: '5' },
+      streams: [
+        { ...video, start_time: String(videoStart), duration: String(videoDuration) },
+        { ...audio, start_time: String(audioStart), duration: String(audioDuration) },
+        { ...audio, index: 10, start_time: '1', duration: '99' },
+        { ...video, index: 11, start_time: '1', duration: '99' }
+      ]
+    });
+    assert.equal(inspection.durationSeconds, 5, 'only the selected video/audio endpoints define the presentation');
+  }
+});
+
+test('missing format duration uses stream start relative to the common origin', () => {
+  const inspection = normalizeInspection({
+    format: { format_name: 'mov,mp4', start_time: '1', duration: 'N/A' },
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+      start_time: '2', duration: '4' }]
+  });
+  assert.equal(inspection.durationSeconds, 5, 'a delayed stream duration is not the entire presentation');
+});
+
+test('unavailable stream starts use the common origin for elapsed duration fallback', () => {
+  for (const start_time of [undefined, null, '', 'N/A', 'Infinity']) {
+    const inspection = normalizeInspection({
+      format: { format_name: 'mov,mp4', start_time: '7', duration: 'N/A' },
+      streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+        start_time, duration: '5' }]
+    });
+    assert.equal(inspection.durationSeconds, 5);
+  }
+});
+
+test('a selected audio endpoint remains usable when video duration is unavailable', () => {
+  const inspection = normalizeInspection({
+    format: { format_name: 'mov,mp4', start_time: '1', duration: 'N/A' },
+    streams: [
+      { index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90, start_time: '1' },
+      { index: 2, codec_type: 'audio', codec_name: 'aac', start_time: '1.5', duration: '4.5' }
+    ]
+  });
+  assert.equal(inspection.durationSeconds, 5);
+});
+
+test('format-only fallback supports Matroska endpoints and elapsed container durations', () => {
+  for (const [format, duration] of [['matroska,webm', '6'], ['mov,mp4', '5'], ['mpegts', '5']]) {
+    const inspection = normalizeInspection({
+      format: { format_name: format, start_time: '1', duration },
+      streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+        start_time: '1', duration: 'N/A' }]
+    });
+    assert.equal(inspection.durationSeconds, 5);
+  }
+});
+
+test('negative origins use selected stream endpoints with either format evidence shape', () => {
+  for (const format of ['mov,mp4', 'matroska,webm', 'mpegts']) {
+    for (const duration of ['4.5', '5']) {
+      const inspection = normalizeInspection({
+        format: { format_name: format, start_time: '-0.5', duration },
+        streams: [
+          { index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+            start_time: '-0.25', duration: '4.75' },
+          { index: 1, codec_type: 'audio', codec_name: 'aac', start_time: '-0.5', duration: '4' }
+        ]
+      });
+      assert.equal(inspection.timeOriginSeconds, -0.5);
+      assert.equal(inspection.durationSeconds, 5);
+    }
+  }
 });
 
 test('negative presentation origins remain finite and normalize both streams together', () => {

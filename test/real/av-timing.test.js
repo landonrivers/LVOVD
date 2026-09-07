@@ -117,7 +117,10 @@ async function fixture(t, options = {}) {
   if (offset) assert.equal(workspace.playbackProxy, true, 'shifted origins use normalized playback');
   const pixels = decode(file, false);
   assert.equal(pixels.length, videos.length * WIDTH * HEIGHT);
-  console.log(JSON.stringify({ fixture: t.name, origin, firstVideo, firstAudio, sourceDuration }));
+  console.log(JSON.stringify({ fixture: t.name, origin, firstVideo, firstAudio, sourceDuration,
+    formatDuration: raw.format.duration, streamTiming: raw.streams.map(stream => ({
+      type: stream.codec_type, start: stream.start_time, duration: stream.duration
+    })), editorDuration: workspace.inspection.durationSeconds }));
   return { manager, workspace, calls, origin, videos, pixels, audio, delay: delay + offset - origin,
     audioEnd: audioEnd + offset - origin, gap, markerOffset: offset - origin };
 }
@@ -236,4 +239,50 @@ for (const [name, options, ranges] of [
   ['fractional source cadence retains every mapped frame', { extension: 'mp4', rate: '30000/1001' }, TWO]
 ]) {
   test(name, { timeout: 60000 }, async t => renderAndVerify(t, options, ranges));
+}
+
+// The reviewed seven-second origin passed accidentally when format.duration -
+// origin was negative. Exercise smaller origins too, without depending on which
+// duration evidence shape the installed FFprobe emits (both have unit coverage).
+for (const extension of ['mp4', 'mov']) {
+  for (const audio of [false, true]) {
+    for (const offset of [0.5, 1, 2, 7]) {
+      test(`final second: ${extension}, origin ${offset}, audio ${audio}`, { timeout: 60000 }, async t => {
+        const source = await renderAndVerify(t, { extension, audio, offset }, [[4, 5]]);
+        const { manager, workspace } = source;
+        const published = manager.publicWorkspace(workspace);
+        // Metadata rounds to milliseconds. The source has exactly 100 frames
+        // spanning five seconds; its final 20 frames must remain editable.
+        assert.equal(source.videos.length, 100);
+        assert.ok(Math.abs(published.inspection.durationSeconds - 5) <= 0.001);
+        assert.ok(Math.abs(published.editedOutput.inspection.durationSeconds - 1) <= DURATION_TOLERANCE);
+        assert.deepEqual(published.editedOutput.editPlan.keepRanges, [{ startSeconds: 4, endSeconds: 5 }]);
+
+        const playback = workspace.assets.get(workspace.playbackAssetId);
+        const raw = probe(playback.filePath, true);
+        const frames = raw.frames.filter(frame => frame.media_type === 'video');
+        assert.equal(published.playback.proxy, true);
+        assert.ok(Math.abs(Number(raw.format.start_time)) <= PTS_TOLERANCE, 'player asset starts on media zero');
+        assert.ok(Math.abs(normalizeInspection(raw).durationSeconds - 5) <= DURATION_TOLERANCE);
+        assert.equal(frames.length, source.videos.length, 'player retains the complete source timeline');
+        const pixels = decode(playback.filePath, false);
+        frames.forEach((frame, index) => {
+          assert.ok(Math.abs(Number(frame.pts_time) - (Number(source.videos[index].pts_time) - source.origin)) <= PTS_TOLERANCE,
+            `player frame ${index} agrees with source presentation time`);
+          assert.ok(Math.abs(pixels[index * WIDTH * HEIGHT] - source.pixels[index * WIDTH * HEIGHT]) <= 3,
+            `player frame ${index} shows the corresponding source marker`);
+        });
+        let finalAudioFrequency = null;
+        if (audio) {
+          const bytes = decode(playback.filePath, true);
+          assertAudioWindows(bytes, [{ startSeconds: 0, endSeconds: 5 }], source);
+          finalAudioFrequency = frequency(bytes, 4.1, 4.9);
+          assert.ok(Math.abs(finalAudioFrequency - 1200) < 20, 'player final-second audio marker');
+        }
+        console.log(JSON.stringify({ finalSecond: t.name, editorDuration: published.inspection.durationSeconds,
+          outputDuration: published.editedOutput.inspection.durationSeconds, proxyLastVideo: frames.at(-1).pts_time,
+          finalAudioFrequency }));
+      });
+    }
+  }
 }
