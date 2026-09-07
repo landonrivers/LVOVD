@@ -79,10 +79,25 @@ function primaryAudioStream(streams) {
   return streams.find((stream) => stream?.codec_type === 'audio' && usableStreamIndex(stream) != null) || null;
 }
 
-function normalizedDuration(raw, video, audio) {
-  const formatDuration = finitePositive(raw.format?.duration);
-  if (video) return formatDuration || finitePositive(video.duration) || null;
-  return formatDuration || finitePositive(audio?.duration) || null;
+function normalizedDuration(raw, video, audio, formatNames, timeOriginSeconds) {
+  // Stream.duration is elapsed: include each selected stream's start offset
+  // before measuring its endpoint from the common origin. MOV/MP4 format.duration
+  // can instead report either elapsed time or an absolute endpoint, so it must
+  // not override usable stream evidence. Never reset video and audio separately.
+  const streamEndpoints = [video, audio].filter(Boolean).map(stream => {
+    const elapsed = Number(stream.duration);
+    if (!Number.isFinite(elapsed) || elapsed <= 0) return NaN;
+    const start = String(stream.start_time ?? '').trim();
+    const streamStart = start && Number.isFinite(Number(start)) ? Number(start) : timeOriginSeconds;
+    return streamStart + elapsed - timeOriginSeconds;
+  }).filter(endpoint => Number.isFinite(endpoint) && endpoint > 0);
+  // Without usable stream durations, retain the Matroska/WebM presentation-end
+  // fallback; other demuxers' format duration is used as elapsed time. This
+  // bounded metadata fallback cannot resolve every ambiguous/missing timestamp.
+  const durationIncludesOrigin = formatNames.some(name => ['matroska', 'webm'].includes(name));
+  const duration = streamEndpoints.length ? Math.max(...streamEndpoints)
+    : Number(raw.format?.duration) - (durationIncludesOrigin ? timeOriginSeconds : 0);
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
 }
 
 function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
@@ -92,19 +107,23 @@ function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
   const videoCandidate = videoStreams.find(isPrimaryVideoCandidate) || null;
   const audioStreams = streams.filter((stream) => stream?.codec_type === 'audio');
   const audioCandidate = primaryAudioStream(streams);
-  const duration = normalizedDuration(raw, videoCandidate, audioCandidate);
+  const formatName = boundedText(raw.format?.format_name, 400, { lower: true }) || '';
+  const formatNames = formatName.split(',')
+    .map((name) => name.trim()).filter(Boolean).slice(0, 20);
+  // Match FFmpeg -copyts -start_at_zero for both Edit and generic inspection.
+  const rawStart = Number(raw.format?.start_time);
+  const timeOriginSeconds = Number.isFinite(rawStart) ? rawStart : 0;
+  const duration = normalizedDuration(raw, videoCandidate, audioCandidate, formatNames, timeOriginSeconds);
   const hasTimedVideo = Boolean(videoCandidate && duration);
   const mediaKind = videoCandidate
     ? hasTimedVideo ? 'video' : 'unsupported'
     : audioCandidate ? 'audio' : 'unsupported';
-  const formatName = boundedText(raw.format?.format_name, 400, { lower: true }) || '';
-  const formatNames = formatName.split(',')
-    .map((name) => name.trim()).filter(Boolean).slice(0, 20);
   const normalizedSourceSize = finiteInteger(sourceSize) ?? finiteInteger(raw.format?.size);
 
   return {
     mediaKind,
     durationSeconds: duration ? roundMetadataNumber(duration) : null,
+    timeOriginSeconds,
     sourceSize: normalizedSourceSize,
     format: normalizedContainerLabel(raw.format || {}, formatNames),
     formatNames,

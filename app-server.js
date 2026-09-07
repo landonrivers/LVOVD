@@ -51,7 +51,9 @@ const SPONSOR_CATEGORIES = new Set([
 ]);
 
 const YTDLP_PATH = process.env.YTDLP_PATH || '';
-const YTDLP_COMMON_ARGS = ['--js-runtimes', 'node', '--no-colors'];
+// Isolate every source operation from unrelated user/system option files.
+// Default extractor-plugin discovery and the explicit YTDLP_PATH remain intact.
+const YTDLP_COMMON_ARGS = ['--ignore-config', '--js-runtimes', 'node', '--no-colors'];
 const WORKSPACE_PROGRESS_TEMPLATE = 'download:__LVOVD_WORKSPACE_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress._percent_str)s';
 
 function withFailureScope(error, failureScope) {
@@ -1870,16 +1872,18 @@ async function cleanupExpiredTemporaryWork() {
 
 setInterval(() => cleanupExpiredTemporaryWork().catch(() => {}), 10 * 60 * 1000).unref();
 
-function streamPreparedFile(res, output) {
+function streamPreparedFile(res, output, workspace = null) {
   return new Promise((resolve) => {
     let settled = false;
     const stream = fs.createReadStream(output.filePath);
+    if (workspace) mediaWorkspaces.ownReadStream(workspace, stream, res);
 
     const finish = () => {
       if (settled) return;
       settled = true;
       resolve();
     };
+    stream.once('close', finish);
 
     stream.once('error', (error) => {
       if (settled) return;
@@ -1894,7 +1898,7 @@ function streamPreparedFile(res, output) {
 
     stream.once('open', (descriptor) => {
       fs.fstat(descriptor, (error, stat) => {
-        if (error || settled) {
+        if (error || settled || (workspace && !mediaWorkspaces.get(workspace.id, { touch: false }))) {
           if (!settled) stream.destroy(error);
           return;
         }
@@ -1929,7 +1933,7 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
     const [ytdlp, ffmpeg] = await Promise.all([
-      commandVersion(YTDLP_PATH, ['--version']),
+      commandVersion(YTDLP_PATH, [...YTDLP_COMMON_ARGS, '--version']),
       commandVersion('ffmpeg', ['-version'])
     ]);
     return json(res, 200, {
@@ -2012,7 +2016,7 @@ async function handleRequest(req, res) {
     } catch (error) {
       if (req.aborted || res.destroyed) return;
       const details = mediaWorkspaces.failureFor(error);
-      return json(res, error.statusCode || 500, { error: details.title, details });
+      return json(res, error.statusCode || 500, { error: details.title, details, cleanup: error.cleanup || null });
     }
   }
 
@@ -2111,18 +2115,27 @@ async function handleRequest(req, res) {
       requestUrl.searchParams.get('asset')
     );
     if (!resolved) return json(res, 404, { error: 'That edited output is not available.' });
-    return streamPreparedFile(res, resolved.asset);
+    return streamPreparedFile(res, resolved.asset, resolved.workspace);
   }
 
   if (req.method === 'DELETE' && requestUrl.pathname === '/api/workspace') {
     const workspaceId = requestUrl.searchParams.get('workspace');
     const workspace = mediaWorkspaces.get(workspaceId, { touch: false });
-    if (!workspace) return json(res, 404, { error: 'Local media workspace not found or already discarded.' });
+    if (!workspace) {
+      if (!mediaWorkspaces.cleanupPending.has(workspaceId) && !mediaWorkspaces.discards.has(workspaceId)) {
+        return json(res, 404, { error: 'Local media workspace not found or already discarded.' });
+      }
+      // A repeat DELETE may retry retained cleanup, never reactivate the workspace.
+      if (mediaWorkspaces.discards.has(workspaceId)) await mediaWorkspaces.discards.get(workspaceId);
+      else await mediaWorkspaces.retryCleanup(workspaceId);
+      return json(res, 200, { ok: true, action: 'discarded', cleanup: mediaWorkspaces.cleanupStatus(workspaceId) });
+    }
     const wasActive = Boolean(workspace.activeOperation);
     await mediaWorkspaces.discard(workspaceId);
     return json(res, 200, {
       ok: true,
-      action: wasActive ? 'cancelled-and-discarded' : 'discarded'
+      action: wasActive ? 'cancelled-and-discarded' : 'discarded',
+      cleanup: mediaWorkspaces.cleanupStatus(workspace)
     });
   }
 

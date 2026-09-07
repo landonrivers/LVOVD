@@ -47,6 +47,18 @@ The verified executable and a small checksum manifest are cached in `.lvovd-bin/
 
 This checksum validation detects corruption and mismatched release assets, but it is not an independent chain of trust: both the executable and published checksum ultimately come from GitHub/yt-dlp release infrastructure. A user-supplied `YTDLP_PATH` override is outside LVOVD's managed verification because LVOVD cannot know which custom build the user intended.
 
+## Local media input and cleanup boundaries
+
+Workspace FFprobe/FFmpeg inputs use a fixed demuxer allowlist before header/deep inspection, a `file`-only protocol policy, and disabled MOV external-track/absolute-path options. A file-protocol restriction by itself is **not** filesystem containment. The demuxer policy excludes dependency-resolving playlist/reference readers; no manifest resolver is provided. FFmpeg processing pins the demuxer identified by protected inspection. The same policy applies to local uploads, the final locally adopted URL-acquired source, proxies, edited rendering, and output-validation probes. Remote yt-dlp acquisition is separate and may still acquire HLS/DASH normally.
+
+The allowed demuxers are `mov` (MP4/MOV family), `matroska` (Matroska/WebM), `avi`, `asf`, `flv`, `mpeg`, `mpegts`, `ogg`, `nut`, `mp3`, `aac`, `flac`, `wav`, `aiff`, `amr`, `ape`, `wv`, `tta`, `ac3`, `eac3`, `dts`, `au`, and `caf`. This is a conservative container-input boundary, not a codec whitelist or a promise that every file in those containers can be edited. Audio-only files and attached cover art remain ineligible for the video editor. Other containers are rejected even if a particular file happens to be self-contained.
+
+These arguments rely on the installed FFmpeg/FFprobe implementing their documented options. They are not a general OS/process sandbox and do not protect against every possible media-decoder defect. Unsupported tool options fail closed. Keep the locally installed tools up to date. The upstream [format policy](https://ffmpeg.org/ffmpeg-formats.html#Format-Options) and [MOV external-track options](https://ffmpeg.org/ffmpeg-formats.html#mov_002fmp4_002f3gp) document the relevant controls.
+
+Workspace Discard invalidates the registry and progress/media/output access before waiting for physical deletion. Owned readers are closed and active operations cancelled before deletion. Pending directories and their assets remain in process-owned cleanup records until removal succeeds. Transient `EBUSY`, `EPERM`, `ENOTEMPTY`, `EMFILE`, or `ENFILE` failures receive two retries (100 ms and 500 ms); other failures stop immediately. Exhausted records remain owned without endless automatic retries. A repeat DELETE for that opaque discarded workspace ID can explicitly retry its retained cleanup; it cannot restore media access. Responses distinguish `complete`, `pending`, and `failed` cleanup without returning local paths. This is in-memory bookkeeping only: abrupt termination can still leave temporary bytes behind, as documented in the README.
+
+All application-controlled yt-dlp source operations use `--ignore-config`; LVOVD does not supply external configuration locations. This isolates option files, not executable/plugin code. Default extractor plugins and an explicit `YTDLP_PATH` are still trusted local code chosen by the user.
+
 ## Local history data
 
 LVOVD can keep a small durable download-history file in the current user's local application-data directory. History is local metadata, not a second copy of downloaded media and not telemetry.
