@@ -124,3 +124,85 @@ test('narrow viewport exposes details, target controls, and download without hor
   await page.locator('#conversion-start').click(); await expect(page.locator('#conversion-download')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+async function authorAndRender(page) {
+  await page.locator('#local-open-editor').click(); await expect(page.locator('#media-editor')).toBeVisible();
+  await page.locator('#cut-start-time').fill('1'); await page.locator('#cut-start-time').press('Enter');
+  await page.locator('#cut-end-time').fill('2'); await page.locator('#cut-end-time').press('Enter'); await page.locator('#remove-section').click();
+  await page.locator('#create-edited-file').click(); await expect(page.locator('#convert-edited-file')).toBeEnabled();
+}
+
+test('edited handoff preserves authoring state and selected input; unchanged edited download survives a later rerender', async ({ page }) => {
+  const uploads = [], connections = [];
+  page.on('request', request => { if (request.url().endsWith('/api/media/local')) uploads.push(request); if (request.url().includes('/api/workspace/progress')) connections.push(request); });
+  const id = await intake(page); await authorAndRender(page);
+  await page.locator('#cut-start-time').fill('3'); await page.locator('#cut-start-time').press('Enter');
+  await page.locator('#timeline-zoom-in').click();
+  await page.locator('#editor-video').evaluate(video => { video.currentTime = 2.5; });
+  const visible = await page.locator('#timeline-visible-label').textContent();
+  // The contract returns a copy and cannot mutate the editor's committed plan.
+  await page.evaluate(() => { const state = window.LVOVDEditorView.conversionState(); state.editPlan.keepRanges[0].endSeconds = 99; });
+  await expect(page.locator('#convert-edited-file')).toBeEnabled();
+  const first = (await snapshot(id)).editedOutput;
+  await page.locator('#convert-edited-file').focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('#conversion-input')).toHaveText(`Input: Edited result — ${first.filename}`);
+  await expect(page.locator('#conversion-input-duration')).toContainText('00:00:04.000');
+  await expect(page.locator('#conversion-plan-title')).toHaveText('No conversion needed');
+  await expect(page.locator('#conversion-cuts-note')).toBeHidden();
+  await page.locator('#conversion-start').click(); await expect(page.locator('#conversion-output-target')).toContainText('Existing edited bytes');
+  const bytesA = (await downloaded(page)).bytes;
+  const sourceDownload = await page.request.get(first.downloadUrl); expect(bytesA).toEqual(await sourceDownload.body());
+  await page.locator('#local-open-editor').click();
+  await expect(page.locator('#cut-start-time')).toHaveValue('00:00:03.000'); await expect(page.locator('#timeline-visible-label')).toHaveText(visible);
+  expect(await page.locator('#editor-video').evaluate(video => video.currentTime)).toBeCloseTo(2.5, 1);
+  await page.locator('#local-open-converter').click(); await expect(page.locator('#conversion-use-edited')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#local-open-editor').click();
+  await page.locator('#editor-end-time').fill('4.5'); await page.locator('#editor-end-time').press('Enter');
+  await expect(page.locator('#convert-edited-file')).toBeDisabled();
+  await expect(page.locator('#edited-conversion-reason')).toHaveText('Create an updated edited file first');
+  await expect(page.locator('#download-edited-file')).toHaveAttribute('href', first.downloadUrl);
+  await page.locator('#local-open-converter').click(); await expect(page.locator('#conversion-start')).toBeDisabled();
+  expect((await downloaded(page)).bytes).toEqual(bytesA);
+  await page.locator('#local-open-editor').click(); await page.locator('#create-edited-file').click(); await expect(page.locator('#convert-edited-file')).toBeEnabled();
+  await page.locator('#local-open-converter').click();
+  await expect(page.locator('#conversion-input-status')).toContainText('was replaced'); await expect(page.locator('#conversion-start')).toBeDisabled();
+  await expect(page.locator('#conversion-input-duration')).toContainText('00:00:04.000');
+  await expect(page.locator('#conversion-output-target')).toContainText('previous edited result');
+  expect((await downloaded(page)).bytes).toEqual(bytesA);
+  await page.locator('#conversion-use-edited').click(); await expect(page.locator('#conversion-input-duration')).toContainText('00:00:03.500');
+  await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
+  await expect(page.locator('#conversion-output-target')).not.toContainText('previous edited result');
+  expect((await downloaded(page)).bytes).not.toEqual(bytesA);
+  expect(uploads).toHaveLength(1); expect(connections).toHaveLength(1);
+});
+
+test('explicit input switching uses edited duration and actual edited M4A output; controls fit a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await intake(page); await authorAndRender(page); await page.locator('#convert-edited-file').click();
+  await page.locator('#conversion-use-original').focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('#conversion-input')).toContainText('Input: Original source');
+  await expect(page.locator('#conversion-input-duration')).toContainText('00:00:05.000');
+  await page.locator('#conversion-use-edited').focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('#conversion-input')).toContainText('Input: Edited result');
+  await expect(page.locator('#conversion-input-duration')).toContainText('00:00:04.000');
+  await page.locator('#conversion-target').selectOption('m4a-aac'); await expect(page.locator('#conversion-start')).toBeEnabled();
+  await page.locator('#conversion-start').click(); await expect(page.locator('#conversion-output-target')).toContainText('Converted edited result');
+  const output = await downloaded(page), file = path.join(root, 'edited-browser.m4a'); await fs.writeFile(file, output.bytes);
+  const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file], { encoding: 'utf8', windowsHide: true }));
+  expect(probe.streams.map(stream => stream.codec_type)).toEqual(['audio']); expect(Math.abs(Number(probe.format.duration) - 4)).toBeLessThanOrEqual(0.06);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('a delayed edited-input review cannot revive after the committed plan changes or Discard', async ({ page }) => {
+  await intake(page); await authorAndRender(page);
+  let release, ready;
+  const fetched = new Promise(resolve => { ready = resolve; }), hold = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/conversion/plan', async route => { const response = await route.fetch(); ready(); await hold; await route.fulfill({ response }); });
+  await page.locator('#convert-edited-file').click(); await fetched;
+  await page.locator('#local-open-editor').click(); await page.locator('#editor-end-time').fill('4.5'); await page.locator('#editor-end-time').press('Enter');
+  release(); await page.unroute('**/api/conversion/plan');
+  await page.locator('#local-open-converter').click(); await expect(page.locator('#conversion-start')).toBeDisabled();
+  await expect(page.locator('#conversion-input-status')).toHaveText('Create an updated edited file first');
+  await page.locator('#workspace-discard').click(); await expect(page.locator('#media-drop-zone')).toBeVisible();
+  await expect(page.locator('#media-converter')).toBeHidden();
+});

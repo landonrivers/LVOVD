@@ -14,6 +14,7 @@
   let generation = 0, workspaceId = null, snapshot = null, upload = null, starting = false, source = null;
   let view = null, plan = null, planRequest = 0, retryTimer = null, planBusy = false;
   let operationRequest = false, discarding = false;
+  let selectedInput = null;
 
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
@@ -29,12 +30,48 @@
     if (!response.ok) throw new Error(data.error || 'The local operation could not complete.');
     return data;
   }
-  function identity() { return { workspaceId, sourceAssetId: snapshot?.sourceAssetId }; }
+  function identity() {
+    return { workspaceId, inputAssetId: selectedInput?.assetId,
+      ...(selectedInput?.role === 'edited-output' ? { editPlan: editor.conversionState().editPlan } : {}) };
+  }
+  function selectInput(edited) {
+    const state = editor.conversionState();
+    if (!snapshot || snapshot.activeOperation || discarding || (edited && !state.eligible)) return;
+    const output = snapshot.editedOutput;
+    selectedInput = edited ? { assetId: output.assetId, role: 'edited-output', filename: output.filename, durationSeconds: output.inspection.durationSeconds }
+      : { assetId: snapshot.sourceAssetId, role: 'source', filename: snapshot.source.name, durationSeconds: snapshot.inspection.durationSeconds };
+    showView('convert', true); reviewPlan();
+  }
+  function selectionIssue() {
+    if (!selectedInput) return 'Select an input.';
+    if (selectedInput.role !== 'edited-output') return null;
+    if (selectedInput.assetId !== snapshot?.editedOutput?.assetId) return 'This edited result was replaced. Select the latest eligible edited result explicitly.';
+    if (!editor.conversionState().fresh) return 'Create an updated edited file first';
+    return null;
+  }
+  function refreshInput() {
+    if (!selectedInput && snapshot?.sourceAssetId && snapshot.inspection) selectedInput = {
+      assetId: snapshot.sourceAssetId, role: 'source', filename: snapshot.source.name, durationSeconds: snapshot.inspection.durationSeconds
+    };
+    const edited = selectedInput?.role === 'edited-output', issue = selectionIssue();
+    $('#conversion-input').textContent = selectedInput ? `Input: ${edited ? 'Edited result' : 'Original source'} — ${selectedInput.filename}` : '';
+    $('#conversion-input-duration').textContent = selectedInput ? `Input duration: ${facts.formatDuration(selectedInput.durationSeconds)}` : '';
+    $('#conversion-use-original').setAttribute('aria-pressed', String(Boolean(selectedInput && !edited)));
+    $('#conversion-use-edited').setAttribute('aria-pressed', String(edited));
+    $('#conversion-use-original').disabled = Boolean(snapshot?.activeOperation || operationRequest);
+    $('#conversion-use-edited').disabled = !editor.conversionState().eligible || operationRequest;
+    $('#conversion-input-status').textContent = issue || '';
+    $('#conversion-cuts-note').hidden = edited || !editor.hasCuts();
+    if (issue && (plan || planBusy)) {
+      planRequest++; plan = null; planBusy = false; clearTimeout(retryTimer); retry.hidden = true;
+      $('#conversion-plan-title').textContent = issue; $('#conversion-changes').replaceChildren(); $('#conversion-warnings').replaceChildren();
+    }
+  }
   function reset(text = '') {
     generation++; planRequest++;
     closeSource(); clearTimeout(retryTimer); retryTimer = null;
     const oldUpload = upload; upload = null; oldUpload?.abort();
-    workspaceId = null; snapshot = null; starting = false; view = null; plan = null; planBusy = false; operationRequest = false; discarding = false;
+    workspaceId = null; snapshot = null; starting = false; view = null; plan = null; planBusy = false; operationRequest = false; discarding = false; selectedInput = null;
     editor.reset(); converter.hidden = true; ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = true; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
     $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
@@ -56,12 +93,16 @@
     const state = snapshot?.conversion || {};
     const busy = Boolean(snapshot?.activeOperation || operationRequest);
     const acknowledged = [...$('#conversion-warnings').querySelectorAll('input')].every(box => box.checked);
-    start.disabled = planBusy || busy || !plan || !['executable', 'no-op'].includes(plan.status) || !acknowledged || state.cleanupPending;
+    refreshInput();
+    start.disabled = planBusy || busy || !plan || !['executable', 'no-op'].includes(plan.status) || !acknowledged
+      || state.cleanupPending || snapshot?.outputCleanup?.blocked || Boolean(selectionIssue());
     start.textContent = plan?.status === 'no-op' ? 'Use Existing File' : 'Create Converted File';
     cancel.hidden = !['running', 'validating', 'cancelling'].includes(state.status);
     cancel.disabled = state.status === 'cancelling';
     target.disabled = Boolean(snapshot?.activeOperation || operationRequest);
-    $('#conversion-cleanup').hidden = !state.cleanupPending;
+    $('#conversion-cleanup').hidden = !state.cleanupPending && !snapshot?.outputCleanup?.blocked;
+    $('#conversion-cleanup').disabled = busy;
+    $('#output-cleanup-status').textContent = snapshot?.outputCleanup?.message || (state.cleanupPending ? 'Temporary output cleanup needs a retry.' : '');
     $('#conversion-progress').hidden = !['running', 'validating', 'cancelling'].includes(state.status);
     const bar = $('#conversion-progress-bar'); bar.classList.toggle('indeterminate', state.percent == null);
     bar.style.width = `${state.percent == null ? 36 : Math.max(0, Math.min(100, state.percent))}%`;
@@ -75,7 +116,12 @@
         output.inspection?.video && `${output.inspection.video.width} × ${output.inspection.video.height}`,
         output.inspection?.audio && `${facts.familiarCodecName(output.inspection.audio.codec)} · ${output.inspection.audio.sampleRate} Hz · ${output.inspection.audio.channels} channels`].filter(Boolean).join(' · ');
       const label = [...target.options].find(option => option.value === output.targetId)?.textContent || output.targetId;
-      $('#conversion-output-target').textContent = `${output.noOp ? 'Existing source bytes' : 'Converted original source'} · ${label}${target.value !== output.targetId ? ' · Previous target; this download has not changed.' : ''}`;
+      const fromEdited = output.provenance?.inputRole === 'edited-output';
+      const previousEdited = fromEdited && output.provenance.inputAssetId !== snapshot?.editedOutput?.assetId;
+      $('#conversion-output-target').textContent = `${output.noOp ? (fromEdited ? 'Existing edited bytes used without conversion' : 'Existing source bytes') : (fromEdited ? 'Converted edited result' : 'Converted original source')} · ${label}`
+        + (output.provenance ? ` · ${output.provenance.inputFilename} · Input ${facts.formatDuration(output.provenance.inputDurationSeconds)}` : '')
+        + (previousEdited ? ' · From a previous edited result; this download has not changed.' : '')
+        + (target.value !== output.targetId ? ' · Previous target; this download has not changed.' : '');
       $('#conversion-download').href = output.downloadUrl; $('#conversion-download').download = output.filename;
     }
   }
@@ -83,7 +129,7 @@
     view = next;
     editor.show(next === 'edit'); converter.hidden = next !== 'convert';
     editButton.setAttribute('aria-pressed', String(next === 'edit')); convertButton.setAttribute('aria-pressed', String(next === 'convert'));
-    $('#conversion-cuts-note').hidden = !editor.hasCuts();
+    $('#conversion-cuts-note').hidden = selectedInput?.role === 'edited-output' || !editor.hasCuts();
     if (focus) (next === 'convert' ? target : $('#editor-video')).focus({ preventScroll: true });
   }
   function accept(data) {
@@ -106,7 +152,6 @@
       editButton.hidden = !data.editor?.eligible;
       convertButton.hidden = !data.inspection.video && !data.inspection.audio;
       editButton.disabled = Boolean(data.activeOperation) && data.editor?.status !== 'ready'; convertButton.disabled = data.status !== 'ready' && !view;
-      $('#conversion-input').textContent = `Input: Original source — ${data.source.name}`;
       editor.update(data); showView(view);
     }
     message(data.editor?.status === 'failed' ? `${data.editor.message} The original source remains available for conversion.` : data.message, data.status === 'error');
@@ -182,7 +227,8 @@
     } catch (error) { if (generation === token) reset(error.message); }
   }
   async function reviewPlan() {
-    if (!workspaceId || !snapshot?.sourceAssetId) return;
+    refreshInput();
+    if (!workspaceId || !selectedInput || selectionIssue()) { conversionControls(); return; }
     const token = generation, request = ++planRequest, targetId = target.value;
     plan = null; planBusy = true; retry.hidden = true; clearTimeout(retryTimer);
     $('#conversion-warnings').replaceChildren(); $('#conversion-changes').replaceChildren();
@@ -209,10 +255,14 @@
     showView('edit');
     if (snapshot?.editor?.status === 'ready') { showView('edit', true); return; }
     editButton.disabled = true;
-    try { const data = await post('/api/workspace/editor', identity()); if (token === generation) accept(data.workspace); }
+    try { const data = await post('/api/workspace/editor', { workspaceId, sourceAssetId: snapshot?.sourceAssetId }); if (token === generation) accept(data.workspace); }
     catch (error) { if (token === generation) { message(error.message, true); editButton.disabled = false; } }
   });
   convertButton.addEventListener('click', () => { showView('convert', true); if (!plan && !planBusy) { if (!snapshot?.inspection.video) target.value = 'm4a-aac'; reviewPlan(); } });
+  $('#conversion-use-original').addEventListener('click', () => selectInput(false));
+  $('#conversion-use-edited').addEventListener('click', () => selectInput(true));
+  document.addEventListener('lvovd:convert-edited', () => selectInput(true));
+  document.addEventListener('lvovd:editor-plan-changed', () => { if (workspaceId) conversionControls(); });
   target.addEventListener('change', reviewPlan); retry.addEventListener('click', reviewPlan);
   start.addEventListener('click', async () => {
     if (!plan || start.disabled) return;

@@ -14,6 +14,7 @@
     MIN_RANGE_SECONDS,
     roundMilliseconds,
     normalizeEditPlan,
+    editPlansEqual,
     subtractKeepRanges,
     intersectKeepRanges,
     deriveInternalRemovedGaps,
@@ -235,15 +236,6 @@
     return roundMilliseconds(clamp(value, 0, duration));
   }
 
-  function editPlansEqual(first, second) {
-    if (first?.version !== 1 || second?.version !== 1) return false;
-    if (!Array.isArray(first.keepRanges) || !Array.isArray(second.keepRanges)
-      || first.keepRanges.length !== second.keepRanges.length) return false;
-    return first.keepRanges.every((range, index) => (
-      range?.startSeconds === second.keepRanges[index]?.startSeconds
-      && range?.endSeconds === second.keepRanges[index]?.endSeconds
-    ));
-  }
 
   function recomputeAuthoringState(state, durationSeconds) {
     const duration = roundMilliseconds(durationSeconds);
@@ -534,6 +526,8 @@
     const outputFacts = document.querySelector('#editor-output-facts');
     const outputStale = document.querySelector('#editor-output-stale');
     const downloadEditedFile = document.querySelector('#download-edited-file');
+    const convertEditedFile = document.querySelector('#convert-edited-file');
+    const editedConversionReason = document.querySelector('#edited-conversion-reason');
 
     let activeWorkspaceId = null;
     let workspaceSnapshot = null;
@@ -570,6 +564,9 @@
     }
 
     function renderEditedOutput() {
+      const handoff = conversionState();
+      convertEditedFile.disabled = !handoff.eligible;
+      editedConversionReason.textContent = handoff.reason || '';
       const output = workspaceSnapshot?.editedOutput;
       if (!output) {
         editedOutput.hidden = true;
@@ -595,7 +592,8 @@
       const state = data?.render || { status: 'idle', percent: null, failure: null };
       const busy = ['rendering', 'cancelling'].includes(state.status);
       const fullDuration = isFullDurationEditPlan(editPlan, durationSeconds);
-      createEditedFile.disabled = !editPlan || fullDuration || busy || Boolean(data?.activeOperation);
+      createEditedFile.disabled = !editPlan || fullDuration || busy || Boolean(data?.activeOperation)
+        || Boolean(data?.outputCleanup?.blocked || data?.conversion?.cleanupPending);
       cancelEditedRender.disabled = state.status === 'cancelling';
       renderProgress.hidden = !busy;
       if (busy) {
@@ -813,6 +811,7 @@
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
       renderRenderState();
+      document.dispatchEvent(new root.CustomEvent('lvovd:editor-plan-changed'));
       return { valid: true, authoringState, editPlan };
     }
 
@@ -1291,7 +1290,20 @@
     root.addEventListener('resize', () => {
       if (editPlan) renderRuler();
     });
+    function conversionState() {
+      const output = workspaceSnapshot?.editedOutput;
+      const fresh = Boolean(output && editPlansEqual(editPlan, output.editPlan));
+      return { workspaceId: activeWorkspaceId, editPlan: editPlan ? structuredClone(editPlan) : null,
+        editedAssetId: output?.assetId || null, fresh,
+        eligible: fresh && !workspaceSnapshot?.activeOperation,
+        reason: !output ? 'Create an edited file first.' : !fresh ? 'Create an updated edited file first'
+          : workspaceSnapshot?.activeOperation ? 'Wait for the current local operation to finish.' : null };
+    }
+    convertEditedFile.addEventListener('click', () => {
+      if (conversionState().eligible) document.dispatchEvent(new root.CustomEvent('lvovd:convert-edited'));
+    });
     root.LVOVDEditorView = {
+      conversionState,
       update(data) {
         if (data?.id !== activeWorkspaceId) { resetEditor(); activeWorkspaceId = data?.id || null; }
         renderWorkspace(data);
