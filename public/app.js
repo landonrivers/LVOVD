@@ -1163,7 +1163,7 @@ function updateDownloadLabel() {
 function editorEligibility() {
   if (!currentInfo) return { eligible: false, reason: '' };
   if (editorWorkspaceState.active) {
-    return { eligible: false, reason: 'Discard the current editor workspace before opening another video.' };
+    return { eligible: false, reason: 'Discard the current local workspace before opening another video.' };
   }
   if (currentInfo.kind !== 'media') {
     return { eligible: false, reason: 'Collections and playlists cannot be opened in the editor.' };

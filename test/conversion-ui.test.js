@@ -75,34 +75,18 @@ test('inspection UI preserves unknown metadata instead of inventing incompatibil
   assert.equal(displayed.Tracks, 'Unknown video · Unknown audio · Unknown subtitle');
 });
 
-test('browser panel is a truthful inspection-only local workflow between Edit and History', () => {
+test('one compact Local Media intake supplies the editor, converter, and expandable facts', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(ROOT, 'public', 'conversion-inspector.js'), 'utf8');
-  const styles = fs.readFileSync(path.join(ROOT, 'public', 'styles.css'), 'utf8');
-  const panelStart = html.indexOf('<section id="conversion-inspector-panel"');
-  const panelEnd = html.indexOf('<section id="history-panel"');
-  const panel = html.slice(panelStart, panelEnd);
-
-  assert.ok(panelStart > html.indexOf('<section id="media-workspace-panel"'));
-  assert.ok(panelEnd > panelStart);
-  assert.match(panel, /Inspect Local Media/);
-  assert.match(panel, /one local video or audio file/i);
-  assert.match(panel, /temporary workspace storage/i);
-  assert.match(panel, /nothing is uploaded to cloud storage/i);
-  assert.match(panel, /Inspection only — this release does not create a converted output/);
-  assert.match(panel, /BROAD COMPATIBILITY MP4/);
-  assert.match(panel, /id="conversion-file-input" type="file" hidden/);
-  assert.doesNotMatch(panel, /id="conversion-file-input"[^>]*accept=/);
-  assert.doesNotMatch(panel, /<button[^>]*>\s*Convert\s*<\/button>/i);
-  assert.ok(html.indexOf('src="/conversion-inspector.js"')
-    > html.indexOf('src="/media-editor.js"'));
-
-  assert.match(source, /POST', '\/api\/conversion\/local'/);
-  assert.match(source, /new root\.EventSource\(`\/api\/workspace\/progress/);
-  assert.match(source, /method: 'DELETE'/);
-  assert.match(source, /data\.purpose !== 'convert'/);
-  assert.match(source, /failureDiscard\.disabled = false;\s*discardButton\.disabled = false;/);
-  assert.match(styles, /\.conversion-inspector-panel/);
-  assert.match(styles, /\.conversion-facts dt \{[^}]*font-size:\s*10px/s);
-  assert.match(styles, /\.conversion-facts dd \{[^}]*font-size:\s*12px/s);
+  const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
+  assert.equal((html.match(/type="file"/g) || []).length, 1);
+  assert.doesNotMatch(html, /Inspect Local Media|Inspection only|conversion-inspector-panel/);
+  assert.match(html, /Edit a video or convert a video\/audio file/);
+  assert.match(html, /<summary>Media Details<\/summary>/);
+  assert.match(html, /Input|conversion-input/);
+  assert.match(html, /Your timeline cuts are not applied/);
+  assert.match(source, /xhr.open\('POST', '\/api\/media\/local'\)/);
+  assert.equal((source.match(/new root.EventSource/g) || []).length, 1);
+  assert.match(source, /generation !== token/);
+  assert.ok(html.indexOf('id="lookup-form"') < html.indexOf('id="media-workspace-panel"'));
+  assert.ok(html.indexOf('id="media-workspace-panel"') < html.indexOf('id="history-panel"'));
 });

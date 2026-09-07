@@ -515,14 +515,14 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /Creates a high-quality H\.264 MP4 locally, with AAC audio when the source has audio/i);
   assert.match(html, /LVOVD re-encodes edits to closely match arbitrary cut times/i);
   assert.match(html, /Your workspace source is unchanged/i);
-  assert.doesNotMatch(html, /\blossless\b|frame-perfect|source codec preserved/i);
+  assert.doesNotMatch(html.slice(html.indexOf('id="media-editor"'), html.indexOf('id="media-converter"')), /\blossless\b|frame-perfect|source codec preserved/i);
   assert.match(html, /id="create-edited-file" class="button secondary mini"[^>]*>Create Edited File<\/button>/);
   assert.match(html, />DOWNLOAD EDITED FILE<\/p>/);
   assert.match(html, /id="download-edited-file" class="button secondary mini"[^>]*>Download<\/a>/);
   assert.match(html, /Change the retained range or remove a section before creating an edited file/i);
   assert.match(html, /Range changed — create the edited file again to update it/i);
   assert.doesNotMatch(html, /Choose or drop one local video\. It stays on this computer/i);
-  assert.match(html, /Nothing is sent to cloud storage/i);
+  assert.match(html, /nothing is uploaded to cloud storage/i);
   assert.doesNotMatch(html, /LOCAL EDIT WORKSPACE/i);
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
   assert.doesNotMatch(html, /id="media-file-input"[^>]*\baccept=/i);
@@ -532,8 +532,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.ok(html.indexOf('id="preview"') < html.indexOf('id="media-workspace-panel"'));
   assert.ok(html.indexOf('id="media-workspace-panel"') < html.indexOf('id="history-panel"'));
   assert.match(html, /<label class="workflow-heading" for="video-url">Download From Media URL<\/label>/);
-  assert.match(html, /<h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File<\/h2>/);
-  assert.match(html, /id="workspace-storage-note" class="workspace-storage-note" hidden/);
+  assert.match(html, /<h2 id="media-workspace-title" class="workflow-heading">Local Media<\/h2>/);
   assert.match(html, /id="preview-button" class="button secondary lookup-submit"[^>]*>Preview<\/button>/);
   assert.match(html, /id="download-button" class="button primary big"/);
   assert.match(html, /id="open-editor-button" class="button secondary editor-action big"[^>]*>Edit Source Video<\/button>/);
@@ -563,14 +562,8 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
   assert.match(source, /requestAnimationFrame\(playbackFrame\)/);
   assert.match(source, /video\.currentTime/);
-  assert.match(source, /xhr\.upload\.onprogress/);
-  assert.match(source, /addEventListener\('drop'/);
   assert.match(source, /addEventListener\('pointerdown'/);
   assert.match(source, /setPointerCapture/);
-  assert.match(source, /dropZone\.hidden = true/);
-  assert.match(source, /dropZone\.hidden = false/);
-  assert.match(source, /storageNote\.hidden = true/);
-  assert.match(source, /if \(!file\.size\)[\s\S]*?return;[\s\S]*?showStorageNote\('local'\)/);
   assert.match(source, /playhead\.addEventListener\('pointerdown', beginPlayheadDrag\)/);
   assert.match(source, /playheadSeekFrame = root\.requestAnimationFrame/);
   assert.match(source, /track\.addEventListener\('keydown', handlePlaybackKey\)/);
@@ -585,10 +578,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   for (const id of ['timeline-start-handle', 'timeline-end-handle', 'timeline-cut-start-handle', 'timeline-cut-end-handle']) {
     assert.match(html, new RegExp(`id="${id}"[^>]*role="slider"[^>]*aria-orientation="horizontal"`));
   }
-  const readyBranch = source.match(/else if \(data\.status === 'ready'\) \{([\s\S]*?)\n      \}/)?.[1];
-  assert.ok(readyBranch);
-  assert.doesNotMatch(readyBranch, /closeProgressSource/);
-  assert.match(source, /if \(data\.workspace\?\.status !== 'error'\) startProgress\(activeWorkspaceId\)/);
+  assert.match(source, /data.editor\?.status === 'ready' && !editPlan/);
   assert.match(source, /root\.fetch\('\/api\/workspace\/render'/);
   assert.match(source, /method:\s*'POST'/);
   assert.match(source, /root\.fetch\(\s*`\/api\/workspace\/render\?workspace=/);
@@ -604,23 +594,6 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /authoringState = fullAuthoringState\(durationSeconds\)/);
   assert.match(source, /const state = fullAuthoringState\(durationSeconds\);[\s\S]*?commitAuthoringState\(state, \{ clearPending: true \}\)/);
   assert.doesNotMatch(source, /downloadEditedFile\.click\(/);
-  assert.match(source, /function resetWorkspaceUi\([\s\S]{0,100}closeProgressSource\(\)/);
-  assert.match(source, /lvovd:workspace-acquire-url/);
-  assert.match(source, /lvovd:workspace-state/);
-  assert.match(source, /root\.fetch\('\/api\/workspace\/url'/);
-  assert.match(source, /workspaceTitle\.textContent = data\.source\?\.origin === 'url' \? 'Edit Media' : 'Edit Local Media File'/);
-  assert.match(source, /The selected media is downloaded into temporary local storage for editing/i);
-  assert.match(source, /Editing after acquisition is local/i);
-  assert.match(source, /The source service still sees the acquisition requests/i);
-  assert.match(source, /A browser playback proxy may use additional temporary space/i);
-  assert.match(source, /Nothing is uploaded to cloud storage by LVOVD/i);
-  assert.match(source, /function releaseWorkspaceConnectionsForDiscard\(\)[\s\S]*?closeProgressSource\(\);[\s\S]*?video\.removeAttribute\('src'\);/);
-  const discardStart = source.indexOf('async function discardWorkspace()');
-  const discardEnd = source.indexOf('async function startEditedRender()', discardStart);
-  const discardFlow = source.slice(discardStart, discardEnd);
-  assert.ok(discardStart >= 0 && discardEnd > discardStart);
-  assert.ok(discardFlow.indexOf('releaseWorkspaceConnectionsForDiscard()') < discardFlow.indexOf('root.fetch('));
-  assert.match(discardFlow, /restoreWorkspaceConnectionsAfterDiscardFailure\(id, connections\)/);
   assert.match(serverSource, /res\.write\(': keepalive\\n\\n'\);\s*mediaWorkspaces\.touch\(workspace\);/);
   assert.match(serverSource, /'\/edit-plan\.js': \['edit-plan\.js', 'text\/javascript; charset=utf-8'\]/);
   assert.match(styles, /\.timeline-ruler-ticks::after[\s\S]*?height:\s*2px/);
@@ -649,15 +622,14 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.doesNotMatch(source, /\/api\/download/);
 });
 
-test('cleanup-pending acknowledgement resets the editor without reconnecting invalidated playback', () => {
-  const source = fs.readFileSync(path.join(ROOT, 'public', 'media-editor.js'), 'utf8');
-  const discard = source.slice(source.indexOf('async function discardWorkspace()'), source.indexOf('async function startEditedRender()'));
-  assert.match(discard, /if \(!response\.ok\) throw/);
-  assert.match(discard, /resetWorkspaceUi\(data\.cleanup && data\.cleanup\.status !== 'complete'/);
-  assert.match(discard, /Local media workspace discarded\. \$\{data\.cleanup\.message\}/);
-  assert.ok(discard.indexOf('catch (error)') < discard.indexOf('restoreWorkspaceConnectionsAfterDiscardFailure'));
+test('coordinator invalidates old updates and releases playback before Discard', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
+  const discard = source.slice(source.indexOf('async function discard()'), source.indexOf('function beginUpload('));
+  assert.ok(discard.indexOf("video.removeAttribute('src')") < discard.indexOf('await removeOwned(id)'));
+  assert.match(discard, /reset\(`Local workspace discarded/);
+  assert.match(discard, /data.cleanup\?.message/);
+  assert.match(source, /generation !== token/);
   assert.doesNotMatch(source, /partial temporary data was removed/);
-  assert.match(source, /failureHelp\.textContent \+= ` \$\{data\.cleanup\.message\}`/);
 });
 
 test('Preview editor action stays secondary, explains eligible or ineligible state, and sends only acquisition settings', () => {
@@ -672,7 +644,7 @@ test('Preview editor action stays secondary, explains eligible or ineligible sta
   assert.match(app, /currentInfo\.kind !== 'media'[\s\S]*Collections and playlists cannot be opened/);
   assert.match(app, /currentInfo\.capabilities\?\.live\?\.isLive[\s\S]*Live media cannot be opened/);
   assert.match(app, /!\['av', 'video'\]\.includes\(content\)/);
-  assert.match(app, /editorWorkspaceState\.active[\s\S]*Discard the current editor workspace/);
+  assert.match(app, /editorWorkspaceState\.active[\s\S]*Discard the current local workspace/);
   assert.match(app, /Edit Source Video opens the full media using the selected video source, profile, and resolution\. Time Range, Extras, and SponsorBlock apply only to Download\./);
   assert.match(app, /openEditorNote\.textContent = state\.eligible \? EDITOR_ELIGIBLE_NOTE : state\.reason/);
   assert.match(app, /openEditorNote\.hidden = !openEditorNote\.textContent/);
