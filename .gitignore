@@ -1,4 +1,6 @@
 node_modules/
+test-results/
+playwright-report/
 .lvovd-bin/
 *.log
 .DS_Store

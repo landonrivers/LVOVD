@@ -24,7 +24,8 @@ test('README ships truthful editing, privacy, temporary-file, and Download Histo
   const readme = read('README.md');
 
   assert.ok(readme.indexOf('## Quick Start') < readme.indexOf('## What it can do'));
-  assert.match(readme, /choose or drop one local video/i);
+  assert.match(readme, /choose or drop one video or audio file into \*\*Local Media\*\*/i);
+  assert.match(readme, /\*\*Edit Video\*\* or \*\*Convert Media\*\* without uploading it again/);
   assert.match(readme, /Edit Source Video[\s\S]*selected source[\s\S]*Compatible\/Maximum[\s\S]*resolution[\s\S]*Manual source choice/i);
   assert.match(readme, /remove and restore multiple middle sections/i);
   assert.match(readme, /high-quality H\.264 MP4[\s\S]*AAC when the source has audio/i);

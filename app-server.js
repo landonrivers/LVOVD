@@ -1835,6 +1835,7 @@ function serveStatic(reqPath, res) {
     '/edit-plan.js': ['edit-plan.js', 'text/javascript; charset=utf-8'],
     '/media-editor.js': ['media-editor.js', 'text/javascript; charset=utf-8'],
     '/conversion-inspector.js': ['conversion-inspector.js', 'text/javascript; charset=utf-8'],
+    '/local-workspace.js': ['local-workspace.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };
   const route = routes[reqPath];
@@ -1872,7 +1873,7 @@ async function cleanupExpiredTemporaryWork() {
 
 setInterval(() => cleanupExpiredTemporaryWork().catch(() => {}), 10 * 60 * 1000).unref();
 
-function streamPreparedFile(res, output, workspace = null) {
+function streamPreparedFile(res, output, workspace = null, { head = false, stillAuthorized = () => true } = {}) {
   return new Promise((resolve) => {
     let settled = false;
     const stream = fs.createReadStream(output.filePath);
@@ -1898,8 +1899,11 @@ function streamPreparedFile(res, output, workspace = null) {
 
     stream.once('open', (descriptor) => {
       fs.fstat(descriptor, (error, stat) => {
-        if (error || settled || (workspace && !mediaWorkspaces.get(workspace.id, { touch: false }))) {
-          if (!settled) stream.destroy(error);
+        if (error || settled || !stat?.isFile() || !stillAuthorized() || (workspace && !mediaWorkspaces.get(workspace.id, { touch: false }))) {
+          if (!settled) {
+            if (!res.headersSent && !res.destroyed) json(res, error ? 500 : 404, { error: 'That prepared file is unavailable or expired.' });
+            stream.destroy();
+          }
           return;
         }
 
@@ -1910,6 +1914,7 @@ function streamPreparedFile(res, output, workspace = null) {
           'Cache-Control': 'no-store',
           'X-Content-Type-Options': 'nosniff'
         });
+        if (head) { res.end(); stream.destroy(); finish(); return; }
 
         res.once('close', () => {
           if (!settled) stream.destroy();
@@ -1996,7 +2001,7 @@ async function handleRequest(req, res) {
     }
   }
 
-  if (req.method === 'POST' && requestUrl.pathname === '/api/workspace/local') {
+  if (req.method === 'POST' && ['/api/media/local', '/api/workspace/local', '/api/conversion/local'].includes(requestUrl.pathname)) {
     const declaredLength = req.headers['content-length'] == null
       ? null
       : Number(req.headers['content-length']);
@@ -2007,7 +2012,8 @@ async function handleRequest(req, res) {
       const workspace = await mediaWorkspaces.receiveLocalStream(req, {
         displayName,
         claimedType: req.headers['content-type'],
-        declaredLength
+        declaredLength,
+        purpose: requestUrl.pathname === '/api/media/local' ? 'local' : requestUrl.pathname === '/api/conversion/local' ? 'convert' : 'edit'
       });
       return json(res, 202, {
         workspaceId: workspace.id,
@@ -2020,29 +2026,36 @@ async function handleRequest(req, res) {
     }
   }
 
-  if (req.method === 'POST' && requestUrl.pathname === '/api/conversion/local') {
-    const declaredLength = req.headers['content-length'] == null
-      ? null
-      : Number(req.headers['content-length']);
-    let displayName = req.headers['x-lvovd-filename'] || 'Local media';
-    try { displayName = decodeURIComponent(displayName); } catch {}
-
+  if (req.method === 'POST' && ['/api/workspace/editor', '/api/conversion/plan', '/api/conversion/start', '/api/conversion/cancel', '/api/conversion/cleanup'].includes(requestUrl.pathname)) {
     try {
-      const workspace = await mediaWorkspaces.receiveLocalStream(req, {
-        displayName,
-        claimedType: req.headers['content-type'],
-        declaredLength,
-        purpose: 'convert'
-      });
-      return json(res, 202, {
-        workspaceId: workspace.id,
-        workspace: mediaWorkspaces.publicWorkspace(workspace)
-      });
+      const body = await readJsonBody(req);
+      const action = requestUrl.pathname.split('/').at(-1);
+      const allowed = action === 'start' ? ['workspaceId', 'sourceAssetId', 'targetId', 'planKey', 'acknowledgedWarnings']
+        : action === 'plan' ? ['workspaceId', 'sourceAssetId', 'targetId'] : action === 'editor' ? ['workspaceId', 'sourceAssetId'] : ['workspaceId'];
+      if (!body || Array.isArray(body) || Object.keys(body).some(key => !allowed.includes(key))
+        || typeof body.workspaceId !== 'string' || body.workspaceId.length > 80) return json(res, 400, { error: 'Invalid local operation request.' });
+      if (action === 'plan') {
+        const { publicConversionPlan } = require('./conversion-plan');
+        const plan = await mediaWorkspaces.conversions.plan(body.workspaceId, body.sourceAssetId, body.targetId);
+        return json(res, 200, { plan: publicConversionPlan(plan) });
+      }
+      const workspace = action === 'editor' ? mediaWorkspaces.prepareEditor(body.workspaceId, body.sourceAssetId)
+        : action === 'start' ? await mediaWorkspaces.conversions.start(body)
+          : action === 'cleanup' ? await mediaWorkspaces.conversions.retryCleanup(body.workspaceId)
+            : await mediaWorkspaces.conversions.cancel(body.workspaceId);
+      return json(res, 202, { workspace: mediaWorkspaces.publicWorkspace(workspace) });
     } catch (error) {
-      if (req.aborted || res.destroyed) return;
-      const details = mediaWorkspaces.failureFor(error);
-      return json(res, error.statusCode || 500, { error: details.title, details });
+      return json(res, error.statusCode || 500, { error: error.statusCode ? error.message : 'The local operation could not complete.' });
     }
+  }
+
+  if (['GET', 'HEAD'].includes(req.method) && requestUrl.pathname === '/api/conversion/file') {
+    const workspaceId = requestUrl.searchParams.get('workspace'), assetId = requestUrl.searchParams.get('asset');
+    const resolved = mediaWorkspaces.conversions.resolve(workspaceId, assetId);
+    if (!resolved) return json(res, 404, { error: 'That converted result is not available.' });
+    return streamPreparedFile(res, resolved.asset, resolved.workspace, {
+      head: req.method === 'HEAD', stillAuthorized: () => Boolean(mediaWorkspaces.conversions.resolve(workspaceId, assetId))
+    });
   }
 
   if (req.method === 'GET' && requestUrl.pathname === '/api/workspace/progress') {
@@ -2126,12 +2139,20 @@ async function handleRequest(req, res) {
         return json(res, 404, { error: 'Local media workspace not found or already discarded.' });
       }
       // A repeat DELETE may retry retained cleanup, never reactivate the workspace.
-      if (mediaWorkspaces.discards.has(workspaceId)) await mediaWorkspaces.discards.get(workspaceId);
+      if (mediaWorkspaces.discards.has(workspaceId)) {
+        const { boundedAcknowledgement } = require('./conversion-process');
+        await boundedAcknowledgement(mediaWorkspaces.discards.get(workspaceId), 700);
+        if (mediaWorkspaces.discards.has(workspaceId)) return json(res, 200, { ok: true, action: 'discarded', cleanup: { status: 'pending', message: 'Owned processing must stop before temporary files can be removed.' } });
+      }
       else await mediaWorkspaces.retryCleanup(workspaceId);
       return json(res, 200, { ok: true, action: 'discarded', cleanup: mediaWorkspaces.cleanupStatus(workspaceId) });
     }
     const wasActive = Boolean(workspace.activeOperation);
-    await mediaWorkspaces.discard(workspaceId);
+    const discarding = mediaWorkspaces.discard(workspaceId);
+    if (workspace.activeOperation === 'converting') {
+      const { boundedAcknowledgement } = require('./conversion-process');
+      await boundedAcknowledgement(discarding, 700);
+    } else await discarding;
     return json(res, 200, {
       ok: true,
       action: wasActive ? 'cancelled-and-discarded' : 'discarded',

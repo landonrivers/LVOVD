@@ -17,6 +17,7 @@ const {
   totalRetainedDuration
 } = require('../media-workspace');
 const { mediaWorkspaces, historyStore, jobs } = require('../app-server');
+const { normalizeMediaInspection } = require('../media-inspection');
 const { server } = require('../server');
 
 const PORT = Number(process.env.PORT);
@@ -984,4 +985,48 @@ test('DELETE cancels active preparation, discards assets, and invalidates media 
   assert.equal(media.status, 404);
   const secondDelete = await request(`/api/workspace?workspace=${data.workspaceId}`, { method: 'DELETE' });
   assert.equal(secondDelete.status, 404);
+});
+
+test('neutral conversion API enforces reviewed identity and secure no-op GET/HEAD without Download or History work', async () => {
+  mediaWorkspaces.inspectAsset = async () => normalizeMediaInspection({
+    format: { format_name: 'mov,mp4,m4a', start_time: '0', duration: '5', tags: { major_brand: 'isom' } }, chapters: [],
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p', width: 96, height: 64, start_time: '0', duration: '5', avg_frame_rate: '20/1' }]
+  });
+  mediaWorkspaces.discoverCapabilities = async () => { throw new Error('A no-op must not discover capabilities'); };
+  const bytes = Buffer.from('owned synthetic no-op bytes');
+  const uploaded = await request('/api/media/local', { method: 'POST', body: bytes,
+    headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'X-LVOVD-Filename': encodeURIComponent('../unsafe<>.mp4') } });
+  assert.equal(uploaded.status, 202);
+  const workspace = await waitForWorkspace(JSON.parse(uploaded.body).workspaceId);
+  assert.equal(workspace.playbackAssetId, null);
+  const body = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId: 'broad-compatibility-mp4' };
+  const post = (route, value) => request(route, { method: 'POST', body: JSON.stringify(value), headers: { 'Content-Type': 'application/json' } });
+  const url = `/api/conversion/file?workspace=${workspace.id}&asset=${workspace.sourceAssetId}`;
+  assert.equal((await request(url)).status, 404);
+  const jobIds = [...jobs.keys()];
+  const historyBeforeConversion = await historyStore.list();
+  for (const field of ['path', 'args', 'filters', 'codec', 'map']) {
+    assert.equal((await post('/api/conversion/plan', { ...body, [field]: 'injected' })).status, 400);
+  }
+  assert.equal((await post('/api/conversion/plan', { ...body, targetId: 'mp3 -y' })).status, 400);
+  assert.equal((await post('/api/workspace/editor', { workspaceId: workspace.id, sourceAssetId: 'wrong' })).status, 409);
+  const planned = await post('/api/conversion/plan', body);
+  assert.equal(planned.status, 200);
+  const plan = JSON.parse(planned.body).plan;
+  assert.equal(plan.status, 'no-op');
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: 'stale' })).status, 409);
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: plan.key })).status, 202);
+  const download = await request(url);
+  assert.equal(download.status, 200); assert.deepEqual(download.body, bytes);
+  assert.equal(download.headers['content-type'], 'video/mp4');
+  assert.equal(download.headers['cache-control'], 'no-store'); assert.equal(download.headers['x-content-type-options'], 'nosniff');
+  assert.match(download.headers['content-disposition'], /^attachment;/); assert.doesNotMatch(download.headers['content-disposition'], /unsafe<>|\.\.\//);
+  const head = await request(url, { method: 'HEAD' });
+  assert.equal(head.status, 200); assert.equal(head.body.length, 0); assert.equal(Number(head.headers['content-length']), bytes.length);
+  assert.equal((await request(url.replace(workspace.id, 'different-workspace'))).status, 404);
+  assert.deepEqual([...jobs.keys()], jobIds);
+  assert.deepEqual(await historyStore.list(), historyBeforeConversion);
+  assert.equal(workspace.assets.size, 1);
+  await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+  assert.equal((await request(url)).status, 404);
 });

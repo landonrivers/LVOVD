@@ -399,3 +399,20 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
   .conversion-result-head .button { width: 100%; }
   .conversion-facts { grid-template-columns: 1fr; }
 }
+/* One local source with compact operation views below the primary downloader. */
+.local-media-summary { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin: 12px 0; }
+.local-media-summary > div { min-width: 0; }
+.local-media-summary h3, #conversion-input, #conversion-output-name { overflow-wrap: anywhere; }
+.local-media-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.local-media-actions [aria-pressed="true"] { outline: 2px solid var(--accent, #dca958); outline-offset: 2px; }
+#local-media-details { margin: 12px 0; }
+#local-media-details > summary { cursor: pointer; padding: 8px 0; }
+.media-converter { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border, #444); }
+.media-converter .field { max-width: 360px; }
+.conversion-warning { display: flex; align-items: start; gap: 10px; margin: 12px 0; }
+.conversion-warning input { flex: 0 0 auto; margin-top: 3px; }
+@media (max-width: 600px) {
+  .local-media-summary { flex-wrap: wrap; }
+  .local-media-actions .button { flex: 1 1 auto; }
+  .media-converter .field { max-width: none; }
+}

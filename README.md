@@ -114,11 +114,15 @@ http://localhost:3000
 - Preview playlists/collections and choose individual entries.
 - Optionally use yt-dlp's SponsorBlock integration to mark or remove supported segment categories.
 - Show real yt-dlp download progress, speed, ETA, and processing stages.
-- Choose or drop one local video into a temporary editing workspace.
-- Inspect one local video or audio file to see its media facts and a capability-aware **Broad Compatibility MP4** assessment. This inspection-only workflow does not create a converted output yet.
+- Choose or drop one video or audio file into **Local Media**, then open **Edit Video** or **Convert Media** without uploading it again. Media Details expands the source facts.
+- Convert the original source to **Compatible MP4**, **M4A / AAC**, or **MP3**. Review which streams will be copied or encoded, then download the validated result. A complete match offers the existing bytes with **No conversion needed**.
 - Use **Edit Source Video** after an eligible single, non-live URL Preview. URL Edit respects the selected source, Compatible/Maximum profile, resolution, and Manual source choice, then acquires that source once into temporary workspace storage.
 - Visually trim the overall Start/End, remove and restore multiple middle sections, and navigate with a zoomable/pannable timeline, draggable handles, keyboard controls, and exact time fields.
 - Create and download a real edited result while leaving the workspace source unchanged.
+
+Switching Edit/Convert preserves your cuts, playhead, zoom, and prepared outputs. Conversion uses the full original source; timeline cuts are not applied. Playback preparation happens only when Edit opens. Cancel Conversion retains the source and previous outputs; Discard invalidates the workspace and attempts owned-file cleanup.
+
+New video encoding uses H.264, CRF 18, medium, yuv420p, and minimal padding for odd dimensions. AAC encoding uses 128/256/512 kbps for mono/stereo/supported 5.1; MP3 uses quality 0 for mono/stereo. Encoding retains 44.1/48 kHz, otherwise resamples to 48 kHz with a notice. Copying retains source parameters. Known HDR, alpha, unsupported transforms, and unsupported channel changes are refused for the affected target. Some native AAC builds cannot produce a verifiable `5.1(side)` layout; such results fail validation and are not downloadable. See the [workspace contract](docs/local-media-workspace.md) for timing, omission, and temporary-storage limits.
 
 ## Source compatibility
 

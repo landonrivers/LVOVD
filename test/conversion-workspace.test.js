@@ -122,7 +122,7 @@ test('Convert intake accepts video and becomes inspection-ready without playback
       version: 1,
       keepRanges: [{ startSeconds: 0, endSeconds: 4 }]
     }),
-    (error) => error?.statusCode === 409 && /inspection, not editing/i.test(error.message)
+    (error) => error?.statusCode === 409 && /Prepare Edit/i.test(error.message)
   );
 });
 

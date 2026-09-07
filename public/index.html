@@ -275,44 +275,34 @@
 
       <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
         <div class="workspace-heading">
-          <h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File</h2>
+          <h2 id="media-workspace-title" class="workflow-heading">Local Media</h2>
+          <p class="help">Edit a video or convert a video/audio file</p>
         </div>
-
-        <div id="workspace-storage-note" class="workspace-storage-note" hidden>
-          <strong>Temporary disk use</strong>
-          <span>Large files can temporarily require roughly another copy's worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.</span>
-        </div>
-
         <div id="media-drop-zone" class="media-drop-zone">
           <input id="media-file-input" type="file" hidden />
           <div class="drop-glyph" aria-hidden="true">＋</div>
-          <div>
-            <strong>Drop one local video here</strong>
-            <span>or choose a file up to 100 GiB</span>
-          </div>
-          <button id="media-choose-button" class="button secondary" type="button">Choose File</button>
+          <div><strong>Drop one local video or audio file here</strong><span>One temporary local copy, up to 100 GiB</span></div>
+          <button id="media-choose-button" class="button secondary" type="button">Choose Media File</button>
         </div>
-
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
-
-        <section id="workspace-progress" class="workspace-progress" aria-live="polite" hidden>
-          <div class="progress-head">
-            <strong id="workspace-progress-label">Copying local media…</strong>
-            <button id="workspace-cancel" class="text-button" type="button">Cancel</button>
-          </div>
+        <section id="workspace-progress" class="workspace-progress" hidden>
+          <div class="progress-head"><strong id="workspace-progress-label">Copying local media…</strong><button id="workspace-cancel" class="text-button" type="button">Cancel / Discard</button></div>
           <div class="progress-track" aria-hidden="true"><div id="workspace-progress-bar" class="progress-bar"></div></div>
         </section>
-
-        <section id="workspace-failure" class="preview-error workspace-failure" hidden>
-          <div>
-            <p class="eyebrow">LOCAL MEDIA RESULT</p>
-            <h3 id="workspace-failure-title">Local media preparation failed</h3>
-            <p id="workspace-failure-explanation" class="error-message"></p>
-            <p id="workspace-failure-help" class="help"></p>
-            <button id="workspace-failure-discard" class="button secondary mini workspace-failure-action" type="button" hidden>Discard failed workspace</button>
-          </div>
+        <section id="workspace-failure" class="preview-error workspace-failure" role="alert" hidden>
+          <div><h3 id="workspace-failure-title">Local media preparation failed</h3><p id="workspace-failure-explanation"></p><p id="workspace-failure-help" class="help"></p>
+          <button id="workspace-failure-discard" class="button secondary mini" type="button">Discard</button></div>
         </section>
-
+        <section id="local-media-ready" hidden>
+          <div class="local-media-summary"><div><h3 id="local-media-name"></h3><p id="local-media-summary" class="help"></p></div><button id="workspace-discard" class="button secondary mini" type="button">Discard</button></div>
+          <div class="local-media-actions" aria-label="Local media operations">
+            <button id="local-open-editor" class="button secondary" type="button" aria-pressed="false">Edit Video</button>
+            <button id="local-open-converter" class="button secondary" type="button" aria-pressed="false">Convert Media</button>
+          </div>
+          <details id="local-media-details"><summary>Media Details</summary><dl id="conversion-facts" class="conversion-facts"></dl>
+            <p class="help">Temporary disk use can include the source, playback proxy, edited file, and old/new converted files together. Each source and converted file is limited to 100 GiB. Free space is not guaranteed. Discard or expiry invalidates the workspace and attempts owned-file cleanup; nothing is uploaded to cloud storage.</p>
+          </details>
+        </section>
         <section id="media-editor" class="media-editor" hidden>
           <div class="editor-head">
             <div>
@@ -321,9 +311,10 @@
               <p id="editor-proxy-note" class="editor-proxy-note"></p>
               <p id="editor-track-warning" class="editor-track-warning" hidden>This edited output uses the primary video/audio track. Additional audio or subtitle tracks are not included yet.</p>
             </div>
-            <button id="workspace-discard" class="button secondary mini" type="button">Discard</button>
+
           </div>
 
+          <p id="editor-status" class="status" role="status"></p>
           <div class="editor-layout">
             <div class="editor-player">
               <video id="editor-video" controls preload="metadata" playsinline tabindex="0"></video>
@@ -466,65 +457,28 @@
             </div>
           </div>
         </section>
-      </section>
-
-      <section id="conversion-inspector-panel" class="conversion-inspector-panel" aria-labelledby="conversion-inspector-title">
-        <div class="workspace-heading">
-          <h2 id="conversion-inspector-title" class="workflow-heading">Inspect Local Media</h2>
-          <p class="conversion-intro">See what one local video or audio file contains and whether it could meet LVOVD's Broad Compatibility MP4 target.</p>
-        </div>
-
-        <div class="conversion-storage-note">
-          <strong>Temporary local copy</strong>
-          <span>LVOVD copies the chosen file into temporary workspace storage for inspection. Discard or inactivity expiry removes that copy. Nothing is uploaded to cloud storage.</span>
-        </div>
-
-        <div id="conversion-drop-zone" class="media-drop-zone conversion-drop-zone">
-          <input id="conversion-file-input" type="file" hidden />
-          <div class="drop-glyph" aria-hidden="true">＋</div>
-          <div>
-            <strong>Drop one local video or audio file here</strong>
-            <span>or choose a file up to 100 GiB</span>
+        <section id="media-converter" class="media-converter" aria-labelledby="converter-title" hidden>
+          <h3 id="converter-title">Convert Media</h3>
+          <p id="conversion-input" class="help"></p>
+          <p id="conversion-cuts-note" class="help" hidden>Conversion uses the full source. Your timeline cuts are not applied.</p>
+          <label class="field" for="conversion-target"><span>Output format</span><select id="conversion-target">
+            <option value="broad-compatibility-mp4">Compatible MP4</option><option value="m4a-aac">M4A / AAC</option><option value="mp3">MP3</option>
+          </select></label>
+          <div id="conversion-plan" aria-live="polite"><h4 id="conversion-plan-title"></h4><ul id="conversion-changes"></ul></div>
+          <div id="conversion-warnings"></div>
+          <p class="help">Generated outputs include only the selected streams. Metadata preservation is not guaranteed. Re-encoding is not lossless.</p>
+          <div class="local-media-actions">
+            <button id="conversion-start" class="button" type="button" disabled>Create Converted File</button>
+            <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
+            <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
+            <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Conversion</button>
           </div>
-          <button id="conversion-choose-button" class="button secondary" type="button">Choose Media File</button>
-        </div>
-
-        <div id="conversion-status" class="status" role="status" aria-live="polite"></div>
-
-        <section id="conversion-progress" class="workspace-progress" aria-live="polite" hidden>
-          <div class="progress-head">
-            <strong id="conversion-progress-label">Copying local media…</strong>
-            <button id="conversion-cancel" class="text-button" type="button">Cancel</button>
-          </div>
-          <div class="progress-track" aria-hidden="true"><div id="conversion-progress-bar" class="progress-bar"></div></div>
-        </section>
-
-        <section id="conversion-failure" class="preview-error workspace-failure" hidden>
-          <div>
-            <p class="eyebrow">LOCAL INSPECTION RESULT</p>
-            <h3 id="conversion-failure-title">Local media inspection failed</h3>
-            <p id="conversion-failure-explanation" class="error-message"></p>
-            <p id="conversion-failure-help" class="help"></p>
-            <button id="conversion-failure-discard" class="button secondary mini workspace-failure-action" type="button" hidden>Discard failed workspace</button>
-          </div>
-        </section>
-
-        <section id="conversion-result" class="conversion-result" aria-live="polite" hidden>
-          <div class="conversion-result-head">
-            <div>
-              <p class="eyebrow">INSPECTION READY</p>
-              <h3 id="conversion-media-name">Local media</h3>
-            </div>
-            <button id="conversion-discard" class="button secondary mini" type="button">Discard</button>
-          </div>
-          <dl id="conversion-facts" class="conversion-facts"></dl>
-          <section id="conversion-assessment" class="conversion-assessment" aria-labelledby="conversion-assessment-target" hidden>
-            <p id="conversion-assessment-target" class="eyebrow">BROAD COMPATIBILITY MP4</p>
-            <h4 id="conversion-assessment-title"></h4>
-            <p id="conversion-assessment-explanation" class="help"></p>
-            <p id="conversion-assessment-missing" class="conversion-assessment-missing" hidden></p>
+          <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
+          <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
+          <section id="conversion-output" class="editor-edited-output" aria-live="polite" hidden>
+            <div><h4 id="conversion-output-name"></h4><p id="conversion-output-facts" class="help"></p><p id="conversion-output-target" class="help"></p></div>
+            <a id="conversion-download" class="button secondary mini">Download</a>
           </section>
-          <p class="conversion-inspection-only">Inspection only — this release does not create a converted output.</p>
         </section>
       </section>
 
@@ -564,5 +518,6 @@
   <script src="/edit-plan.js" defer></script>
   <script src="/media-editor.js" defer></script>
   <script src="/conversion-inspector.js" defer></script>
+  <script src="/local-workspace.js" defer></script>
 </body>
 </html>
