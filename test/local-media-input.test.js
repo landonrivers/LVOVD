@@ -56,7 +56,7 @@ test('proxy and single/multiple-cut render builders apply the shared policy to t
     editedOutputArgs('original.bin', 'edited.mp4', inspection, one),
     editedOutputArgs('original.bin', 'edited.mp4', inspection, two)
   ]) {
-    assert.deepEqual(args.slice(4, args.indexOf('-i')), localMediaInputArgs(inspection));
+    assert.deepEqual(args.slice(args.indexOf('-format_whitelist'), args.indexOf('-i')), localMediaInputArgs(inspection));
     assert.equal(args[args.indexOf('-i') + 1], 'original.bin');
     assert.equal(args.filter(value => value === '-i').length, 1);
   }

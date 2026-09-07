@@ -238,6 +238,144 @@ test('inspection falls back to the selected real video duration when format dura
   assert.equal(normalized.durationSeconds, 4.25);
 });
 
+test('inspection establishes one finite presentation origin for selected stream endpoints', () => {
+  const streams = [
+    { index: 2, codec_type: 'video', codec_name: 'h264', width: 160, height: 90, start_time: '7', duration: '5' },
+    { index: 9, codec_type: 'audio', codec_name: 'aac', start_time: '7.5' }
+  ];
+  for (const [format, duration] of [['matroska,webm', '12'], ['mov,mp4', '12'], ['mpegts', '5']]) {
+    const inspection = normalizeInspection({ format: { format_name: format, start_time: '7', duration }, streams });
+    assert.equal(inspection.timeOriginSeconds, 7);
+    assert.equal(inspection.durationSeconds, 5);
+    assert.equal(inspection.video.streamIndex, 2);
+    assert.equal(inspection.audio.streamIndex, 9);
+    assert.equal(isDirectPlaybackCompatible(inspection), false, 'non-zero origins require normalized playback');
+  }
+  for (const start_time of [undefined, 'N/A', 'Infinity']) {
+    const inspection = normalizeInspection({ format: { format_name: 'mov,mp4', start_time, duration: '5' }, streams });
+    assert.equal(inspection.timeOriginSeconds, 0, 'unavailable format start follows FFmpeg default, not a per-stream reset');
+    assert.equal(inspection.durationSeconds, 12, 'known stream endpoints still lie on the shared zero-origin clock');
+  }
+  const fallback = normalizeInspection({ format: { format_name: 'matroska', start_time: '7', duration: 'N/A' }, streams });
+  assert.equal(fallback.durationSeconds, 5, 'stream duration is elapsed and must not subtract the origin');
+});
+
+// Captured reviewer evidence: MOV/MP4 format.duration can be elapsed (5),
+// even at a positive origin. Other probes report the absolute endpoint instead.
+// Both shapes must work without requiring the capturing FFprobe build.
+for (const origin of [0, 0.5, 1, 2, 7]) {
+  for (const audio of [false, true]) {
+    for (const shape of ['elapsed', 'endpoint']) {
+      test(`inspection: MP4 ${shape} evidence, origin ${origin}, audio ${audio}`, () => {
+        const inspection = normalizeInspection({
+          format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', start_time: String(origin),
+            duration: String(shape === 'elapsed' ? 5 : origin + 5) },
+          streams: [
+            { index: 2, codec_type: 'video', codec_name: 'h264', width: 128, height: 96,
+              start_time: String(origin), duration: '5', avg_frame_rate: '10/1' },
+            ...(audio ? [{ index: 9, codec_type: 'audio', codec_name: 'aac',
+              start_time: String(origin + 0.478), duration: '4.521333' }] : [])
+          ]
+        });
+        assert.equal(inspection.timeOriginSeconds, origin);
+        assert.equal(inspection.durationSeconds, 5);
+        const plan = { version: 1, keepRanges: [{ startSeconds: 4, endSeconds: 5 }] };
+        assert.deepEqual(normalizeEditPlan(plan, inspection.durationSeconds), plan, 'the complete final second remains editable');
+        assert.equal(isDirectPlaybackCompatible(inspection), origin === 0);
+      });
+    }
+  }
+}
+
+test('inspection measures both selected stream endpoints from the common origin', () => {
+  const video = { index: 2, codec_type: 'video', codec_name: 'h264', width: 160, height: 90 };
+  const audio = { index: 9, codec_type: 'audio', codec_name: 'aac' };
+  for (const [videoStart, videoDuration, audioStart, audioDuration] of [
+    [1.5, 4.5, 1, 1], // Video itself starts after media zero.
+    [1, 4, 3, 3], // Later audio ends after video: its elapsed duration alone is insufficient.
+    [1, 5, 1.5, 1] // Missing audio tail must not shorten video.
+  ]) {
+    const inspection = normalizeInspection({
+      format: { format_name: 'mov,mp4', start_time: '1', duration: '5' },
+      streams: [
+        { ...video, start_time: String(videoStart), duration: String(videoDuration) },
+        { ...audio, start_time: String(audioStart), duration: String(audioDuration) },
+        { ...audio, index: 10, start_time: '1', duration: '99' },
+        { ...video, index: 11, start_time: '1', duration: '99' }
+      ]
+    });
+    assert.equal(inspection.durationSeconds, 5, 'only the selected video/audio endpoints define the presentation');
+  }
+});
+
+test('missing format duration uses stream start relative to the common origin', () => {
+  const inspection = normalizeInspection({
+    format: { format_name: 'mov,mp4', start_time: '1', duration: 'N/A' },
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+      start_time: '2', duration: '4' }]
+  });
+  assert.equal(inspection.durationSeconds, 5, 'a delayed stream duration is not the entire presentation');
+});
+
+test('unavailable stream starts use the common origin for elapsed duration fallback', () => {
+  for (const start_time of [undefined, null, '', 'N/A', 'Infinity']) {
+    const inspection = normalizeInspection({
+      format: { format_name: 'mov,mp4', start_time: '7', duration: 'N/A' },
+      streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+        start_time, duration: '5' }]
+    });
+    assert.equal(inspection.durationSeconds, 5);
+  }
+});
+
+test('a selected audio endpoint remains usable when video duration is unavailable', () => {
+  const inspection = normalizeInspection({
+    format: { format_name: 'mov,mp4', start_time: '1', duration: 'N/A' },
+    streams: [
+      { index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90, start_time: '1' },
+      { index: 2, codec_type: 'audio', codec_name: 'aac', start_time: '1.5', duration: '4.5' }
+    ]
+  });
+  assert.equal(inspection.durationSeconds, 5);
+});
+
+test('format-only fallback supports Matroska endpoints and elapsed container durations', () => {
+  for (const [format, duration] of [['matroska,webm', '6'], ['mov,mp4', '5'], ['mpegts', '5']]) {
+    const inspection = normalizeInspection({
+      format: { format_name: format, start_time: '1', duration },
+      streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+        start_time: '1', duration: 'N/A' }]
+    });
+    assert.equal(inspection.durationSeconds, 5);
+  }
+});
+
+test('negative origins use selected stream endpoints with either format evidence shape', () => {
+  for (const format of ['mov,mp4', 'matroska,webm', 'mpegts']) {
+    for (const duration of ['4.5', '5']) {
+      const inspection = normalizeInspection({
+        format: { format_name: format, start_time: '-0.5', duration },
+        streams: [
+          { index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90,
+            start_time: '-0.25', duration: '4.75' },
+          { index: 1, codec_type: 'audio', codec_name: 'aac', start_time: '-0.5', duration: '4' }
+        ]
+      });
+      assert.equal(inspection.timeOriginSeconds, -0.5);
+      assert.equal(inspection.durationSeconds, 5);
+    }
+  }
+});
+
+test('negative presentation origins remain finite and normalize both streams together', () => {
+  const inspection = normalizeInspection({
+    format: { format_name: 'matroska', start_time: '-0.5', duration: '4.5' },
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'ffv1', width: 160, height: 90 }]
+  });
+  assert.equal(inspection.timeOriginSeconds, -0.5);
+  assert.equal(inspection.durationSeconds, 5);
+});
+
 test('inspection rejects non-video media and missing duration clearly', () => {
   assert.throws(
     () => normalizeInspection({ format: { duration: '10' }, streams: [{ codec_type: 'audio', codec_name: 'aac' }] }),
@@ -368,7 +506,7 @@ test('playback proxy arguments are bounded H.264/AAC preview settings without up
     audio: { ...PROXY_INSPECTION.audio, streamIndex: 7 }
   });
   const inputIndex = args.indexOf('-i');
-  assert.deepEqual(args.slice(0, inputIndex), ['-y', '-hide_banner', '-loglevel', 'error', ...localMediaInputArgs(PROXY_INSPECTION)]);
+  assert.deepEqual(args.slice(0, inputIndex), ['-y', '-hide_banner', '-loglevel', 'error', '-copyts', '-start_at_zero', ...localMediaInputArgs(PROXY_INSPECTION)]);
   assert.equal(args[inputIndex + 1], '/private/source.mkv');
   assert.deepEqual(args.slice(inputIndex + 2, inputIndex + 6), ['-map', '0:4', '-map', '0:7']);
   assert.ok(args.includes('libx264'));
@@ -451,15 +589,19 @@ test('edited output arguments always re-encode the exact selected streams to the
   }, plan);
 
   const inputIndex = args.indexOf('-i');
-  assert.deepEqual(args.slice(0, inputIndex), ['-y', '-hide_banner', '-loglevel', 'error', ...localMediaInputArgs(PROXY_INSPECTION)]);
+  assert.deepEqual(args.slice(0, inputIndex), ['-y', '-hide_banner', '-loglevel', 'error', '-copyts', '-start_at_zero', ...localMediaInputArgs(PROXY_INSPECTION)]);
   assert.equal(args[inputIndex + 1], '/private/original.mkv');
-  assert.deepEqual(args.slice(inputIndex + 2, inputIndex + 10), ['-ss', '1.25', '-t', '9.25', '-map', '0:5', '-map', '0:9']);
+  const graph = args[args.indexOf('-filter_complex') + 1];
+  assert.ok(graph.includes("[0:5]settb=AVTB,trim=end_pts=10500000,select='gte(pts,1250000)*lt(pts,10500000)'"));
+  assert.match(graph, /\[0:9\]aresample=/);
+  assert.match(graph, /apad=whole_dur=10.5,atrim=end=10.5/);
+  assert.equal(args.includes('-ss'), false);
   assert.equal(args[args.indexOf('-preset') + 1], 'medium');
   assert.equal(args[args.indexOf('-crf') + 1], '18');
   assert.equal(args[args.indexOf('-pix_fmt') + 1], 'yuv420p');
   assert.equal(args[args.indexOf('-b:a') + 1], '256k');
   assert.equal(args[args.indexOf('-movflags') + 1], '+faststart');
-  assert.match(args[args.indexOf('-vf') + 1], /trunc\(iw\/2\)\*2.*trunc\(ih\/2\)\*2/);
+  assert.match(graph, /trunc\(iw\/2\)\*2.*trunc\(ih\/2\)\*2/);
   assert.equal(args.includes('copy'), false);
 
   const silentArgs = editedOutputArgs('/private/original.mkv', '/private/edited.mp4', {
@@ -470,7 +612,7 @@ test('edited output arguments always re-encode the exact selected streams to the
   assert.equal(silentArgs.includes('-c:a'), false);
 });
 
-test('multi-range edited output builds bounded A/V concat graphs in source order', () => {
+test('multi-range output maps original video PTS and concatenates bounded presentation audio in source order', () => {
   const twoRangePlan = {
     version: 1,
     keepRanges: [{ startSeconds: 0, endSeconds: 2 }, { startSeconds: 4, endSeconds: 6 }]
@@ -484,10 +626,16 @@ test('multi-range edited output builds bounded A/V concat graphs in source order
   const graph = args[args.indexOf('-filter_complex') + 1];
   assert.equal(args[args.indexOf('-i') + 1], '/private/original-source.mkv');
   assert.equal(args.includes('-ss'), false);
-  assert.match(graph, /^\[0:5\]trim=start=0:end=2,setpts=PTS-STARTPTS\[v0\];/);
-  assert.match(graph, /\[0:9\]atrim=start=0:end=2,asetpts=PTS-STARTPTS\[a0\]/);
-  assert.match(graph, /\[0:5\]trim=start=4:end=6,setpts=PTS-STARTPTS\[v1\]/);
-  assert.match(graph, /\[v0\]\[a0\]\[v1\]\[a1\]concat=n=2:v=1:a=1\[vcat\]\[acat\]/);
+  assert.ok(graph.startsWith("[0:5]settb=AVTB,trim=end_pts=6000000,select='gte(pts,0)*lt(pts,2000000)+gte(pts,4000000)*lt(pts,6000000)'"));
+  assert.ok(graph.includes("setpts='PTS-(0+gte(PTS,4000000)*2000000)'"));
+  assert.match(graph, /\[0:9\]aresample=async=1:first_pts=0:min_hard_comp=0.001,apad=whole_dur=6,atrim=end=6,asplit=2\[as0\]\[as1\]/);
+  assert.match(graph, /\[as1\]atrim=start=4:end=6,asetpts=PTS-4\/TB\[a1\]/);
+  assert.match(graph, /\[a0\]\[a1\]concat=n=2:v=0:a=1\[acat\]/);
+  assert.doesNotMatch(graph, /STARTPTS|concat=n=\d+:v=1/);
+  assert.match(graph, /apad=whole_dur=6,atrim=end=6/);
+  assert.equal(args[args.indexOf('-fps_mode:v') + 1], 'vfr');
+  assert.equal(args[args.indexOf('-enc_time_base:v') + 1], '1:1000000');
+  assert.equal(args.includes('-r'), false);
   assert.deepEqual(args.slice(args.indexOf('-map'), args.indexOf('-map') + 4), ['-map', '[vout]', '-map', '[acat]']);
   assert.equal(totalRetainedDuration(twoRangePlan), 4);
   assert.equal(renderProgressPercent(2, totalRetainedDuration(twoRangePlan)), 50);
@@ -502,11 +650,12 @@ test('multi-range edited output builds bounded A/V concat graphs in source order
   };
   const threeArgs = editedOutputArgs('source', 'output', inspection, threeRangePlan);
   const threeGraph = threeArgs[threeArgs.indexOf('-filter_complex') + 1];
-  assert.match(threeGraph, /\[v0\]\[a0\]\[v1\]\[a1\]\[v2\]\[a2\]concat=n=3:v=1:a=1/);
+  assert.match(threeGraph, /\[a0\]\[a1\]\[a2\]concat=n=3:v=0:a=1/);
+  assert.ok(threeGraph.includes("setpts='PTS-(0+gte(PTS,2500000)*1500000+gte(PTS,7000000)*3000000)'"));
   assert.equal(totalRetainedDuration(threeRangePlan), 4.75);
 });
 
-test('silent multi-range edited output concatenates only the authoritative video stream', () => {
+test('silent multi-range output maps only the authoritative video stream', () => {
   const plan = {
     version: 1,
     keepRanges: [{ startSeconds: 1, endSeconds: 2 }, { startSeconds: 3, endSeconds: 5 }]
@@ -517,11 +666,63 @@ test('silent multi-range edited output concatenates only the authoritative video
     audio: null
   }, plan);
   const graph = args[args.indexOf('-filter_complex') + 1];
-  assert.match(graph, /\[0:7\]trim=start=1:end=2/);
-  assert.match(graph, /\[v0\]\[v1\]concat=n=2:v=1:a=0\[vcat\]/);
+  assert.ok(graph.includes("[0:7]settb=AVTB,trim=end_pts=5000000,select='gte(pts,1000000)*lt(pts,2000000)"));
+  assert.ok(graph.includes("setpts='PTS-(1000000+gte(PTS,3000000)*1000000)'"));
   assert.doesNotMatch(graph, /atrim|\[acat\]/);
   assert.equal(args.includes('-an'), true);
   assert.equal(args.includes('-c:a'), false);
+});
+
+test('generated video expressions implement half-open source intervals on one common clock', () => {
+  const args = editedOutputArgs('original', 'output', DIRECT_INSPECTION, { version: 1, keepRanges: [
+    { startSeconds: 0.2, endSeconds: 0.817 },
+    { startSeconds: 1.123, endSeconds: 1.927 },
+    { startSeconds: 2.233, endSeconds: 3.137 }
+  ] });
+  const graph = args[args.indexOf('-filter_complex') + 1];
+  // Evaluate the emitted arithmetic, with independently specified input/output
+  // examples, instead of only checking that a timestamp filter name is present.
+  const evaluate = expression => new Function('pts', 'PTS', 'gte', 'lt', `return ${expression};`);
+  const select = evaluate(graph.match(/select='([^']+)'/)[1]);
+  const pts = evaluate(graph.match(/setpts='([^']+)'/)[1]);
+  const gte = (a, b) => Number(a >= b), lt = (a, b) => Number(a < b);
+  for (const [input, expected] of [[200000, 0], [500000, 300000], [1123000, 617000], [1500000, 994000], [2233000, 1421000], [3000000, 2188000]]) {
+    assert.equal(select(input, input, gte, lt), 1);
+    assert.equal(pts(input, input, gte, lt), expected);
+  }
+  for (const input of [199999, 817000, 1122999, 1927000, 2232999, 3137000]) {
+    assert.equal(select(input, input, gte, lt), 0, 'end boundaries and removed gaps are excluded');
+  }
+});
+
+test('missing encoded durations are recovered without rewriting PTS or DTS, including a one-frame render', () => {
+  const args = editedOutputArgs('original', 'output', DIRECT_INSPECTION, {
+    version: 1, keepRanges: [{ startSeconds: 0.5, endSeconds: 0.55 }]
+  });
+  const bsf = args[args.indexOf('-bsf:v') + 1];
+  assert.match(bsf, /^setts=pts=PTS:dts=DTS:duration=/);
+  const expression = bsf.match(/duration='([^']+)'/)[1].replaceAll('if(', 'choose(');
+  const evaluate = new Function('DURATION', 'NEXT_DTS', 'DTS', 'PREV_OUTDTS', 'N', 'PTS', 'TB', 'gt', 'eq', 'choose', `return ${expression};`);
+  const duration = (...values) => evaluate(...values, (a, b) => Number(a > b), (a, b) => Number(a === b), (condition, a, b) => condition ? a : b);
+  assert.equal(duration(40000, 50000, 0, -50000, 1, 0, 0.000001), 40000, 'known duration is retained');
+  assert.equal(duration(0, 80000, 30000, 0, 1, 30000, 0.000001), 50000, 'next DTS establishes missing duration');
+  assert.equal(duration(0, -1, 100000, 50000, 2, 100000, 0.000001), 50000, 'last packet uses prior DTS spacing');
+  assert.ok(Math.abs(duration(0, -1, 0, -1, 0, 0, 0.000001) - 50000) < 1e-8, 'single packet covers retained duration');
+  assert.equal(args[args.indexOf('-x264-params') + 1], 'fps=30', 'source cadence is a header hint only');
+  assert.equal(args.includes('-r'), false);
+  assert.equal(args.includes('-r:v'), false);
+});
+
+test('the 50-range limit also bounds the production timing graph', () => {
+  const plan = normalizeEditPlan({ version: 1, keepRanges: Array.from({ length: 50 }, (_, index) => ({
+    startSeconds: index * 0.2, endSeconds: index * 0.2 + 0.1
+  })) }, 12.5);
+  const args = editedOutputArgs('original', 'output', DIRECT_INSPECTION, plan);
+  const graph = args[args.indexOf('-filter_complex') + 1];
+  assert.match(graph, /asplit=50/);
+  assert.match(graph, /concat=n=50:v=0:a=1/);
+  assert.equal((graph.match(/\]atrim=start=/g) || []).length, 50);
+  assert.equal(totalRetainedDuration(plan), 5);
 });
 
 test('render progress is finite, bounded below completion, and output inspection enforces the final contract', () => {
