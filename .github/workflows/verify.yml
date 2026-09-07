@@ -4,13 +4,11 @@ on:
   push:
     branches:
       - master
-      - roadmap/6-local-edit-staging
       - roadmap/7-local-convert-staging
   workflow_dispatch:
   pull_request:
     branches:
       - master
-      - roadmap/6-local-edit-staging
       - roadmap/7-local-convert-staging
     types:
       - opened
@@ -40,6 +38,17 @@ jobs:
       - name: Run checks and tests
         run: npm run check
 
+      - name: Install required local-media test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg strace
+          npm run update-ytdlp
+
+      - name: Verify real local-media and isolated yt-dlp boundaries
+        env:
+          LVOVD_TRACE_LOCAL_INPUT: '1'
+        run: npm run test:media
+
   windows-launcher:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Windows launcher and yt-dlp manager
@@ -55,5 +64,5 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Verify Windows launcher and yt-dlp manager behavior
-        run: node --test test/launcher.test.js test/ytdlp-manager.test.js
+      - name: Verify Windows launcher, yt-dlp manager, and workspace cleanup behavior
+        run: node --test test/launcher.test.js test/ytdlp-manager.test.js test/local-media-input.test.js test/ytdlp-isolation.test.js test/media-workspace.test.js test/media-workspace-api.test.js test/workspace-cleanup.test.js test/media-inspection.test.js test/ffmpeg-capabilities.test.js test/conversion-compatibility.test.js test/conversion-assessment.test.js test/conversion-workspace.test.js test/conversion-ui.test.js

@@ -1,7 +1,7 @@
 'use strict';
 
 const BROAD_MP4_TARGET = 'broad-compatibility-mp4';
-const MP4_FAMILY = new Set(['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2']);
+const { hasSoftwareDecoder } = require('./ffmpeg-capabilities');
 
 function capabilitySet(value) {
   if (value instanceof Set) return value;
@@ -27,19 +27,18 @@ function decoderName(codec) {
 
 function missingCapabilities(status, inspection, capabilities) {
   const encoders = capabilitySet(capabilities?.encoders);
-  const decoders = capabilitySet(capabilities?.decoders);
   const muxers = capabilitySet(capabilities?.muxers);
   const missing = [];
   if (capabilities?.available !== true) return ['FFmpeg capability discovery'];
   if (!muxers.has('mp4')) missing.push('MP4 muxer');
   if (['reencode-video', 'reencode-video-and-audio'].includes(status)) {
     const sourceDecoder = decoderName(inspection.video?.codec);
-    if (sourceDecoder && !decoders.has(sourceDecoder)) missing.push('source video decoder');
+    if (sourceDecoder && !hasSoftwareDecoder(capabilities, sourceDecoder)) missing.push('source video decoder');
     if (!encoders.has('libx264')) missing.push('H.264 software encoder');
   }
   if (['reencode-audio', 'reencode-video-and-audio'].includes(status)) {
     const sourceDecoder = decoderName(inspection.audio?.codec);
-    if (sourceDecoder && !decoders.has(sourceDecoder)) missing.push('source audio decoder');
+    if (sourceDecoder && !hasSoftwareDecoder(capabilities, sourceDecoder)) missing.push('source audio decoder');
     if (!encoders.has('aac')) missing.push('AAC encoder');
   }
   return missing;
@@ -47,6 +46,14 @@ function missingCapabilities(status, inspection, capabilities) {
 
 function assessBroadCompatibilityMp4(inspection, capabilities) {
   const mediaKind = inspection?.mediaKind || (inspection?.video ? 'video' : inspection?.audio ? 'audio' : 'unsupported');
+  if (inspection?.trackCounts?.video == null && !inspection?.video) {
+    return result('unknown', 'Incomplete media metadata',
+      'LVOVD does not have enough reported stream metadata to determine whether this video target applies.');
+  }
+  if ((inspection?.trackCounts?.video > 0 && (mediaKind !== 'video' || !inspection?.video)) || mediaKind === 'unknown') {
+    return result('unknown', 'Incomplete video metadata',
+      'A video stream was reported, but LVOVD lacks enough usable timing or stream metadata to assess it. This is not evidence of an audio-only source.');
+  }
   if (mediaKind !== 'video') {
     return result(
       'not-applicable',
@@ -63,11 +70,8 @@ function assessBroadCompatibilityMp4(inspection, capabilities) {
   const audioKnownAbsent = audioTracks === 0;
   const audio = inspection.audio || null;
   const audioUnknown = !audio && !audioKnownAbsent;
-  const containerNames = Array.isArray(inspection.formatNames) ? inspection.formatNames : [];
-  const containerKnown = containerNames.length > 0;
-  const containerCompatible = containerKnown
-    ? containerNames.some((name) => MP4_FAMILY.has(String(name).toLowerCase()))
-    : null;
+  const containerKind = inspection.container?.kind;
+  const containerCompatible = !containerKind || containerKind === 'unknown' ? null : containerKind === 'mp4';
 
   let videoCompatible = null;
   if (videoCodec && videoCodec !== 'h264') videoCompatible = false;
@@ -126,6 +130,10 @@ function assessBroadCompatibilityMp4(inspection, capabilities) {
     actions = { container: 'mp4', video: 'reencode', audio: 'reencode' };
   }
 
+  if (capabilities?.available !== true) {
+    return result('unknown', 'Could not check conversion capabilities',
+      'The required operation is known, but LVOVD could not inspect the installed FFmpeg capabilities. Try inspecting again shortly.', actions);
+  }
   const missing = missingCapabilities(status, inspection, capabilities);
   if (missing.length) {
     return result(

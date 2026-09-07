@@ -44,8 +44,10 @@ test('generic timed video normalization retains bounded product media facts', ()
   assert.deepEqual(inspection, {
     mediaKind: 'video',
     durationSeconds: 12.346,
+    timeOriginSeconds: 0,
     sourceSize: 12_345,
     format: 'MP4',
+    container: { kind: 'mp4', evidence: 'brand' },
     formatNames: ['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2'],
     video: {
       streamIndex: 2,

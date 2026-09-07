@@ -1199,6 +1199,9 @@
         workspaceCancel.textContent = 'Discard';
         workspaceCancel.hidden = false;
         showFailure(data.failure, data.message);
+        if (data.cleanup && data.cleanup.status !== 'complete') {
+          failureHelp.textContent += ` ${data.cleanup.message}`;
+        }
       } else if (data.status === 'ready') {
         workspaceProgress.hidden = true;
         workspaceCancel.hidden = true;
@@ -1290,7 +1293,9 @@
           return;
         }
         if (!response.ok) throw new Error(data.error || 'Could not discard the local workspace.');
-        resetWorkspaceUi('Local media workspace discarded.');
+        resetWorkspaceUi(data.cleanup && data.cleanup.status !== 'complete'
+          ? `Local media workspace discarded. ${data.cleanup.message}`
+          : 'Local media workspace discarded. Temporary workspace files were removed.');
       } catch (error) {
         restoreWorkspaceConnectionsAfterDiscardFailure(id, connections);
         workspaceCancel.disabled = false;
@@ -1400,7 +1405,7 @@
       };
       xhr.onabort = () => {
         upload = null;
-        resetWorkspaceUi('Local file copy cancelled; partial temporary data was removed.');
+        resetWorkspaceUi('Local file copy cancelled. LVOVD will attempt to clean up the partial temporary copy.');
       };
       xhr.onload = () => {
         upload = null;
@@ -1409,6 +1414,9 @@
         if (xhr.status < 200 || xhr.status >= 300) {
           resetWorkspaceUi();
           showFailure(data?.details, data?.error || 'LVOVD could not stage that local file.');
+          if (data?.cleanup && data.cleanup.status !== 'complete') {
+            failureHelp.textContent += ` ${data.cleanup.message}`;
+          }
           return;
         }
         activeWorkspaceId = data.workspaceId;

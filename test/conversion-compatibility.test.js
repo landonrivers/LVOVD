@@ -16,6 +16,7 @@ const FULL_CAPABILITIES = Object.freeze({
 
 function videoInspection({
   formatNames = ['mov', 'mp4'],
+  containerKind = 'mp4',
   videoCodec = 'h264',
   pixelFormat = 'yuv420p',
   audioCodec = 'aac',
@@ -24,6 +25,7 @@ function videoInspection({
   return {
     mediaKind: 'video',
     formatNames,
+    container: { kind: containerKind, evidence: 'test' },
     video: { codec: videoCodec, pixelFormat },
     audio: audioCodec == null ? null : { codec: audioCodec },
     trackCounts: { video: 1, audio: audioTracks, subtitle: 0 }
@@ -41,7 +43,7 @@ test('Broad Compatibility MP4 recognizes proven already-compatible video', () =>
 
 test('Broad Compatibility MP4 distinguishes remux from re-encoding', () => {
   const assessment = assessBroadCompatibilityMp4(
-    videoInspection({ formatNames: ['matroska', 'webm'] }),
+    videoInspection({ formatNames: ['matroska', 'webm'], containerKind: 'matroska' }),
     FULL_CAPABILITIES
   );
 
