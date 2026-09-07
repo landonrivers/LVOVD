@@ -35,6 +35,9 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install development test dependencies
+        run: npm ci
+
       - name: Run checks and tests
         run: npm run check
 
@@ -48,6 +51,12 @@ jobs:
         env:
           LVOVD_TRACE_LOCAL_INPUT: '1'
         run: npm run test:media
+
+      - name: Install Chromium for the local-workflow browser tests
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Verify the local workflow in Chromium
+        run: npm run test:browser
 
   windows-launcher:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -65,4 +74,4 @@ jobs:
           node-version: '24'
 
       - name: Verify Windows launcher, yt-dlp manager, and workspace cleanup behavior
-        run: node --test test/launcher.test.js test/ytdlp-manager.test.js test/local-media-input.test.js test/ytdlp-isolation.test.js test/media-workspace.test.js test/media-workspace-api.test.js test/workspace-cleanup.test.js test/media-inspection.test.js test/ffmpeg-capabilities.test.js test/conversion-compatibility.test.js test/conversion-assessment.test.js test/conversion-workspace.test.js test/conversion-ui.test.js
+        run: node --test test/launcher.test.js test/ytdlp-manager.test.js test/local-media-input.test.js test/ytdlp-isolation.test.js test/media-workspace.test.js test/media-workspace-api.test.js test/workspace-cleanup.test.js test/media-inspection.test.js test/ffmpeg-capabilities.test.js test/conversion-compatibility.test.js test/conversion-assessment.test.js test/conversion-workspace.test.js test/conversion-ui.test.js test/conversion-plan.test.js test/conversion-lifecycle.test.js
