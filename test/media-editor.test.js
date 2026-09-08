@@ -498,31 +498,28 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'removed-sections',
     'removed-sections-list',
     'editor-track-warning',
-    'create-edited-file',
-    'editor-render-noop',
-    'editor-render-progress',
-    'cancel-edited-render',
-    'editor-render-failure',
-    'editor-edited-output',
-    'editor-output-stale',
-    'download-edited-file',
+    'processing-settings',
+    'processing-video-codec',
+    'processing-container',
+    'processing-scale',
+    'processing-rate-mode',
+    'processing-reset',
+    'processing-finish',
+    'conversion-start',
+    'conversion-output',
+    'conversion-download',
     'timeline-zoom-in',
     'timeline-zoom-out',
     'timeline-fit'
   ]) assert.match(html, new RegExp(`id="${id}"`), id);
 
   assert.doesNotMatch(html, /Edit locally · Creates MP4/i);
-  assert.match(html, /Creates a high-quality H\.264 MP4 locally, with AAC audio when the source has audio/i);
-  assert.match(html, /LVOVD re-encodes edits to closely match arbitrary cut times/i);
-  assert.match(html, /Your workspace source is unchanged/i);
-  assert.doesNotMatch(html.slice(html.indexOf('id="media-editor"'), html.indexOf('id="media-converter"')), /\blossless\b|frame-perfect|source codec preserved/i);
-  assert.match(html, /id="create-edited-file" class="button secondary mini"[^>]*>Create Edited File<\/button>/);
-  assert.match(html, />DOWNLOAD EDITED FILE<\/p>/);
-  assert.match(html, /id="download-edited-file" class="button secondary mini"[^>]*>Download<\/a>/);
-  assert.match(html, /Change the retained range or remove a section before creating an edited file/i);
-  assert.match(html, /Range changed — create the edited file again to update it/i);
-  assert.doesNotMatch(html, /Choose or drop one local video\. It stays on this computer/i);
-  assert.match(html, /nothing is uploaded to cloud storage/i);
+  assert.match(html, /Cuts and output settings apply together to your original source/);
+  assert.match(html, /Re-encoding is not lossless/);
+  assert.doesNotMatch(html, /id="(?:local-open-editor|local-open-converter|media-converter|create-edited-file|convert-edited-file)"/);
+  assert.match(html, /id="conversion-start"[^>]*>Process File<\/button>/);
+  assert.match(html, /id="conversion-download"[^>]*>Download<\/a>/);
+  assert.match(html, /Processing stays on this computer/);
   assert.doesNotMatch(html, /LOCAL EDIT WORKSPACE/i);
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
   assert.doesNotMatch(html, /id="media-file-input"[^>]*\baccept=/i);
@@ -545,7 +542,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, />Set End<\/button>/);
   assert.match(html, />Go to End<\/button>/);
   assert.match(html, />Reset Range<\/button>/);
-  assert.match(html, /id="crop-video-title" class="editor-section-title">Crop Video Length<\/h4>/);
+  assert.match(html, /id="trim-video-title" class="editor-section-title">Trim Video Length<\/h4>/);
   assert.match(html, /id="middle-cut-title" class="editor-section-title">Remove Section<\/h4>/);
   assert.doesNotMatch(html, /Move the playhead to each boundary/i);
   assert.match(html, />Set Cut Start<\/button>/);
@@ -553,10 +550,9 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, />Remove Section<\/button>/);
   assert.match(html, />Clear Cut<\/button>/);
   assert.match(html, />Removed Sections</);
-  assert.ok(html.indexOf('id="reset-range"') < html.indexOf('class="editor-render-panel"'));
-  assert.ok(html.indexOf('id="crop-video-title"') < html.indexOf('class="editor-exact-grid"'));
+  assert.ok(html.indexOf('id="reset-range"') < html.indexOf('id="processing-finish"'));
+  assert.ok(html.indexOf('id="trim-video-title"') < html.indexOf('class="editor-exact-grid"'));
   assert.ok(html.indexOf('class="editor-exact-grid"') < html.indexOf('id="middle-cut-title"'));
-  assert.ok(html.indexOf('id="create-edited-file"') < html.indexOf('Creates a high-quality H.264 MP4 locally'));
   assert.match(html, /Click or drag the timeline to seek · Drag the time ruler to pan when zoomed/i);
   assert.match(html, /id="timeline-track"[^>]*tabindex="0"/);
   assert.match(source, /version:\s*1[\s\S]*keepRanges:\s*\[/);
@@ -578,14 +574,10 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   for (const id of ['timeline-start-handle', 'timeline-end-handle', 'timeline-cut-start-handle', 'timeline-cut-end-handle']) {
     assert.match(html, new RegExp(`id="${id}"[^>]*role="slider"[^>]*aria-orientation="horizontal"`));
   }
-  assert.match(source, /data.editor\?.status === 'ready' && !editPlan/);
-  assert.match(source, /root\.fetch\('\/api\/workspace\/render'/);
-  assert.match(source, /method:\s*'POST'/);
-  assert.match(source, /root\.fetch\(\s*`\/api\/workspace\/render\?workspace=/);
-  assert.match(source, /method:\s*'DELETE'/);
-  assert.match(source, /downloadEditedFile\.href = output\.downloadUrl/);
-  assert.match(source, /downloadEditedFile\.download = output\.filename/);
-  assert.match(source, /!editPlansEqual\(editPlan, output\.editPlan\)/);
+  assert.match(source, /data.editor\?.eligible && !editPlan/);
+  assert.match(source, /conversionState\(\)[\s\S]*structuredClone\(editPlan\)/);
+  assert.match(source, /authoringState\(\)[\s\S]*authoring: authoringState \? structuredClone\(authoringState\) : null/);
+  assert.doesNotMatch(source, /root\.fetch\('\/api\/workspace\/render'/);
   assert.match(source, /timelineRegionsLayer\.replaceChildren\(\)/);
   assert.match(source, /deriveInternalRemovedGaps\(editPlan\)/);
   assert.match(source, /pendingCut\[`\$\{handleDrag\.which\}Seconds`\]/);
@@ -626,7 +618,7 @@ test('coordinator invalidates old updates and releases playback before Discard',
   const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
   const discard = source.slice(source.indexOf('async function discard()'), source.indexOf('function beginUpload('));
   assert.ok(discard.indexOf("video.removeAttribute('src')") < discard.indexOf('await removeOwned(id)'));
-  assert.match(discard, /reset\(`Local workspace discarded/);
+  assert.match(discard, /reset\(`Local file removed/);
   assert.match(discard, /data.cleanup\?.message/);
   assert.match(source, /generation !== token/);
   assert.doesNotMatch(source, /partial temporary data was removed/);

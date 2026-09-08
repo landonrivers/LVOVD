@@ -19,6 +19,7 @@ const { assessBroadCompatibilityMp4 } = require('./conversion-compatibility');
 const { ConversionOperations } = require('./conversion-workspace');
 const { runConversionProcess } = require('./conversion-process');
 const { OutputRetirement } = require('./output-retirement');
+const { ProcessingOperations } = require('./processing-workspace');
 const {
   MAX_KEEP_RANGES,
   roundMilliseconds,
@@ -446,6 +447,7 @@ class MediaWorkspaceManager {
     this.maxConvertedBytes = Math.min(MAX_LOCAL_MEDIA_BYTES, maxConvertedBytes);
     this.conversionTerminationGraceMs = Math.max(10, Math.min(2000, conversionTerminationGraceMs));
     this.conversions = new ConversionOperations(this);
+    this.processing = new ProcessingOperations(this);
     this.outputRetirement = new OutputRetirement(this);
     this.workspaces = new Map();
     this.discards = new Map();
@@ -517,7 +519,8 @@ class MediaWorkspaceManager {
       inspection: null,
       editor: { status: 'idle', message: null, failure: null },
       conversion: { status: 'idle', percent: null, message: null, failure: null, output: null, targetId: null,
-        terminationPending: false, cleanupPaths: new Set(), attemptPath: null, activeInputAssetId: null },
+        terminationPending: false, cleanupPaths: new Set(), cleanupDirectories: new Set(), attemptPath: null, activeInputAssetId: null },
+      processingReview: null,
       retiredOutputs: new Map(),
       compatibility: null,
       playbackProxy: false,
@@ -1553,6 +1556,8 @@ class MediaWorkspaceManager {
       workspace.render.outputAssetId = null;
       workspace.conversion.output = null;
       workspace.conversion.cleanupPaths.clear();
+      workspace.conversion.cleanupDirectories.clear();
+      workspace.processingReview = null;
       workspace.retiredOutputs.clear();
     }
     if (!record) return;

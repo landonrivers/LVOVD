@@ -10,6 +10,13 @@ const { normalizeEditPlan, editPlansEqual } = require('./public/edit-plan');
 // Process-wide conversion admission, independent of the remote-source queue.
 let conversionOwner = null;
 
+function conversionSlotBusy() { return Boolean(conversionOwner); }
+function claimConversionSlot(workspace) {
+  if (conversionOwner) throw requestError('Another local conversion is running. Try again when it finishes.', 409);
+  conversionOwner = workspace;
+}
+function releaseConversionSlot(workspace) { if (conversionOwner === workspace) conversionOwner = null; }
+
 function conversionFilename(name, targetId) {
   const stem = String(name || 'Local media').split(/[\\/]/).at(-1).replace(/\.[^.]*$/, '')
     .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').trim().slice(0, 180) || 'Local media';
@@ -84,6 +91,7 @@ class ConversionOperations {
     if (workspace.conversion.cleanupPaths.size || this.manager.outputRetirement.state(workspace).blocked) throw requestError('Temporary output cleanup needs a retry before another conversion.', 409);
     if (workspace.activeOperation || (conversionOwner && plan.status !== 'no-op')) throw requestError('Another conversion or workspace operation is busy. Try again when it finishes.', 409);
     const previous = workspace.conversion.output;
+    Object.assign(workspace.conversion, { mode: 'conversion', phase: null, phasePercent: null, draftRevision: null, processingSnapshot: null });
     const provenance = Object.freeze({ inputAssetId, inputRole: asset.role, inputFilename: input.filename,
       inputDurationSeconds: input.inspection.durationSeconds, editPlanKey: input.editPlanKey });
     if (plan.status === 'no-op') {
@@ -100,7 +108,7 @@ class ConversionOperations {
       return workspace;
     }
     // No await between admission and ownership. Shared across manager instances.
-    conversionOwner = workspace;
+    claimConversionSlot(workspace);
     workspace.activeOperation = 'converting';
     workspace.abortController = new AbortController();
     workspace.cancelRequested = false;
@@ -117,7 +125,10 @@ class ConversionOperations {
   async removeFile(workspace, filePath) {
     workspace.conversion.cleanupPaths.add(filePath);
     for (let attempt = 0; attempt <= this.manager.cleanupRetryDelaysMs.length; attempt++) {
-      try { await this.manager.fs.rm(filePath, { force: true }); workspace.conversion.cleanupPaths.delete(filePath); return; }
+      try {
+        await this.manager.fs.rm(filePath, { force: true, ...(workspace.conversion.cleanupDirectories.has(filePath) ? { recursive: true } : {}) });
+        workspace.conversion.cleanupPaths.delete(filePath); workspace.conversion.cleanupDirectories.delete(filePath); return;
+      }
       catch (error) {
         const delay = this.manager.cleanupRetryDelaysMs[attempt];
         if (!['EBUSY', 'EPERM', 'ENOTEMPTY', 'EMFILE', 'ENFILE'].includes(error.code) || delay == null) return;
@@ -181,14 +192,15 @@ class ConversionOperations {
       workspace.conversion.activeInputAssetId = null;
       if (workspace.retiredOutputs.has(input.id)) await manager.outputRetirement.retire(workspace, input.id);
       workspace.activeOperation = null; workspace.activePromise = null; workspace.child = null;
-      if (conversionOwner === workspace) conversionOwner = null;
+      releaseConversionSlot(workspace);
       manager.emit(workspace);
     }
   }
 
   async cancel(workspaceId) {
     const workspace = this.manager.get(workspaceId);
-    if (!workspace || workspace.activeOperation !== 'converting') throw requestError('No conversion is running in this workspace.', 409);
+    if (!workspace || workspace.activeOperation !== 'converting'
+      || !['running', 'validating', 'cancelling'].includes(workspace.conversion.status)) throw requestError('No conversion is running in this workspace.', 409);
     workspace.cancelRequested = true;
     Object.assign(workspace.conversion, { status: 'cancelling', percent: null, message: 'Cancelling conversion…' });
     workspace.abortController.abort();
@@ -213,10 +225,12 @@ class ConversionOperations {
     return {
       status: state.status, percent: state.percent, message: state.message, failure: state.failure,
       targetId: state.targetId, terminationPending: state.terminationPending,
+      mode: state.mode || 'conversion', phase: state.phase || null, phasePercent: state.phasePercent ?? null,
+      draftRevision: state.draftRevision ?? null, processingSnapshot: state.processingSnapshot || null,
       cleanupPending: state.cleanupPaths.size > 0,
       output: output ? { ...output, provenance: { ...output.provenance }, downloadUrl: `/api/conversion/file?workspace=${encodeURIComponent(workspace.id)}&asset=${encodeURIComponent(output.assetId)}` } : null
     };
   }
 }
 
-module.exports = { ConversionOperations, conversionFilename, publicConversionPlan };
+module.exports = { ConversionOperations, conversionFilename, publicConversionPlan, conversionSlotBusy, claimConversionSlot, releaseConversionSlot };

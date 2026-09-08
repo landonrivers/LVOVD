@@ -303,7 +303,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .legend-removed { background: repeating-linear-gradient(135deg, #1a1920, #1a1920 3px, #46414e 3px, #46414e 5px); }
 .legend-pending-cut { border: 1px solid rgba(255,197,72,.72); background: repeating-linear-gradient(135deg, rgba(255,169,38,.6), rgba(255,169,38,.6) 3px, rgba(255,91,80,.64) 3px, rgba(255,91,80,.64) 5px); }
 .legend-playhead { width: 2px !important; background: #ff315f; }
-.editor-crop-panel { margin-top: 18px; }
+.editor-trim-panel { margin-top: 18px; }
 .editor-section-title { margin: 0; color: #f0ebf4; font-size: 16px; font-weight: 850; line-height: 1.2; letter-spacing: -.01em; }
 .editor-exact-grid { width: fit-content; max-width: 100%; display: grid; grid-template-columns: repeat(2, minmax(180px,200px)) max-content; grid-template-areas: "start-field end-field ." "start-actions end-actions reset" "start-error end-error ."; column-gap: 12px; row-gap: 7px; margin-top: 8px; }
 .editor-exact-control { display: contents; }
@@ -411,6 +411,63 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .media-converter .field { max-width: 360px; }
 .conversion-warning { display: flex; align-items: start; gap: 10px; margin: 12px 0; }
 .conversion-warning input { flex: 0 0 auto; margin-top: 3px; }
+/* Single-file workbench: source/settings at left, preview/cuts at right. */
+.local-workbench { display: grid; grid-template-columns: minmax(230px, 290px) minmax(0, 1fr); gap: 24px; margin-top: 18px; align-items: start; }
+.processing-sidebar, .processing-preview, .processing-file { min-width: 0; }
+.processing-sidebar { padding: 18px; border: 1px solid rgba(255,255,255,.09); border-radius: 14px; background: rgba(7,8,12,.32); }
+.processing-sidebar h3 { color: #f0ebf4; font-size: 15px; overflow-wrap: anywhere; }
+.processing-sidebar .eyebrow { margin-bottom: 9px; }
+.processing-file #processing-reset { flex: 0 0 auto; width: auto; border: 1px solid #51495f; background: transparent; }
+.processing-file #processing-reset:hover { border-color: #b89fff; background: rgba(169,148,255,.06); }
+.processing-sidebar .help { font-size: 10px; line-height: 1.5; }
+.processing-sidebar .field { display: block; margin-top: 12px; min-width: 0; }
+.processing-sidebar input[type="number"] { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid #302e39; border-radius: 11px; background: #111117; color: #f2f0f5; outline: none; }
+.processing-sidebar input[type="number"]:focus { border-color: #b89fff; box-shadow: 0 0 0 3px rgba(169,148,255,.1); }
+.processing-sidebar fieldset { min-width: 0; margin: 18px 0 0; padding: 0; border: 0; }
+.processing-sidebar legend { padding: 0; color: #dcd6e6; font-size: 12px; font-weight: 850; }
+.processing-sidebar .conversion-facts { grid-template-columns: 1fr; gap: 5px; }
+.processing-sidebar .conversion-facts > div { padding: 8px; }
+.processing-sidebar .conversion-facts dd { font-size: 11px; }
+.processing-sidebar .conversion-facts dt { font-size: 9px; }
+.processing-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.processing-check { display: flex; gap: 7px; align-items: center; margin-top: 10px; font-size: 10px; color: #b9b2c5; }
+.processing-check input { flex: 0 0 auto; width: auto; }
+.processing-preview .media-editor { margin-top: 0; padding-top: 0; border-top: 0; }
+.processing-preview .editor-layout { grid-template-columns: minmax(0, 1fr); }
+.processing-preview .editor-player { width: 100%; max-width: none; }
+.processing-preview .editor-player video { max-height: 410px; }
+.processing-preview .editor-exact-grid { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "start-field end-field" "start-actions end-actions" "start-error end-error" "reset reset"; }
+.processing-preview .middle-cut-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.processing-preview .preview-actions { display: flex; gap: 10px; align-items: start; justify-content: space-between; margin-bottom: 10px; }
+.processing-preview .preview-actions p:empty { display: none; }
+.processing-preview .preview-actions .button { margin-left: auto; }
+.processing-finish { margin-top: 24px; padding: 20px; border: 1px solid rgba(182,134,255,.23); border-radius: 14px; background: rgba(103,48,155,.065); }
+.processing-finish h3 { color: #f0ebf4; font-size: 17px; }
+.processing-finish h4 { font-size: 13px; }
+.processing-plan-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 15px 0; }
+.processing-plan-facts > div { min-width: 0; }
+.processing-plan-facts dt { color: #9e95ae; font-size: 10px; font-weight: 750; }
+.processing-plan-facts dd { margin: 5px 0 0; color: #e1dce8; font-size: 12px; overflow-wrap: anywhere; }
+.processing-primary { min-width: 180px; min-height: 44px; font-size: 14px; }
+#conversion-changes { margin: 10px 0; padding-left: 18px; color: #b8b0c3; font-size: 11px; line-height: 1.6; }
+.conversion-warning { color: #e4c990; font-size: 11px; line-height: 1.5; }
+@media (max-width: 960px) {
+  .local-workbench { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); gap: 16px; }
+  .processing-sidebar { padding: 14px; }
+  .processing-preview .editor-boundary-actions { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .local-workbench { grid-template-columns: minmax(0, 1fr); }
+  .processing-preview .editor-boundary-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .processing-plan-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 450px) {
+  .processing-preview .editor-exact-grid { grid-template-columns: 1fr; grid-template-areas: "start-field" "start-actions" "start-error" "end-field" "end-actions" "end-error" "reset"; }
+  .processing-preview .middle-cut-grid { grid-template-columns: minmax(0, 1fr); }
+  .processing-finish { padding: 14px; }
+  .processing-plan-facts { grid-template-columns: minmax(0, 1fr); }
+  .processing-primary { width: 100%; }
+}
 @media (max-width: 600px) {
   .local-media-summary { flex-wrap: wrap; }
   .local-media-actions .button { flex: 1 1 auto; }

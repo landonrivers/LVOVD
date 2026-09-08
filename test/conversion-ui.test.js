@@ -75,15 +75,16 @@ test('inspection UI preserves unknown metadata instead of inventing incompatibil
   assert.equal(displayed.Tracks, 'Unknown video · Unknown audio · Unknown subtitle');
 });
 
-test('one compact Local Media intake supplies the editor, converter, and expandable facts', () => {
+test('one compact Local Media intake supplies cuts, processing settings, and expandable facts together', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
   assert.equal((html.match(/type="file"/g) || []).length, 1);
   assert.doesNotMatch(html, /Inspect Local Media|Inspection only|conversion-inspector-panel/);
-  assert.match(html, /Edit a video or convert a video\/audio file/);
+  assert.match(html, /One file\. Your cuts and output settings, together\./);
   assert.match(html, /<summary>Media Details<\/summary>/);
-  assert.match(html, /Input|conversion-input/);
-  assert.match(html, /Your timeline cuts are not applied/);
+  assert.match(html, /id="processing-settings"/);
+  assert.match(html, /Cuts and output settings apply together to your original source/);
+  assert.doesNotMatch(html, /id="local-open-editor"|id="local-open-converter"|Your timeline cuts are not applied/);
   assert.match(source, /xhr.open\('POST', '\/api\/media\/local'\)/);
   assert.equal((source.match(/new root.EventSource/g) || []).length, 1);
   assert.match(source, /generation !== token/);

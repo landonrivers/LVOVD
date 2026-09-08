@@ -1836,6 +1836,7 @@ function serveStatic(reqPath, res) {
     '/media-editor.js': ['media-editor.js', 'text/javascript; charset=utf-8'],
     '/conversion-inspector.js': ['conversion-inspector.js', 'text/javascript; charset=utf-8'],
     '/local-workspace.js': ['local-workspace.js', 'text/javascript; charset=utf-8'],
+    '/processing-profile.js': ['processing-profile.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };
   const route = routes[reqPath];
@@ -2023,6 +2024,20 @@ async function handleRequest(req, res) {
       if (req.aborted || res.destroyed) return;
       const details = mediaWorkspaces.failureFor(error);
       return json(res, error.statusCode || 500, { error: details.title, details, cleanup: error.cleanup || null });
+    }
+  }
+
+  if (req.method === 'POST' && ['/api/processing/plan', '/api/processing/start'].includes(requestUrl.pathname)) {
+    try {
+      const body = await readJsonBody(req);
+      if (requestUrl.pathname === '/api/processing/plan') {
+        const { publicProcessingPlan } = require('./processing-plan');
+        return json(res, 200, { plan: publicProcessingPlan(await mediaWorkspaces.processing.plan(body)) });
+      }
+      const workspace = await mediaWorkspaces.processing.start(body);
+      return json(res, 202, { workspace: mediaWorkspaces.publicWorkspace(workspace) });
+    } catch (error) {
+      return json(res, error.statusCode || 500, { error: error.statusCode ? error.message : 'The local processing operation could not complete.' });
     }
   }
 
