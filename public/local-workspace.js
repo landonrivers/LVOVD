@@ -120,7 +120,9 @@
     const bar = $('#conversion-progress-bar'); bar.classList.toggle('indeterminate', state.percent == null);
     bar.style.width = `${state.percent == null ? 36 : Math.max(0, Math.min(100, state.percent))}%`;
     const phases = { preparing: 'Preparing', analyzing: 'Analyzing', 'pass-1': 'Pass 1', 'pass-2': 'Pass 2', encoding: 'Encoding', validating: 'Validating', retrying: 'Fitting the size target' };
-    $('#conversion-status').textContent = [phases[state.phase], state.message, state.failure?.explanation, state.failure?.help,
+    const phaseProgress = state.status === 'running' && Number.isFinite(state.phasePercent)
+      ? `${Math.floor(state.phasePercent)}% of this phase${Number.isFinite(state.percent) ? ` · about ${Math.floor(state.percent)}% overall` : ' · overall progress indeterminate'}` : null;
+    $('#conversion-status').textContent = [phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
       state.cleanupPending ? 'Some temporary attempt files remain. Retry cleanup or Remove File.' : null].filter(Boolean).join(' · ');
     const submitted = current?.submitted, newer = submitted && submitted.draftRevision !== current.draftRevision;
     $('#processing-draft-status').textContent = current ? `Draft ${current.draftRevision}`
