@@ -999,7 +999,7 @@ test('neutral conversion API enforces reviewed identity and secure no-op GET/HEA
   assert.equal(uploaded.status, 202);
   const workspace = await waitForWorkspace(JSON.parse(uploaded.body).workspaceId);
   assert.equal(workspace.playbackAssetId, null);
-  const body = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId: 'broad-compatibility-mp4' };
+  const body = { workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId: 'broad-compatibility-mp4' };
   const post = (route, value) => request(route, { method: 'POST', body: JSON.stringify(value), headers: { 'Content-Type': 'application/json' } });
   const url = `/api/conversion/file?workspace=${workspace.id}&asset=${workspace.sourceAssetId}`;
   assert.equal((await request(url)).status, 404);
@@ -1029,4 +1029,51 @@ test('neutral conversion API enforces reviewed identity and secure no-op GET/HEA
   assert.equal(workspace.assets.size, 1);
   await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
   assert.equal((await request(url)).status, 404);
+});
+
+test('edited-input API accepts original-coordinate freshness, preserves no-op download across rerender, and rejects retired planning', async () => {
+  const inspected = duration => normalizeMediaInspection({
+    format: { format_name: 'mov,mp4,m4a', start_time: '0', duration: String(duration), tags: { major_brand: 'isom' } }, chapters: [],
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p', width: 96, height: 64, start_time: '0', duration: String(duration), avg_frame_rate: '20/1' }]
+  });
+  mediaWorkspaces.inspectAsset = async () => inspected(9);
+  mediaWorkspaces.inspectOutputAsset = async workspace => inspected(totalRetainedDuration(workspace.render.requestedPlan));
+  mediaWorkspaces.createEditedAsset = async (_workspace, _source, _inspection, plan, attempt) => {
+    await fsp.writeFile(attempt.finalPath, JSON.stringify(plan)); return { filePath: attempt.finalPath };
+  };
+  mediaWorkspaces.discoverCapabilities = async () => { throw new Error('no-op must not execute discovery'); };
+  const { data } = await upload(Buffer.from('synthetic original'), 'nine-seconds.mp4');
+  const workspace = await waitForWorkspace(data.workspaceId);
+  const historyBefore = await historyStore.list(), jobIds = [...jobs.keys()];
+  const post = (route, value) => request(route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  const editPlan = { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 3 }, { startSeconds: 6, endSeconds: 9 }] };
+  assert.equal((await post('/api/workspace/render', { workspaceId: workspace.id, editPlan })).status, 202);
+  await waitForRender(workspace.id);
+  const first = mediaWorkspaces.publicWorkspace(workspace).editedOutput;
+  const body = { workspaceId: workspace.id, inputAssetId: first.assetId, editPlan, targetId: 'broad-compatibility-mp4' };
+  for (const extra of [{ sourceAssetId: first.assetId }, { inputRole: 'source' }, { filePath: '/arbitrary' }, { args: ['-y'] }]) {
+    assert.equal((await post('/api/conversion/plan', { ...body, ...extra })).status, 400);
+  }
+  assert.equal((await post('/api/workspace/editor', { workspaceId: workspace.id, sourceAssetId: first.assetId })).status, 409);
+  const planned = await post('/api/conversion/plan', body);
+  assert.equal(planned.status, 200);
+  const plan = JSON.parse(planned.body).plan;
+  assert.equal(plan.inputAssetId, first.assetId); assert.equal(plan.inputRole, 'edited-output'); assert.equal(plan.inputDurationSeconds, 6);
+  assert.equal(plan.status, 'no-op'); assert.equal(Object.hasOwn(plan, 'sourceAssetId'), false);
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: plan.key })).status, 202);
+  const alias = mediaWorkspaces.publicWorkspace(workspace).conversion.output;
+  const oldBytes = (await request(alias.downloadUrl)).body;
+  assert.deepEqual(oldBytes, (await request(first.downloadUrl)).body);
+  assert.equal((await request(alias.downloadUrl, { method: 'HEAD' })).status, 200);
+  const changed = { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 5 }] };
+  assert.equal((await post('/api/conversion/plan', { ...body, editPlan: changed })).status, 409);
+  assert.equal((await post('/api/workspace/render', { workspaceId: workspace.id, editPlan: changed })).status, 202);
+  await waitForRender(workspace.id);
+  assert.equal((await request(first.downloadUrl)).status, 404);
+  assert.deepEqual((await request(alias.downloadUrl)).body, oldBytes);
+  assert.equal((await post('/api/conversion/plan', body)).status, 409);
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: plan.key })).status, 409);
+  assert.deepEqual(await historyStore.list(), historyBefore); assert.deepEqual([...jobs.keys()], jobIds);
+  await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+  assert.equal((await request(alias.downloadUrl)).status, 404);
 });

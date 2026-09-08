@@ -30,7 +30,7 @@ async function convert(context, targetId) {
   const { manager, workspace } = context;
   const plan = await manager.conversions.plan(workspace.id, workspace.sourceAssetId, targetId);
   assert.ok(['executable', 'no-op'].includes(plan.status), JSON.stringify(plan));
-  await manager.conversions.start({ workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId, planKey: plan.key, acknowledgedWarnings: plan.warnings.map(item => item.id) });
+  await manager.conversions.start({ workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId, planKey: plan.key, acknowledgedWarnings: plan.warnings.map(item => item.id) });
   await workspace.activePromise;
   assert.equal(workspace.conversion.status, 'ready', JSON.stringify(workspace.conversion));
   const resolved = manager.conversions.resolve(workspace.id, workspace.conversion.output.assetId);
@@ -169,7 +169,7 @@ for (const [layout, channels, targetId] of [['mono', 1, 'm4a-aac'], ['stereo', 2
     const plan = await manager.conversions.plan(workspace.id, workspace.sourceAssetId, targetId);
     assert.equal(plan.status, 'executable');
     assert.equal(plan.output.channelLayout, layout);
-    await manager.conversions.start({ workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId, planKey: plan.key });
+    await manager.conversions.start({ workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId, planKey: plan.key });
     await workspace.activePromise;
     assert.equal(actual.audio.channels, channels); assert.equal(actual.audio.sampleRate, 44100);
     if (layout === '5.1(side)' && actual.audio.channelLayout !== layout) {
@@ -243,7 +243,7 @@ test('real conversion cancellation stops the owned process, removes partial outp
   } });
   const { manager, workspace } = context;
   const plan = await manager.conversions.plan(workspace.id, workspace.sourceAssetId, 'broad-compatibility-mp4');
-  await manager.conversions.start({ workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId: plan.targetId, planKey: plan.key });
+  await manager.conversions.start({ workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId: plan.targetId, planKey: plan.key });
   const child = await spawned;
   await manager.conversions.cancel(workspace.id); await workspace.activePromise;
   assert.equal(workspace.conversion.status, 'cancelled'); assert.ok(child.exitCode != null || child.signalCode != null);
@@ -261,7 +261,7 @@ test('real file-size-limited partial conversion cannot replace a previous succes
   const { manager, workspace } = context, previous = workspace.conversion.output;
   manager.maxConvertedBytes = 1024;
   const plan = await manager.conversions.plan(workspace.id, workspace.sourceAssetId, previous.targetId);
-  await manager.conversions.start({ workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId: plan.targetId, planKey: plan.key });
+  await manager.conversions.start({ workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId: plan.targetId, planKey: plan.key });
   await workspace.activePromise;
   assert.equal(workspace.conversion.status, 'failed'); assert.equal(workspace.conversion.output, previous);
   assert.ok(manager.conversions.resolve(workspace.id, previous.assetId));

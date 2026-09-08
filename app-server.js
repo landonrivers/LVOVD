@@ -1877,7 +1877,7 @@ function streamPreparedFile(res, output, workspace = null, { head = false, still
   return new Promise((resolve) => {
     let settled = false;
     const stream = fs.createReadStream(output.filePath);
-    if (workspace) mediaWorkspaces.ownReadStream(workspace, stream, res);
+    if (workspace) mediaWorkspaces.ownReadStream(workspace, stream, res, output.id);
 
     const finish = () => {
       if (settled) return;
@@ -2030,13 +2030,13 @@ async function handleRequest(req, res) {
     try {
       const body = await readJsonBody(req);
       const action = requestUrl.pathname.split('/').at(-1);
-      const allowed = action === 'start' ? ['workspaceId', 'sourceAssetId', 'targetId', 'planKey', 'acknowledgedWarnings']
-        : action === 'plan' ? ['workspaceId', 'sourceAssetId', 'targetId'] : action === 'editor' ? ['workspaceId', 'sourceAssetId'] : ['workspaceId'];
+      const allowed = action === 'start' ? ['workspaceId', 'inputAssetId', 'editPlan', 'targetId', 'planKey', 'acknowledgedWarnings']
+        : action === 'plan' ? ['workspaceId', 'inputAssetId', 'editPlan', 'targetId'] : action === 'editor' ? ['workspaceId', 'sourceAssetId'] : ['workspaceId'];
       if (!body || Array.isArray(body) || Object.keys(body).some(key => !allowed.includes(key))
         || typeof body.workspaceId !== 'string' || body.workspaceId.length > 80) return json(res, 400, { error: 'Invalid local operation request.' });
       if (action === 'plan') {
         const { publicConversionPlan } = require('./conversion-plan');
-        const plan = await mediaWorkspaces.conversions.plan(body.workspaceId, body.sourceAssetId, body.targetId);
+        const plan = await mediaWorkspaces.conversions.plan(body.workspaceId, body.inputAssetId, body.targetId, body.editPlan);
         return json(res, 200, { plan: publicConversionPlan(plan) });
       }
       const workspace = action === 'editor' ? mediaWorkspaces.prepareEditor(body.workspaceId, body.sourceAssetId)
@@ -2128,7 +2128,9 @@ async function handleRequest(req, res) {
       requestUrl.searchParams.get('asset')
     );
     if (!resolved) return json(res, 404, { error: 'That edited output is not available.' });
-    return streamPreparedFile(res, resolved.asset, resolved.workspace);
+    return streamPreparedFile(res, resolved.asset, resolved.workspace, {
+      stillAuthorized: () => Boolean(mediaWorkspaces.resolveOutputAsset(resolved.workspace.id, resolved.asset.id))
+    });
   }
 
   if (req.method === 'DELETE' && requestUrl.pathname === '/api/workspace') {

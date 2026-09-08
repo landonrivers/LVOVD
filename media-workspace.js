@@ -18,6 +18,7 @@ const { getFfmpegCapabilities } = require('./ffmpeg-capabilities');
 const { assessBroadCompatibilityMp4 } = require('./conversion-compatibility');
 const { ConversionOperations } = require('./conversion-workspace');
 const { runConversionProcess } = require('./conversion-process');
+const { OutputRetirement } = require('./output-retirement');
 const {
   MAX_KEEP_RANGES,
   roundMilliseconds,
@@ -445,6 +446,7 @@ class MediaWorkspaceManager {
     this.maxConvertedBytes = Math.min(MAX_LOCAL_MEDIA_BYTES, maxConvertedBytes);
     this.conversionTerminationGraceMs = Math.max(10, Math.min(2000, conversionTerminationGraceMs));
     this.conversions = new ConversionOperations(this);
+    this.outputRetirement = new OutputRetirement(this);
     this.workspaces = new Map();
     this.discards = new Map();
     this.cleanupPending = new Map();
@@ -515,7 +517,8 @@ class MediaWorkspaceManager {
       inspection: null,
       editor: { status: 'idle', message: null, failure: null },
       conversion: { status: 'idle', percent: null, message: null, failure: null, output: null, targetId: null,
-        terminationPending: false, cleanupPaths: new Set(), attemptPath: null },
+        terminationPending: false, cleanupPaths: new Set(), attemptPath: null, activeInputAssetId: null },
+      retiredOutputs: new Map(),
       compatibility: null,
       playbackProxy: false,
       failure: null,
@@ -579,6 +582,7 @@ class MediaWorkspaceManager {
       activeOperation: workspace.activeOperation,
       editor: { ...workspace.editor, eligible: Boolean(workspace.inspection?.video && workspace.inspection.durationSeconds > 0) },
       conversion: this.conversions.publicState(workspace),
+      outputCleanup: this.outputRetirement.state(workspace),
       compatibility: workspace.compatibility,
       assets: [...workspace.assets.values()].map((asset) => ({
         id: asset.id,
@@ -684,7 +688,8 @@ class MediaWorkspaceManager {
       playable: rawAsset.playable === true,
       filename: rawAsset.filename ? normalizeDisplayFilename(rawAsset.filename) : null,
       inspection: rawAsset.inspection ? structuredClone(rawAsset.inspection) : null,
-      editPlan: rawAsset.editPlan ? structuredClone(rawAsset.editPlan) : null
+      editPlan: rawAsset.editPlan ? structuredClone(rawAsset.editPlan) : null,
+      validated: rawAsset.validated === true
     };
     workspace.assets.set(asset.id, asset);
     return asset;
@@ -895,8 +900,17 @@ class MediaWorkspaceManager {
     }
   }
 
+  originalSource(workspaceId, sourceAssetId) {
+    const workspace = this.get(workspaceId);
+    if (!workspace) throw workspaceRequestError('Local media workspace not found or expired.', 404);
+    const asset = workspace.assets.get(sourceAssetId);
+    if (!asset || asset.id !== workspace.sourceAssetId || asset.role !== 'source') throw workspaceRequestError('This operation requires the workspace’s current original source asset.', 409);
+    if (workspace.status !== 'ready' || !workspace.inspection || workspace.cleanupRecord) throw workspaceRequestError('The original source is not ready.', 409);
+    return { workspace, asset };
+  }
+
   prepareEditor(workspaceId, sourceAssetId) {
-    const { workspace, asset } = this.conversions.source(workspaceId, sourceAssetId);
+    const { workspace, asset } = this.originalSource(workspaceId, sourceAssetId);
     validateEditorInspection(workspace.inspection);
     if (workspace.activeOperation) throw workspaceRequestError('A local workspace operation is already running.', 409);
     if (workspace.editor.status === 'ready' && workspace.playbackAssetId) return workspace;
@@ -1202,6 +1216,9 @@ class MediaWorkspaceManager {
     if (workspace.activeOperation) {
       throw workspaceRequestError('A local workspace operation is already running.', 409);
     }
+    if (this.outputRetirement.state(workspace).blocked || workspace.conversion.cleanupPaths.size) {
+      throw workspaceRequestError('Retry temporary output cleanup before creating another file.', 409);
+    }
 
     const editPlan = normalizeEditPlan(rawEditPlan, workspace.inspection.durationSeconds);
     const attemptId = crypto.randomUUID();
@@ -1267,13 +1284,12 @@ class MediaWorkspaceManager {
         playable: false,
         filename: editedOutputFilename(workspace.source.displayName),
         inspection: outputInspection,
-        editPlan
+        editPlan,
+        validated: true
       });
       workspace.render.outputAssetId = outputAsset.id;
       if (previousOutputId && previousOutputId !== outputAsset.id) {
-        const previous = workspace.assets.get(previousOutputId);
-        workspace.assets.delete(previousOutputId);
-        if (previous?.filePath) await this.fs.rm(previous.filePath, { force: true }).catch(() => {});
+        await this.outputRetirement.retire(workspace, previousOutputId);
       }
       this.updateRender(workspace, {
         status: 'ready',
@@ -1283,8 +1299,8 @@ class MediaWorkspaceManager {
         requestedPlan: structuredClone(editPlan)
       });
     } catch (error) {
-      await this.fs.rm(attempt.partialPath, { force: true }).catch(() => {});
-      await this.fs.rm(attempt.finalPath, { force: true }).catch(() => {});
+      await this.conversions.removeFile(workspace, attempt.partialPath);
+      await this.conversions.removeFile(workspace, attempt.finalPath);
       if (workspace.cancelRequested || isWorkspaceCancellation(error)) {
         this.updateRender(workspace, {
           status: 'cancelled',
@@ -1417,7 +1433,7 @@ class MediaWorkspaceManager {
     await new Promise((resolve) => {
       let settled = false;
       const stream = this.createReadStream(asset.filePath, range ? { start: range.start, end: range.end } : undefined);
-      this.ownReadStream(workspace, stream, res);
+      this.ownReadStream(workspace, stream, res, asset.id);
       const finish = () => {
         if (settled) return;
         settled = true;
@@ -1437,13 +1453,16 @@ class MediaWorkspaceManager {
     });
   }
 
-  ownReadStream(workspace, stream, response) {
-    workspace.readStreams.set(stream, response);
-    stream.once('close', () => workspace.readStreams.delete(stream));
+  ownReadStream(workspace, stream, response, assetId = null) {
+    workspace.readStreams.set(stream, { response, assetId });
+    stream.once('close', () => {
+      workspace.readStreams.delete(stream);
+      if (workspace.retiredOutputs.has(assetId)) this.outputRetirement.retire(workspace, assetId).catch(() => {});
+    });
   }
 
   async releaseReadStreams(workspace) {
-    await Promise.all([...workspace.readStreams].map(([stream, response]) => {
+    await Promise.all([...workspace.readStreams].map(([stream, { response }]) => {
       if (stream.closed) return;
       const closed = new Promise(resolve => stream.once('close', resolve));
       stream.destroy();
@@ -1510,6 +1529,7 @@ class MediaWorkspaceManager {
 
   async removeWorkspaceFiles(workspace) {
     if (!workspace) return;
+    await Promise.all([...workspace.retiredOutputs.values()].map(record => record.promise).filter(Boolean));
     let record = workspace.cleanupRecord;
     if (!record && workspace.tempDir) {
       record = {
@@ -1533,6 +1553,7 @@ class MediaWorkspaceManager {
       workspace.render.outputAssetId = null;
       workspace.conversion.output = null;
       workspace.conversion.cleanupPaths.clear();
+      workspace.retiredOutputs.clear();
     }
     if (!record) return;
     if (record.promise) await record.promise;

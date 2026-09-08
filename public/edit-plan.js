@@ -50,6 +50,17 @@
       && range.endSeconds === duration);
   }
 
+  function editPlansEqual(first, second) {
+    if (first?.version !== 1 || second?.version !== 1) return false;
+    if (!Array.isArray(first.keepRanges) || !Array.isArray(second.keepRanges)
+      || first.keepRanges.length !== second.keepRanges.length) return false;
+    return first.keepRanges.every((range, index) => (
+      range?.startSeconds === second.keepRanges[index]?.startSeconds
+      && range?.endSeconds === second.keepRanges[index]?.endSeconds
+    ));
+  }
+
+
   function normalizeEditPlan(rawPlan, durationSeconds, { rejectNoop = false } = {}) {
     const duration = roundMilliseconds(durationSeconds);
     if (!rawPlan || typeof rawPlan !== 'object' || Array.isArray(rawPlan)) {
@@ -230,6 +241,7 @@
     EditPlanError,
     roundMilliseconds,
     normalizeEditPlan,
+    editPlansEqual,
     totalRetainedDuration,
     subtractKeepRanges,
     intersectKeepRanges,

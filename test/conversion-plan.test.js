@@ -19,7 +19,7 @@ function caps() { return { available: true, encoders: new Set(['libx264', 'aac',
     ['mp3', [{ name: 'mp3float', software: true }]], ['pcm_s16le', [{ name: 'pcm_s16le', software: true }]]
   ]) }; }
 function plan(data = raw(), targetId = 'broad-compatibility-mp4', capabilities = caps()) {
-  return planConversion({ sourceAssetId: 'owned-source', inspection: normalizeMediaInspection(data), targetId, capabilities });
+  return planConversion({ inputAssetId: 'owned-source', inspection: normalizeMediaInspection(data), targetId, capabilities });
 }
 
 for (const value of ['MP4', '', null, {}, ['mp3'], '__proto__', 'mp3 -y', '../mp3', 'wav']) {
@@ -45,7 +45,7 @@ test('remux requires only a muxer; codec requirements follow individual encode d
 });
 test('software decoder alias is executed explicitly, never the advertised hardware default', () => {
   const source = normalizeMediaInspection(raw({ video: { codec_name: 'av1' } }));
-  const result = planConversion({ sourceAssetId: 'owned', inspection: source, targetId: 'broad-compatibility-mp4', capabilities: caps() });
+  const result = planConversion({ inputAssetId: 'owned', inspection: source, targetId: 'broad-compatibility-mp4', capabilities: caps() });
   assert.equal(result.streams[0].decoder, 'libdav1d');
   const args = conversionArgs('original.bin', 'output.mp4', source, result, 1000000);
   assert.equal(args[args.indexOf('-c:2') + 1], 'libdav1d'); assert.ok(args.indexOf('-c:2') < args.indexOf('-i'));
@@ -97,7 +97,7 @@ test('plan key includes source identity, effective settings, selected roles, and
   assert.notEqual(result.key, plan(raw({ audio: { codec_name: 'opus' } })).key);
   const chapters = raw(); chapters.chapters = [{ id: 0, start_time: '0', end_time: '5' }];
   assert.notEqual(result.key, plan(chapters).key); assert.ok(plan(chapters).warnings.length);
-  assert.notEqual(result.key, planConversion({ sourceAssetId: 'different', inspection: normalizeMediaInspection(raw()), targetId: result.targetId, capabilities: caps() }).key);
+  assert.notEqual(result.key, planConversion({ inputAssetId: 'different', inspection: normalizeMediaInspection(raw()), targetId: result.targetId, capabilities: caps() }).key);
 });
 test('failed discovery stays unknown while known missing requirements stay unavailable', () => {
   assert.equal(plan(raw(), undefined, { available: false }).reason, 'capability-check');

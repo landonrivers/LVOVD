@@ -25,7 +25,7 @@ function softwareDecoder(capabilities, codec) {
   return /^[a-z0-9_][a-z0-9_.-]{0,79}$/.test(name || '') ? name : null;
 }
 
-function planConversion({ sourceAssetId, inspection, targetId, capabilities }) {
+function planConversion({ workspaceId = null, inputAssetId, inputRole = 'source', inputFilename = null, editPlanKey = null, inspection, targetId, capabilities }) {
   normalizeTarget(targetId);
   const target = TARGETS[targetId];
   const source = inspection || {};
@@ -33,7 +33,9 @@ function planConversion({ sourceAssetId, inspection, targetId, capabilities }) {
   const audio = source.audio;
   const counts = source.trackCounts || {};
   const plan = {
-    version: 1, sourceAssetId, targetId, target: target.label,
+    version: 1, workspaceId, inputAssetId, inputRole, inputFilename, editPlanKey,
+    inspectionKey: crypto.createHash('sha256').update(JSON.stringify(source)).digest('hex'),
+    inputDurationSeconds: source.durationSeconds, targetId, target: target.label,
     status: 'unknown', reason: 'incomplete', message: 'More source metadata is needed for this target.',
     streams: [], changes: [], warnings: [], missing: [],
     output: { extension: target.extension, mime: target.mime, container: target.muxer },
@@ -46,7 +48,7 @@ function planConversion({ sourceAssetId, inspection, targetId, capabilities }) {
   };
   const incomplete = message => finish('unknown', 'incomplete', message);
   const unsupported = message => finish('unavailable', 'unsupported', message);
-  if (!sourceAssetId || !Number.isFinite(source.timeOriginSeconds)) return incomplete('The source identity or presentation origin is incomplete.');
+  if (!inputAssetId || !Number.isFinite(source.timeOriginSeconds)) return incomplete('The source identity or presentation origin is incomplete.');
   if (target.video && (!video || source.mediaKind !== 'video')) {
     return counts.video === 0 ? unsupported('Compatible MP4 requires a timed video. Choose an audio target for this source.')
       : incomplete('The reported video does not have enough usable metadata.');

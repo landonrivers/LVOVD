@@ -74,4 +74,4 @@ jobs:
           node-version: '24'
 
       - name: Verify Windows launcher, yt-dlp manager, and workspace cleanup behavior
-        run: node --test test/launcher.test.js test/ytdlp-manager.test.js test/local-media-input.test.js test/ytdlp-isolation.test.js test/media-workspace.test.js test/media-workspace-api.test.js test/workspace-cleanup.test.js test/media-inspection.test.js test/ffmpeg-capabilities.test.js test/conversion-compatibility.test.js test/conversion-assessment.test.js test/conversion-workspace.test.js test/conversion-ui.test.js test/conversion-plan.test.js test/conversion-lifecycle.test.js
+        run: node --test test/launcher.test.js test/ytdlp-manager.test.js test/local-media-input.test.js test/ytdlp-isolation.test.js test/media-workspace.test.js test/media-workspace-api.test.js test/workspace-cleanup.test.js test/media-inspection.test.js test/ffmpeg-capabilities.test.js test/conversion-compatibility.test.js test/conversion-assessment.test.js test/conversion-workspace.test.js test/conversion-ui.test.js test/conversion-plan.test.js test/conversion-lifecycle.test.js test/edited-conversion.test.js

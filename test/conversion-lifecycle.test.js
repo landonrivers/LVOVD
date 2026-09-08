@@ -50,7 +50,7 @@ async function setup(t, { kind = 'mov', sourceMetadata = null, ...options } = {}
   });
   const request = async () => {
     const plan = await manager.conversions.plan(workspace.id, workspace.sourceAssetId, 'broad-compatibility-mp4');
-    return { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, targetId: 'broad-compatibility-mp4', planKey: plan.key, acknowledgedWarnings: plan.warnings.map(item => item.id) };
+    return { workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId: 'broad-compatibility-mp4', planKey: plan.key, acknowledgedWarnings: plan.warnings.map(item => item.id) };
   };
   return { manager, workspace, control, request };
 }
