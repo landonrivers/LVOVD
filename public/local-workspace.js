@@ -12,6 +12,7 @@
   let generation = 0, workspaceId = null, snapshot = null, upload = null, starting = false, source = null, profile = null;
   let plan = null, planVersion = 0, planBusy = false, reviewInFlight = false, reviewQueued = false, reviewTimer = null, retryTimer = null;
   let operationRequest = false, previewRequest = false, discarding = false, resetting = false, retainedCleanupId = null;
+  let previewAttempted = false, previewError = null;
 
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
@@ -28,15 +29,20 @@
     return data;
   }
   function number(selector) { const value = $(selector).value.trim(); return value === '' ? null : Number(value); }
+  function rateMode() { return settingsForm.querySelector('input[name="processing-rate"]:checked').value; }
   function readSettings() {
     const settings = profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
     settings.container = $('#processing-container').value;
     if (hasVideo) {
       settings.videoCodec = $('#processing-video-codec').value;
-      settings.scale.mode = $('#processing-scale').value;
-      if (settings.scale.mode === 'fit') Object.assign(settings.scale, { width: number('#processing-width'), height: number('#processing-height'), allowUpscale: !$('#processing-no-upscale').checked });
+      const scale = $('#processing-scale').value;
+      settings.scale.mode = scale === 'unchanged' ? 'unchanged' : 'fit';
+      if (settings.scale.mode === 'fit') {
+        const [width, height] = scale === 'fit' ? [number('#processing-width'), number('#processing-height')] : scale.split('x').map(Number);
+        Object.assign(settings.scale, { width, height, allowUpscale: !$('#processing-no-upscale').checked });
+      }
       settings.frameRate = number('#processing-frame-rate');
-      settings.rate.mode = $('#processing-rate-mode').value;
+      settings.rate.mode = rateMode();
       if (settings.rate.mode !== 'automatic') settings.rate.preset = $('#processing-preset').value;
       if (settings.rate.mode === 'quality') settings.rate.crf = number('#processing-crf');
       if (settings.rate.mode === 'bitrate') Object.assign(settings.rate, { videoKbps: number('#processing-video-bitrate'), twoPass: $('#processing-two-pass').checked });
@@ -50,9 +56,15 @@
     for (const id of ['processing-video-settings', 'processing-transform-settings', 'processing-rate-settings']) $(`#${id}`).hidden = !hasVideo;
     $('#processing-audio-settings').hidden = !hasAudio;
     $('#processing-scale-fields').hidden = $('#processing-scale').value !== 'fit';
-    const mode = $('#processing-rate-mode').value;
+    const mode = rateMode();
     for (const kind of ['quality', 'bitrate', 'size']) $(`#processing-${kind}-fields`).hidden = mode !== kind;
     $('#processing-preset-field').hidden = mode === 'automatic';
+    $('#processing-rate-help').textContent = {
+      automatic: 'No rate override. Copy where the complete operation permits.',
+      quality: 'Lower CRF keeps more detail. Final file size varies.',
+      bitrate: 'Set an average video bitrate. Final file size varies.',
+      size: 'Limit the complete output size, using the duration after cuts.'
+    }[mode];
     for (const control of settingsForm.querySelectorAll('input, select')) control.disabled = Boolean(control.closest('[hidden]'));
   }
   function refreshDraft() {
@@ -74,7 +86,8 @@
     closeSource(); clearTimeout(reviewTimer); clearTimeout(retryTimer);
     const oldUpload = upload; upload = null; oldUpload?.abort();
     workspaceId = null; snapshot = null; profile = null; starting = false; plan = null; planBusy = false; reviewQueued = false;
-    operationRequest = false; previewRequest = false; discarding = false;
+    operationRequest = false; previewRequest = false; previewAttempted = false; previewError = null; discarding = false;
+    $('#processing-file-list').replaceChildren();
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = Boolean(retainedCleanupId); input.value = '';
     progress.hidden = true; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
     $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
@@ -91,6 +104,13 @@
   }
   function renderFacts(data) {
     $('#local-media-name').textContent = data.source?.name || 'Local media';
+    const files = $('#processing-file-list');
+    if (files.options[0]?.value !== data.sourceAssetId) {
+      const option = document.createElement('option');
+      option.value = data.sourceAssetId; option.textContent = data.source?.name || 'Local media'; option.selected = true;
+      files.replaceChildren(option);
+    }
+    files.title = data.source?.name || 'Local media';
     const inspection = data.inspection || {};
     $('#local-media-summary').textContent = [facts.mediaKindLabel(inspection.mediaKind), inspection.format,
       inspection.video && facts.familiarCodecName(inspection.video.codec), inspection.audio && facts.familiarCodecName(inspection.audio.codec),
@@ -109,10 +129,12 @@
     cancel.disabled = state.status === 'cancelling' || discarding;
     $('#processing-reset').disabled = !profile || discarding;
     const preview = $('#processing-prepare-preview');
-    preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url);
-    preview.disabled = busy; preview.textContent = previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing Preview…' : 'Prepare Preview';
+    preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url) || (!previewError && snapshot?.editor?.status !== 'failed');
+    preview.disabled = busy;
     $('#processing-preview-note').textContent = !snapshot?.inspection?.video ? 'Audio file — choose output settings, then Process File.'
-      : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings below.' : '';
+      : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings.'
+        : previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing playback from the selected original file…'
+          : previewError ? `${previewError} You can still review processing settings or retry playback.` : '';
     $('#conversion-cleanup').hidden = !state.cleanupPending && !snapshot?.outputCleanup?.blocked;
     $('#conversion-cleanup').disabled = busy;
     $('#output-cleanup-status').textContent = snapshot?.outputCleanup?.message || (state.cleanupPending ? 'Temporary output cleanup needs a retry.' : '');
@@ -157,6 +179,7 @@
   function accept(data) {
     if (!data || data.id !== workspaceId || discarding) return;
     snapshot = data; publish();
+    if (data.playback?.url) previewError = null;
     const inspected = Boolean(data.inspection && data.sourceAssetId);
     ready.hidden = !inspected; intake.hidden = true; choose.disabled = true;
     progress.hidden = data.status === 'ready';
@@ -177,6 +200,8 @@
     }
     message(data.status === 'error' ? data.message : '', data.status === 'error');
     processingControls();
+    if (inspected && data.status === 'ready' && data.editor?.eligible && !data.playback?.url
+      && !data.activeOperation && !previewAttempted) preparePreview();
   }
   function connect(id, token) {
     closeSource();
@@ -317,12 +342,18 @@
       if (reviewQueued && workspaceId && !discarding) reviewTimer = setTimeout(reviewPlan, 300);
     }
   }
-  $('#processing-prepare-preview').addEventListener('click', async () => {
-    if (!profile || snapshot?.activeOperation || previewRequest) return;
-    const token = generation; previewRequest = true; processingControls();
+  async function preparePreview() {
+    if (!profile || !snapshot?.editor?.eligible || snapshot?.playback?.url || snapshot?.activeOperation || previewRequest || discarding) return;
+    const token = generation; previewRequest = true; previewAttempted = true; previewError = null; processingControls();
     try { const data = await post('/api/workspace/editor', { workspaceId, sourceAssetId: snapshot.sourceAssetId }); if (token === generation) accept(data.workspace); }
-    catch (error) { if (token === generation) message(error.message, true); }
+    catch (error) { if (token === generation && !snapshot?.playback?.url) previewError = error.message; }
     finally { if (token === generation) { previewRequest = false; processingControls(); } }
+  }
+  $('#processing-prepare-preview').addEventListener('click', preparePreview);
+  $('#processing-file-list').addEventListener('change', () => {
+    // Selection belongs to this one original source. Re-selecting never resets
+    // its profile or reacquires media; playback preparation is idempotent.
+    if (!previewAttempted) preparePreview();
   });
   settingsForm.addEventListener('submit', event => event.preventDefault());
   settingsForm.addEventListener('change', refreshDraft); settingsForm.addEventListener('input', refreshDraft);

@@ -952,8 +952,8 @@
         }, { once: true });
       }
       proxyNote.textContent = data.playback?.url
-        ? (data.playback.proxy ? 'Preview uses a temporary local proxy. Processing uses your original source.' : 'Preview plays your original source directly.')
-        : 'Prepare the local preview to play and seek. Your cuts and output settings can be reviewed independently.';
+        ? (data.playback.proxy ? 'Playback uses a temporary local proxy. Processing uses your original source.' : '')
+        : '';
       proxyNote.classList.toggle('proxy', Boolean(data.playback?.proxy));
       setStatus(data.editor?.status === 'failed' ? `${data.editor.message} Processing settings and authored cuts remain available.` : '');
     }
@@ -969,9 +969,9 @@
       for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
         handle.setAttribute('aria-valuemax', String(durationSeconds));
       }
-      mediaName.textContent = 'Preview & cuts';
-      mediaFacts.textContent = [inspection.video && `${inspection.video.width} × ${inspection.video.height}`,
-        formatBytes(data.source?.size)].filter(Boolean).join(' · ');
+      mediaName.textContent = data.source?.name || 'Local video';
+      mediaName.title = mediaName.textContent;
+      mediaFacts.textContent = '';
       const trackCounts = inspection.trackCounts || {};
       trackWarning.hidden = !(Number(trackCounts.audio) > 1 || Number(trackCounts.subtitle) > 0);
       editor.hidden = false;
