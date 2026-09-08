@@ -80,7 +80,7 @@ test('one compact Local Media intake supplies cuts, processing settings, and exp
   const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
   assert.equal((html.match(/type="file"/g) || []).length, 1);
   assert.doesNotMatch(html, /Inspect Local Media|Inspection only|conversion-inspector-panel/);
-  assert.match(html, /One file\. Your cuts and output settings, together\./);
+  assert.match(html, /Edit videos or convert video\/audio files/);
   assert.match(html, /<summary>Media Details<\/summary>/);
   assert.match(html, /id="processing-settings"/);
   assert.match(html, /Cuts and output settings apply together to your original source/);

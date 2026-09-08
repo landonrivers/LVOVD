@@ -214,6 +214,17 @@ for (const container of ['mov', 'matroska']) {
   });
 }
 
+for (const [scale, width, height] of [[{ mode: 'width', width: 160 }, 160, 90], [{ mode: 'height', height: 90 }, 160, 90], [{ mode: 'percent', percent: 25 }, 80, 44]]) {
+  test(`selected ${scale.mode} scale preserves retained video/audio markers and the reviewed download suffix`, async t => {
+    const context = await intake(t, 'sections.mkv');
+    const output = await processFile(context, { ...H264, scale, filenameSuffix: '_fit' }, CUTS);
+    assertVideoMarkers(output.file, CUTS, { width, height }); assertAudioMarkers(output.file, CUTS);
+    assert.equal(output.result.filename, 'sections_fit.mp4');
+    assert.equal(output.plan.downloadFilename, output.result.filename);
+    assert.equal(output.calls.length, 1); assert.equal(output.plan.sizeEstimate.bytes, null, 'CRF does not invent a size');
+  });
+}
+
 test('original sections are cut, scaled and encoded directly into one H.264 result', async t => {
   const context = await intake(t, 'sections.mkv');
   const output = await processFile(context, { ...H264, scale: { mode: 'fit', width: 160, height: 90 },

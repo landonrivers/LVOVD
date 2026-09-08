@@ -276,7 +276,7 @@
       <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
         <div class="workspace-heading">
           <h2 id="media-workspace-title" class="workflow-heading">Local Media</h2>
-          <p class="help">One file. Your cuts and output settings, together.</p>
+          <p class="help">Edit videos or convert video/audio files</p>
         </div>
         <div id="media-drop-zone" class="media-drop-zone">
           <input id="media-file-input" type="file" hidden />
@@ -324,7 +324,21 @@
                 <fieldset id="processing-transform-settings">
                   <legend class="sr-only">Picture</legend>
                   <div class="processing-pair">
-                  <label class="field" for="processing-scale"><span>Scale</span><select id="processing-scale"><option value="unchanged">Unchanged</option><option value="854x480">854 × 480</option><option value="1280x720">1280 × 720</option><option value="1920x1080">1920 × 1080</option><option value="fit">Custom fit…</option></select></label>
+                  <label class="field" for="processing-scale"><span>Scale</span><select id="processing-scale" aria-describedby="processing-scale-help">
+                    <option value="unchanged">Source / unchanged</option>
+                    <optgroup label="Fit within dimensions">
+                      <option value="4096x2160">4096 × 2160</option><option value="3840x2160">3840 × 2160</option><option value="2560x1440">2560 × 1440</option>
+                      <option value="1920x1080">1920 × 1080</option><option value="1440x1080">1440 × 1080</option><option value="1280x720">1280 × 720</option>
+                      <option value="1024x768">1024 × 768</option><option value="1024x576">1024 × 576</option><option value="854x480">854 × 480</option>
+                      <option value="720x576">720 × 576</option><option value="640x360">640 × 360</option><option value="320x180">320 × 180</option>
+                    </optgroup>
+                    <optgroup label="One dimension / automatic aspect">
+                      <option value="width:3840">3840 × auto</option><option value="width:1920">1920 × auto</option>
+                      <option value="height:2160">auto × 2160</option><option value="height:1080">auto × 1080</option><option value="height:720">auto × 720</option>
+                    </optgroup>
+                    <optgroup label="Percentage"><option value="percent:50">50%</option><option value="percent:25">25%</option></optgroup>
+                    <option value="fit">Custom fit…</option>
+                  </select></label>
                   <label class="field" for="processing-frame-rate"><span>Frame rate</span><select id="processing-frame-rate"><option value="">Unchanged</option></select></label>
                   </div>
                   <div id="processing-scale-fields" hidden>
@@ -334,7 +348,7 @@
                     </div>
                   </div>
                   <label class="processing-check"><input id="processing-no-upscale" type="checkbox" checked />Do not upscale lower resolutions</label>
-                  <p class="help">Scale fits within the selected size, preserving aspect ratio.</p>
+                  <p id="processing-scale-help" class="help">Dimensions are adjusted to fit aspect ratio and encoder alignment; no cropping. See the actual dimensions below.</p>
                 </fieldset>
                 <fieldset id="processing-rate-settings">
                   <legend>Compression <span class="help">(this file)</span></legend>
@@ -348,21 +362,22 @@
                   <div id="processing-quality-fields" hidden>
                     <label class="field processing-value-row" for="processing-crf"><span>H.264 quality</span><input id="processing-crf" type="number" min="0" max="51" step="1" value="18" /><small>CRF</small></label>
                   </div>
-                  <div id="processing-bitrate-fields" hidden>
-                    <label class="field processing-value-row" for="processing-video-bitrate"><span>Video bitrate</span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="1" value="2000" /><small>kbps</small></label>
-                    <label class="processing-check"><input id="processing-two-pass" type="checkbox" />2-pass encoding</label>
+                  <div id="processing-bitrate-fields">
+                    <label class="field processing-value-row" for="processing-video-bitrate"><span id="processing-video-rate-label">Video bitrate</span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="any" aria-describedby="processing-budget-help" /><small>kbps</small></label>
+                    <label id="processing-two-pass-field" class="processing-check" hidden><input id="processing-two-pass" type="checkbox" />2-pass encoding</label>
                   </div>
-                  <div id="processing-size-fields" hidden>
-                    <label class="field processing-value-row" for="processing-maximum-mb"><span>Maximum file size</span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" value="10" /><small>MB</small></label>
-                    <p class="help">1 MB = 1,000,000 bytes per output. Includes audio; 2-pass encoding with one bounded size retry.</p>
-                  </div>
-                  <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed</span><select id="processing-preset"><option value="medium">Medium</option></select></label>
-                </fieldset>
                 <fieldset id="processing-audio-settings">
                   <legend class="sr-only">Audio</legend>
                   <label class="field processing-value-row" for="processing-audio-codec"><span>Audio codec</span><select id="processing-audio-codec"><option value="unchanged">Unchanged</option></select></label>
                   <label class="field processing-value-row" for="processing-audio-bitrate"><span>Audio bitrate</span><input id="processing-audio-bitrate" type="number" min="8" max="1536" step="1" placeholder="Auto" /><small>kbps</small></label>
-                  <p class="help">Auto keeps copied audio or uses the codec default. No automatic downmix.</p>
+                  <p id="processing-audio-rate-help" class="help">Auto keeps copied audio or uses the codec default. No automatic downmix.</p>
+                </fieldset>
+                  <div id="processing-size-fields">
+                    <label class="field processing-value-row" for="processing-maximum-mb"><span id="processing-size-label">Estimated file size</span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" aria-describedby="processing-budget-help" /><small>MB</small></label>
+                    <p id="processing-budget-help" class="help">Edit video bitrate to calculate size, or file size to calculate a video budget. Audio and the duration after cuts are included. 1 MB = 1,000,000 bytes.</p>
+                    <p id="processing-size-policy" class="help" hidden>Maximum per output, using two passes and at most one size correction. Actual bytes are checked before publication.</p>
+                  </div>
+                  <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed</span><select id="processing-preset"><option value="medium">Medium</option></select></label>
                 </fieldset>
               </form>
             </aside>
@@ -495,6 +510,11 @@
             <div id="conversion-warnings"></div>
             <p class="help">Cuts and output settings apply together to your original source. Re-encoding is not lossless. Metadata preservation is not guaranteed.</p>
             <div class="local-media-actions">
+              <div class="processing-suffix">
+                <label class="processing-check"><input id="processing-suffix-enabled" type="checkbox" form="processing-settings" checked />Add a suffix</label>
+                <input id="processing-filename-suffix" type="text" form="processing-settings" aria-label="Filename suffix" maxlength="60" value=" - processed" autocomplete="off" spellcheck="false" aria-describedby="processing-filename-preview" />
+                <p id="processing-filename-preview" class="help"></p>
+              </div>
               <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process File</button>
               <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
               <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>

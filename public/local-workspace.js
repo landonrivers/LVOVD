@@ -33,13 +33,17 @@
   function readSettings() {
     const settings = profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
     settings.container = $('#processing-container').value;
+    settings.filenameSuffix = $('#processing-suffix-enabled').checked ? $('#processing-filename-suffix').value : '';
     if (hasVideo) {
       settings.videoCodec = $('#processing-video-codec').value;
       const scale = $('#processing-scale').value;
-      settings.scale.mode = scale === 'unchanged' ? 'unchanged' : 'fit';
+      settings.scale.mode = scale === 'unchanged' ? 'unchanged' : scale.includes(':') ? scale.split(':')[0] : 'fit';
       if (settings.scale.mode === 'fit') {
         const [width, height] = scale === 'fit' ? [number('#processing-width'), number('#processing-height')] : scale.split('x').map(Number);
         Object.assign(settings.scale, { width, height, allowUpscale: !$('#processing-no-upscale').checked });
+      } else if (settings.scale.mode !== 'unchanged') {
+        settings.scale[settings.scale.mode] = Number(scale.split(':')[1]);
+        settings.scale.allowUpscale = !$('#processing-no-upscale').checked;
       }
       settings.frameRate = number('#processing-frame-rate');
       settings.rate.mode = rateMode();
@@ -53,19 +57,49 @@
   }
   function renderSettings() {
     const hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
-    for (const id of ['processing-video-settings', 'processing-transform-settings', 'processing-rate-settings']) $(`#${id}`).hidden = !hasVideo;
+    for (const id of ['processing-video-settings', 'processing-transform-settings', 'processing-rate-mode', 'processing-rate-help', 'processing-bitrate-fields', 'processing-size-fields']) $(`#${id}`).hidden = !hasVideo;
+    $('#processing-rate-settings').hidden = !hasVideo && !hasAudio;
     $('#processing-audio-settings').hidden = !hasAudio;
     $('#processing-scale-fields').hidden = $('#processing-scale').value !== 'fit';
     const mode = rateMode();
-    for (const kind of ['quality', 'bitrate', 'size']) $(`#processing-${kind}-fields`).hidden = mode !== kind;
-    $('#processing-preset-field').hidden = mode === 'automatic';
+    $('#processing-quality-fields').hidden = !hasVideo || mode !== 'quality';
+    $('#processing-two-pass-field').hidden = !hasVideo || mode !== 'bitrate';
+    $('#processing-size-policy').hidden = mode !== 'size';
+    $('#processing-preset-field').hidden = !hasVideo || mode === 'automatic';
+    $('#processing-video-rate-label').textContent = mode === 'bitrate' ? 'Video bitrate (set)' : 'Video bitrate (auto)';
+    $('#processing-size-label').textContent = mode === 'size' ? 'Maximum file size' : 'Estimated file size';
+    $('#processing-video-bitrate').required = hasVideo && mode === 'bitrate';
+    $('#processing-maximum-mb').required = hasVideo && mode === 'size';
+    // Observed/calculated values are not requested limits. Large source rates
+    // or estimates must not make an otherwise valid unchanged draft invalid.
+    $('#processing-video-bitrate').max = mode === 'bitrate' ? '1000000' : '';
+    $('#processing-maximum-mb').max = mode === 'size' ? '107374.1824' : '';
     $('#processing-rate-help').textContent = {
       automatic: 'No rate override. Copy where the complete operation permits.',
       quality: 'Lower CRF keeps more detail. Final file size varies.',
-      bitrate: 'Set an average video bitrate. Final file size varies.',
-      size: 'Limit the complete output size, using the duration after cuts.'
+      bitrate: 'Video bitrate controls the estimate below. Actual file size varies.',
+      size: 'File size controls the video budget. Audio and container space are reserved first.'
     }[mode];
-    for (const control of settingsForm.querySelectorAll('input, select')) control.disabled = Boolean(control.closest('[hidden]'));
+    for (const control of settingsForm.elements) control.disabled = Boolean(control.closest('[hidden]'));
+    const suffix = $('#processing-filename-suffix'); suffix.disabled = !$('#processing-suffix-enabled').checked;
+    suffix.setCustomValidity(/[\u0000-\u001f\u007f<>:"/\\|?*]/.test(suffix.value) ? 'Use a suffix without path separators or reserved filename characters.' : '');
+  }
+  function renderEstimates() {
+    const estimate = plan.sizeEstimate || {}, mode = rateMode();
+    const video = $('#processing-video-bitrate'), size = $('#processing-maximum-mb');
+    // Companion values come from the reviewed server plan. Editing either
+    // selects it as the new controlling intent; programmatic updates do not.
+    if (mode !== 'bitrate') {
+      video.value = estimate.videoBitrate >= 1000 ? String(Number((estimate.videoBitrate / 1000).toFixed(3))) : '';
+      video.placeholder = plan.streams?.find(stream => stream.role === 'video')?.action === 'encode' ? 'Variable' : 'Unknown';
+    }
+    if (mode !== 'size') {
+      size.value = estimate.bytes >= 1000 ? String(Number((estimate.bytes / 1e6).toFixed(6))) : '';
+      size.placeholder = estimate.bytes == null ? 'Variable' : '< 0.001';
+    }
+    const audioRate = estimate.audioBitrate;
+    $('#processing-audio-bitrate').placeholder = audioRate > 0 ? `${Number((audioRate / 1000).toFixed(1))} auto` : 'Auto';
+    $('#processing-audio-rate-help').textContent = `${audioRate > 0 ? `${Number((audioRate / 1000).toFixed(1))} kbps ${plan.streams?.find(stream => stream.role === 'audio')?.action === 'copy' ? 'copied (inspected average)' : 'encoding target'}. ` : 'Audio rate is variable or unknown. '}Enter a bitrate to encode explicitly. Clear it to use Auto. No automatic downmix.`;
   }
   function refreshDraft() {
     if (!profile || resetting) return;
@@ -79,6 +113,7 @@
     clearTimeout(reviewTimer); clearTimeout(retryTimer); retry.hidden = true;
     $('#conversion-warnings').replaceChildren(); $('#conversion-changes').replaceChildren(); $('#processing-plan-facts').replaceChildren();
     $('#conversion-plan-title').textContent = 'Reviewing current cuts and output settings…';
+    $('#processing-filename-preview').textContent = 'Reviewing download name…';
     reviewTimer = setTimeout(reviewPlan, 300);
   }
   function reset(text = '') {
@@ -302,10 +337,11 @@
     appendFact(list, 'Retained duration', facts.formatDuration(plan.timing?.durationSeconds));
     const output = plan.output || {}, settings = plan.settings || profile.draft().settings;
     appendFact(list, 'Output', [output.videoCodec && facts.familiarCodecName(output.videoCodec), output.container || output.extension].filter(Boolean).join(' · ') || 'See review');
-    if (output.width && output.height) appendFact(list, 'Dimensions', `${output.width} × ${output.height}${output.frameRate ? ` · ${output.frameRate} fps` : ''}`);
+    if (output.width && output.height) appendFact(list, 'Dimensions', `${output.width} × ${output.height}${settings.scale?.mode !== 'unchanged' ? ' (adjusted to fit aspect)' : ''}${output.frameRate ? ` · ${output.frameRate} fps` : ''}`);
     if (output.sampleAspectRatio && !['1:1', '1/1'].includes(output.sampleAspectRatio)) appendFact(list, 'Pixel aspect', `${output.sampleAspectRatio} · preserves display proportions`);
     appendFact(list, 'Encoding', rateDescription(settings.rate));
-    if (plan.rateBudget?.estimatedBytes) appendFact(list, 'Estimated size', facts.formatBytes(plan.rateBudget.estimatedBytes));
+    const estimate = plan.sizeEstimate;
+    appendFact(list, 'Estimated size', estimate?.bytes != null ? `${(estimate.bytes / 1e6).toFixed(3)} MB${estimate.exact ? ' (exact original bytes)' : ' (approx.)'}` : estimate?.explanation || 'Size varies with quality and content');
     if (plan.rateBudget?.videoBitrate != null) appendFact(list, 'Video bitrate budget', `${(plan.rateBudget.videoBitrate / 1000).toFixed(1)} kbps`);
     if (plan.rateBudget?.audioBitsPerSecond != null) appendFact(list, 'Audio budget', `${(plan.rateBudget.audioBitsPerSecond / 1000).toFixed(1)} kbps · ${facts.formatBytes(plan.rateBudget.audioBytes)}`);
     if (plan.rateBudget?.overheadBytes != null) appendFact(list, 'Container reserve', facts.formatBytes(plan.rateBudget.overheadBytes));
@@ -317,7 +353,8 @@
       if (warning.required !== false) { const box = document.createElement('input'); box.type = 'checkbox'; box.required = true; box.value = warning.id; box.addEventListener('change', processingControls); label.append(box); }
       label.append(text); $('#conversion-warnings').append(label);
     }
-    renderOptions(plan.options); renderSettings();
+    $('#processing-filename-preview').textContent = plan.downloadFilename || snapshot.source?.name || '';
+    renderEstimates(); renderOptions(plan.options); renderSettings();
   }
   async function reviewPlan() {
     clearTimeout(reviewTimer);
@@ -356,7 +393,19 @@
     if (!previewAttempted) preparePreview();
   });
   settingsForm.addEventListener('submit', event => event.preventDefault());
-  settingsForm.addEventListener('change', refreshDraft); settingsForm.addEventListener('input', refreshDraft);
+  function settingsChanged(event) {
+    if (event.target.id === 'processing-video-bitrate') settingsForm.querySelector('[name="processing-rate"][value="bitrate"]').checked = true;
+    if (event.target.id === 'processing-maximum-mb') settingsForm.querySelector('[name="processing-rate"][value="size"]').checked = true;
+    if (event.target.name === 'processing-rate') {
+      if (rateMode() === 'bitrate' && !$('#processing-video-bitrate').value) $('#processing-video-bitrate').value = '2000';
+      if (rateMode() === 'size' && !$('#processing-maximum-mb').value) $('#processing-maximum-mb').value = '10';
+    }
+    refreshDraft();
+  }
+  settingsForm.addEventListener('change', settingsChanged); settingsForm.addEventListener('input', settingsChanged);
+  for (const id of ['processing-suffix-enabled', 'processing-filename-suffix']) {
+    $(`#${id}`).addEventListener('change', refreshDraft); $(`#${id}`).addEventListener('input', refreshDraft);
+  }
   document.addEventListener('lvovd:editor-plan-changed', refreshDraft);
   document.addEventListener('lvovd:editor-state-changed', () => { if (profile) { profile.update({ editorState: editor.authoringState() }); processingControls(); } });
   $('#processing-reset').addEventListener('click', () => {

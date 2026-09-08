@@ -56,6 +56,7 @@ test('generic timed video normalization retains bounded product media facts', ()
       width: 1920,
       height: 1080,
       frameRate: 29.97,
+      bitRate: null,
       pixelFormat: 'yuv420p', startSeconds: null, durationSeconds: null, rotationDegrees: null,
       orientationSupported: true, sampleAspectRatio: null, colorTransfer: null, hdr: null, alpha: null
     },

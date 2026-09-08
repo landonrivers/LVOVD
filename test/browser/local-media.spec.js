@@ -102,7 +102,7 @@ test('portrait selection shows a real file list, contained playback and compact 
   expect(await page.locator('#editor-video').evaluate(video => getComputedStyle(video).objectFit)).toBe('contain');
   await page.locator('#processing-scale').selectOption('854x480');
   await expect(page.locator('#processing-plan-facts')).toContainText('360 × 480');
-  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).settings.scale).toEqual({ mode: 'fit', width: 854, height: 480, allowUpscale: false });
+  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).settings.scale).toEqual({ mode: 'fit', width: 854, height: 480, percent: null, allowUpscale: false });
   await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBe(4);
   await expect.poll(() => page.locator('#editor-video').evaluate(video => video.seeking)).toBe(false);
   expect(await page.locator('#editor-video').evaluate(video => video.paused)).toBe(true);
@@ -110,6 +110,73 @@ test('portrait selection shows a real file list, contained playback and compact 
   await exact(page, 'processing-maximum-mb', '0.75');
   await expect(page.locator('#processing-plan-facts')).toContainText('Maximum 0.75 MB');
   await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-compact-portrait.png') });
+});
+
+test('linked rate and size controls review the current cuts and keep a completed custom download name immutable', async ({ page }) => {
+  const id = await intake(page);
+  await expect(page.getByText('Edit videos or convert video/audio files', { exact: true })).toBeVisible();
+  await expect(page.locator('#processing-plan-facts')).toContainText('exact original bytes');
+  for (const selector of ['#processing-video-bitrate', '#processing-audio-bitrate', '#processing-maximum-mb']) await expect(page.locator(selector)).toBeVisible();
+  const suffixBox = await page.locator('.processing-suffix').boundingBox(), processBox = await page.locator('#conversion-start').boundingBox();
+  expect(suffixBox.x + suffixBox.width).toBeLessThanOrEqual(processBox.x);
+  await page.locator('#processing-filename-suffix').fill('_original');
+  await expect(page.locator('#processing-filename-preview')).toHaveText('generated_original.mp4');
+  await processFile(page); const original = await downloaded(page);
+  expect(original.name).toBe('generated_original.mp4'); expect(original.bytes).toEqual(await fs.readFile(path.join(root, 'generated.mp4')));
+  await cut(page);
+  await page.locator('#processing-video-bitrate').fill('250');
+  await expect(page.locator('[name="processing-rate"][value="bitrate"]')).toBeChecked();
+  await expect(page.locator('#processing-plan-facts')).toContainText('250 kbps');
+  const sizeBefore = Number(await page.locator('#processing-maximum-mb').inputValue());
+  expect(sizeBefore).toBeGreaterThan(0);
+  await page.locator('#processing-audio-bitrate').fill('320');
+  await expect.poll(async () => Number(await page.locator('#processing-maximum-mb').inputValue())).toBeGreaterThan(sizeBefore);
+  await page.locator('#processing-maximum-mb').fill('0.2');
+  await expect(page.locator('[name="processing-rate"][value="size"]')).toBeChecked();
+  await expect(page.locator('#processing-plan-facts')).toContainText('Maximum 0.2 MB');
+  const videoBefore = Number(await page.locator('#processing-video-bitrate').inputValue());
+  await page.locator('#processing-audio-bitrate').fill('64');
+  await expect.poll(async () => Number(await page.locator('#processing-video-bitrate').inputValue())).toBeGreaterThan(videoBefore);
+  await page.locator('#processing-filename-suffix').fill('_small');
+  await expect(page.locator('#processing-filename-preview')).toHaveText('generated_small.mp4');
+  expect((await downloaded(page)).name).toBe('generated_original.mp4');
+  await processFile(page); const small = await downloaded(page, 'linked-small.mp4');
+  expect(small.name).toBe('generated_small.mp4'); expect(small.bytes.length).toBeLessThanOrEqual(200000);
+  expect(Math.abs(Number(probe(small.file).format.duration) - 3)).toBeLessThanOrEqual(0.08);
+  expect((await snapshot(id)).conversion.output.processingSnapshot.settings.filenameSuffix).toBe('_small');
+  await page.locator('#processing-suffix-enabled').uncheck();
+  await expect(page.locator('#processing-filename-preview')).toHaveText('generated.mp4');
+  expect((await downloaded(page)).name).toBe('generated_small.mp4');
+  await page.locator('[name="processing-rate"][value="quality"]').check();
+  await expect(page.locator('#processing-plan-facts')).toContainText('Size varies with quality and content');
+  await expect(page.locator('#processing-maximum-mb')).toHaveValue('');
+  await page.locator('#processing-suffix-enabled').check(); await page.locator('#processing-filename-suffix').fill('../bad');
+  await expect(page.locator('#conversion-start')).toBeDisabled();
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#processing-reset').click();
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue(' - processed');
+  await expect(page.locator('#processing-suffix-enabled')).toBeChecked();
+});
+
+test('ordinary scale presets explain fitted dimensions and remain accessible on a narrow layout', async ({ page }) => {
+  await intake(page, 'portrait example.mp4');
+  for (const value of ['4096x2160', '3840x2160', '2560x1440', '1920x1080', '1440x1080', '1280x720', '1024x768', '1024x576', '854x480', '720x576', '640x360', '320x180', 'width:3840', 'width:1920', 'height:2160', 'height:1080', 'height:720', 'percent:50', 'percent:25']) {
+    await expect(page.locator(`#processing-scale option[value="${value}"]`)).toHaveCount(1);
+  }
+  await page.locator('#processing-scale').selectOption('height:720');
+  await expect(page.locator('#processing-plan-facts')).toContainText('390 × 520 (adjusted to fit aspect)');
+  await page.locator('#processing-no-upscale').uncheck();
+  await expect(page.locator('#processing-plan-facts')).toContainText('540 × 720 (adjusted to fit aspect)');
+  await page.locator('#processing-scale').selectOption('percent:50');
+  await expect(page.locator('#processing-plan-facts')).toContainText('194 × 260 (adjusted to fit aspect)');
+  await processFile(page); const output = await downloaded(page, 'percentage.mp4');
+  const actual = probe(output.file).streams.find(stream => stream.codec_type === 'video');
+  expect([actual.width, actual.height]).toEqual([194, 260]);
+  await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-linked-controls.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#processing-filename-suffix').focus(); await expect(page.locator('#processing-filename-suffix')).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(page.locator('#conversion-start')).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-linked-controls-narrow.png') });
 });
 
 test('failed automatic playback permits processing and retries only on explicit request', async ({ page }) => {
@@ -253,7 +320,10 @@ test('video cuts apply to audio extraction and Reset Range keeps the selected en
   await expect(page.locator('input[name="processing-rate"][value="quality"]').first()).toBeChecked();
   await expect(page.locator('#editor-start-time')).toHaveValue('00:00:00.000');
   await cut(page); await page.locator('#processing-container').selectOption('m4a');
-  await expect(page.locator('#processing-rate-settings')).toBeHidden();
+  await expect(page.locator('#processing-rate-mode')).toBeHidden();
+  await expect(page.locator('#processing-bitrate-fields')).toBeHidden();
+  await expect(page.locator('#processing-size-fields')).toBeHidden();
+  await expect(page.locator('#processing-audio-bitrate')).toBeVisible();
   await expect(page.locator('#processing-plan-facts')).toContainText('00:00:03.000');
   await processFile(page); const output = await downloaded(page, 'cut-audio.m4a'), actual = probe(output.file);
   expect(actual.streams.map(stream => stream.codec_type)).toEqual(['audio']);
