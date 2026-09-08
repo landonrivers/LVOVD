@@ -5,20 +5,17 @@
   const document = root.document, $ = selector => document.querySelector(selector);
   const panel = $('#media-workspace-panel');
   if (!panel) return;
-  const editor = root.LVOVDEditorView, facts = root.LVOVDMediaFacts;
+  const editor = root.LVOVDEditorView, facts = root.LVOVDMediaFacts, profiles = root.LVOVDProcessingProfile;
   const intake = $('#media-drop-zone'), input = $('#media-file-input'), choose = $('#media-choose-button');
   const ready = $('#local-media-ready'), status = $('#workspace-status'), progress = $('#workspace-progress');
-  const editButton = $('#local-open-editor'), convertButton = $('#local-open-converter');
-  const converter = $('#media-converter'), target = $('#conversion-target'), start = $('#conversion-start');
-  const retry = $('#conversion-retry'), cancel = $('#conversion-cancel');
-  let generation = 0, workspaceId = null, snapshot = null, upload = null, starting = false, source = null;
-  let view = null, plan = null, planRequest = 0, retryTimer = null, planBusy = false;
-  let operationRequest = false, discarding = false;
-  let selectedInput = null;
+  const settingsForm = $('#processing-settings'), start = $('#conversion-start'), retry = $('#conversion-retry'), cancel = $('#conversion-cancel');
+  let generation = 0, workspaceId = null, snapshot = null, upload = null, starting = false, source = null, profile = null;
+  let plan = null, planVersion = 0, planBusy = false, reviewInFlight = false, reviewQueued = false, reviewTimer = null, retryTimer = null;
+  let operationRequest = false, previewRequest = false, discarding = false, resetting = false, retainedCleanupId = null;
 
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(workspaceId || upload || starting), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(workspaceId || upload || starting || retainedCleanupId), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -30,52 +27,67 @@
     if (!response.ok) throw new Error(data.error || 'The local operation could not complete.');
     return data;
   }
-  function identity() {
-    return { workspaceId, inputAssetId: selectedInput?.assetId,
-      ...(selectedInput?.role === 'edited-output' ? { editPlan: editor.conversionState().editPlan } : {}) };
-  }
-  function selectInput(edited) {
-    const state = editor.conversionState();
-    if (!snapshot || snapshot.activeOperation || discarding || (edited && !state.eligible)) return;
-    const output = snapshot.editedOutput;
-    selectedInput = edited ? { assetId: output.assetId, role: 'edited-output', filename: output.filename, durationSeconds: output.inspection.durationSeconds }
-      : { assetId: snapshot.sourceAssetId, role: 'source', filename: snapshot.source.name, durationSeconds: snapshot.inspection.durationSeconds };
-    showView('convert', true); reviewPlan();
-  }
-  function selectionIssue() {
-    if (!selectedInput) return 'Select an input.';
-    if (selectedInput.role !== 'edited-output') return null;
-    if (selectedInput.assetId !== snapshot?.editedOutput?.assetId) return 'This edited result was replaced. Select the latest eligible edited result explicitly.';
-    if (!editor.conversionState().fresh) return 'Create an updated edited file first';
-    return null;
-  }
-  function refreshInput() {
-    if (!selectedInput && snapshot?.sourceAssetId && snapshot.inspection) selectedInput = {
-      assetId: snapshot.sourceAssetId, role: 'source', filename: snapshot.source.name, durationSeconds: snapshot.inspection.durationSeconds
-    };
-    const edited = selectedInput?.role === 'edited-output', issue = selectionIssue();
-    $('#conversion-input').textContent = selectedInput ? `Input: ${edited ? 'Edited result' : 'Original source'} — ${selectedInput.filename}` : '';
-    $('#conversion-input-duration').textContent = selectedInput ? `Input duration: ${facts.formatDuration(selectedInput.durationSeconds)}` : '';
-    $('#conversion-use-original').setAttribute('aria-pressed', String(Boolean(selectedInput && !edited)));
-    $('#conversion-use-edited').setAttribute('aria-pressed', String(edited));
-    $('#conversion-use-original').disabled = Boolean(snapshot?.activeOperation || operationRequest);
-    $('#conversion-use-edited').disabled = !editor.conversionState().eligible || operationRequest;
-    $('#conversion-input-status').textContent = issue || '';
-    $('#conversion-cuts-note').hidden = edited || !editor.hasCuts();
-    if (issue && (plan || planBusy)) {
-      planRequest++; plan = null; planBusy = false; clearTimeout(retryTimer); retry.hidden = true;
-      $('#conversion-plan-title').textContent = issue; $('#conversion-changes').replaceChildren(); $('#conversion-warnings').replaceChildren();
+  function number(selector) { const value = $(selector).value.trim(); return value === '' ? null : Number(value); }
+  function readSettings() {
+    const settings = profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
+    settings.container = $('#processing-container').value;
+    if (hasVideo) {
+      settings.videoCodec = $('#processing-video-codec').value;
+      settings.scale.mode = $('#processing-scale').value;
+      if (settings.scale.mode === 'fit') Object.assign(settings.scale, { width: number('#processing-width'), height: number('#processing-height'), allowUpscale: !$('#processing-no-upscale').checked });
+      settings.frameRate = number('#processing-frame-rate');
+      settings.rate.mode = $('#processing-rate-mode').value;
+      if (settings.rate.mode !== 'automatic') settings.rate.preset = $('#processing-preset').value;
+      if (settings.rate.mode === 'quality') settings.rate.crf = number('#processing-crf');
+      if (settings.rate.mode === 'bitrate') Object.assign(settings.rate, { videoKbps: number('#processing-video-bitrate'), twoPass: $('#processing-two-pass').checked });
+      if (settings.rate.mode === 'size') Object.assign(settings.rate, { maximumMB: number('#processing-maximum-mb'), twoPass: true });
     }
+    if (hasAudio) settings.audio = { codec: $('#processing-audio-codec').value, bitrateKbps: number('#processing-audio-bitrate') };
+    return settings;
+  }
+  function renderSettings() {
+    const hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
+    for (const id of ['processing-video-settings', 'processing-transform-settings', 'processing-rate-settings']) $(`#${id}`).hidden = !hasVideo;
+    $('#processing-audio-settings').hidden = !hasAudio;
+    $('#processing-scale-fields').hidden = $('#processing-scale').value !== 'fit';
+    const mode = $('#processing-rate-mode').value;
+    for (const kind of ['quality', 'bitrate', 'size']) $(`#processing-${kind}-fields`).hidden = mode !== kind;
+    $('#processing-preset-field').hidden = mode === 'automatic';
+    for (const control of settingsForm.querySelectorAll('input, select')) control.disabled = Boolean(control.closest('[hidden]'));
+  }
+  function refreshDraft() {
+    if (!profile || resetting) return;
+    const authoring = editor.authoringState();
+    const changed = profile.update({ editPlan: authoring.editPlan, editorState: authoring, settings: readSettings() });
+    if (changed) invalidatePlan();
+    renderSettings(); processingControls();
+  }
+  function invalidatePlan() {
+    planVersion++; plan = null; planBusy = true; reviewQueued = true;
+    clearTimeout(reviewTimer); clearTimeout(retryTimer); retry.hidden = true;
+    $('#conversion-warnings').replaceChildren(); $('#conversion-changes').replaceChildren(); $('#processing-plan-facts').replaceChildren();
+    $('#conversion-plan-title').textContent = 'Reviewing current cuts and output settings…';
+    reviewTimer = setTimeout(reviewPlan, 300);
   }
   function reset(text = '') {
-    generation++; planRequest++;
-    closeSource(); clearTimeout(retryTimer); retryTimer = null;
+    generation++; planVersion++;
+    closeSource(); clearTimeout(reviewTimer); clearTimeout(retryTimer);
     const oldUpload = upload; upload = null; oldUpload?.abort();
-    workspaceId = null; snapshot = null; starting = false; view = null; plan = null; planBusy = false; operationRequest = false; discarding = false; selectedInput = null;
-    editor.reset(); converter.hidden = true; ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
+    workspaceId = null; snapshot = null; profile = null; starting = false; plan = null; planBusy = false; reviewQueued = false;
+    operationRequest = false; previewRequest = false; discarding = false;
+    editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = Boolean(retainedCleanupId); input.value = '';
     progress.hidden = true; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
     $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
-    target.value = 'broad-compatibility-mp4'; message(text); publish();
+    settingsForm.reset(); message(text); publish();
+  }
+  function appendFact(list, label, value) {
+    const item = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
+    term.textContent = label; description.textContent = value; item.append(term, description); list.append(item);
+  }
+  function rateDescription(rate = {}) {
+    return rate.mode === 'quality' ? `CRF ${rate.crf} · ${rate.preset} · final size varies`
+      : rate.mode === 'bitrate' ? `${rate.videoKbps} kbps average video · ${rate.preset}${rate.twoPass ? ' · two passes' : ''}`
+      : rate.mode === 'size' ? `Maximum ${rate.maximumMB} MB · ${rate.preset} · two passes` : 'Automatic / no override';
   }
   function renderFacts(data) {
     $('#local-media-name').textContent = data.source?.name || 'Local media';
@@ -84,53 +96,63 @@
       inspection.video && facts.familiarCodecName(inspection.video.codec), inspection.audio && facts.familiarCodecName(inspection.audio.codec),
       facts.formatDuration(inspection.durationSeconds)].filter(Boolean).join(' · ');
     const list = $('#conversion-facts'); list.replaceChildren();
-    for (const [label, value] of facts.inspectionFacts(data)) {
-      const item = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
-      term.textContent = label; description.textContent = value; item.append(term, description); list.append(item);
-    }
+    for (const [label, value] of facts.inspectionFacts(data)) appendFact(list, label, value);
   }
-  function conversionControls() {
-    const state = snapshot?.conversion || {};
-    const busy = Boolean(snapshot?.activeOperation || operationRequest);
-    const acknowledged = [...$('#conversion-warnings').querySelectorAll('input')].every(box => box.checked);
-    refreshInput();
-    start.disabled = planBusy || busy || !plan || !['executable', 'no-op'].includes(plan.status) || !acknowledged
-      || state.cleanupPending || snapshot?.outputCleanup?.blocked || Boolean(selectionIssue());
-    start.textContent = plan?.status === 'no-op' ? 'Use Existing File' : 'Create Converted File';
+  function processingControls() {
+    const state = snapshot?.conversion || {}, current = profile?.state();
+    const busy = Boolean(snapshot?.activeOperation || operationRequest || previewRequest || discarding);
+    const acknowledged = [...$('#conversion-warnings').querySelectorAll('input[required]')].every(box => box.checked);
+    start.disabled = !profile || busy || planBusy || Boolean(plan && !['executable', 'no-op'].includes(plan.status)) || !acknowledged
+      || state.cleanupPending || snapshot?.outputCleanup?.blocked;
+    start.textContent = 'Process File';
     cancel.hidden = !['running', 'validating', 'cancelling'].includes(state.status);
-    cancel.disabled = state.status === 'cancelling';
-    target.disabled = Boolean(snapshot?.activeOperation || operationRequest);
+    cancel.disabled = state.status === 'cancelling' || discarding;
+    $('#processing-reset').disabled = !profile || discarding;
+    const preview = $('#processing-prepare-preview');
+    preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url);
+    preview.disabled = busy; preview.textContent = previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing Preview…' : 'Prepare Preview';
+    $('#processing-preview-note').textContent = !snapshot?.inspection?.video ? 'Audio file — choose output settings, then Process File.'
+      : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings below.' : '';
     $('#conversion-cleanup').hidden = !state.cleanupPending && !snapshot?.outputCleanup?.blocked;
     $('#conversion-cleanup').disabled = busy;
     $('#output-cleanup-status').textContent = snapshot?.outputCleanup?.message || (state.cleanupPending ? 'Temporary output cleanup needs a retry.' : '');
     $('#conversion-progress').hidden = !['running', 'validating', 'cancelling'].includes(state.status);
     const bar = $('#conversion-progress-bar'); bar.classList.toggle('indeterminate', state.percent == null);
     bar.style.width = `${state.percent == null ? 36 : Math.max(0, Math.min(100, state.percent))}%`;
-    $('#conversion-status').textContent = [state.message, state.failure?.explanation, state.failure?.help,
-      state.cleanupPending ? 'Some temporary conversion files remain owned. Retry cleanup or Discard.' : null].filter(Boolean).join(' ');
+    const phases = { preparing: 'Preparing', analyzing: 'Analyzing', 'pass-1': 'Pass 1', 'pass-2': 'Pass 2', encoding: 'Encoding', validating: 'Validating', retrying: 'Fitting the size target' };
+    const phaseProgress = state.status === 'running' && Number.isFinite(state.phasePercent)
+      ? `${Math.floor(state.phasePercent)}% of this phase${Number.isFinite(state.percent) ? ` · about ${Math.floor(state.percent)}% overall` : ' · overall progress indeterminate'}` : null;
+    $('#conversion-status').textContent = [phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
+      state.cleanupPending ? 'Some temporary attempt files remain. Retry cleanup or Remove File.' : null].filter(Boolean).join(' · ');
+    const submitted = current?.submitted, newer = submitted && submitted.draftRevision !== current.draftRevision;
+    $('#processing-draft-status').textContent = current ? `Draft ${current.draftRevision}`
+      + (newer ? ` · Newer settings or cuts. The submitted work remains draft ${submitted.draftRevision}.` : '')
+      + (editor.hasPendingWork() ? ' · Pending cut selection is not applied until Remove Section.' : '') : '';
     const output = state.output;
     $('#conversion-output').hidden = !output;
     if (output) {
+      const inspection = output.inspection || {}, video = inspection.video, audio = inspection.audio;
       $('#conversion-output-name').textContent = output.filename;
-      $('#conversion-output-facts').textContent = [facts.formatBytes(output.size), facts.formatDuration(output.inspection?.durationSeconds),
-        output.inspection?.video && `${output.inspection.video.width} × ${output.inspection.video.height}`,
-        output.inspection?.audio && `${facts.familiarCodecName(output.inspection.audio.codec)} · ${output.inspection.audio.sampleRate} Hz · ${output.inspection.audio.channels} channels`].filter(Boolean).join(' · ');
-      const label = [...target.options].find(option => option.value === output.targetId)?.textContent || output.targetId;
-      const fromEdited = output.provenance?.inputRole === 'edited-output';
-      const previousEdited = fromEdited && output.provenance.inputAssetId !== snapshot?.editedOutput?.assetId;
-      $('#conversion-output-target').textContent = `${output.noOp ? (fromEdited ? 'Existing edited bytes used without conversion' : 'Existing source bytes') : (fromEdited ? 'Converted edited result' : 'Converted original source')} · ${label}`
-        + (output.provenance ? ` · ${output.provenance.inputFilename} · Input ${facts.formatDuration(output.provenance.inputDurationSeconds)}` : '')
-        + (previousEdited ? ' · From a previous edited result; this download has not changed.' : '')
-        + (target.value !== output.targetId ? ' · Previous target; this download has not changed.' : '');
+      $('#conversion-output-facts').textContent = [facts.formatBytes(output.size), facts.formatDuration(inspection.durationSeconds), inspection.format,
+        video && facts.familiarCodecName(video.codec), video && `${video.width} × ${video.height}`,
+        video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
+        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · ');
+      const revision = output.draftRevision ?? output.processingSnapshot?.draftRevision ?? output.provenance?.draftRevision;
+      $('#conversion-output-target').textContent = `${output.noOp ? 'Existing original bytes; no processing required' : 'Processed from the original source'}`
+        + (Number.isInteger(revision) ? ` · Draft ${revision}` : '')
+        + (Number.isInteger(revision) && revision !== current?.draftRevision ? ' · Previous draft; this download has not changed.' : '');
       $('#conversion-download').href = output.downloadUrl; $('#conversion-download').download = output.filename;
+      const processed = output.processingSnapshot, actualSettings = processed?.settings;
+      $('#conversion-output-settings').textContent = actualSettings ? [video && rateDescription(actualSettings.rate),
+        `Container: ${actualSettings.container === 'source' ? 'keep source' : actualSettings.container}`,
+        video && `Requested ${actualSettings.videoCodec === 'unchanged' ? 'unchanged video codec' : facts.familiarCodecName(actualSettings.videoCodec)}`,
+        video && (actualSettings.scale?.mode === 'fit' ? `Fit within ${actualSettings.scale.width} × ${actualSettings.scale.height}${actualSettings.scale.allowUpscale ? '' : ' · no upscale'}` : 'Scale unchanged'),
+        video && (actualSettings.frameRate ? `${actualSettings.frameRate} fps requested` : 'Frame rate unchanged'),
+        audio && (actualSettings.audio?.codec === 'unchanged' ? 'Audio codec unchanged' : `${facts.familiarCodecName(actualSettings.audio?.codec)} audio`),
+        actualSettings.audio?.bitrateKbps ? `${actualSettings.audio.bitrateKbps} kbps audio` : null,
+        output.effectiveVideoBitrate ? `Final video bitrate budget ${(output.effectiveVideoBitrate / 1000).toFixed(1)} kbps` : null,
+        output.attempts > 1 ? `Size fitting used ${output.attempts} attempts` : null].filter(Boolean).join(' · ') : '';
     }
-  }
-  function showView(next, focus = false) {
-    view = next;
-    editor.show(next === 'edit'); converter.hidden = next !== 'convert';
-    editButton.setAttribute('aria-pressed', String(next === 'edit')); convertButton.setAttribute('aria-pressed', String(next === 'convert'));
-    $('#conversion-cuts-note').hidden = selectedInput?.role === 'edited-output' || !editor.hasCuts();
-    if (focus) (next === 'convert' ? target : $('#editor-video')).focus({ preventScroll: true });
   }
   function accept(data) {
     if (!data || data.id !== workspaceId || discarding) return;
@@ -148,14 +170,13 @@
       $('#workspace-failure-help').textContent = [data.failure?.help, data.cleanup?.message].filter(Boolean).join(' ');
     }
     if (inspected) {
-      renderFacts(data);
-      editButton.hidden = !data.editor?.eligible;
-      convertButton.hidden = !data.inspection.video && !data.inspection.audio;
-      editButton.disabled = Boolean(data.activeOperation) && data.editor?.status !== 'ready'; convertButton.disabled = data.status !== 'ready' && !view;
-      editor.update(data); showView(view);
+      renderFacts(data); editor.update(data); editor.show(Boolean(data.editor?.eligible));
+      if (!profile) { profile = profiles.create(data); profile.update({ editorState: editor.authoringState() }); invalidatePlan(); }
+      if (data.conversion?.output) profile.acceptResult(data.conversion.output);
+      renderSettings();
     }
-    message(data.editor?.status === 'failed' ? `${data.editor.message} The original source remains available for conversion.` : data.message, data.status === 'error');
-    conversionControls();
+    message(data.status === 'error' ? data.message : '', data.status === 'error');
+    processingControls();
   }
   function connect(id, token) {
     closeSource();
@@ -169,32 +190,34 @@
   async function removeOwned(id) {
     const response = await root.fetch(`/api/workspace?workspace=${encodeURIComponent(id)}`, { method: 'DELETE', cache: 'no-store' });
     const data = await response.json();
-    if (!response.ok && response.status !== 404) throw new Error(data.error || 'Discard could not complete.');
+    if (!response.ok && response.status !== 404) throw new Error(data.error || 'Remove File could not complete.');
     return data;
   }
+  function hasTemporaryWork() { return Boolean(profile?.hasChanges() || editor.hasPendingWork() || snapshot?.activeOperation || snapshot?.playback || snapshot?.conversion?.output || snapshot?.editedOutput || upload || starting || retainedCleanupId); }
   async function discard() {
     if (discarding) return;
+    if (hasTemporaryWork() && !root.confirm('Remove this file and discard its cuts, output settings, and temporary results? Any running work will be cancelled.')) return;
     if (!workspaceId) { reset('Local copy cancelled. Cleanup of any partial copy will be attempted.'); return; }
     const id = workspaceId, token = ++generation;
-    discarding = true; planRequest++;
+    discarding = true; planVersion++; clearTimeout(reviewTimer); reviewQueued = false;
     closeSource(); editor.show(false);
-    // Release owned playback readers before asking the server to delete files.
     const video = $('#editor-video'), playback = video.getAttribute('src'), time = video.currentTime;
     video.pause(); video.removeAttribute('src'); video.load();
-    message('Discarding local workspace…');
+    message('Removing local file…'); processingControls();
     try {
       const data = await removeOwned(id);
       if (generation !== token || workspaceId !== id) return;
-      reset(`Local workspace discarded. ${data.cleanup?.message || ''}`); choose.focus();
+      retainedCleanupId = data.cleanup && data.cleanup.status !== 'complete' ? id : null;
+      reset(`Local file removed. ${data.cleanup?.message || ''}`); $('#workspace-retry-cleanup').hidden = !retainedCleanupId; choose.focus();
     } catch (error) {
       if (generation !== token || workspaceId !== id) return;
-      discarding = false; planBusy = false; operationRequest = false;
+      discarding = false; operationRequest = false;
       if (playback) { video.src = playback; video.addEventListener('loadedmetadata', () => { if (workspaceId === id) video.currentTime = time; }, { once: true }); }
-      connect(id, token); showView(view); message(error.message, true);
+      connect(id, token); editor.show(Boolean(snapshot?.editor?.eligible)); invalidatePlan(); message(error.message, true); processingControls();
     }
   }
   function beginUpload(file) {
-    if (!file || workspaceId || upload || starting) return;
+    if (!file || workspaceId || upload || starting || retainedCleanupId) return;
     if (!file.size || file.size > 100 * 1024 ** 3) return message('Choose one nonempty video or audio file up to 100 GiB.', true);
     const token = ++generation; intake.hidden = true; progress.hidden = false; choose.disabled = true;
     const xhr = new root.XMLHttpRequest(); upload = xhr; publish();
@@ -217,8 +240,8 @@
     xhr.send(file);
   }
   async function acquire(detail) {
-    if (!detail || workspaceId || upload || starting) { publish(); return; }
-    const token = ++generation; starting = true; view = 'edit'; publish(); intake.hidden = true; progress.hidden = false;
+    if (!detail || workspaceId || upload || starting || retainedCleanupId) { publish(); return; }
+    const token = ++generation; starting = true; publish(); intake.hidden = true; progress.hidden = false;
     message('Acquiring the selected source once for local use…'); panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try {
       const data = await post('/api/workspace/url', detail);
@@ -226,68 +249,133 @@
       starting = false; workspaceId = data.workspaceId; accept(data.workspace); connect(workspaceId, token);
     } catch (error) { if (generation === token) reset(error.message); }
   }
-  async function reviewPlan() {
-    refreshInput();
-    if (!workspaceId || !selectedInput || selectionIssue()) { conversionControls(); return; }
-    const token = generation, request = ++planRequest, targetId = target.value;
-    plan = null; planBusy = true; retry.hidden = true; clearTimeout(retryTimer);
-    $('#conversion-warnings').replaceChildren(); $('#conversion-changes').replaceChildren();
-    $('#conversion-plan-title').textContent = 'Checking the selected target…'; conversionControls();
-    try {
-      const data = await post('/api/conversion/plan', { ...identity(), targetId });
-      if (token !== generation || request !== planRequest || target.value !== targetId) return;
-      plan = data.plan; $('#conversion-plan-title').textContent = plan.message;
-      for (const change of plan.changes) { const item = document.createElement('li'); item.textContent = change; $('#conversion-changes').append(item); }
-      for (const warning of plan.warnings) {
-        const label = document.createElement('label'), box = document.createElement('input'), text = document.createElement('span');
-        box.type = 'checkbox'; box.value = warning.id; box.addEventListener('change', conversionControls); text.textContent = warning.message;
-        label.className = 'conversion-warning'; label.append(box, text); $('#conversion-warnings').append(label);
+  function renderOptions(options) {
+    if (!options) return;
+    $('#processing-capability-note').textContent = options.checked === false
+      ? 'Local capabilities could not be checked. Keep the original bytes, or retry the capability check to show available output choices.' : '';
+    const choices = [
+      ['#processing-video-codec', options.videoCodecs], ['#processing-container', options.containers], ['#processing-audio-codec', options.audioCodecs],
+      ['#processing-frame-rate', [{ value: '', label: 'Unchanged' }, ...(options.frameRates || []).map(value => ({ value: String(value), label: `${value} fps` }))]],
+      ['#processing-preset', (options.presets || []).map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }))]
+    ];
+    for (const [selector, entries] of choices) {
+      if (!entries?.length) continue;
+      const select = $(selector), chosen = select.value;
+      select.replaceChildren();
+      const defaultValue = selector === '#processing-container' ? 'source' : selector === '#processing-frame-rate' ? '' : selector === '#processing-preset' ? 'medium' : 'unchanged';
+      for (const entry of entries) { const option = document.createElement('option'); option.value = entry.value; option.textContent = entry.label; option.defaultSelected = entry.value === defaultValue; select.append(option); }
+      if (![...select.options].some(option => option.value === chosen)) {
+        const option = document.createElement('option'); option.value = chosen; option.textContent = `${chosen} (unavailable)`; option.disabled = true; select.append(option);
       }
-      if (plan.reason === 'capability-check') {
-        retry.hidden = false; retry.disabled = true; retry.textContent = 'Retry Capability Check (available in 30 seconds)';
-        retryTimer = setTimeout(() => { if (token === generation && request === planRequest) { retry.disabled = false; retry.textContent = 'Retry Capability Check'; } }, 30000);
-      }
-    } catch (error) { if (token === generation && request === planRequest) $('#conversion-plan-title').textContent = error.message; }
-    finally { if (token === generation && request === planRequest) { planBusy = false; conversionControls(); } }
+      select.value = chosen;
+    }
   }
-  editButton.addEventListener('click', async () => {
-    const token = generation;
-    showView('edit');
-    if (snapshot?.editor?.status === 'ready') { showView('edit', true); return; }
-    editButton.disabled = true;
-    try { const data = await post('/api/workspace/editor', { workspaceId, sourceAssetId: snapshot?.sourceAssetId }); if (token === generation) accept(data.workspace); }
-    catch (error) { if (token === generation) { message(error.message, true); editButton.disabled = false; } }
-  });
-  convertButton.addEventListener('click', () => { showView('convert', true); if (!plan && !planBusy) { if (!snapshot?.inspection.video) target.value = 'm4a-aac'; reviewPlan(); } });
-  $('#conversion-use-original').addEventListener('click', () => selectInput(false));
-  $('#conversion-use-edited').addEventListener('click', () => selectInput(true));
-  document.addEventListener('lvovd:convert-edited', () => selectInput(true));
-  document.addEventListener('lvovd:editor-plan-changed', () => { if (workspaceId) conversionControls(); });
-  target.addEventListener('change', reviewPlan); retry.addEventListener('click', reviewPlan);
-  start.addEventListener('click', async () => {
-    if (!plan || start.disabled) return;
-    const token = generation; operationRequest = true; conversionControls();
+  function renderPlan() {
+    $('#conversion-plan-title').textContent = plan.message;
+    const list = $('#processing-plan-facts'); list.replaceChildren();
+    appendFact(list, 'Source duration', facts.formatDuration(plan.inputDurationSeconds ?? snapshot.inspection.durationSeconds));
+    appendFact(list, 'Retained duration', facts.formatDuration(plan.timing?.durationSeconds));
+    const output = plan.output || {}, settings = plan.settings || profile.draft().settings;
+    appendFact(list, 'Output', [output.videoCodec && facts.familiarCodecName(output.videoCodec), output.container || output.extension].filter(Boolean).join(' · ') || 'See review');
+    if (output.width && output.height) appendFact(list, 'Dimensions', `${output.width} × ${output.height}${output.frameRate ? ` · ${output.frameRate} fps` : ''}`);
+    if (output.sampleAspectRatio && !['1:1', '1/1'].includes(output.sampleAspectRatio)) appendFact(list, 'Pixel aspect', `${output.sampleAspectRatio} · preserves display proportions`);
+    appendFact(list, 'Encoding', rateDescription(settings.rate));
+    if (plan.rateBudget?.estimatedBytes) appendFact(list, 'Estimated size', facts.formatBytes(plan.rateBudget.estimatedBytes));
+    if (plan.rateBudget?.videoBitrate != null) appendFact(list, 'Video bitrate budget', `${(plan.rateBudget.videoBitrate / 1000).toFixed(1)} kbps`);
+    if (plan.rateBudget?.audioBitsPerSecond != null) appendFact(list, 'Audio budget', `${(plan.rateBudget.audioBitsPerSecond / 1000).toFixed(1)} kbps · ${facts.formatBytes(plan.rateBudget.audioBytes)}`);
+    if (plan.rateBudget?.overheadBytes != null) appendFact(list, 'Container reserve', facts.formatBytes(plan.rateBudget.overheadBytes));
+    appendFact(list, 'Audio', output.audioCodec ? `${facts.familiarCodecName(output.audioCodec)}${settings.audio?.bitrateKbps ? ` · ${settings.audio.bitrateKbps} kbps` : ''} · ${plan.streams?.find(stream => stream.role === 'audio')?.action || 'unchanged'}` : 'No audio output');
+    $('#conversion-changes').replaceChildren(); $('#conversion-warnings').replaceChildren();
+    for (const change of plan.changes || []) { const item = document.createElement('li'); item.textContent = change; $('#conversion-changes').append(item); }
+    for (const warning of plan.warnings || []) {
+      const label = document.createElement('label'), text = document.createElement('span'); text.textContent = warning.message; label.className = 'conversion-warning';
+      if (warning.required !== false) { const box = document.createElement('input'); box.type = 'checkbox'; box.required = true; box.value = warning.id; box.addEventListener('change', processingControls); label.append(box); }
+      label.append(text); $('#conversion-warnings').append(label);
+    }
+    renderOptions(plan.options); renderSettings();
+  }
+  async function reviewPlan() {
+    clearTimeout(reviewTimer);
+    if (!workspaceId || !profile || discarding) return;
+    if (reviewInFlight) { reviewQueued = true; return; }
+    reviewQueued = false;
+    if (!settingsForm.checkValidity()) { planBusy = false; $('#conversion-plan-title').textContent = 'Enter valid values in the output settings.'; processingControls(); return; }
+    const token = generation, version = planVersion, submittedDraft = profile.draft();
+    reviewInFlight = true; planBusy = true; retry.hidden = true; clearTimeout(retryTimer); processingControls();
     try {
-      const data = await post('/api/conversion/start', { ...identity(), targetId: target.value, planKey: plan.key,
+      const data = await post('/api/processing/plan', submittedDraft);
+      if (token !== generation || version !== planVersion || submittedDraft.draftRevision !== profile?.draft().draftRevision) return;
+      plan = data.plan; renderPlan();
+      if (plan.reason === 'capability-check' || plan.options?.checked === false) {
+        retry.hidden = false; retry.disabled = true; retry.textContent = 'Retry Capability Check (available in 30 seconds)';
+        retryTimer = setTimeout(() => { if (token === generation && version === planVersion) { retry.disabled = false; retry.textContent = 'Retry Capability Check'; } }, 30000);
+      }
+    } catch (error) { if (token === generation && version === planVersion) $('#conversion-plan-title').textContent = error.message; }
+    finally {
+      reviewInFlight = false;
+      if (token === generation && version === planVersion) { planBusy = false; processingControls(); }
+      if (reviewQueued && workspaceId && !discarding) reviewTimer = setTimeout(reviewPlan, 300);
+    }
+  }
+  $('#processing-prepare-preview').addEventListener('click', async () => {
+    if (!profile || snapshot?.activeOperation || previewRequest) return;
+    const token = generation; previewRequest = true; processingControls();
+    try { const data = await post('/api/workspace/editor', { workspaceId, sourceAssetId: snapshot.sourceAssetId }); if (token === generation) accept(data.workspace); }
+    catch (error) { if (token === generation) message(error.message, true); }
+    finally { if (token === generation) { previewRequest = false; processingControls(); } }
+  });
+  settingsForm.addEventListener('submit', event => event.preventDefault());
+  settingsForm.addEventListener('change', refreshDraft); settingsForm.addEventListener('input', refreshDraft);
+  document.addEventListener('lvovd:editor-plan-changed', refreshDraft);
+  document.addEventListener('lvovd:editor-state-changed', () => { if (profile) { profile.update({ editorState: editor.authoringState() }); processingControls(); } });
+  $('#processing-reset').addEventListener('click', () => {
+    if (!profile) return;
+    if ((profile.hasChanges() || editor.hasPendingWork()) && !root.confirm('Reset this file’s cuts and output settings? The original source and any previous download will be kept.')) return;
+    resetting = true; settingsForm.reset(); editor.resetFile(); profile.reset(); resetting = false;
+    profile.update({ editorState: editor.authoringState() }); invalidatePlan(); renderSettings(); processingControls();
+  });
+  retry.addEventListener('click', reviewPlan);
+  start.addEventListener('click', async () => {
+    if (start.disabled) return;
+    if (!settingsForm.reportValidity()) return;
+    if (!plan) { await reviewPlan(); return; }
+    const token = generation, reviewed = plan, submitted = profile.submit(reviewed);
+    operationRequest = true; processingControls();
+    try {
+      const data = await post('/api/processing/start', { ...submitted,
         acknowledgedWarnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value) });
       if (token === generation) accept(data.workspace);
     } catch (error) { if (token === generation) { $('#conversion-plan-title').textContent = error.message; plan = null; } }
-    finally { if (token === generation) { operationRequest = false; conversionControls(); } }
+    finally { if (token === generation) { operationRequest = false; processingControls(); } }
   });
   for (const [button, endpoint] of [[cancel, '/api/conversion/cancel'], [$('#conversion-cleanup'), '/api/conversion/cleanup']]) {
     button.addEventListener('click', async () => {
       const token = generation; button.disabled = true;
       try { const data = await post(endpoint, { workspaceId }); if (token === generation) accept(data.workspace); }
       catch (error) { if (token === generation) $('#conversion-status').textContent = error.message; }
-      finally { if (token === generation) button.disabled = false; }
+      finally { if (token === generation) processingControls(); }
     });
   }
-  choose.addEventListener('click', () => input.click()); input.addEventListener('change', () => beginUpload(input.files?.[0]));
+  $('#workspace-retry-cleanup').addEventListener('click', async () => {
+    const button = $('#workspace-retry-cleanup'), id = retainedCleanupId; if (!id) return; button.disabled = true;
+    try { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') { retainedCleanupId = null; button.hidden = true; choose.disabled = false; publish(); } message(data.cleanup?.message || 'Temporary cleanup complete.'); }
+    catch (error) { message(error.message, true); }
+    finally { button.disabled = false; }
+  });
+  choose.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if (input.files?.length !== 1) message('Choose exactly one local video or audio file.', true); else beginUpload(input.files[0]); });
   for (const selector of ['#workspace-discard', '#workspace-cancel', '#workspace-failure-discard']) $(selector).addEventListener('click', discard);
-  for (const name of ['dragenter', 'dragover']) intake.addEventListener(name, event => { event.preventDefault(); if (!workspaceId && !upload) intake.classList.add('dragover'); });
-  intake.addEventListener('dragleave', () => intake.classList.remove('dragover'));
-  intake.addEventListener('drop', event => { event.preventDefault(); intake.classList.remove('dragover'); const files = [...(event.dataTransfer?.files || [])]; if (files.length !== 1) message('Choose one local video or audio file.', true); else beginUpload(files[0]); });
+  for (const name of ['dragenter', 'dragover']) panel.addEventListener(name, event => { event.preventDefault(); if (!workspaceId && !upload) intake.classList.add('dragover'); });
+  panel.addEventListener('dragleave', () => intake.classList.remove('dragover'));
+  panel.addEventListener('drop', event => {
+    event.preventDefault(); intake.classList.remove('dragover');
+    const files = [...(event.dataTransfer?.files || [])];
+    if (files.length !== 1) message('Choose exactly one local video or audio file. No files were added.', true);
+    else if (workspaceId || upload || starting || retainedCleanupId) message('Remove the current file before adding another. No files were added.', true);
+    else beginUpload(files[0]);
+  });
+  root.addEventListener('beforeunload', event => { if (hasTemporaryWork()) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
-  root.LVOVDLocalWorkspace = { accept };
+  root.LVOVDLocalWorkspace = { accept, profileState() { if (profile) profile.update({ editorState: editor.authoringState() }); return profile?.state() || null; } };
   publish();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

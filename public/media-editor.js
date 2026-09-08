@@ -511,23 +511,6 @@
     const zoomIn = document.querySelector('#timeline-zoom-in');
     const zoomOut = document.querySelector('#timeline-zoom-out');
     const fit = document.querySelector('#timeline-fit');
-    const createEditedFile = document.querySelector('#create-edited-file');
-    const renderNoop = document.querySelector('#editor-render-noop');
-    const renderProgress = document.querySelector('#editor-render-progress');
-    const renderProgressLabel = document.querySelector('#editor-render-progress-label');
-    const renderProgressBar = document.querySelector('#editor-render-progress-bar');
-    const cancelEditedRender = document.querySelector('#cancel-edited-render');
-    const renderFailure = document.querySelector('#editor-render-failure');
-    const renderFailureTitle = document.querySelector('#editor-render-failure-title');
-    const renderFailureExplanation = document.querySelector('#editor-render-failure-explanation');
-    const renderFailureHelp = document.querySelector('#editor-render-failure-help');
-    const editedOutput = document.querySelector('#editor-edited-output');
-    const outputFilename = document.querySelector('#editor-output-filename');
-    const outputFacts = document.querySelector('#editor-output-facts');
-    const outputStale = document.querySelector('#editor-output-stale');
-    const downloadEditedFile = document.querySelector('#download-edited-file');
-    const convertEditedFile = document.querySelector('#convert-edited-file');
-    const editedConversionReason = document.querySelector('#edited-conversion-reason');
 
     let activeWorkspaceId = null;
     let workspaceSnapshot = null;
@@ -547,77 +530,6 @@
     function setStatus(message, type = '') {
       workspaceStatus.textContent = message || '';
       workspaceStatus.className = `status${type ? ` ${type}` : ''}`;
-    }
-
-    function showRenderFailure(failure, fallback) {
-      renderFailureTitle.textContent = failure?.title || fallback || 'Edited-file creation failed';
-      renderFailureExplanation.textContent = failure?.explanation || '';
-      renderFailureHelp.textContent = failure?.help || '';
-      renderFailure.hidden = false;
-    }
-
-    function clearRenderFailure() {
-      renderFailure.hidden = true;
-      renderFailureTitle.textContent = '';
-      renderFailureExplanation.textContent = '';
-      renderFailureHelp.textContent = '';
-    }
-
-    function renderEditedOutput() {
-      const handoff = conversionState();
-      convertEditedFile.disabled = !handoff.eligible;
-      editedConversionReason.textContent = handoff.reason || '';
-      const output = workspaceSnapshot?.editedOutput;
-      if (!output) {
-        editedOutput.hidden = true;
-        downloadEditedFile.removeAttribute('href');
-        downloadEditedFile.removeAttribute('download');
-        return;
-      }
-      outputFilename.textContent = output.filename || 'Edited video.mp4';
-      outputFacts.textContent = [
-        Number.isFinite(output.inspection?.durationSeconds)
-          ? formatTimecode(output.inspection.durationSeconds)
-          : null,
-        formatBytes(output.size)
-      ].filter(Boolean).join(' · ');
-      const stale = !editPlansEqual(editPlan, output.editPlan);
-      outputStale.hidden = !stale;
-      downloadEditedFile.href = output.downloadUrl;
-      downloadEditedFile.download = output.filename || 'edited-video.mp4';
-      editedOutput.hidden = false;
-    }
-
-    function renderRenderState(data = workspaceSnapshot) {
-      const state = data?.render || { status: 'idle', percent: null, failure: null };
-      const busy = ['rendering', 'cancelling'].includes(state.status);
-      const fullDuration = isFullDurationEditPlan(editPlan, durationSeconds);
-      createEditedFile.disabled = !editPlan || fullDuration || busy || Boolean(data?.activeOperation)
-        || Boolean(data?.outputCleanup?.blocked || data?.conversion?.cleanupPending);
-      cancelEditedRender.disabled = state.status === 'cancelling';
-      renderProgress.hidden = !busy;
-      if (busy) {
-        const percent = Number.isFinite(state.percent) ? clamp(state.percent, 0, 100) : null;
-        renderProgressLabel.textContent = state.message || (state.status === 'cancelling'
-          ? 'Cancelling edited-file creation…'
-          : 'Creating edited file…');
-        renderProgressBar.classList.toggle('indeterminate', percent == null);
-        renderProgressBar.style.width = percent == null ? '36%' : `${percent}%`;
-      }
-
-      if (fullDuration) {
-        renderNoop.textContent = 'Change the retained range or remove a section before creating an edited file.';
-        renderNoop.hidden = false;
-      } else if (state.status === 'cancelled') {
-        renderNoop.textContent = state.message || 'Edited-file creation cancelled. The editor is still available.';
-        renderNoop.hidden = false;
-      } else {
-        renderNoop.hidden = true;
-      }
-
-      clearRenderFailure();
-      if (state.status === 'error') showRenderFailure(state.failure, state.message);
-      renderEditedOutput();
     }
 
     function resetEditor() {
@@ -643,15 +555,6 @@
       editPlan = null;
       pendingCut = { startSeconds: null, endSeconds: null };
       workspaceSnapshot = null;
-      renderProgress.hidden = true;
-      renderNoop.hidden = false;
-      renderNoop.textContent = 'Change the retained range or remove a section before creating an edited file.';
-      editedOutput.hidden = true;
-      createEditedFile.disabled = true;
-      cancelEditedRender.disabled = false;
-      downloadEditedFile.removeAttribute('href');
-      downloadEditedFile.removeAttribute('download');
-      clearRenderFailure();
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
       setFieldError(cutStartField, cutStartError, '');
@@ -769,6 +672,7 @@
       pendingCutError.textContent = hasBothBoundaries && !removal.valid ? removal.reason : '';
       clearPendingCutButton.disabled = !Number.isFinite(pendingCut.startSeconds)
         && !Number.isFinite(pendingCut.endSeconds);
+      document.dispatchEvent(new root.CustomEvent('lvovd:editor-state-changed'));
     }
 
     function renderTimeline({ normalizeFields = true } = {}) {
@@ -810,7 +714,6 @@
       renderTimeline({ normalizeFields });
       setFieldError(startField, startError, '');
       setFieldError(endField, endError, '');
-      renderRenderState();
       document.dispatchEvent(new root.CustomEvent('lvovd:editor-plan-changed'));
       return { valid: true, authoringState, editPlan };
     }
@@ -1039,18 +942,26 @@
     function renderWorkspace(data) {
       if (!data || data.id !== activeWorkspaceId) return;
       workspaceSnapshot = data;
-      if (data.editor?.status === 'ready' && !editPlan) initializeEditor(data);
-      if (editPlan) renderRenderState(data);
+      if (data.editor?.eligible && !editPlan) initializeEditor(data);
+      if (!editPlan) return;
+      if (data.playback?.url && video.getAttribute('src') !== data.playback.url) {
+        const playheadTime = video.currentTime;
+        video.src = data.playback.url;
+        video.addEventListener('loadedmetadata', () => {
+          if (activeWorkspaceId === data.id) video.currentTime = playheadTime;
+        }, { once: true });
+      }
+      proxyNote.textContent = data.playback?.url
+        ? (data.playback.proxy ? 'Preview uses a temporary local proxy. Processing uses your original source.' : 'Preview plays your original source directly.')
+        : 'Prepare the local preview to play and seek. Your cuts and output settings can be reviewed independently.';
+      proxyNote.classList.toggle('proxy', Boolean(data.playback?.proxy));
+      setStatus(data.editor?.status === 'failed' ? `${data.editor.message} Processing settings and authored cuts remain available.` : '');
     }
 
     function initializeEditor(data) {
       const inspection = data.inspection || {};
       durationSeconds = Number(inspection.durationSeconds);
-      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || !data.playback?.url) {
-        setStatus('The prepared editor state is incomplete.', 'error');
-        return;
-      }
-
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return;
       authoringState = fullAuthoringState(durationSeconds);
       editPlan = authoringState?.editPlan || null;
       pendingCut = { startSeconds: null, endSeconds: null };
@@ -1058,85 +969,13 @@
       for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
         handle.setAttribute('aria-valuemax', String(durationSeconds));
       }
-      mediaName.textContent = data.source?.name || 'Local video';
-      const facts = [
-        `${inspection.video.width}×${inspection.video.height}`,
-        inspection.video.codec?.toUpperCase(),
-        inspection.audio ? `Audio ${inspection.audio.codec?.toUpperCase()}` : 'No audio',
-        inspection.format,
-        formatBytes(data.source?.size)
-      ].filter(Boolean);
-      mediaFacts.textContent = facts.join(' · ');
-      proxyNote.textContent = data.playback.proxy
-        ? 'Playback uses a temporary local H.264/AAC proxy. The workspace source remains separate and unchanged.'
-        : 'This workspace source is directly compatible with browser playback; no proxy copy was needed.';
-      proxyNote.classList.toggle('proxy', Boolean(data.playback.proxy));
+      mediaName.textContent = 'Preview & cuts';
+      mediaFacts.textContent = [inspection.video && `${inspection.video.width} × ${inspection.video.height}`,
+        formatBytes(data.source?.size)].filter(Boolean).join(' · ');
       const trackCounts = inspection.trackCounts || {};
       trackWarning.hidden = !(Number(trackCounts.audio) > 1 || Number(trackCounts.subtitle) > 0);
-      video.src = data.playback.url;
       editor.hidden = false;
-      setStatus(data.source?.origin === 'url' ? 'URL media is ready in the editor.' : 'Local editor ready.', 'success');
       renderTimeline();
-      renderRenderState(data);
-    }
-
-    async function startEditedRender() {
-      if (!activeWorkspaceId || !editPlan || isFullDurationEditPlan(editPlan, durationSeconds)) return;
-      createEditedFile.disabled = true;
-      clearRenderFailure();
-      renderProgress.hidden = false;
-      renderProgressLabel.textContent = 'Starting edited-file creation…';
-      renderProgressBar.classList.add('indeterminate');
-      renderProgressBar.style.width = '36%';
-      const requestWorkspaceId = activeWorkspaceId;
-      try {
-        const response = await root.fetch('/api/workspace/render', {
-          method: 'POST',
-          cache: 'no-store',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workspaceId: activeWorkspaceId,
-            editPlan
-          })
-        });
-        let data = null;
-        try { data = await response.json(); } catch {}
-        if (!response.ok) throw Object.assign(
-          new Error(data?.error || 'Could not start edited-file creation.'),
-          { failure: data?.details }
-        );
-        if (activeWorkspaceId !== requestWorkspaceId) return;
-        root.LVOVDLocalWorkspace?.accept(data.workspace);
-      } catch (error) {
-        if (activeWorkspaceId !== requestWorkspaceId) return;
-        renderProgress.hidden = true;
-        renderRenderState();
-        showRenderFailure(error.failure, error.message);
-      }
-    }
-
-    async function cancelRender() {
-      if (!activeWorkspaceId || !['rendering', 'cancelling'].includes(workspaceSnapshot?.render?.status)) return;
-      cancelEditedRender.disabled = true;
-      renderProgressLabel.textContent = 'Cancelling edited-file creation…';
-      renderProgressBar.classList.add('indeterminate');
-      renderProgressBar.style.width = '36%';
-      const requestWorkspaceId = activeWorkspaceId;
-      try {
-        const response = await root.fetch(
-          `/api/workspace/render?workspace=${encodeURIComponent(activeWorkspaceId)}`,
-          { method: 'DELETE', cache: 'no-store' }
-        );
-        let data = null;
-        try { data = await response.json(); } catch {}
-        if (!response.ok) throw new Error(data?.error || 'Could not cancel edited-file creation.');
-        if (activeWorkspaceId !== requestWorkspaceId) return;
-        root.LVOVDLocalWorkspace?.accept(data.workspace);
-      } catch (error) {
-        if (activeWorkspaceId !== requestWorkspaceId) return;
-        cancelEditedRender.disabled = false;
-        showRenderFailure(null, error.message || 'Could not cancel edited-file creation.');
-      }
     }
 
     track.addEventListener('pointerdown', (event) => {
@@ -1273,8 +1112,6 @@
     });
     removeSection.addEventListener('click', commitPendingCut);
     clearPendingCutButton.addEventListener('click', clearPendingCut);
-    createEditedFile.addEventListener('click', startEditedRender);
-    cancelEditedRender.addEventListener('click', cancelRender);
     zoomIn.addEventListener('click', () => zoom(0.5));
     zoomOut.addEventListener('click', () => zoom(2));
     fit.addEventListener('click', () => {
@@ -1299,11 +1136,17 @@
         reason: !output ? 'Create an edited file first.' : !fresh ? 'Create an updated edited file first'
           : workspaceSnapshot?.activeOperation ? 'Wait for the current local operation to finish.' : null };
     }
-    convertEditedFile.addEventListener('click', () => {
-      if (conversionState().eligible) document.dispatchEvent(new root.CustomEvent('lvovd:convert-edited'));
-    });
     root.LVOVDEditorView = {
       conversionState,
+      authoringState() {
+        return { workspaceId: activeWorkspaceId, editPlan: editPlan ? structuredClone(editPlan) : null,
+          authoring: authoringState ? structuredClone(authoringState) : null,
+          pendingCut: { ...pendingCut }, visibleWindow: { ...visibleWindow }, playheadSeconds: video.currentTime };
+      },
+      resetFile() {
+        if (editPlan) commitAuthoringState(fullAuthoringState(durationSeconds), { clearPending: true });
+      },
+      hasPendingWork() { return Object.values(pendingCut).some(Number.isFinite); },
       update(data) {
         if (data?.id !== activeWorkspaceId) { resetEditor(); activeWorkspaceId = data?.id || null; }
         renderWorkspace(data);

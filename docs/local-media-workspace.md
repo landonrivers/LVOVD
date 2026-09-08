@@ -12,7 +12,7 @@ The workspace is not a permanent media library. It owns temporary working assets
 
 Source acquisition, editing, and conversion remain understandable as distinct jobs even when they share this lower-level workspace.
 
-The product should eventually support three clear workflows:
+The original 7B/7C product direction separated three workflows (the 7D1 revision below supersedes their separate Edit/Convert navigation):
 
 1. **Download from URL**
    - Preview and choose source/download settings as today.
@@ -152,7 +152,7 @@ Any local playback endpoint must remain confined to workspace-owned files and mu
 
 ## Relationship between Edit and Convert
 
-Roadmap #6 and #7 should share local media workspace infrastructure where that reduces duplication, but they remain separate product jobs.
+The pre-7D1 contract kept editing and conversion as separate product jobs sharing local workspace infrastructure. The distinction below still describes intent; the unified screen now applies both in one direct processing operation.
 
 **Edit** answers: "What parts of this media should remain?"
 
@@ -164,13 +164,13 @@ The eventual supported chains include:
 - Edit -> Convert -> download converted edited result;
 - Convert only -> download converted result.
 
-Conversion controls should not clutter the normal editing timeline, and editing controls should not be required when the user simply wants compatibility conversion.
+Conversion settings sit beside the editing timeline in 7D1. Editing remains optional for users who only need compatibility conversion.
 
 Roadmap #7 remains responsible for conversion capability discovery, codec/container choices, batch conversion, image compatibility work, and similar conversion-specific behavior.
 
-### Implemented Roadmap 7B/7C boundary
+### Implemented Roadmap 7B/7C history and compatible operation boundary
 
-One neutral local intake streams one source into an opaque workspace, performs protected generic inspection, and offers Edit/Convert plus expandable Media Details. The old intake routes remain thin adapters. URL acquisition still enters Edit automatically and acquires only once; the resulting original source can also be converted without another provider request.
+7B/7C introduced one neutral local intake that streams a source into an opaque workspace, performs protected generic inspection, and offered Edit/Convert plus expandable Media Details. The old intake routes remain thin adapters. URL acquisition acquires only once; the resulting original source can also be processed without another provider request. The following explicit edited-result handoff remains compatible internally; it is no longer required by the main interface.
 
 Generic source inspection is the authoritative evidence. Explicit server validation prepares Edit lazily and derives its stricter video projection. A playback failure retains a valid source for Convert. Editor preparation, authored cuts, playhead, zoom/pan, pending cut, and separate edited/converted outputs survive switching views. One browser coordinator owns intake, workspace identity, EventSource/lease, and Discard; leaving Edit pauses playback.
 
@@ -195,6 +195,32 @@ Shared output retirement checks explicit owners: latest edited result, admitted 
 Replacement revokes obsolete download/planning authorization while allowing existing readers to finish; last-reader close triggers pending retirement. File deletion failures keep a small path-owning retirement record and the existing bounded retry budget. Unresolved deletion blocks additional render/conversion admission until explicit temporary cleanup succeeds; still-referenced aliases/readers remain usable. Discard/expiry immediately invalidate all IDs, cancel processing, close readers, and transfer remaining bytes to retained directory-cleanup ownership after safe release. This is in-memory lifetime management, not persistent crash recovery.
 
 Inputs and converted outputs each have a 100 GiB cap, with active and final output enforcement. A tool size limit cannot publish a truncated success. Disk use can simultaneously include the source, playback proxy, latest edited result, a retained older no-op input/opened download, previous conversion, new attempt, and cleanup-pending files; free space is not guaranteed. ENOSPC is a local failure. These temporary operations do not create Download jobs or History entries. Later targets (including Opus/FLAC/WAV), converted-result chains, batches, and images remain deferred.
+
+## Roadmap 7D1 product revision — one workbench and direct processing
+
+Landon explicitly replaced separate Edit/Convert navigation with the supplied unified-workbench direction: file/source details and output settings on the left, the selected video's player/timeline and **Trim Video Length** tools on the right, and one prominent **Process File** action with its final download. 7D1 accepts exactly one file; extra dropped files are rejected rather than silently ignored. There are no fake batch controls. Media Details stays expandable, audio-only input needs no video editor, and the URL downloader remains first and independent.
+
+The authoritative operation is **original workspace source + canonical committed keepRanges + requested output settings → final output**. A server-built reviewed plan binds workspace/source identity, selected stream indexes, source inspection, original-coordinate cuts, normalized settings, and draft revision. It never accepts client paths or FFmpeg arguments. The plan applies cuts and encoding together; both passes of a two-pass operation read the same original with identical video cuts/transforms. No intermediate lossy edited file or playback proxy becomes output authority. Current common-clock mapping, leading silence, internal gaps, chronological frame order, source origin, and frame/sample tolerances remain in force. Video cuts can also produce M4A/MP3 directly; audio-only files retain full selected-audio conversion without adding an audio editor.
+
+Defaults are unchanged video codec/container/scale/cadence/audio and automatic rate. A complete no-op authorizes all original bytes, including their existing inventory; it does not need a working encoder. Bounded capability discovery supplies available controls. Explicit compatible container-only changes remux selected streams. Changed operations keep the established omission review. “Unchanged codec” preserves codec identity where an implemented encoder supports the requested transform; it does not promise losslessness. Cuts, scale, quality, bitrate, or size changes require encoding even for H.264 input. If that requires an unsupported video/audio encoder or muxing combination, the plan requires an explicit supported choice, without silently substituting codecs, removing audio, or downmixing.
+
+The initial video adapter is software H.264/libx264. MP4, MOV/QuickTime, and Matroska/MKV are available where inspection, policy, and installed capabilities permit; Keep source is supported for implemented containers, or unchanged existing-byte downloads. M4A/AAC and MP3 preserve their established audio conversion policy. Known HDR/alpha and unsupported transforms/channel layouts stay conservative, including the documented native AAC `5.1(side)` validation limitation.
+
+Rate modes are mutually exclusive: **Automatic** copies where the whole operation permits, otherwise discloses CRF 18/medium for required H.264 encoding; **Quality** selects bounded CRF and software speed with variable final size; **Average bitrate** uses a positive bounded video bitrate with optional two passes and a size estimate when audio evidence permits; **Maximum file size** uses decimal MB (1 MB = 1,000,000 bytes) per complete output. Size budgeting uses retained duration after cuts, encoded audio bitrate or inspected copied-audio evidence with reserve, and fixed/per-packet/variable container overhead. Missing audio budget evidence requires an explicit supported audio encoding bitrate. Nonpositive or too-small video budgets are refused; arbitrary tiny sizes carry no visual-quality promise.
+
+Maximum size uses two-pass H.264 and measures actual complete bytes before publication. At most one additional two-pass attempt may lower only the planned video bitrate, with a disclosed correction phase. If still oversized or the corrected budget is impossible, it fails and retains the previous result. No `-fs` truncation stands in for fitting a file. The independent 100 GiB output safety cap remains active; it is not a successful-output target. Resolution, channel count, and selected audio cannot change merely to fit a byte target.
+
+Scale is unchanged or an aspect-preserving fit inside bounded width/height, with no-upscale enabled by default. Resolved coded dimensions and display aspect are reviewed before processing; 390×520 inside 854×480 resolves to 360×480. Standard source orientation is applied once when encoding; even dimensions use scaling/padding without cropping source pixels. Frame rate is unchanged or explicitly reduced without changing playback duration. Spatial crop, arbitrary stretching, tone mapping, and new rotation/mirror controls are deferred.
+
+One bounded in-memory file profile holds stable workspace/source identity, source facts, reversible committed cuts, pending cut/playhead/zoom/pan, requested settings, draft revision, submitted snapshot, and latest successful result with provenance. Control changes invalidate older reviews and create a new draft; they cannot mutate admitted processing or relabel a completed result. The browser owns unsubmitted authoring state and uses no continuous server synchronization of handle movement. The server rejects older submitted revisions, conflicting same-revision intent, and changed plan/source evidence after asynchronous boundaries. There is no automatic processing when a control changes.
+
+**Prepare Preview** lazily supplies seekable playback. Preview failure does not automatically prevent valid processing from the source. **Reset File** confirms lost authored work, resets cuts/settings, and retains the original and correctly labelled previous output; **Reset Range** keeps its narrow timeline meaning. **Remove File** confirms relevant authored/running/prepared work and uses existing Discard invalidation and truthful cleanup. A conditional `beforeunload` warning is best-effort only, with no guaranteed/custom browser text and no reliance on unloading to delete server files.
+
+Processing uses the converter's existing process-wide slot and one expensive operation per workspace. Ownership covers all passes, validation, and the optional correction. Cancel stops the owned current phase, prevents later phases, and holds admission until actual termination. Unique attempt directories own partial files and pass logs; failed bounded removal retains those directories and blocks further file creation until explicit retry. Final publication validates before replacing the prior result and reuses #43 retirement/no-op/reader ownership. Discard/expiry invalidate first, cancel/close resources, and transfer remaining paths to retained cleanup ownership. Temporary storage may simultaneously contain the original, optional proxy, previous/new result, pass logs, correction attempt, and cleanup-pending data. No durable per-file database, crash recovery, Download job, or History entry is introduced.
+
+The interface reports preparation/pass/encoding/validation phases and phase progress; optional corrective work uses indeterminate overall progress rather than a fabricated estimate. Review shows source/retained durations, codecs/container, resolved dimensions, rate/size/audio treatment. Results show their actual inspected duration/geometry/codecs, completed bytes, revision/settings, and Download.
+
+7D1 is single-file unified H.264 processing with applicable audio outputs. Independent multi-file profiles/Process All (7D2), playlist intake (7D3), H.265/VP9/AV1/ProRes adapters, batch/images, hardware encoding, broader metadata/track controls, and desktop packaging remain subsequent work. Roadmap 7 remains incomplete.
 
 ## Existing Custom Range and chapters
 

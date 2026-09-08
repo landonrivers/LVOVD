@@ -279,6 +279,19 @@ test('plan keys bind workspace, input identity, role, edited plan, and inspectio
     { inspection: { ...latest.inspection, bitRate: 12345 } }]) assert.notEqual(planConversion({ ...args, ...change }).key, original.key);
 });
 
+test('unified original processing replaces an older edited no-op alias without deleting the latest edited output', async t => {
+  const { manager, workspace, render, convert } = await setup(t);
+  const first = await render(); await convert(first, 'broad-compatibility-mp4');
+  const latest = await render(B);
+  const request = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, draftRevision: 0, settings: {} };
+  const plan = await manager.processing.plan(request);
+  await manager.processing.start({ ...request, planKey: plan.key });
+  assert.equal(workspace.conversion.output.assetId, workspace.sourceAssetId);
+  assert.equal(workspace.render.outputAssetId, latest.id);
+  await assert.rejects(fsp.stat(first.filePath), { code: 'ENOENT' });
+  assert.ok(await fsp.stat(latest.filePath));
+});
+
 test('edited inspection controls codec/index/origin selection even when original source facts differ', async t => {
   const { manager, workspace, render } = await setup(t); const edited = await render();
   workspace.inspection.video = { ...workspace.inspection.video, streamIndex: 7, codec: 'hevc', width: 1920, height: 1080, hdr: true };

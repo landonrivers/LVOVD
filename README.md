@@ -114,17 +114,19 @@ http://localhost:3000
 - Preview playlists/collections and choose individual entries.
 - Optionally use yt-dlp's SponsorBlock integration to mark or remove supported segment categories.
 - Show real yt-dlp download progress, speed, ETA, and processing stages.
-- Choose or drop one video or audio file into **Local Media**, then open **Edit Video** or **Convert Media** without uploading it again. Media Details expands the source facts.
-- Convert the original source or a completed edited result to **Compatible MP4**, **M4A / AAC**, or **MP3**. Review which streams will be copied or encoded, then download the validated result. A complete match offers the existing bytes with **No conversion needed**.
+- Choose or drop one video or audio file into the unified **Local Media** workbench. Source facts and output settings sit alongside the visual timeline; Media Details remains expandable.
+- Use **Process File** to apply committed cuts and output settings directly to the original working source. H.264 controls offer quality, average bitrate, or a maximum complete output size, with aspect-preserving fit and optional frame-rate reduction. Applicable outputs include MP4, MOV, MKV, M4A/AAC, and MP3.
 - Use **Edit Source Video** after an eligible single, non-live URL Preview. URL Edit respects the selected source, Compatible/Maximum profile, resolution, and Manual source choice, then acquires that source once into temporary workspace storage.
 - Visually trim the overall Start/End, remove and restore multiple middle sections, and navigate with a zoomable/pannable timeline, draggable handles, keyboard controls, and exact time fields.
 - Create and download a real edited result while leaving the workspace source unchanged.
 
-Switching Edit/Convert preserves your cuts, playhead, zoom, selected conversion input, and prepared outputs. **Convert Edited File** beside an edited download opens the existing converter with that exact result and its duration, without downloading/uploading an intermediate file. **Use Original Source** explicitly selects the full source instead. A changed committed plan requires an updated edited file before handoff; pending cut selections do not apply themselves. Replacing an edited file does not silently select its replacement or invalidate an already-completed converted download.
+Defaults keep codec, container, picture, cadence, and audio unchanged. A complete no-op downloads the existing owned bytes. Cuts or encoding settings can require re-encoding even when the codec stays H.264; other source codecs require an explicit supported choice. Pending cuts remain pending until applied. Requested settings, cuts, playhead, and zoom stay in one temporary file profile; changing them marks an existing result as an older revision and never processes automatically.
 
-Playback preparation happens only when Edit opens. Cancel Conversion retains its input and previous outputs. A no-op conversion can keep an older edited file's exact bytes available after rerendering; those bytes retire when the converter releases them and open downloads finish. Unreferenced output deletion failures retain cleanup ownership and block additional file creation until cleanup is retried. Discard invalidates the workspace and attempts owned-file cleanup.
+**Prepare Preview** creates seekable playback only when needed; final processing always reads the original. **Reset File** resets cuts/settings while keeping that source and any correctly labelled prior result. **Remove File** invalidates the workspace and attempts owned-file cleanup. Cancellation retains the editing session and previous successful output. Open downloads and referenced no-op bytes remain owned until safe retirement; failed cleanup blocks further file creation until retry succeeds.
 
-New video encoding uses H.264, CRF 18, medium, yuv420p, and minimal padding for odd dimensions. AAC encoding uses 128/256/512 kbps for mono/stereo/supported 5.1; MP3 uses quality 0 for mono/stereo. Encoding retains 44.1/48 kHz, otherwise resamples to 48 kHz with a notice. Copying retains source parameters. Known HDR, alpha, unsupported transforms, and unsupported channel changes are refused for the affected target. Some native AAC builds cannot produce a verifiable `5.1(side)` layout; such results fail validation and are not downloadable. See the [workspace contract](docs/local-media-workspace.md) for timing, omission, and temporary-storage limits.
+Maximum size uses decimal MB (1 MB = 1,000,000 bytes) per complete output, retained duration, an audio budget, and container reserve. H.264 runs two passes directly from the original, with at most one bitrate correction; an oversized result is rejected. It never silently lowers resolution, removes audio, or downmixes to meet the limit. Temporary storage includes input, optional preview, previous/new results, pass logs, and cleanup-pending files. This is a single-file workflow; multiple-file processing and playlist intake remain deferred.
+
+Default video encoding uses H.264, CRF 18, medium, yuv420p, and minimal padding for odd dimensions; explicit quality/rate settings override those defaults. AAC defaults to 128/256/512 kbps for mono/stereo/supported 5.1; MP3 defaults to quality 0 for mono/stereo. Encoding retains 44.1/48 kHz, otherwise resamples to 48 kHz with a notice. Copying retains source parameters. Known HDR, alpha, unsupported transforms, and unsupported channel changes are refused for the affected target. Some native AAC builds cannot produce a verifiable `5.1(side)` layout; such results fail validation and are not downloadable. See the [workspace contract](docs/local-media-workspace.md) for timing, omission, and temporary-storage limits.
 
 ## Source compatibility
 
@@ -149,7 +151,7 @@ LVOVD does **not** bypass DRM, region restrictions, logins, or access controls.
 
 Video-only mode follows the same idea but produces no audio track.
 
-For **Edit Source Video**, Compatible/Maximum, the selected resolution, and any Manual source override control which source is acquired into the temporary editor workspace. They do not change the edited-output codec policy: edited results are currently H.264 MP4 with AAC when the acquired source has audio.
+For **Edit Source Video**, Compatible/Maximum, the selected resolution, and any Manual source override control which source is acquired into the temporary editor workspace. Local output settings are selected separately in the workbench and do not cause another acquisition.
 
 ### Audio
 
@@ -163,7 +165,7 @@ The editor accepts one chosen/dropped local video, or an eligible single, non-li
 
 The browser player and timeline let you set reversible outer Start/End bounds, remove and restore middle sections, seek, zoom, pan, drag handles, use exact time fields, and adjust focused handles with the keyboard. The final retained ranges stay in their original chronological order.
 
-**Create Edited File** produces a high-quality H.264 MP4 locally, with AAC when the source has audio. LVOVD re-encodes edited output to closely honor arbitrary authored cut times. This is not lossless, and it does not preserve arbitrary source codecs. The workspace source remains unchanged.
+Choose H.264, MP4, and AAC (when audio exists) with Automatic rate for the existing high-quality H.264 MP4 policy, with AAC when the source has audio. **Process File** applies the committed cuts and these settings together. LVOVD re-encodes cuts to closely honor arbitrary authored boundaries; this is not lossless and does not imply frame-perfect output. The workspace source remains unchanged. Other source codecs need an explicit supported choice when cuts require encoding; the planner never silently substitutes H.264.
 
 ### Extras, ranges, chapters, and subtitles
 

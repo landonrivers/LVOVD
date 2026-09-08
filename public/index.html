@@ -276,7 +276,7 @@
       <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
         <div class="workspace-heading">
           <h2 id="media-workspace-title" class="workflow-heading">Local Media</h2>
-          <p class="help">Edit a video or convert a video/audio file</p>
+          <p class="help">One file. Your cuts and output settings, together.</p>
         </div>
         <div id="media-drop-zone" class="media-drop-zone">
           <input id="media-file-input" type="file" hidden />
@@ -285,6 +285,7 @@
           <button id="media-choose-button" class="button secondary" type="button">Choose Media File</button>
         </div>
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+        <button id="workspace-retry-cleanup" class="text-button" type="button" hidden>Retry Removed File Cleanup</button>
         <section id="workspace-progress" class="workspace-progress" hidden>
           <div class="progress-head"><strong id="workspace-progress-label">Copying local media…</strong><button id="workspace-cancel" class="text-button" type="button">Cancel / Discard</button></div>
           <div class="progress-track" aria-hidden="true"><div id="workspace-progress-bar" class="progress-bar"></div></div>
@@ -294,24 +295,70 @@
           <button id="workspace-failure-discard" class="button secondary mini" type="button">Discard</button></div>
         </section>
         <section id="local-media-ready" hidden>
-          <div class="local-media-summary"><div><h3 id="local-media-name"></h3><p id="local-media-summary" class="help"></p></div><button id="workspace-discard" class="button secondary mini" type="button">Discard</button></div>
-          <div class="local-media-actions" aria-label="Local media operations">
-            <button id="local-open-editor" class="button secondary" type="button" aria-pressed="false">Edit Video</button>
-            <button id="local-open-converter" class="button secondary" type="button" aria-pressed="false">Convert Media</button>
-          </div>
-          <details id="local-media-details"><summary>Media Details</summary><dl id="conversion-facts" class="conversion-facts"></dl>
-            <p class="help">Temporary disk use can include the source, playback proxy, edited file, and old/new converted files together. Each source and converted file is limited to 100 GiB. Free space is not guaranteed. Discard or expiry invalidates the workspace and attempts owned-file cleanup; nothing is uploaded to cloud storage.</p>
-          </details>
-          <p id="output-cleanup-status" class="help" role="status"></p>
-          <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
-        </section>
+          <div class="local-workbench">
+            <aside class="processing-sidebar" aria-label="File and processing settings">
+              <section class="processing-file" aria-labelledby="local-file-title">
+                <p class="eyebrow" id="local-file-title">FILE</p>
+                <h3 id="local-media-name"></h3><p id="local-media-summary" class="help"></p>
+                <div class="local-media-actions">
+                  <button id="processing-reset" class="button secondary mini" type="button">Reset File</button>
+                  <button id="workspace-discard" class="text-button" type="button">Remove File</button>
+                </div>
+              </section>
+              <details id="local-media-details"><summary>Media Details</summary><dl id="conversion-facts" class="conversion-facts"></dl>
+                <p class="help">Processing stays on this computer. Temporary disk use can include the source, preview, previous result, and a new attempt together. Each source and output is limited to 100 GiB. Free space is not guaranteed. Remove File or expiry invalidates the workspace and attempts cleanup.</p>
+              </details>
+              <form id="processing-settings" aria-labelledby="processing-settings-title">
+                <h3 id="processing-settings-title">Output settings</h3>
+                <p id="processing-capability-note" class="help" role="status"></p>
+                <div id="processing-video-settings">
+                  <label class="field" for="processing-video-codec"><span>Video codec</span><select id="processing-video-codec"><option value="unchanged">Unchanged</option></select></label>
+                </div>
+                <label class="field" for="processing-container"><span>Container</span><select id="processing-container"><option value="source">Keep source</option></select></label>
+                <fieldset id="processing-transform-settings">
+                  <legend>Picture</legend>
+                  <label class="field" for="processing-scale"><span>Scale</span><select id="processing-scale"><option value="unchanged">Unchanged</option><option value="fit">Fit within width / height</option></select></label>
+                  <div id="processing-scale-fields" hidden>
+                    <div class="processing-pair">
+                      <label class="field" for="processing-width"><span>Max width</span><input id="processing-width" type="number" min="2" max="16384" step="1" value="854" /></label>
+                      <label class="field" for="processing-height"><span>Max height</span><input id="processing-height" type="number" min="2" max="16384" step="1" value="480" /></label>
+                    </div>
+                    <label class="processing-check"><input id="processing-no-upscale" type="checkbox" checked />Do not upscale</label>
+                    <p class="help">Fits inside this box and preserves aspect ratio.</p>
+                  </div>
+                  <label class="field" for="processing-frame-rate"><span>Frame rate</span><select id="processing-frame-rate"><option value="">Unchanged</option></select></label>
+                </fieldset>
+                <fieldset id="processing-rate-settings">
+                  <legend>Encoding</legend>
+                  <label class="field" for="processing-rate-mode"><span>Encoding mode</span><select id="processing-rate-mode"><option value="automatic">Automatic / no override</option><option value="quality">Quality</option><option value="bitrate">Average bitrate</option><option value="size">Maximum file size</option></select></label>
+                  <div id="processing-quality-fields" hidden>
+                    <label class="field" for="processing-crf"><span>H.264 quality (CRF)</span><input id="processing-crf" type="number" min="0" max="51" step="1" value="18" /><small>Lower values keep more detail. Final file size varies.</small></label>
+                  </div>
+                  <div id="processing-bitrate-fields" hidden>
+                    <label class="field" for="processing-video-bitrate"><span>Video bitrate (kbps)</span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="1" value="2000" /></label>
+                    <label class="processing-check"><input id="processing-two-pass" type="checkbox" />Use two passes</label>
+                  </div>
+                  <div id="processing-size-fields" hidden>
+                    <label class="field" for="processing-maximum-mb"><span>Maximum MB per output file</span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" value="10" /><small>1 MB = 1,000,000 bytes. Uses retained duration after cuts and includes the audio budget. Two passes; one bounded retry if needed.</small></label>
+                  </div>
+                  <label id="processing-preset-field" class="field" for="processing-preset" hidden><span>Encoding speed</span><select id="processing-preset"><option value="medium">Medium</option></select><small>Slower presets spend more processing time on compression.</small></label>
+                </fieldset>
+                <fieldset id="processing-audio-settings">
+                  <legend>Audio</legend>
+                  <label class="field" for="processing-audio-codec"><span>Audio codec</span><select id="processing-audio-codec"><option value="unchanged">Unchanged</option></select></label>
+                  <label class="field" for="processing-audio-bitrate"><span>Audio bitrate (kbps)</span><input id="processing-audio-bitrate" type="number" min="8" max="1536" step="1" placeholder="No override" /><small>Leave blank for unchanged audio or the codec's default. No automatic downmix.</small></label>
+                </fieldset>
+              </form>
+            </aside>
+            <div class="processing-preview">
+              <div class="preview-actions"><p id="processing-preview-note" class="help"></p><button id="processing-prepare-preview" class="button secondary mini" type="button">Prepare Preview</button></div>
         <section id="media-editor" class="media-editor" hidden>
           <div class="editor-head">
             <div>
               <h3 id="editor-media-name">Local video</h3>
               <p id="editor-media-facts" class="help"></p>
               <p id="editor-proxy-note" class="editor-proxy-note"></p>
-              <p id="editor-track-warning" class="editor-track-warning" hidden>This edited output uses the primary video/audio track. Additional audio or subtitle tracks are not included yet.</p>
+              <p id="editor-track-warning" class="editor-track-warning" hidden>Processing uses the selected video/audio tracks. Any known omissions are shown in the processing review.</p>
             </div>
 
           </div>
@@ -359,8 +406,8 @@
                 <span><i class="legend-playhead"></i>Playhead</span>
               </div>
 
-              <section class="editor-crop-panel" aria-labelledby="crop-video-title">
-                <h4 id="crop-video-title" class="editor-section-title">Crop Video Length</h4>
+              <section class="editor-trim-panel" aria-labelledby="trim-video-title">
+                <h4 id="trim-video-title" class="editor-section-title">Trim Video Length</h4>
                 <div class="editor-exact-grid">
                   <div class="editor-exact-control">
                     <label class="field" for="editor-start-time">
@@ -418,75 +465,31 @@
                 <div id="removed-sections-list" class="removed-sections-list"></div>
               </section>
 
-              <section class="editor-render-panel" aria-label="Create edited output">
-                <div class="editor-render-head">
-                  <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
-                  <p class="editor-foundation-note">Creates a high-quality H.264 MP4 locally, with AAC audio when the source has audio. LVOVD re-encodes edits to closely match arbitrary cut times. Your workspace source is unchanged.</p>
-                </div>
-
-                <p id="editor-render-noop" class="editor-render-noop">Change the retained range or remove a section before creating an edited file.</p>
-
-                <div id="editor-render-progress" class="workspace-progress editor-render-progress" aria-live="polite" hidden>
-                  <div class="progress-head">
-                    <div>
-                      <strong id="editor-render-progress-label">Creating edited file…</strong>
-                      <span>Re-encoding locally for the selected boundaries.</span>
-                    </div>
-                    <button id="cancel-edited-render" class="text-button" type="button">Cancel Render</button>
-                  </div>
-                  <div class="progress-track" aria-hidden="true"><div id="editor-render-progress-bar" class="progress-bar"></div></div>
-                </div>
-
-                <section id="editor-render-failure" class="preview-error editor-render-failure" aria-live="polite" hidden>
-                  <div>
-                    <p class="eyebrow">EDITED FILE RESULT</p>
-                    <h4 id="editor-render-failure-title">Edited-file creation failed</h4>
-                    <p id="editor-render-failure-explanation" class="error-message"></p>
-                    <p id="editor-render-failure-help" class="help"></p>
-                  </div>
-                </section>
-
-                <section id="editor-edited-output" class="editor-edited-output" aria-live="polite" hidden>
-                  <div>
-                    <p class="eyebrow">DOWNLOAD EDITED FILE</p>
-                    <h4 id="editor-output-filename">Edited video.mp4</h4>
-                    <p id="editor-output-facts" class="help"></p>
-                    <p id="editor-output-stale" class="editor-output-stale" hidden>Range changed — create the edited file again to update it. This download was created from the previous range.</p>
-                  </div>
-                  <div class="local-media-actions"><a id="download-edited-file" class="button secondary mini" href="#">Download</a>
-                    <button id="convert-edited-file" class="button secondary mini" type="button" disabled>Convert Edited File</button></div>
-                  <p id="edited-conversion-reason" class="help"></p>
-                </section>
-              </section>
             </div>
           </div>
         </section>
-        <section id="media-converter" class="media-converter" aria-labelledby="converter-title" hidden>
-          <h3 id="converter-title">Convert Media</h3>
-          <p id="conversion-input" class="help"></p>
-          <p id="conversion-input-duration" class="help"></p>
-          <div class="local-media-actions" aria-label="Conversion input">
-            <button id="conversion-use-original" class="text-button" type="button" aria-pressed="true">Use Original Source</button>
-            <button id="conversion-use-edited" class="text-button" type="button" aria-pressed="false" disabled>Use Latest Eligible Edited Result</button>
+            </div>
           </div>
-          <p id="conversion-input-status" class="help" role="status"></p>
-          <p id="conversion-cuts-note" class="help" hidden>Conversion uses the full source. Your timeline cuts are not applied.</p>
-          <label class="field" for="conversion-target"><span>Output format</span><select id="conversion-target">
-            <option value="broad-compatibility-mp4">Compatible MP4</option><option value="m4a-aac">M4A / AAC</option><option value="mp3">MP3</option>
-          </select></label>
-          <div id="conversion-plan" aria-live="polite"><h4 id="conversion-plan-title"></h4><ul id="conversion-changes"></ul></div>
-          <div id="conversion-warnings"></div>
-          <p class="help">Generated outputs include only the selected streams. Metadata preservation is not guaranteed. Re-encoding is not lossless.</p>
-          <div class="local-media-actions">
-            <button id="conversion-start" class="button" type="button" disabled>Create Converted File</button>
-            <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
-            <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Conversion</button>
-          </div>
-          <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
-          <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
-          <section id="conversion-output" class="editor-edited-output" aria-live="polite" hidden>
-            <div><h4 id="conversion-output-name"></h4><p id="conversion-output-facts" class="help"></p><p id="conversion-output-target" class="help"></p></div>
-            <a id="conversion-download" class="button secondary mini">Download</a>
+          <section id="processing-finish" class="processing-finish" aria-labelledby="processing-review-title">
+            <h3 id="processing-review-title">Ready to process</h3>
+            <p id="processing-draft-status" class="help" role="status"></p>
+            <dl id="processing-plan-facts" class="processing-plan-facts"></dl>
+            <div id="conversion-plan" aria-live="polite"><h4 id="conversion-plan-title"></h4><ul id="conversion-changes"></ul></div>
+            <div id="conversion-warnings"></div>
+            <p class="help">Cuts and output settings apply together to your original source. Re-encoding is not lossless. Metadata preservation is not guaranteed.</p>
+            <div class="local-media-actions">
+              <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process File</button>
+              <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
+              <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>
+            </div>
+            <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
+            <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
+            <p id="output-cleanup-status" class="help" role="status"></p>
+            <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
+            <section id="conversion-output" class="editor-edited-output" aria-live="polite" hidden>
+              <div><p class="eyebrow">PROCESSED FILE</p><h4 id="conversion-output-name"></h4><p id="conversion-output-facts" class="help"></p><p id="conversion-output-target" class="help"></p><p id="conversion-output-settings" class="help"></p></div>
+              <a id="conversion-download" class="button secondary">Download</a>
+            </section>
           </section>
         </section>
       </section>
@@ -527,6 +530,7 @@
   <script src="/edit-plan.js" defer></script>
   <script src="/media-editor.js" defer></script>
   <script src="/conversion-inspector.js" defer></script>
+  <script src="/processing-profile.js" defer></script>
   <script src="/local-workspace.js" defer></script>
 </body>
 </html>
