@@ -182,6 +182,63 @@ test('ordinary scale presets explain fitted dimensions and remain accessible on 
 
 test.describe('processing help access', () => {
 test.use({ hasTouch: true });
+test('zoom arrows reveal offscreen timeline and pan by mouse, keyboard and touch without changing edits', async ({ page }) => {
+  await intake(page); await cut(page); await exact(page, 'cut-start-time', '3');
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.seeking)).toBe(false);
+  const state = () => page.evaluate(() => window.LVOVDEditorView.authoringState());
+  const before = await state(), revision = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState().draftRevision);
+  const plans = []; page.on('request', request => { if (request.url().endsWith('/api/processing/plan')) plans.push(request); });
+  const left = page.locator('#timeline-pan-left'), right = page.locator('#timeline-pan-right'), tip = page.getByRole('tooltip');
+  const zoomIn = page.getByRole('button', { name: 'Zoom In', exact: true }), zoomOut = page.getByRole('button', { name: 'Zoom Out', exact: true });
+  await expect(zoomIn.locator('.timeline-zoom-glyph')).toHaveText('⊕');
+  await expect(zoomOut.locator('.timeline-zoom-glyph')).toHaveText('⊖');
+  await expect(left).toBeHidden(); await expect(right).toBeHidden();
+  await zoomIn.click(); await expect(left).toBeHidden(); await expect(right).toBeVisible();
+  expect((await state()).visibleWindow).toEqual({ startSeconds: 0, endSeconds: 2.5 });
+  await right.hover(); await expect(tip).toContainText('Drag the time ruler sideways');
+  await right.focus(); await expect(right).toHaveAttribute('aria-describedby', 'processing-help-tooltip');
+  await page.keyboard.press('Escape'); await expect(tip).toBeHidden();
+  await right.click(); await expect(left).toBeVisible(); await expect(right).toBeVisible();
+  expect((await state()).visibleWindow).toEqual({ startSeconds: 1.25, endSeconds: 3.75 });
+  await right.click(); await expect(right).toBeHidden(); await expect(left).toBeFocused();
+  expect((await state()).visibleWindow).toEqual({ startSeconds: 2.5, endSeconds: 5 });
+  await page.keyboard.press('Enter'); await expect(right).toBeVisible();
+  expect((await state()).visibleWindow).toEqual({ startSeconds: 1.25, endSeconds: 3.75 });
+  const ruler = page.locator('#timeline-ruler'); await ruler.scrollIntoViewIfNeeded();
+  const box = await ruler.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 8); await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height - 8, { steps: 5 }); await page.mouse.up();
+  const dragged = (await state()).visibleWindow;
+  expect(dragged.startSeconds).toBeLessThan(1.25); expect(dragged.endSeconds).toBeLessThan(3.75);
+  expect(dragged.endSeconds - dragged.startSeconds).toBeCloseTo(2.5, 3);
+  await page.locator('.timeline-editor').screenshot({ path: path.join(os.tmpdir(), 'lvovd-timeline-arrows.png') });
+  await zoomOut.click(); await expect(left).toBeHidden(); await expect(right).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await zoomIn.tap(); await right.tap(); await expect(left).toBeVisible();
+  expect((await state()).visibleWindow).toEqual({ startSeconds: 1.25, endSeconds: 3.75 });
+  await left.focus(); await right.focus(); await expect(tip).toBeVisible();
+  const narrowRuler = await ruler.boundingBox();
+  for (const arrow of [left, right]) {
+    const arrowBox = await arrow.boundingBox();
+    expect(arrowBox.x).toBeGreaterThanOrEqual(narrowRuler.x); expect(arrowBox.x + arrowBox.width).toBeLessThanOrEqual(narrowRuler.x + narrowRuler.width);
+  }
+  const tipBox = await tip.boundingBox(); expect(tipBox.x).toBeGreaterThanOrEqual(0); expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: path.join(os.tmpdir(), 'lvovd-timeline-arrows-narrow.png') });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Full Timeline', exact: true }).click();
+  await expect(left).toBeHidden(); await expect(right).toBeHidden();
+  expect(await state()).toEqual(before);
+  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).draftRevision).toBe(revision);
+  expect(plans).toHaveLength(0);
+  await zoomIn.click(); await right.focus(); await expect(tip).toBeVisible();
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#media-drop-zone')).toBeVisible(); await expect(tip).toBeHidden();
+  await intake(page); await expect(left).toBeHidden(); await expect(right).toBeHidden();
+});
+
+
 test('processing help supports hover, keyboard dismissal and touch without changing the draft', async ({ page }) => {
   await intake(page); await exact(page, 'cut-start-time', '1');
   const before = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());

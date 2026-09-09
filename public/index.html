@@ -410,8 +410,8 @@
                 </div>
                 <div id="editor-clock" class="editor-clock">00:00:00.000 / 00:00:00.000</div>
                 <div class="inline-actions">
-                  <button id="timeline-zoom-in" class="text-button" type="button">Zoom In</button>
-                  <button id="timeline-zoom-out" class="text-button" type="button">Zoom Out</button>
+                  <button id="timeline-zoom-in" class="text-button" type="button"><span class="timeline-zoom-glyph" aria-hidden="true">⊕</span>Zoom In</button>
+                  <button id="timeline-zoom-out" class="text-button" type="button"><span class="timeline-zoom-glyph" aria-hidden="true">⊖</span>Zoom Out</button>
                   <button id="timeline-fit" class="text-button" type="button">Full Timeline</button>
                 </div>
               </div>
@@ -420,6 +420,8 @@
 
               <div id="timeline-ruler" class="timeline-ruler" title="Drag to pan while zoomed">
                 <div id="timeline-ruler-ticks" class="timeline-ruler-ticks"></div>
+                <button id="timeline-pan-left" class="timeline-pan-arrow left" type="button" aria-label="Pan timeline left" data-processing-help="pan" data-help-action hidden><span aria-hidden="true">◀</span></button>
+                <button id="timeline-pan-right" class="timeline-pan-arrow right" type="button" aria-label="Pan timeline right" data-processing-help="pan" data-help-action hidden><span aria-hidden="true">▶</span></button>
               </div>
 
               <div id="timeline-track" class="timeline-track" role="group" tabindex="0" aria-label="Timeline seek control. Space plays or pauses; Left and Right Arrow seek five seconds." title="Click or drag to seek; use the handles to change the retained range">
