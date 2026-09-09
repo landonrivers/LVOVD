@@ -15,7 +15,6 @@
   let previewAttempted = false, previewError = null;
 
   const processingHelp = {
-    pan: ['More timeline to explore', 'Drag the time ruler sideways to pan the zoomed view, or click an arrow to move by half a window. Arrows appear only where more of the timeline is off-screen.', 'Panning changes the view, not your cuts or playback position. Use Full Timeline to see the complete source again.'],
     relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
     quality: ['H.264 quality (CRF)', 'Trial starting points: 18 for more detail, 22 for a balance, 26 for a smaller file with more visible compression. Lower numbers preserve more detail and generally use more bytes. These are starting points, not quality guarantees.', 'CRF does not specify a bitrate or file size. The application default remains 18. Choose Bitrate or File size when a predictable budget matters more.'],
     video: ['Average video bitrate', 'Rough H.264 trial ranges at 24–30 fps: 480p: 1,000–2,500 kbps; 720p: 2,500–5,000; 1080p: 5,000–10,000. Motion, fine detail, grain and higher frame rates can need more. A small portrait video can be a reasonable place to try 2,000 kbps.', 'This is an average target, not a fixed stream rate. Short or simple clips can undershoot, especially in one pass. Two passes usually improve budget accuracy; actual size can still differ.'],
@@ -59,7 +58,7 @@
     button.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') showHelp(button); });
     button.addEventListener('pointerleave', dismissHelpLater);
     button.addEventListener('focus', () => showHelp(button)); button.addEventListener('blur', dismissHelpLater);
-    button.addEventListener('click', event => { if (button.hasAttribute('data-help-action')) { closeHelp(); return; } event.preventDefault(); if (helpButton === button && helpPinned) closeHelp(); else { showHelp(button); helpPinned = true; } });
+    button.addEventListener('click', event => { event.preventDefault(); if (helpButton === button && helpPinned) closeHelp(); else { showHelp(button); helpPinned = true; } });
   }
   helpTip.addEventListener('pointerenter', () => clearTimeout(helpTimer)); helpTip.addEventListener('pointerleave', dismissHelpLater);
   document.addEventListener('pointerdown', event => { if (helpButton && !helpButton.contains(event.target) && !helpTip.contains(event.target)) closeHelp(); });

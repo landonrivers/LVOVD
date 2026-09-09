@@ -197,9 +197,10 @@ test('zoom arrows reveal offscreen timeline and pan by mouse, keyboard and touch
   await expect(left).toBeHidden(); await expect(right).toBeHidden();
   await zoomIn.click(); await expect(left).toBeHidden(); await expect(right).toBeVisible();
   expect((await state()).visibleWindow).toEqual({ startSeconds: 0, endSeconds: 2.5 });
-  await right.hover(); await expect(tip).toContainText('Drag the time ruler sideways');
-  await right.focus(); await expect(right).toHaveAttribute('aria-describedby', 'processing-help-tooltip');
-  await page.keyboard.press('Escape'); await expect(tip).toBeHidden();
+  await right.hover(); await expect(tip).toBeHidden();
+  await right.focus(); await expect(tip).toBeHidden();
+  await expect(right).not.toHaveAttribute('aria-describedby');
+  await expect(page.locator('#timeline-ruler [title], #timeline-ruler[title]')).toHaveCount(0);
   await right.click(); await expect(left).toBeVisible(); await expect(right).toBeVisible();
   expect((await state()).visibleWindow).toEqual({ startSeconds: 1.25, endSeconds: 3.75 });
   await right.click(); await expect(right).toBeHidden(); await expect(left).toBeFocused();
@@ -218,21 +219,19 @@ test('zoom arrows reveal offscreen timeline and pan by mouse, keyboard and touch
   await page.setViewportSize({ width: 390, height: 844 });
   await zoomIn.tap(); await right.tap(); await expect(left).toBeVisible();
   expect((await state()).visibleWindow).toEqual({ startSeconds: 1.25, endSeconds: 3.75 });
-  await left.focus(); await right.focus(); await expect(tip).toBeVisible();
+  await left.focus(); await expect(tip).toBeHidden(); await right.focus(); await expect(tip).toBeHidden();
   const narrowRuler = await ruler.boundingBox();
   for (const arrow of [left, right]) {
     const arrowBox = await arrow.boundingBox();
     expect(arrowBox.x).toBeGreaterThanOrEqual(narrowRuler.x); expect(arrowBox.x + arrowBox.width).toBeLessThanOrEqual(narrowRuler.x + narrowRuler.width);
   }
-  const tipBox = await tip.boundingBox(); expect(tipBox.x).toBeGreaterThanOrEqual(0); expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: path.join(os.tmpdir(), 'lvovd-timeline-arrows-narrow.png') });
-  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Full Timeline', exact: true }).click();
   await expect(left).toBeHidden(); await expect(right).toBeHidden();
   expect(await state()).toEqual(before);
   expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).draftRevision).toBe(revision);
   expect(plans).toHaveLength(0);
-  await zoomIn.click(); await right.focus(); await expect(tip).toBeVisible();
+  await zoomIn.click(); await right.focus(); await expect(tip).toBeHidden();
   page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
   await expect(page.locator('#media-drop-zone')).toBeVisible(); await expect(tip).toBeHidden();
   await intake(page); await expect(left).toBeHidden(); await expect(right).toBeHidden();
