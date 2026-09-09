@@ -171,12 +171,59 @@ test('ordinary scale presets explain fitted dimensions and remain accessible on 
   await processFile(page); const output = await downloaded(page, 'percentage.mp4');
   const actual = probe(output.file).streams.find(stream => stream.codec_type === 'video');
   expect([actual.width, actual.height]).toEqual([194, 260]);
+  await expect(page.locator('#conversion-output-settings')).toContainText('Scale 50%');
   await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-linked-controls.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#processing-filename-suffix').focus(); await expect(page.locator('#processing-filename-suffix')).toBeFocused();
   await page.keyboard.press('Tab'); await expect(page.locator('#conversion-start')).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-linked-controls-narrow.png') });
+});
+
+test.describe('processing help access', () => {
+test.use({ hasTouch: true });
+test('processing help supports hover, keyboard dismissal and touch without changing the draft', async ({ page }) => {
+  await intake(page); await exact(page, 'cut-start-time', '1');
+  const before = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+  const tip = page.getByRole('tooltip'), videoHelp = page.getByRole('button', { name: 'Help: video bitrate', exact: true });
+  await videoHelp.hover(); await expect(tip).toBeVisible(); await expect(tip).toContainText('1,000–2,500 kbps');
+  await tip.hover(); await expect(tip).toBeVisible();
+  await page.mouse.move(1, 1); await expect(tip).toBeHidden();
+  await videoHelp.focus(); await expect(tip).toBeVisible();
+  await expect(videoHelp).toHaveAttribute('aria-describedby', 'processing-help-tooltip');
+  await page.keyboard.press('Escape'); await expect(tip).toBeHidden(); await expect(videoHelp).toBeFocused();
+  await expect(page.locator('[name="processing-rate"][value="automatic"]')).toBeChecked();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const sizeHelp = page.getByRole('button', { name: 'Help: file size', exact: true });
+  await sizeHelp.tap(); await expect(tip).toContainText('ten seconds of video is about 2.5 MB');
+  const box = await tip.boundingBox(); expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(390);
+  expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(844);
+  await page.screenshot({ path: path.join(os.tmpdir(), 'lvovd-processing-help-narrow.png') });
+  await sizeHelp.tap(); await expect(tip).toBeHidden();
+  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).draftRevision).toBe(before.draftRevision);
+  await expect(page.locator('#cut-start-time')).toHaveValue('00:00:01.000');
+  await sizeHelp.tap(); await expect(tip).toBeVisible();
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#media-drop-zone')).toBeVisible(); await expect(tip).toBeHidden();
+});
+});
+
+test('bitrate review and actual download use consistent decimal MB and expose the measured video rate', async ({ page }) => {
+  const id = await intake(page); await cut(page); await page.locator('#processing-video-bitrate').fill('2000');
+  await expect(page.locator('#processing-rate-help')).toContainText('Video bitrate is in control');
+  await processFile(page); const result = await downloaded(page, 'rate-example.mp4');
+  const output = (await snapshot(id)).conversion.output;
+  expect(output.processingSnapshot.settings.rate.twoPass).toBe(false);
+  expect(output.size).toBe(result.bytes.length);
+  await expect(page.locator('#conversion-output-facts')).toContainText(`${(result.bytes.length / 1e6).toFixed(3)} MB`);
+  await expect(page.locator('#conversion-output-facts')).toContainText(`${result.bytes.length.toLocaleString()} bytes`);
+  const measured = Number(probe(result.file).streams.find(stream => stream.codec_type === 'video').bit_rate);
+  expect(measured).toBeGreaterThan(0);
+  await expect(page.locator('#conversion-output-settings')).toContainText(`Measured video ${(measured / 1000).toFixed(1)} kbps average`);
+  const budget = output.processingSnapshot.rateBudget;
+  expect(budget.estimatedBytes).toBe(Math.ceil(2000000 * 3 / 8 + budget.audioBytes + budget.overheadBytes));
+  console.log(JSON.stringify({ bitrateExample: { requestedKbps: 2000, retainedSeconds: 3, estimatedBytes: budget.estimatedBytes,
+    actualBytes: result.bytes.length, measuredVideoKbps: measured / 1000 } }));
 });
 
 test('failed automatic playback permits processing and retries only on explicit request', async ({ page }) => {

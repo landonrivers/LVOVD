@@ -14,6 +14,57 @@
   let operationRequest = false, previewRequest = false, discarding = false, resetting = false, retainedCleanupId = null;
   let previewAttempted = false, previewError = null;
 
+  const processingHelp = {
+    relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
+    quality: ['H.264 quality (CRF)', 'Trial starting points: 18 for more detail, 22 for a balance, 26 for a smaller file with more visible compression. Lower numbers preserve more detail and generally use more bytes. These are starting points, not quality guarantees.', 'CRF does not specify a bitrate or file size. The application default remains 18. Choose Bitrate or File size when a predictable budget matters more.'],
+    video: ['Average video bitrate', 'Rough H.264 trial ranges at 24–30 fps: 480p: 1,000–2,500 kbps; 720p: 2,500–5,000; 1080p: 5,000–10,000. Motion, fine detail, grain and higher frame rates can need more. A small portrait video can be a reasonable place to try 2,000 kbps.', 'This is an average target, not a fixed stream rate. Short or simple clips can undershoot, especially in one pass. Two passes usually improve budget accuracy; actual size can still differ.'],
+    audio: ['Audio bitrate', 'Mono/stereo trial examples: AAC speech at 64–96 kbps for mono; AAC music at 128–192 kbps for stereo, or 256 for more headroom. For stereo MP3, try 160–192 kbps. Listen to speech and music before choosing a lower rate.', 'Leaving this empty uses copied audio or the existing codec default. Entering a bitrate requests audio encoding. Channel count stays unchanged; the examples above are not surround-audio budgets.'],
+    size: ['Estimated size and maximum size', 'Size ≈ (video kbps + audio kbps) × retained seconds ÷ 8,000 MB, plus container overhead. At 2,000 kbps, ten seconds of video is about 2.5 MB before audio and overhead.', 'An estimate is not a promise: the encoder may undershoot and the budget reserves extra space. Editing this field sets a maximum per output, with two-pass encoding and a completed-byte check. The result may be smaller. 1 MB = 1,000,000 bytes; other apps may display binary MiB.'],
+    passes: ['Two-pass encoding', 'The first pass analyzes the retained video; the second allocates the bitrate using that analysis. It takes more processing time and usually gets closer to the requested average than one pass.', 'It does not guarantee an exact size or visual quality. File-size mode already uses two passes and validates the completed byte count.'],
+    speed: ['Software encoding speed', 'Medium is the general starting point. Fast finishes sooner; Slow spends longer looking for efficient compression. This changes encoding effort, not playback speed.', 'Keep Medium while comparing quality or bitrate so you change one thing at a time.']
+  };
+  const helpTip = document.createElement('div');
+  helpTip.id = 'processing-help-tooltip'; helpTip.className = 'processing-help-tooltip'; helpTip.setAttribute('role', 'tooltip'); helpTip.hidden = true;
+  document.body.append(helpTip);
+  let helpButton = null, helpPinned = false, helpTimer = null;
+  function closeHelp() {
+    clearTimeout(helpTimer); helpTip.hidden = true;
+    helpButton?.removeAttribute('aria-describedby'); helpButton?.setAttribute('aria-expanded', 'false'); helpButton = null; helpPinned = false;
+  }
+  function positionHelp() {
+    if (!helpButton || helpTip.hidden) return;
+    if (!helpButton.getClientRects().length) { closeHelp(); return; }
+    const rect = helpButton.getBoundingClientRect();
+    helpTip.style.left = `${Math.max(8, Math.min(rect.left, root.innerWidth - helpTip.offsetWidth - 8))}px`;
+    helpTip.style.top = `${rect.bottom + 6 + helpTip.offsetHeight <= root.innerHeight - 8 ? rect.bottom + 6 : Math.max(8, rect.top - helpTip.offsetHeight - 6)}px`;
+  }
+  function showHelp(button) {
+    clearTimeout(helpTimer);
+    if (helpButton !== button) closeHelp();
+    helpButton = button; helpTip.replaceChildren();
+    processingHelp[button.dataset.processingHelp].forEach((text, index) => {
+      const item = document.createElement(index ? 'p' : 'strong'); item.textContent = text; helpTip.append(item);
+    });
+    button.setAttribute('aria-describedby', helpTip.id); button.setAttribute('aria-expanded', 'true');
+    helpTip.hidden = false; positionHelp();
+  }
+  function dismissHelpLater() {
+    clearTimeout(helpTimer); helpTimer = setTimeout(() => {
+      if (!helpPinned && !helpButton?.matches(':hover, :focus') && !helpTip.matches(':hover')) closeHelp();
+    }, 180);
+  }
+  for (const button of panel.querySelectorAll('[data-processing-help]')) {
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') showHelp(button); });
+    button.addEventListener('pointerleave', dismissHelpLater);
+    button.addEventListener('focus', () => showHelp(button)); button.addEventListener('blur', dismissHelpLater);
+    button.addEventListener('click', event => { event.preventDefault(); if (helpButton === button && helpPinned) closeHelp(); else { showHelp(button); helpPinned = true; } });
+  }
+  helpTip.addEventListener('pointerenter', () => clearTimeout(helpTimer)); helpTip.addEventListener('pointerleave', dismissHelpLater);
+  document.addEventListener('pointerdown', event => { if (helpButton && !helpButton.contains(event.target) && !helpTip.contains(event.target)) closeHelp(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && helpButton) { event.preventDefault(); closeHelp(); } });
+  root.addEventListener('resize', positionHelp); document.addEventListener('scroll', positionHelp, true);
+
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
       active: Boolean(workspaceId || upload || starting || retainedCleanupId), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
@@ -66,7 +117,7 @@
     $('#processing-two-pass-field').hidden = !hasVideo || mode !== 'bitrate';
     $('#processing-size-policy').hidden = mode !== 'size';
     $('#processing-preset-field').hidden = !hasVideo || mode === 'automatic';
-    $('#processing-video-rate-label').textContent = mode === 'bitrate' ? 'Video bitrate (set)' : 'Video bitrate (auto)';
+    $('#processing-video-rate-label').textContent = mode === 'bitrate' ? 'Video bitrate (target)' : mode === 'size' ? 'Video bitrate (calculated)' : 'Video bitrate (auto)';
     $('#processing-size-label').textContent = mode === 'size' ? 'Maximum file size' : 'Estimated file size';
     $('#processing-video-bitrate').required = hasVideo && mode === 'bitrate';
     $('#processing-maximum-mb').required = hasVideo && mode === 'size';
@@ -75,10 +126,10 @@
     $('#processing-video-bitrate').max = mode === 'bitrate' ? '1000000' : '';
     $('#processing-maximum-mb').max = mode === 'size' ? '107374.1824' : '';
     $('#processing-rate-help').textContent = {
-      automatic: 'No rate override. Copy where the complete operation permits.',
-      quality: 'Lower CRF keeps more detail. Final file size varies.',
-      bitrate: 'Video bitrate controls the estimate below. Actual file size varies.',
-      size: 'File size controls the video budget. Audio and container space are reserved first.'
+      automatic: 'Auto: copy where possible; required H.264 encoding uses CRF 18. Size can vary.',
+      quality: 'Quality is in control. Bitrate and file size vary with the footage.',
+      bitrate: 'Video bitrate is in control. File size is an estimate, not an exact result.',
+      size: 'Maximum size is in control. Video bitrate is calculated after reserving audio and container space.'
     }[mode];
     for (const control of settingsForm.elements) control.disabled = Boolean(control.closest('[hidden]'));
     const suffix = $('#processing-filename-suffix'); suffix.disabled = !$('#processing-suffix-enabled').checked;
@@ -117,6 +168,7 @@
     reviewTimer = setTimeout(reviewPlan, 300);
   }
   function reset(text = '') {
+    closeHelp();
     generation++; planVersion++;
     closeSource(); clearTimeout(reviewTimer); clearTimeout(retryTimer);
     const oldUpload = upload; upload = null; oldUpload?.abort();
@@ -137,6 +189,7 @@
       : rate.mode === 'bitrate' ? `${rate.videoKbps} kbps average video · ${rate.preset}${rate.twoPass ? ' · two passes' : ''}`
       : rate.mode === 'size' ? `Maximum ${rate.maximumMB} MB · ${rate.preset} · two passes` : 'Automatic / no override';
   }
+  function sizeInMB(bytes) { return Number.isFinite(bytes) && bytes >= 0 ? `${(bytes / 1e6).toFixed(3)} MB` : 'Size unavailable'; }
   function renderFacts(data) {
     $('#local-media-name').textContent = data.source?.name || 'Local media';
     const files = $('#processing-file-list');
@@ -190,7 +243,7 @@
     if (output) {
       const inspection = output.inspection || {}, video = inspection.video, audio = inspection.audio;
       $('#conversion-output-name').textContent = output.filename;
-      $('#conversion-output-facts').textContent = [facts.formatBytes(output.size), facts.formatDuration(inspection.durationSeconds), inspection.format,
+      $('#conversion-output-facts').textContent = [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
         video && facts.familiarCodecName(video.codec), video && `${video.width} × ${video.height}`,
         video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
         audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · ');
@@ -203,11 +256,14 @@
       $('#conversion-output-settings').textContent = actualSettings ? [video && rateDescription(actualSettings.rate),
         `Container: ${actualSettings.container === 'source' ? 'keep source' : actualSettings.container}`,
         video && `Requested ${actualSettings.videoCodec === 'unchanged' ? 'unchanged video codec' : facts.familiarCodecName(actualSettings.videoCodec)}`,
-        video && (actualSettings.scale?.mode === 'fit' ? `Fit within ${actualSettings.scale.width} × ${actualSettings.scale.height}${actualSettings.scale.allowUpscale ? '' : ' · no upscale'}` : 'Scale unchanged'),
+        video && (actualSettings.scale?.mode === 'fit' ? `Fit within ${actualSettings.scale.width} × ${actualSettings.scale.height}${actualSettings.scale.allowUpscale ? '' : ' · no upscale'}`
+          : actualSettings.scale?.mode === 'percent' ? `Scale ${actualSettings.scale.percent}%`
+            : ['width', 'height'].includes(actualSettings.scale?.mode) ? `Fit ${actualSettings.scale.mode} ${actualSettings.scale[actualSettings.scale.mode]}` : 'Scale unchanged'),
         video && (actualSettings.frameRate ? `${actualSettings.frameRate} fps requested` : 'Frame rate unchanged'),
         audio && (actualSettings.audio?.codec === 'unchanged' ? 'Audio codec unchanged' : `${facts.familiarCodecName(actualSettings.audio?.codec)} audio`),
         actualSettings.audio?.bitrateKbps ? `${actualSettings.audio.bitrateKbps} kbps audio` : null,
         output.effectiveVideoBitrate ? `Final video bitrate budget ${(output.effectiveVideoBitrate / 1000).toFixed(1)} kbps` : null,
+        video?.bitRate > 0 ? `Measured video ${(video.bitRate / 1000).toFixed(1)} kbps average` : null,
         output.attempts > 1 ? `Size fitting used ${output.attempts} attempts` : null].filter(Boolean).join(' · ') : '';
     }
   }
@@ -341,10 +397,10 @@
     if (output.sampleAspectRatio && !['1:1', '1/1'].includes(output.sampleAspectRatio)) appendFact(list, 'Pixel aspect', `${output.sampleAspectRatio} · preserves display proportions`);
     appendFact(list, 'Encoding', rateDescription(settings.rate));
     const estimate = plan.sizeEstimate;
-    appendFact(list, 'Estimated size', estimate?.bytes != null ? `${(estimate.bytes / 1e6).toFixed(3)} MB${estimate.exact ? ' (exact original bytes)' : ' (approx.)'}` : estimate?.explanation || 'Size varies with quality and content');
+    appendFact(list, 'Estimated size', estimate?.bytes != null ? `${sizeInMB(estimate.bytes)}${estimate.exact ? ' (exact original bytes)' : ' (approx.)'}` : estimate?.explanation || 'Size varies with quality and content');
     if (plan.rateBudget?.videoBitrate != null) appendFact(list, 'Video bitrate budget', `${(plan.rateBudget.videoBitrate / 1000).toFixed(1)} kbps`);
-    if (plan.rateBudget?.audioBitsPerSecond != null) appendFact(list, 'Audio budget', `${(plan.rateBudget.audioBitsPerSecond / 1000).toFixed(1)} kbps · ${facts.formatBytes(plan.rateBudget.audioBytes)}`);
-    if (plan.rateBudget?.overheadBytes != null) appendFact(list, 'Container reserve', facts.formatBytes(plan.rateBudget.overheadBytes));
+    if (plan.rateBudget?.audioBitsPerSecond != null) appendFact(list, 'Audio budget', `${(plan.rateBudget.audioBitsPerSecond / 1000).toFixed(1)} kbps · ${sizeInMB(plan.rateBudget.audioBytes)}`);
+    if (plan.rateBudget?.overheadBytes != null) appendFact(list, 'Container reserve', sizeInMB(plan.rateBudget.overheadBytes));
     appendFact(list, 'Audio', output.audioCodec ? `${facts.familiarCodecName(output.audioCodec)}${settings.audio?.bitrateKbps ? ` · ${settings.audio.bitrateKbps} kbps` : ''} · ${plan.streams?.find(stream => stream.role === 'audio')?.action || 'unchanged'}` : 'No audio output');
     $('#conversion-changes').replaceChildren(); $('#conversion-warnings').replaceChildren();
     for (const change of plan.changes || []) { const item = document.createElement('li'); item.textContent = change; $('#conversion-changes').append(item); }

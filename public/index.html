@@ -351,8 +351,9 @@
                   <p id="processing-scale-help" class="help">Dimensions are adjusted to fit aspect ratio and encoder alignment; no cropping. See the actual dimensions below.</p>
                 </fieldset>
                 <fieldset id="processing-rate-settings">
-                  <legend>Compression <span class="help">(this file)</span></legend>
+                  <legend>Compression <span class="help">(this file)</span> <button class="processing-help-button" type="button" data-processing-help="relationship" aria-label="Help: how quality, bitrate and size relate">?</button></legend>
                   <div id="processing-rate-mode" class="processing-rate-choice" role="group" aria-label="Compression mode">
+                    <span class="help">Control:</span>
                     <label><input type="radio" name="processing-rate" value="automatic" checked />Auto</label>
                     <label><input type="radio" name="processing-rate" value="quality" />Quality</label>
                     <label><input type="radio" name="processing-rate" value="bitrate" />Bitrate</label>
@@ -360,24 +361,24 @@
                   </div>
                   <p id="processing-rate-help" class="help">No rate override. Copy where the complete operation permits.</p>
                   <div id="processing-quality-fields" hidden>
-                    <label class="field processing-value-row" for="processing-crf"><span>H.264 quality</span><input id="processing-crf" type="number" min="0" max="51" step="1" value="18" /><small>CRF</small></label>
+                    <label class="field processing-value-row" for="processing-crf"><span>H.264 quality <button class="processing-help-button" type="button" data-processing-help="quality" aria-label="Help: H.264 quality">?</button></span><input id="processing-crf" type="number" min="0" max="51" step="1" value="18" /><small>CRF</small></label>
                   </div>
                   <div id="processing-bitrate-fields">
-                    <label class="field processing-value-row" for="processing-video-bitrate"><span id="processing-video-rate-label">Video bitrate</span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="any" aria-describedby="processing-budget-help" /><small>kbps</small></label>
-                    <label id="processing-two-pass-field" class="processing-check" hidden><input id="processing-two-pass" type="checkbox" />2-pass encoding</label>
+                    <label class="field processing-value-row" for="processing-video-bitrate"><span><span id="processing-video-rate-label">Video bitrate</span> <button class="processing-help-button" type="button" data-processing-help="video" aria-label="Help: video bitrate">?</button></span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="any" aria-describedby="processing-budget-help" /><small>kbps</small></label>
+                    <label id="processing-two-pass-field" class="processing-check" hidden><input id="processing-two-pass" type="checkbox" />2-pass encoding <button class="processing-help-button" type="button" data-processing-help="passes" aria-label="Help: two-pass encoding">?</button></label>
                   </div>
                 <fieldset id="processing-audio-settings">
                   <legend class="sr-only">Audio</legend>
                   <label class="field processing-value-row" for="processing-audio-codec"><span>Audio codec</span><select id="processing-audio-codec"><option value="unchanged">Unchanged</option></select></label>
-                  <label class="field processing-value-row" for="processing-audio-bitrate"><span>Audio bitrate</span><input id="processing-audio-bitrate" type="number" min="8" max="1536" step="1" placeholder="Auto" /><small>kbps</small></label>
+                  <label class="field processing-value-row" for="processing-audio-bitrate"><span>Audio bitrate <button class="processing-help-button" type="button" data-processing-help="audio" aria-label="Help: audio bitrate">?</button></span><input id="processing-audio-bitrate" type="number" min="8" max="1536" step="1" placeholder="Auto" /><small>kbps</small></label>
                   <p id="processing-audio-rate-help" class="help">Auto keeps copied audio or uses the codec default. No automatic downmix.</p>
                 </fieldset>
                   <div id="processing-size-fields">
-                    <label class="field processing-value-row" for="processing-maximum-mb"><span id="processing-size-label">Estimated file size</span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" aria-describedby="processing-budget-help" /><small>MB</small></label>
-                    <p id="processing-budget-help" class="help">Edit video bitrate to calculate size, or file size to calculate a video budget. Audio and the duration after cuts are included. 1 MB = 1,000,000 bytes.</p>
+                    <label class="field processing-value-row" for="processing-maximum-mb"><span><span id="processing-size-label">Estimated file size</span> <button class="processing-help-button" type="button" data-processing-help="size" aria-label="Help: file size">?</button></span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" aria-describedby="processing-budget-help" /><small>MB</small></label>
+                    <p id="processing-budget-help" class="help">Editing a calculated field makes it the target; the other values update. Size includes audio and the duration after cuts. 1 MB = 1,000,000 bytes.</p>
                     <p id="processing-size-policy" class="help" hidden>Maximum per output, using two passes and at most one size correction. Actual bytes are checked before publication.</p>
                   </div>
-                  <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed</span><select id="processing-preset"><option value="medium">Medium</option></select></label>
+                  <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed <button class="processing-help-button" type="button" data-processing-help="speed" aria-label="Help: encoding speed">?</button></span><select id="processing-preset"><option value="medium">Medium</option></select></label>
                 </fieldset>
               </form>
             </aside>
