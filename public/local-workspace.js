@@ -11,8 +11,7 @@
   const settingsForm = $('#processing-settings'), start = $('#conversion-start'), retry = $('#conversion-retry'), cancel = $('#conversion-cancel');
   let generation = 0, workspaceId = null, snapshot = null, upload = null, starting = false, source = null, profile = null;
   let plan = null, planVersion = 0, planBusy = false, reviewInFlight = false, reviewQueued = false, reviewTimer = null, retryTimer = null;
-  let operationRequest = false, previewRequest = false, discarding = false, resetting = false;
-  let previewAttempted = false, previewError = null;
+  let operationRequest = false, discarding = false, resetting = false;
   const entries = new Map(), cleanupIds = new Set(), removedIds = new Set(), removedDuringUpload = new Set();
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
@@ -91,7 +90,7 @@
   function saveSelected() {
     const entry = entries.get(workspaceId); if (!entry) return;
     if (profile && editor.authoringState().workspaceId === workspaceId) profile.update({ editorState: editor.authoringState() });
-    Object.assign(entry, { snapshot, profile, plan, previewAttempted, previewError, previewRequest,
+    Object.assign(entry, { snapshot, profile, plan,
       warnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value), detailsOpen: $('#local-media-details').open, scaleChoice: $('#processing-scale').value });
   }
   function setSelectValue(selector, value) {
@@ -135,10 +134,9 @@
   }
   function selectEntry(id) {
     const entry = entries.get(id); if (!entry) return;
-    if (id === workspaceId) { if (!previewAttempted) preparePreview(); return; }
+    if (id === workspaceId) { if (!entry.previewAttempted) preparePreview(); return; }
     saveSelected(); closeHelp(); generation++; planVersion++; clearTimeout(reviewTimer); clearTimeout(retryTimer);
     workspaceId = id; snapshot = entry.snapshot; profile = entry.profile; plan = entry.plan;
-    previewAttempted = Boolean(entry.previewAttempted); previewError = entry.previewError || null; previewRequest = Boolean(entry.previewRequest);
     operationRequest = false; discarding = false; planBusy = false; reviewQueued = false;
     resetting = true;
     if (profile) {
@@ -290,7 +288,7 @@
     generation++; planVersion++;
     clearTimeout(reviewTimer); clearTimeout(retryTimer);
     workspaceId = null; snapshot = null; profile = null; starting = false; plan = null; planBusy = false; reviewQueued = false;
-    operationRequest = false; previewRequest = false; previewAttempted = false; previewError = null; discarding = false;
+    operationRequest = false; discarding = false;
     $('#processing-file-list').replaceChildren();
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = !upload; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
@@ -318,6 +316,7 @@
     for (const [label, value] of facts.inspectionFacts(data)) appendFact(list, label, value);
   }
   function processingControls() {
+    const { previewRequest = false, previewError = null } = entries.get(workspaceId) || {};
     const state = snapshot?.conversion || {}, current = profile?.state();
     const busy = Boolean(snapshot?.activeOperation || operationRequest || previewRequest || discarding || jobActive());
     const acknowledged = [...$('#conversion-warnings').querySelectorAll('input[required]')].every(box => box.checked);
@@ -389,7 +388,7 @@
   function accept(data) {
     if (!data || data.id !== workspaceId || discarding) return;
     snapshot = data; const entry = entries.get(workspaceId); if (entry) entry.snapshot = data; publish();
-    if (data.playback?.url) previewError = null;
+    if (data.playback?.url && entry) { entry.previewRequest = false; entry.previewError = null; }
     const inspected = Boolean(data.inspection && data.sourceAssetId);
     ready.hidden = !entries.size; intake.hidden = true; choose.disabled = false;
     settingsForm.hidden = !inspected; $('#local-media-details').hidden = !inspected; $('#processing-apply-settings').hidden = !inspected;
@@ -416,7 +415,7 @@
     message(data.status === 'error' ? data.message : '', data.status === 'error');
     processingControls();
     if (inspected && data.status === 'ready' && data.editor?.eligible && !data.playback?.url
-      && !data.activeOperation && !jobActive() && !processingElsewhere() && !previewAttempted) preparePreview();
+      && !data.activeOperation && !jobActive() && !processingElsewhere() && !entry?.previewAttempted) preparePreview();
   }
   function connect() {
     closeSource();
@@ -607,19 +606,26 @@
     }
   }
   async function preparePreview() {
-    if (!profile || !snapshot?.editor?.eligible || snapshot?.playback?.url || snapshot?.activeOperation || jobActive() || processingElsewhere() || previewRequest || discarding) return;
-    const id = workspaceId, entry = entries.get(id), token = generation;
-    previewRequest = true; previewAttempted = true; previewError = null;
-    Object.assign(entry, { previewRequest: true, previewAttempted: true, previewError: null }); processingControls();
+    const id = workspaceId, entry = entries.get(id);
+    if (!profile || !entry || !snapshot?.editor?.eligible || snapshot?.playback?.url || snapshot?.activeOperation || jobActive() || processingElsewhere() || entry.previewRequest || discarding) return;
+    const sourceAssetId = snapshot.sourceAssetId, request = {};
+    Object.assign(entry, { previewRequest: true, previewAttempted: true, previewError: null, previewToken: request });
+    const ownsRequest = () => entries.get(id) === entry && !removedIds.has(id)
+      && entry.previewToken === request && entry.snapshot.sourceAssetId === sourceAssetId;
+    processingControls();
     try {
-      const data = await post('/api/workspace/editor', { workspaceId: id, sourceAssetId: snapshot.sourceAssetId });
-      if (entries.get(id) === entry && !removedIds.has(id)) {
+      const data = await post('/api/workspace/editor', { workspaceId: id, sourceAssetId });
+      if (ownsRequest()) {
         entry.snapshot = { ...entry.snapshot, playback: data.workspace.playback, editor: data.workspace.editor };
-        if (token === generation) accept(entry.snapshot);
+        if (workspaceId === id) accept(entry.snapshot);
       }
     } catch (error) {
-      if (entries.get(id) === entry && !entry.snapshot.playback?.url) { entry.previewError = error.message; if (token === generation) previewError = error.message; }
-    } finally { entry.previewRequest = false; if (token === generation) { previewRequest = false; processingControls(); } }
+      if (ownsRequest() && !entry.snapshot.playback?.url) entry.previewError = error.message;
+    } finally {
+      // Selection can move A -> B -> A while the request is pending. Settlement
+      // belongs to the live entry/request; controls read that entry directly.
+      if (ownsRequest()) { entry.previewRequest = false; if (workspaceId === id) processingControls(); }
+    }
   }
   $('#processing-prepare-preview').addEventListener('click', preparePreview);
   $('#processing-file-list').addEventListener('change', event => selectEntry(event.target.value));

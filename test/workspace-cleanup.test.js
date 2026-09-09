@@ -43,6 +43,39 @@ async function waitFor(predicate) {
   }
 }
 
+for (const boundary of ['exposure', 'source rename']) {
+  test(`Discard during intake ${boundary} cannot inspect or publish the cancelled source`, async t => {
+    const { manager } = await fixture(t);
+    let release, entered, workspace, discarded, inspections = 0;
+    const gate = new Promise(resolve => { release = resolve; });
+    const renaming = new Promise(resolve => { entered = resolve; });
+    const originalFs = manager.fs;
+    manager.inspectAsset = async () => { inspections++; return inspection; };
+    manager.fs = { ...originalFs, rename: async (...args) => {
+      entered(); await gate; return originalFs.rename(...args);
+    } };
+    t.after(() => release());
+    const receiving = manager.receiveLocalStream(Readable.from('small complete input'), {
+      displayName: 'cancelled.mp4', purpose: 'local', onWorkspace: current => {
+        workspace = current;
+        assert.ok(current.activePromise); assert.equal(current.activePromise, current.receivingPromise);
+        if (boundary === 'exposure') discarded = manager.discard(current.id);
+      }
+    });
+    const rejected = assert.rejects(receiving, { code: WORKSPACE_CANCELLED_CODE });
+    if (boundary === 'source rename') {
+      await renaming;
+      discarded = manager.discard(workspace.id);
+      assert.equal(manager.get(workspace.id), null);
+      assert.equal(manager.cleanupStatus(workspace).status, 'pending');
+    }
+    release(); await rejected; await discarded;
+    assert.equal(manager.get(workspace.id), null); assert.equal(inspections, 0);
+    assert.equal(workspace.sourceAssetId, null); assert.equal(workspace.assets.size, 0);
+    assert.equal(manager.cleanupStatus(workspace).status, 'complete');
+  });
+}
+
 test('Discard invalidates immediately, retains pending ownership, and retries a transient deletion once it clears', async t => {
   const { manager, workspace } = await fixture(t);
   const directory = workspace.tempDir;

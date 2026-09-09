@@ -7,6 +7,9 @@ process.env.PORT = String(45000 + process.pid % 10000);
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
+const path = require('node:path');
 const { mediaWorkspaces } = require('../app-server');
 const { server } = require('../server');
 const { normalizeMediaInspection } = require('../media-inspection');
@@ -64,22 +67,180 @@ async function until(predicate) {
   const deadline = Date.now() + 3000;
   while (!predicate()) { assert.ok(Date.now() < deadline, 'owned queue settles within the test bound'); await new Promise(resolve => setTimeout(resolve, 5)); }
 }
+function deferred() {
+  let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve };
+}
 function progress(id) {
   return new Promise((resolve, reject) => {
     const req = http.get({ hostname: '127.0.0.1', port, path: `/api/processing/queue/progress?collection=${id}`,
       headers: { Origin: `http://127.0.0.1:${port}`, 'Sec-Fetch-Site': 'same-origin' } }, res => {
-      assert.equal(res.statusCode, 200); let text = '', completed = false;
-      const connection = { req, res, closed: false, stop() { req.destroy(); } };
+      assert.equal(res.statusCode, 200); let buffer = '';
+      const waiting = new Set();
+      const connection = { req, res, closed: false, snapshots: [], stop() { req.destroy(); },
+        waitFor(predicate) {
+          const found = this.snapshots.find(predicate); if (found) return Promise.resolve(found);
+          return new Promise(done => waiting.add({ predicate, done }));
+        } };
       res.on('close', () => { connection.closed = true; });
       res.on('data', chunk => {
-        text += String(chunk);
-        if (!completed && text.includes('\n\n')) {
-          completed = true; connection.data = JSON.parse(text.split('\n\n')[0].replace(/^data: /, '')); resolve(connection);
+        buffer += String(chunk); let boundary;
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          const event = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
+          if (!event.startsWith('data: ')) continue;
+          const data = JSON.parse(event.slice(6)); connection.snapshots.push(data);
+          if (!connection.data) { connection.data = data; resolve(connection); }
+          for (const waiter of waiting) if (waiter.predicate(data)) { waiting.delete(waiter); waiter.done(data); }
         }
       });
     }); req.once('error', reject);
   });
 }
+
+for (const deletionFails of [false, true]) {
+  test(`DELETE owns an open HTTP upload through writer close and ${deletionFails ? 'retained failed cleanup' : 'physical cleanup'}`, { timeout: 10000 }, async t => {
+    const list = await collection(), otherBytes = Buffer.from('other complete source');
+    const other = await upload(list.id, 'other.mp4', otherBytes);
+    await post('/api/processing/queue', { collectionId: list.id, entries: [await reviewed(other)] });
+    await until(() => other.conversion.status === 'ready');
+    const feed = await progress(list.id);
+    const firstWrite = deferred(), destroyStarted = deferred(), closeGate = deferred(), intakeSettled = deferred();
+    const originalWriter = mediaWorkspaces.createWriteStream, originalFs = mediaWorkspaces.fs;
+    const originalReceive = mediaWorkspaces.receiveLocalStream, inspect = mediaWorkspaces.inspectAsset;
+    let writer, incoming, uploadRequest, directory, receivedId, ownershipAtExposure, destroyCount = 0, cleanupAttempts = 0;
+    const inspected = [], cleanupClosed = [];
+    t.after(async () => {
+      closeGate.resolve(); uploadRequest?.destroy(); feed.stop();
+      mediaWorkspaces.createWriteStream = originalWriter; mediaWorkspaces.fs = originalFs;
+      mediaWorkspaces.receiveLocalStream = originalReceive; mediaWorkspaces.inspectAsset = inspect;
+      if (incoming) await intakeSettled.promise;
+      if (receivedId) { await mediaWorkspaces.discard(receivedId); await mediaWorkspaces.retryCleanup(receivedId); }
+    });
+    mediaWorkspaces.inspectAsset = async (...args) => { inspected.push(args[0].id); return inspect(...args); };
+    mediaWorkspaces.createWriteStream = (...args) => {
+      writer = fs.createWriteStream(...args); directory = path.dirname(args[0]);
+      const destroy = writer._destroy;
+      for (const name of ['_write', '_writev']) {
+        const write = writer[name];
+        writer[name] = function (...args) {
+          const callback = args.pop();
+          write.call(this, ...args, error => { callback(error); firstWrite.resolve(); });
+        };
+      }
+      writer._destroy = function (error, callback) {
+        destroyCount++; destroyStarted.resolve();
+        closeGate.promise.then(() => destroy.call(this, error, callback));
+      };
+      return writer;
+    };
+    mediaWorkspaces.receiveLocalStream = async function (readable, options) {
+      incoming = readable;
+      try { return await originalReceive.call(this, readable, { ...options, onWorkspace: workspace => {
+        ownershipAtExposure = workspace.activePromise === workspace.receivingPromise && Boolean(workspace.receivingPromise);
+        options.onWorkspace(workspace);
+      } }); }
+      finally { intakeSettled.resolve(); }
+    };
+    mediaWorkspaces.fs = { ...originalFs, rm: async (...args) => {
+      if (args[0] === directory) {
+        cleanupAttempts++; cleanupClosed.push(writer.closed);
+        if (deletionFails) throw Object.assign(new Error('Synthetic permission denial'), { code: 'EACCES' });
+      }
+      return originalFs.rm(...args);
+    } };
+    uploadRequest = http.request({ hostname: '127.0.0.1', port, path: '/api/media/local', method: 'POST', headers: {
+      Origin: `http://127.0.0.1:${port}`, 'Sec-Fetch-Site': 'same-origin',
+      'Content-Length': 32, 'X-LVOVD-Collection': list.id, 'X-LVOVD-Filename': 'partial.mp4'
+    } }, res => res.resume());
+    uploadRequest.on('error', () => {});
+    uploadRequest.write(Buffer.alloc(8)); // Keep the client open; DELETE must stop it.
+    await firstWrite.promise;
+    const exposed = await feed.waitFor(data => data.workspaces.some(item => item.source.name === 'partial.mp4'));
+    receivedId = exposed.workspaces.find(item => item.source.name === 'partial.mp4').id;
+    const workspace = mediaWorkspaces.get(receivedId);
+    assert.equal(ownershipAtExposure, true, 'receiving resource ownership exists before the entry is exposed');
+    assert.equal(writer.bytesWritten, 8);
+    const deleting = request(`/api/workspace?workspace=${receivedId}`, { method: 'DELETE' });
+    await destroyStarted.promise;
+    const repeated = request(`/api/workspace?workspace=${receivedId}`, { method: 'DELETE' });
+    assert.equal(mediaWorkspaces.get(receivedId), null);
+    await feed.waitFor(data => data.revision > exposed.revision && !data.workspaces.some(item => item.id === receivedId));
+    assert.equal((await request(`/api/workspace?workspace=${receivedId}`)).status, 404);
+    assert.equal(writer.closed, false, 'the deterministic close gate still owns the actual file handle');
+    assert.equal(incoming.destroyed, true, 'server cancellation closes intake without a browser abort');
+    assert.equal(mediaWorkspaces.cleanupStatus(workspace).status, 'pending');
+    mediaWorkspaces.localProcessing.reap();
+    assert.equal(mediaWorkspaces.localProcessing.snapshot(list.id).sourceBytesReserved, otherBytes.length + 32);
+    assert.equal(cleanupAttempts, 0);
+    uploadRequest.write(Buffer.alloc(8)); // Client may buffer it; the destroyed server pipeline must not consume it.
+    assert.equal(writer.bytesWritten, 8, 'further client bytes cannot reach the removed writer');
+    closeGate.resolve();
+    const [removed, duplicate] = await Promise.all([deleting, repeated]); await intakeSettled.promise;
+    assert.equal(removed.status, 200); assert.equal(duplicate.status, 200);
+    assert.equal(removed.data.cleanup.status, deletionFails ? 'failed' : 'complete');
+    assert.equal(writer.closed, true); assert.equal(destroyCount, 1);
+    assert.equal(writer.bytesWritten, 8); assert.equal(workspace.bytesReceived, 8);
+    assert.ok(cleanupClosed.length > 0 && cleanupClosed.every(Boolean));
+    assert.deepEqual(inspected, []); assert.equal(workspace.sourceAssetId, null); assert.equal(workspace.inspection, null);
+    await feed.waitFor(data => data.revision > exposed.revision && data.uploads === 0);
+    mediaWorkspaces.localProcessing.reap();
+    assert.equal(mediaWorkspaces.localProcessing.snapshot(list.id).sourceBytesReserved, otherBytes.length + (deletionFails ? 32 : 0));
+    if (deletionFails) {
+      assert.equal(mediaWorkspaces.cleanupPending.get(receivedId).directory, directory);
+      assert.ok((await fsp.stat(directory)).isDirectory());
+      mediaWorkspaces.fs = originalFs;
+      assert.equal((await request(`/api/workspace?workspace=${receivedId}`, { method: 'DELETE' })).data.cleanup.status, 'complete');
+      mediaWorkspaces.localProcessing.reap();
+    }
+    assert.equal(mediaWorkspaces.localProcessing.snapshot(list.id).sourceBytesReserved, otherBytes.length);
+    await assert.rejects(fsp.stat(directory), { code: 'ENOENT' });
+    const output = mediaWorkspaces.publicWorkspace(other).conversion.output;
+    assert.deepEqual((await request(output.downloadUrl)).bytes, otherBytes);
+    mediaWorkspaces.createWriteStream = originalWriter; mediaWorkspaces.receiveLocalStream = originalReceive;
+    const next = await upload(list.id, 'next.mp4'); assert.equal(next.status, 'ready');
+  });
+}
+
+test('a client-disconnected HTTP upload closes its writer before releasing cleanup and reservations', { timeout: 10000 }, async t => {
+  const list = await collection(), feed = await progress(list.id), written = deferred(), settled = deferred();
+  const originalWriter = mediaWorkspaces.createWriteStream, originalFs = mediaWorkspaces.fs;
+  const originalReceive = mediaWorkspaces.receiveLocalStream, originalInspect = mediaWorkspaces.inspectAsset;
+  let writer, directory, client, inspections = 0;
+  const closedAtCleanup = [];
+  t.after(async () => {
+    client?.destroy(); feed.stop();
+    if (writer) await settled.promise;
+    mediaWorkspaces.createWriteStream = originalWriter; mediaWorkspaces.fs = originalFs;
+    mediaWorkspaces.receiveLocalStream = originalReceive; mediaWorkspaces.inspectAsset = originalInspect;
+  });
+  mediaWorkspaces.inspectAsset = async (...args) => { inspections++; return originalInspect(...args); };
+  mediaWorkspaces.createWriteStream = (...args) => {
+    writer = fs.createWriteStream(...args); directory = path.dirname(args[0]);
+    for (const name of ['_write', '_writev']) {
+      const write = writer[name]; writer[name] = function (...args) {
+        const callback = args.pop(); write.call(this, ...args, error => { callback(error); written.resolve(); });
+      };
+    }
+    return writer;
+  };
+  mediaWorkspaces.receiveLocalStream = async function (...args) {
+    try { return await originalReceive.apply(this, args); } finally { settled.resolve(); }
+  };
+  mediaWorkspaces.fs = { ...originalFs, rm: async (...args) => {
+    if (args[0] === directory) closedAtCleanup.push(writer.closed);
+    return originalFs.rm(...args);
+  } };
+  client = http.request({ hostname: '127.0.0.1', port, path: '/api/media/local', method: 'POST', headers: {
+    Origin: `http://127.0.0.1:${port}`, 'Content-Length': 32, 'X-LVOVD-Collection': list.id, 'X-LVOVD-Filename': 'disconnect.mp4'
+  } }, res => res.resume());
+  client.on('error', () => {}); client.write(Buffer.alloc(8)); await written.promise;
+  const exposed = await feed.waitFor(data => data.workspaces.length === 1), id = exposed.workspaces[0].id;
+  client.destroy(); await settled.promise;
+  await feed.waitFor(data => data.revision > exposed.revision && data.uploads === 0);
+  assert.equal(mediaWorkspaces.get(id), null); assert.equal(writer.closed, true); assert.equal(writer.bytesWritten, 8);
+  assert.deepEqual(closedAtCleanup, [true]); assert.equal(inspections, 0);
+  assert.equal(mediaWorkspaces.localProcessing.snapshot(list.id).sourceBytesReserved, 0);
+  await assert.rejects(fsp.stat(directory), { code: 'ENOENT' });
+});
 
 test('collection API submits two exact reviewed originals and serves independent byte-identical downloads', async () => {
   const list = await collection(), aBytes = Buffer.from('first source'), bBytes = Buffer.from('second source');

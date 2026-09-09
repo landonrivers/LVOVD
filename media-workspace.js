@@ -537,6 +537,7 @@ class MediaWorkspaceManager {
       cancelRequested: false,
       activeOperation: urlOrigin ? 'acquiring' : 'receiving',
       activePromise: null,
+      receivingPromise: null,
       render: {
         status: 'idle',
         percent: null,
@@ -813,10 +814,32 @@ class MediaWorkspaceManager {
       }
     });
 
+    // Install ownership before the collection can expose this receiving entry.
+    // This promise owns copying/rename only: it never waits for Discard cleanup,
+    // which in turn must await this promise before deleting or releasing bytes.
+    const receiving = Promise.resolve().then(async () => {
+      let output, closed;
+      try {
+        output = this.createWriteStream(partialPath, { flags: 'wx' });
+        closed = output.closed ? Promise.resolve() : new Promise(resolve => output.once('close', resolve));
+        await pipeline(readable, counter, output, { signal: workspace.abortController.signal });
+        if (workspace.cancelRequested || workspace.abortController.signal.aborted) throw workspaceCancelledError();
+        await this.fs.rename(partialPath, sourcePath);
+      } finally {
+        // A pipeline rejection is not itself proof that an asynchronous file
+        // close has finished. Keep ownership until the actual writer closes.
+        if (output) { if (!output.closed) output.destroy(); await closed; }
+        else { readable.destroy(); counter.destroy(); }
+      }
+    });
+    workspace.receivingPromise = receiving;
+    workspace.activePromise = receiving;
+    receiving.finally(() => { workspace.receivingPromise = null; }).catch(() => {});
+
     try {
       if (onWorkspace) onWorkspace(workspace);
-      await pipeline(readable, counter, this.createWriteStream(partialPath, { flags: 'wx' }));
-      if (workspace.cancelRequested) throw workspaceCancelledError();
+      await receiving;
+      if (workspace.cancelRequested || workspace.abortController.signal.aborted || !this.workspaces.has(workspace.id)) throw workspaceCancelledError();
       if (!received) {
         throw workspaceUserError(
           'The selected local file is empty.',
@@ -831,7 +854,6 @@ class MediaWorkspaceManager {
           400
         );
       }
-      await this.fs.rename(partialPath, sourcePath);
       const sourceAsset = this.registerAsset(workspace, {
         role: 'source',
         filePath: sourcePath,
@@ -856,9 +878,11 @@ class MediaWorkspaceManager {
       workspace.activePromise.catch(() => {});
       return workspace;
     } catch (error) {
-      await this.removeWorkspaceFiles(workspace);
-      this.workspaces.delete(workspace.id);
-      if (readable.aborted || isWorkspaceCancellation(error)) {
+      const cancelled = workspace.cancelRequested || workspace.abortController.signal.aborted || readable.aborted || isWorkspaceCancellation(error);
+      // Intake failures use the same invalidation/resource/cleanup owner as a
+      // concurrent DELETE. Its wait covers receiving, not this caller's catch.
+      await this.discard(workspace.id);
+      if (cancelled) {
         throw Object.assign(workspaceCancelledError(), { cleanup: this.cleanupStatus(workspace) });
       }
       error.cleanup = this.cleanupStatus(workspace);
@@ -1485,6 +1509,9 @@ class MediaWorkspaceManager {
   }
 
   cleanupStatus(workspaceOrId) {
+    if (workspaceOrId?.receivingPromise || (typeof workspaceOrId === 'string' && this.discards.has(workspaceOrId) && !this.cleanupPending.has(workspaceOrId))) {
+      return { status: 'pending', message: 'Owned resources must close before temporary files can be removed.' };
+    }
     if (typeof workspaceOrId !== 'string' && workspaceOrId?.activeOperation === 'converting' && !workspaceOrId.cleanupRecord) {
       return { status: 'pending', message: 'Conversion termination is pending. Temporary files remain owned until the process exits.' };
     }

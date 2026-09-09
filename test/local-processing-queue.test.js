@@ -312,11 +312,17 @@ test('entry count, collection count, queue count and reserved source bytes are e
 });
 
 test('only one upload per collection and exact received-byte ceiling prevent bypassing reservations', async t => {
-  const { queue, collection } = await setup(t);
+  const { manager, queue, collection } = await setup(t);
+  const createWriter = manager.createWriteStream;
+  let writer;
+  const closedAtCleanup = [];
+  manager.createWriteStream = (...args) => { writer = createWriter(...args); return writer; };
+  manager.fs = { ...fsp, rm: async (...args) => { closedAtCleanup.push(writer.closed); return fsp.rm(...args); } };
   await assert.rejects(queue.receiveLocalStream(collection.id, Readable.from('x'), { displayName: 'x.mp4' }), { statusCode: 400 });
   const stream = new PassThrough(), pending = queue.receiveLocalStream(collection.id, stream, { displayName: 'a.mp4', declaredLength: 3 });
   await assert.rejects(queue.receiveLocalStream(collection.id, Readable.from('x'), { displayName: 'b.mp4', declaredLength: 1 }), { statusCode: 409 });
   stream.end('1234'); await assert.rejects(pending);
+  assert.equal(writer.closed, true); assert.deepEqual(closedAtCleanup, [true]);
   assert.equal(queue.snapshot(collection.id).workspaces.length, 0); assert.equal(queue.snapshot(collection.id).sourceBytesReserved, 0);
 });
 
