@@ -279,10 +279,10 @@
           <p class="help">Edit videos or convert video/audio files</p>
         </div>
         <div id="media-drop-zone" class="media-drop-zone">
-          <input id="media-file-input" type="file" hidden />
+          <input id="media-file-input" type="file" multiple hidden />
           <div class="drop-glyph" aria-hidden="true">＋</div>
-          <div><strong>Drop one local video or audio file here</strong><span>One temporary local copy, up to 100 GiB</span></div>
-          <button id="media-choose-button" class="button secondary" type="button">Choose Media File</button>
+          <div><strong>Drop local video or audio files here</strong><span>Up to 20 files, copied one at a time · 100 GiB combined sources</span></div>
+          <button id="media-choose-button" class="button secondary" type="button">Choose Media Files</button>
         </div>
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
         <button id="workspace-retry-cleanup" class="text-button" type="button" hidden>Retry Removed File Cleanup</button>
@@ -298,8 +298,10 @@
           <div class="local-workbench">
             <aside class="processing-sidebar" aria-label="File and processing settings">
               <section class="processing-files" aria-labelledby="local-files-title">
-                <div class="processing-files-head"><h3 id="local-files-title">Files</h3><span class="help">1 file</span></div>
+                <div class="processing-files-head"><h3 id="local-files-title">Files</h3><span id="processing-file-count" class="help">0 files</span></div>
                 <select id="processing-file-list" size="6" aria-label="Files"></select>
+                <button id="processing-add-files" class="text-button" type="button">Add Files</button>
+                <p id="processing-collection-status" class="help" role="status"></p>
               </section>
               <section class="processing-file" aria-labelledby="local-file-title">
                 <p class="sr-only" id="local-file-title">Selected file</p>
@@ -310,11 +312,12 @@
                 </div>
               </section>
               <details id="local-media-details"><summary>Media Details</summary><dl id="conversion-facts" class="conversion-facts"></dl>
-                <p class="help">Processing stays on this computer. Temporary disk use can include the source, preview, previous result, and a new attempt together. Each source and output is limited to 100 GiB. Free space is not guaranteed. Remove File or expiry invalidates the workspace and attempts cleanup.</p>
+                <p class="help">Processing stays on this computer. Combined sources are limited to 100 GiB across up to 20 files. Temporary disk use also includes previews, previous results, new attempts, and cleanup-pending files; each output is limited to 100 GiB. Free space is not guaranteed. Remove File or expiry invalidates that file and attempts cleanup.</p>
               </details>
               <form id="processing-settings" aria-labelledby="processing-settings-title">
                 <h3 id="processing-settings-title">Convert File</h3>
                 <p id="processing-capability-note" class="help" role="status"></p>
+                <button id="processing-clear-video-settings" class="text-button" type="button" hidden>Clear video changes for audio-only output</button>
                 <div class="processing-pair processing-codecs">
                 <div id="processing-video-settings">
                   <label class="field" for="processing-video-codec"><span>Codec</span><select id="processing-video-codec"><option value="unchanged">Unchanged</option></select></label>
@@ -381,6 +384,16 @@
                   <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed <button class="processing-help-button" type="button" data-processing-help="speed" aria-label="Help: encoding speed">?</button></span><select id="processing-preset"><option value="medium">Medium</option></select></label>
                 </fieldset>
               </form>
+              <details id="processing-apply-settings" class="processing-shared-settings">
+                <summary>Apply output settings to all</summary>
+                <p class="help">Copy selected groups from this file. Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged.</p>
+                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="video" checked />Codec and output</label>
+                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="picture" checked />Scale and frame rate</label>
+                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="rate" checked />Compression</label>
+                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="audio" checked />Audio</label>
+                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="suffix" />Filename suffix</label>
+                <button id="processing-apply-all" class="button secondary mini" type="button">Apply selected settings</button>
+              </details>
             </aside>
             <div class="processing-preview">
               <div class="preview-actions"><p id="processing-preview-note" class="help" role="status"></p><button id="processing-prepare-preview" class="button secondary mini" type="button" hidden>Retry Preview</button></div>
@@ -519,9 +532,18 @@
                 <p id="processing-filename-preview" class="help"></p>
               </div>
               <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process File</button>
+              <button id="processing-process-all" class="button primary processing-primary" type="button" hidden>Process All Files</button>
               <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
               <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>
+              <button id="processing-cancel-all" class="text-button" type="button" hidden>Cancel All</button>
             </div>
+            <section id="processing-batch-review" class="processing-batch-review" aria-labelledby="processing-batch-title" hidden>
+              <h4 id="processing-batch-title">Review files to process</h4>
+              <p class="help">Files run one at a time in list order. Select the reviewed files and acknowledge their warnings. Unchanged files download original bytes. Queued files and successful current drafts are excluded; Process File can run a completed draft again. A failure does not stop the remaining files.</p>
+              <div id="processing-batch-files"></div>
+              <button id="processing-batch-submit" class="button secondary" type="button" disabled>Queue reviewed files</button>
+              <button id="processing-batch-close" class="text-button" type="button">Close review</button>
+            </section>
             <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
             <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
             <p id="output-cleanup-status" class="help" role="status"></p>

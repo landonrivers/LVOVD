@@ -2002,6 +2002,30 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && ['/api/processing/collection', '/api/processing/collection/attach', '/api/processing/queue', '/api/processing/queue/cancel'].includes(requestUrl.pathname)) {
+    try {
+      const body = await readJsonBody(req);
+      const action = requestUrl.pathname;
+      const allowed = action === '/api/processing/collection' ? []
+        : action === '/api/processing/queue' ? ['collectionId', 'entries'] : ['collectionId', 'workspaceId'];
+      assertOnlyKeys(body, new Set(allowed), 'Local processing collection request');
+      const queue = mediaWorkspaces.localProcessing;
+      const collection = action === '/api/processing/collection' ? queue.createCollection()
+        : action === '/api/processing/collection/attach' ? queue.attachWorkspace(body.collectionId, body.workspaceId)
+          : action === '/api/processing/queue' ? await queue.enqueue(body.collectionId, body.entries)
+            : await queue.cancel(body.collectionId, body.workspaceId);
+      return json(res, action === '/api/processing/collection' ? 201 : 202, { collection });
+    } catch (error) {
+      return json(res, error.statusCode || 400, { error: error.statusCode ? error.message : 'The local file collection request could not complete.' });
+    }
+  }
+
+  if (req.method === 'GET' && requestUrl.pathname === '/api/processing/queue/progress') {
+    try { mediaWorkspaces.localProcessing.subscribe(requestUrl.searchParams.get('collection'), res); }
+    catch (error) { return json(res, error.statusCode || 404, { error: 'Local file collection not found or expired.' }); }
+    return;
+  }
+
   if (req.method === 'POST' && ['/api/media/local', '/api/workspace/local', '/api/conversion/local'].includes(requestUrl.pathname)) {
     const declaredLength = req.headers['content-length'] == null
       ? null
@@ -2010,12 +2034,17 @@ async function handleRequest(req, res) {
     try { displayName = decodeURIComponent(displayName); } catch {}
 
     try {
-      const workspace = await mediaWorkspaces.receiveLocalStream(req, {
+      const collectionId = req.headers['x-lvovd-collection'];
+      if (collectionId && requestUrl.pathname !== '/api/media/local') return json(res, 400, { error: 'Use Local Media intake to add a file to this collection.' });
+      const options = {
         displayName,
         claimedType: req.headers['content-type'],
         declaredLength,
         purpose: requestUrl.pathname === '/api/media/local' ? 'local' : requestUrl.pathname === '/api/conversion/local' ? 'convert' : 'edit'
-      });
+      };
+      const workspace = collectionId
+        ? await mediaWorkspaces.localProcessing.receiveLocalStream(collectionId, req, options)
+        : await mediaWorkspaces.receiveLocalStream(req, options);
       return json(res, 202, {
         workspaceId: workspace.id,
         workspace: mediaWorkspaces.publicWorkspace(workspace)

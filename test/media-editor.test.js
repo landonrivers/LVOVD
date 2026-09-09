@@ -617,8 +617,11 @@ test('editor markup keeps the downloader primary and makes local timeline intera
 test('coordinator invalidates old updates and releases playback before Discard', () => {
   const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
   const discard = source.slice(source.indexOf('async function discard()'), source.indexOf('function beginUpload('));
-  assert.ok(discard.indexOf("video.removeAttribute('src')") < discard.indexOf('await removeOwned(id)'));
-  assert.match(discard, /reset\(`Local file removed/);
+  assert.ok(discard.includes('editor.reset()'));
+  assert.ok(discard.indexOf('editor.reset()') < discard.indexOf('await removeOwned(id)'));
+  assert.match(discard, /removedIds\.add\(id\)/);
+  assert.match(discard, /entries\.delete\(id\)/);
+  assert.match(discard, /if \(entries\.size\) selectEntry/);
   assert.match(discard, /data.cleanup\?.message/);
   assert.match(source, /generation !== token/);
   assert.doesNotMatch(source, /partial temporary data was removed/);

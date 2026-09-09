@@ -72,6 +72,12 @@ class ProcessingOperations {
   }
 
   async start(body) {
+    return this.startPrepared(await this.prepare(body));
+  }
+
+  // Queue admission reviews the same production plan, but does not claim the
+  // encoder. Its owned snapshot survives later, independently reviewed drafts.
+  async prepare(body, { queued = false } = {}) {
     const intent = requestIntent(body, true);
     const plan = await this.plan(intent);
     if (typeof body.planKey !== 'string' || body.planKey !== plan.key) throw requestError('The processing plan changed. Review the current draft first.', 409);
@@ -83,7 +89,7 @@ class ProcessingOperations {
     }
     const { workspace, asset } = this.manager.originalSource(intent.workspaceId, intent.sourceAssetId);
     const reviewKey = workspace.processingReview.intentKey;
-    this.checkAdmission(workspace, plan);
+    this.checkAdmission(workspace, plan, { ignoreSlot: queued });
     let stat;
     try { stat = await this.manager.fs.lstat(asset.filePath); }
     catch { throw requestError('The owned source file is missing. Remove the entry and choose the file again.', 409); }
@@ -92,7 +98,34 @@ class ProcessingOperations {
     if (current.asset !== asset || !stat.isFile() || stat.size !== asset.size || hash(workspace.inspection) !== plan.inspectionKey) {
       throw requestError('The owned source identity or inspection changed. Review again.', 409);
     }
-    this.checkAdmission(workspace, plan);
+    this.checkAdmission(workspace, plan, { ignoreSlot: queued });
+    return { workspace, asset, plan: freeze(structuredClone(plan)), intent: freeze(structuredClone(intent)), reviewKey };
+  }
+
+  async startPrepared(prepared, { queueJobId = null, isCancelled = () => false } = {}) {
+    const { workspace, asset, plan, intent, reviewKey } = prepared;
+    const assertCurrent = () => {
+      if (isCancelled()) throw requestError('Queued processing was cancelled.', 409);
+      const current = this.manager.originalSource(intent.workspaceId, intent.sourceAssetId);
+      if (current.workspace !== workspace || current.asset !== asset || hash(workspace.inspection) !== plan.inspectionKey) {
+        throw requestError('The queued source identity or inspection changed. Review again.', 409);
+      }
+      if (queueJobId ? workspace.queuedProcessingJobId !== queueJobId : workspace.queuedProcessingJobId) {
+        throw requestError('This file has a different queued processing operation.', 409);
+      }
+      if (!queueJobId) this.checkReview(workspace, intent.draftRevision, reviewKey);
+      this.checkAdmission(workspace, plan, { queueJobId });
+    };
+    assertCurrent();
+    // A queued source can wait while another file runs. Recheck its owned bytes
+    // immediately before admission, without consulting a newer browser draft.
+    if (queueJobId) {
+      let stat;
+      try { stat = await this.manager.fs.lstat(asset.filePath); }
+      catch { throw requestError('The owned source file is missing. Remove the entry and choose the file again.', 409); }
+      assertCurrent();
+      if (!stat.isFile() || stat.size !== asset.size) throw requestError('The queued source file changed or is missing.', 409);
+    }
     const frozenPlan = freeze(structuredClone(plan));
     const snapshot = freeze({ draftRevision: intent.draftRevision, planKey: plan.key,
       editPlan: structuredClone(plan.editPlan), settings: structuredClone(plan.settings),
@@ -127,8 +160,13 @@ class ProcessingOperations {
     return workspace;
   }
 
-  checkAdmission(workspace, plan) {
-    if (workspace.activeOperation || (plan.status !== 'no-op' && conversionSlotBusy())) throw requestError('A local operation is running. Wait for it to finish or cancel it.', 409);
+  checkAdmission(workspace, plan, { ignoreSlot = false, queueJobId = null } = {}) {
+    if (workspace.activeOperation || (workspace.queuedProcessingJobId && workspace.queuedProcessingJobId !== queueJobId)) {
+      throw requestError('A local operation is running or queued. Wait for it to finish or cancel it.', 409);
+    }
+    if (!ignoreSlot && plan.status !== 'no-op' && conversionSlotBusy()) {
+      throw Object.assign(requestError('A local operation is running. Wait for it to finish or cancel it.', 409), { code: 'LVOVD_CONVERSION_BUSY' });
+    }
     if (workspace.conversion.cleanupPaths.size || this.manager.outputRetirement.state(workspace).blocked) throw requestError('Retry temporary cleanup before processing another file.', 409);
   }
 

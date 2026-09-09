@@ -9,13 +9,19 @@ const { normalizeEditPlan, editPlansEqual } = require('./public/edit-plan');
 
 // Process-wide conversion admission, independent of the remote-source queue.
 let conversionOwner = null;
+const conversionSlotListeners = new Set();
 
 function conversionSlotBusy() { return Boolean(conversionOwner); }
 function claimConversionSlot(workspace) {
   if (conversionOwner) throw requestError('Another local conversion is running. Try again when it finishes.', 409);
   conversionOwner = workspace;
 }
-function releaseConversionSlot(workspace) { if (conversionOwner === workspace) conversionOwner = null; }
+function releaseConversionSlot(workspace) {
+  if (conversionOwner !== workspace) return;
+  conversionOwner = null;
+  for (const listener of conversionSlotListeners) listener();
+}
+function onConversionSlotReleased(listener) { conversionSlotListeners.add(listener); return () => conversionSlotListeners.delete(listener); }
 
 function conversionFilename(name, targetId) {
   const stem = String(name || 'Local media').split(/[\\/]/).at(-1).replace(/\.[^.]*$/, '')
@@ -81,7 +87,7 @@ class ConversionOperations {
     const input = this.input(workspaceId, inputAssetId, editPlan);
     this.sameInput(plan, input);
     const { workspace, asset } = input;
-    if (workspace.activeOperation) throw requestError('A local workspace operation is already running.', 409);
+    if (workspace.activeOperation || workspace.queuedProcessingJobId) throw requestError('A local workspace operation is already running or queued.', 409);
     if (workspace.conversion.cleanupPaths.size || this.manager.outputRetirement.state(workspace).blocked) throw requestError('Temporary output cleanup needs a retry before another conversion.', 409);
     let stat;
     try { stat = await this.manager.fs.lstat(asset.filePath); }
@@ -89,7 +95,7 @@ class ConversionOperations {
     this.sameInput(plan, this.input(workspaceId, inputAssetId, editPlan));
     if (!stat.isFile() || stat.size !== asset.size) throw requestError('The owned input file changed or is missing.', 409);
     if (workspace.conversion.cleanupPaths.size || this.manager.outputRetirement.state(workspace).blocked) throw requestError('Temporary output cleanup needs a retry before another conversion.', 409);
-    if (workspace.activeOperation || (conversionOwner && plan.status !== 'no-op')) throw requestError('Another conversion or workspace operation is busy. Try again when it finishes.', 409);
+    if (workspace.activeOperation || workspace.queuedProcessingJobId || (conversionOwner && plan.status !== 'no-op')) throw requestError('Another conversion or workspace operation is busy. Try again when it finishes.', 409);
     const previous = workspace.conversion.output;
     Object.assign(workspace.conversion, { mode: 'conversion', phase: null, phasePercent: null, draftRevision: null, processingSnapshot: null });
     const provenance = Object.freeze({ inputAssetId, inputRole: asset.role, inputFilename: input.filename,
@@ -233,4 +239,4 @@ class ConversionOperations {
   }
 }
 
-module.exports = { ConversionOperations, conversionFilename, publicConversionPlan, conversionSlotBusy, claimConversionSlot, releaseConversionSlot };
+module.exports = { ConversionOperations, conversionFilename, publicConversionPlan, conversionSlotBusy, claimConversionSlot, releaseConversionSlot, onConversionSlotReleased };
