@@ -206,6 +206,7 @@ function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
       width: Math.floor(Number(videoCandidate.width)),
       height: Math.floor(Number(videoCandidate.height)),
       frameRate: parseFrameRate(videoCandidate.avg_frame_rate || videoCandidate.r_frame_rate),
+      bitRate: finiteInteger(videoCandidate.bit_rate),
       pixelFormat: boundedText(videoCandidate.pix_fmt, 80, { lower: true }),
       ...streamTiming(videoCandidate, timeOriginSeconds, formatNames),
       ...videoFidelity(videoCandidate)

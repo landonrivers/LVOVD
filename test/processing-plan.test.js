@@ -151,6 +151,67 @@ test('size budgets use retained seconds, decimal MB, selected audio, and an expl
   assert.equal(silent.rateBudget.audioBytes, 0); assert.equal(silent.status, 'executable');
 });
 
+test('size estimates distinguish exact original bytes, remux, bitrate budgets, audio encoding, and variable quality', () => {
+  assert.deepEqual(plan().sizeEstimate.bytes, 1000000);
+  assert.equal(plan().sizeEstimate.exact, true);
+  const remux = plan({ container: 'mov' });
+  assert.ok(remux.sizeEstimate.bytes > 1000000); assert.equal(remux.sizeEstimate.exact, false);
+  const bitrate = plan({ rate: { mode: 'bitrate', videoKbps: 250 } }, raw(), { editPlan: cuts });
+  assert.equal(bitrate.sizeEstimate.bytes, bitrate.rateBudget.estimatedBytes);
+  assert.equal(bitrate.sizeEstimate.videoBitrate, 250000);
+  const audio = plan({ container: 'm4a', audio: { codec: 'aac', bitrateKbps: 96 } });
+  assert.equal(audio.sizeEstimate.audioBitrate, 96000); assert.ok(audio.sizeEstimate.bytes > 96000 * audio.timing.durationSeconds / 8);
+  for (const settings of [{ rate: { mode: 'quality' } }, { scale: { mode: 'percent', percent: 50 } }, { container: 'mp3' }]) {
+    const variable = plan(settings);
+    assert.equal(variable.sizeEstimate.bytes, null); assert.match(variable.sizeEstimate.explanation, /varies/);
+  }
+  const unknownAudio = plan({ rate: { mode: 'bitrate', videoKbps: 250 } }, raw({ audio: { bit_rate: null } }));
+  assert.equal(unknownAudio.sizeEstimate.bytes, null);
+  const copied = plan({}, raw({ video: { bit_rate: '500000' } }));
+  assert.equal(copied.sizeEstimate.videoBitrate, 500000);
+});
+
+test('linked budgets recalculate with audio settings and cuts without conflating size and bitrate intent', () => {
+  const settings = { rate: { mode: 'size', maximumMB: 1 }, audio: { bitrateKbps: 64 } };
+  const initial = plan(settings), louderBudget = plan({ ...settings, audio: { bitrateKbps: 128 } });
+  assert.ok(louderBudget.sizeEstimate.videoBitrate < initial.sizeEstimate.videoBitrate);
+  assert.ok(plan(settings, raw(), { editPlan: cuts }).sizeEstimate.videoBitrate > initial.sizeEstimate.videoBitrate);
+  const bitrate = plan({ rate: { mode: 'bitrate', videoKbps: 250 }, audio: { bitrateKbps: 64 } });
+  const moreAudio = plan({ rate: { mode: 'bitrate', videoKbps: 250 }, audio: { bitrateKbps: 128 } });
+  assert.equal(moreAudio.sizeEstimate.videoBitrate, bitrate.sizeEstimate.videoBitrate);
+  assert.ok(moreAudio.sizeEstimate.bytes > bitrate.sizeEstimate.bytes);
+});
+
+test('width, height and percentage scaling resolve actual oriented dimensions and preserve no-upscale', () => {
+  const cases = [[{ mode: 'width', width: 1920 }, [390, 520]],
+    [{ mode: 'height', height: 720 }, [390, 520]], [{ mode: 'height', height: 720, allowUpscale: true }, [540, 720]],
+    [{ mode: 'percent', percent: 50 }, [194, 260]], [{ mode: 'percent', percent: 25 }, [96, 130]]];
+  for (const [scale, expected] of cases) {
+    const result = plan({ scale });
+    assert.equal(result.status, 'executable'); assert.deepEqual([result.output.width, result.output.height], expected);
+    assert.match(processingVideoFilter(null, result), new RegExp(`scale=${expected.join(':')}`));
+    const ratio = result.output.sampleAspectRatio.split(':').map(Number);
+    assert.ok(Math.abs(result.output.width / result.output.height * ratio[0] / ratio[1] - 390 / 520) < 0.00001);
+  }
+  const rotated = plan({ scale: { mode: 'percent', percent: 50 } }, raw({ video: { tags: { rotate: '90' } } }));
+  assert.deepEqual([rotated.output.width, rotated.output.height], [260, 194]);
+  assert.equal(rotated.output.rotationDegrees, 0);
+  for (const scale of [{ mode: 'width' }, { mode: 'height', height: -1 }, { mode: 'percent', percent: 0 }, { mode: 'percent', percent: 101 }, { mode: 'percent', percent: '50' }]) {
+    assert.throws(() => plan({ scale }), { statusCode: 400 });
+  }
+});
+
+test('filename suffix is bounded, plan-bound display intent; naming alone never encodes source bytes', () => {
+  const renamed = plan({ filenameSuffix: '_H.264' });
+  assert.equal(renamed.status, 'no-op'); assert.equal(renamed.downloadFilename, 'source_H.264.mp4');
+  assert.notEqual(renamed.key, plan().key);
+  assert.equal(plan({ filenameSuffix: '' }).downloadFilename, 'source.mp4');
+  assert.equal(plan({ container: 'mov', filenameSuffix: ' [small]' }).downloadFilename, 'source [small].mov');
+  for (const filenameSuffix of [null, 1, '../escape', '\\escape', ':ads', 'bad\r\nheader', '*', 'a'.repeat(61)]) {
+    assert.throws(() => plan({ filenameSuffix }), { statusCode: 400 });
+  }
+});
+
 test('two-pass commands use the same original, geometry, rate, preset, cuts, and cadence', () => {
   const settings = { rate: { mode: 'size', maximumMB: 1 }, scale: { mode: 'fit', width: 854, height: 480 }, frameRate: 15 };
   const source = normalizeMediaInspection(raw()), result = plan(settings, raw(), { editPlan: cuts });

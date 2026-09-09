@@ -92,9 +92,24 @@ test('complete default processing aliases the original with immutable revision/p
   const before = await fsp.readdir(workspace.tempDir), body = await review(request());
   await manager.processing.start(body); const output = workspace.conversion.output;
   assert.equal(output.noOp, true); assert.equal(output.assetId, workspace.sourceAssetId); assert.equal(output.draftRevision, 0);
-  assert.equal(output.filename, 'source.mp4'); assert.equal(control.calls.length, 0); assert.equal(control.outputProbes, 0);
+  assert.equal(output.filename, 'source - processed.mp4'); assert.equal(control.calls.length, 0); assert.equal(control.outputProbes, 0);
   assert.deepEqual(await fsp.readdir(workspace.tempDir), before); assert.ok(Object.isFrozen(output.processingSnapshot.settings));
   await manager.processing.start(body); assert.equal(manager.conversions.resolve(workspace.id, output.assetId).asset.id, output.assetId);
+});
+
+test('custom suffix stays with the reviewed result and cannot rename a previous download or bypass a plan key', async t => {
+  const { manager, workspace, control, process, request, review } = await setup(t);
+  const original = await process({ filenameSuffix: '_first' });
+  assert.equal(original.filename, 'source_first.mp4'); assert.equal(control.calls.length, 0);
+  const next = await review(request({ ...QUALITY, filenameSuffix: '_second' }, CUT));
+  assert.equal(manager.conversions.resolve(workspace.id, original.assetId).asset.filename, 'source_first.mp4');
+  await assert.rejects(manager.processing.start({ ...next, settings: { ...next.settings, filenameSuffix: '_unreviewed' } }), { statusCode: 409 });
+  await manager.processing.start(next); await workspace.activePromise;
+  assert.equal(workspace.conversion.output.filename, 'source_second.mp4');
+  assert.equal(workspace.conversion.output.processingSnapshot.settings.filenameSuffix, '_second');
+  assert.equal(original.filename, 'source_first.mp4');
+  assert.equal(manager.conversions.resolve(workspace.id, workspace.conversion.output.assetId).asset.filename, 'source_second.mp4');
+  const plain = await process({ filenameSuffix: '' }); assert.equal(plain.filename, 'source.mp4');
 });
 
 test('processing uses original without editor/proxy preparation; cuts and settings remain immutable after admission', async t => {

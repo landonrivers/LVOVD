@@ -18,7 +18,7 @@ function processingVideoFilter(inspection, plan) {
       : `gte(PTS,${micros(range.startSeconds)})*${micros(roundMilliseconds(range.startSeconds - ranges[index - 1].endSeconds))}`).join('+');
     transforms.push('settb=AVTB', `trim=end_pts=${micros(ranges.at(-1).endSeconds)}`, `select='${selection}'`, `setpts='PTS-(${removed})'`);
   }
-  if (plan.settings.scale.mode === 'fit') transforms.push(`scale=${plan.output.width}:${plan.output.height}`);
+  if (plan.settings.scale.mode !== 'unchanged') transforms.push(`scale=${plan.output.width}:${plan.output.height}`);
   else transforms.push('pad=ceil(iw/2)*2:ceil(ih/2)*2');
   if (plan.settings.frameRate != null) transforms.push(`fps=fps=${plan.settings.frameRate}:round=near:eof_action=pass`);
   return `[0:${video.index}]${transforms.join(',')}[vout]`;

@@ -479,6 +479,8 @@
     const clock = document.querySelector('#editor-clock');
     const ruler = document.querySelector('#timeline-ruler');
     const rulerTicks = document.querySelector('#timeline-ruler-ticks');
+    const panLeft = document.querySelector('#timeline-pan-left');
+    const panRight = document.querySelector('#timeline-pan-right');
     const track = document.querySelector('#timeline-track');
     const timelineRegionsLayer = document.querySelector('#timeline-regions');
     const pendingCutOverlay = document.querySelector('#timeline-pending-cut');
@@ -545,6 +547,7 @@
       playhead.classList.remove('dragging');
       track.classList.remove('seeking');
       ruler.classList.remove('panning');
+      panLeft.hidden = true; panRight.hidden = true;
       video.pause();
       video.removeAttribute('src');
       video.load();
@@ -579,6 +582,8 @@
     function renderRuler() {
       rulerTicks.replaceChildren();
       ruler.classList.toggle('can-pan', visibleWindow.endSeconds - visibleWindow.startSeconds < durationSeconds);
+      panLeft.hidden = visibleWindow.startSeconds <= 0;
+      panRight.hidden = visibleWindow.endSeconds >= durationSeconds;
       const { ticks } = buildTimelineTicks(visibleWindow, rulerTicks.clientWidth || ruler.clientWidth || 600);
       for (const value of ticks) {
         const tick = document.createElement('span');
@@ -952,8 +957,8 @@
         }, { once: true });
       }
       proxyNote.textContent = data.playback?.url
-        ? (data.playback.proxy ? 'Preview uses a temporary local proxy. Processing uses your original source.' : 'Preview plays your original source directly.')
-        : 'Prepare the local preview to play and seek. Your cuts and output settings can be reviewed independently.';
+        ? (data.playback.proxy ? 'Playback uses a temporary local proxy. Processing uses your original source.' : '')
+        : '';
       proxyNote.classList.toggle('proxy', Boolean(data.playback?.proxy));
       setStatus(data.editor?.status === 'failed' ? `${data.editor.message} Processing settings and authored cuts remain available.` : '');
     }
@@ -969,9 +974,9 @@
       for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
         handle.setAttribute('aria-valuemax', String(durationSeconds));
       }
-      mediaName.textContent = 'Preview & cuts';
-      mediaFacts.textContent = [inspection.video && `${inspection.video.width} × ${inspection.video.height}`,
-        formatBytes(data.source?.size)].filter(Boolean).join(' · ');
+      mediaName.textContent = data.source?.name || 'Local video';
+      mediaName.title = mediaName.textContent;
+      mediaFacts.textContent = '';
       const trackCounts = inspection.trackCounts || {};
       trackWarning.hidden = !(Number(trackCounts.audio) > 1 || Number(trackCounts.subtitle) > 0);
       editor.hidden = false;
@@ -1023,6 +1028,7 @@
     }
 
     ruler.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
       if (!editPlan || event.button !== 0 || visibleWindow.endSeconds - visibleWindow.startSeconds >= durationSeconds) return;
       event.preventDefault();
       ruler.setPointerCapture(event.pointerId);
@@ -1114,6 +1120,15 @@
     clearPendingCutButton.addEventListener('click', clearPendingCut);
     zoomIn.addEventListener('click', () => zoom(0.5));
     zoomOut.addEventListener('click', () => zoom(2));
+    for (const [button, direction, opposite] of [[panLeft, -1, panRight], [panRight, 1, panLeft]]) {
+      button.addEventListener('click', () => {
+        if (!editPlan || button.hidden) return;
+        const hadFocus = document.activeElement === button;
+        visibleWindow = panVisibleWindow(visibleWindow, durationSeconds, direction * (visibleWindow.endSeconds - visibleWindow.startSeconds) / 2);
+        renderTimeline();
+        if (button.hidden && hadFocus) opposite.focus();
+      });
+    }
     fit.addEventListener('click', () => {
       visibleWindow = { startSeconds: 0, endSeconds: durationSeconds };
       renderTimeline();

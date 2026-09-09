@@ -3,7 +3,7 @@
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { requestError } = require('./conversion-plan');
-const { planProcessing, publicProcessingPlan } = require('./processing-plan');
+const { planProcessing, publicProcessingPlan, processingFilename } = require('./processing-plan');
 const { processingArgs, validateProcessingOutput } = require('./processing-command');
 const { conversionSlotBusy, claimConversionSlot, releaseConversionSlot } = require('./conversion-workspace');
 
@@ -13,11 +13,6 @@ function freeze(value) {
     Object.values(value).forEach(freeze); Object.freeze(value);
   }
   return value;
-}
-function processingFilename(name, extension) {
-  const stem = String(name || 'Local media').split(/[\\/]/).at(-1).replace(/\.[^.]*$/, '')
-    .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').trim().slice(0, 180) || 'Local media';
-  return `${stem} - processed.${extension}`;
 }
 function requestIntent(body, starting = false) {
   const allowed = ['workspaceId', 'sourceAssetId', 'draftRevision', 'editPlan', 'settings', ...(starting ? ['planKey', 'acknowledgedWarnings'] : [])];
@@ -113,7 +108,7 @@ class ProcessingOperations {
       const previous = workspace.conversion.output;
       workspace.conversion.output = { assetId: asset.id, noOp: true, targetId: null, planKey: plan.key,
         provenance, draftRevision: intent.draftRevision, processingSnapshot: snapshot,
-        filename: workspace.source.displayName, mime: asset.mime, size: asset.size, inspection: structuredClone(workspace.inspection) };
+        filename: plan.downloadFilename || workspace.source.displayName, mime: asset.mime, size: asset.size, inspection: structuredClone(workspace.inspection) };
       Object.assign(workspace.conversion, { status: 'ready', phase: 'ready', percent: 100, message: 'No processing needed. The complete existing file is ready to download.' });
       try { if (previous && previous.assetId !== asset.id) await this.manager.outputRetirement.retire(workspace, previous.assetId); }
       finally { workspace.activeOperation = null; this.manager.emit(workspace); }
@@ -212,7 +207,7 @@ class ProcessingOperations {
         await manager.fs.rename(outputPath, finalPath);
         this.checkActive(workspace);
         const asset = manager.registerAsset(workspace, { role: 'converted-output', filePath: finalPath, size: stat.size,
-          mime: plan.output.mime, filename: processingFilename(provenance.inputFilename, plan.output.extension), inspection: outputInspection });
+          mime: plan.output.mime, filename: plan.downloadFilename, inspection: outputInspection });
         const previous = workspace.conversion.output;
         workspace.conversion.output = { assetId: asset.id, noOp: false, targetId: null, planKey: plan.key,
           filename: asset.filename, mime: asset.mime, size: asset.size, inspection: outputInspection, provenance,

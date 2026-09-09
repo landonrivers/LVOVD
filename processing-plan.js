@@ -39,11 +39,11 @@ function number(value, minimum, maximum, label, integer = false) {
 }
 
 function normalizeProcessingSettings(raw = {}) {
-  object(raw, ['videoCodec', 'container', 'scale', 'frameRate', 'rate', 'audio'], 'Processing settings');
-  const scale = object(raw.scale === undefined ? {} : raw.scale, ['mode', 'width', 'height', 'allowUpscale'], 'Scale');
+  object(raw, ['videoCodec', 'container', 'scale', 'frameRate', 'rate', 'audio', 'filenameSuffix'], 'Processing settings');
+  const scale = object(raw.scale === undefined ? {} : raw.scale, ['mode', 'width', 'height', 'percent', 'allowUpscale'], 'Scale');
   const rate = object(raw.rate === undefined ? {} : raw.rate, ['mode', 'crf', 'preset', 'videoKbps', 'maximumMB', 'twoPass'], 'Encoding rate');
   const audio = object(raw.audio === undefined ? {} : raw.audio, ['codec', 'bitrateKbps'], 'Audio');
-  const scaleMode = choice(scale.mode === undefined ? 'unchanged' : scale.mode, ['unchanged', 'fit'], 'scaling mode');
+  const scaleMode = choice(scale.mode === undefined ? 'unchanged' : scale.mode, ['unchanged', 'fit', 'width', 'height', 'percent'], 'scaling mode');
   const rateMode = choice(rate.mode === undefined ? 'automatic' : rate.mode, ['automatic', 'quality', 'bitrate', 'size'], 'encoding mode');
   if (scale.allowUpscale !== undefined && typeof scale.allowUpscale !== 'boolean') throw requestError('Allow upscale must be a boolean.');
   if (rate.twoPass !== undefined && typeof rate.twoPass !== 'boolean') throw requestError('Two pass must be a boolean.');
@@ -51,6 +51,11 @@ function normalizeProcessingSettings(raw = {}) {
   // normalize them deliberately so they cannot affect an admitted plan or key.
   if (scale.width != null) number(scale.width, 2, 16384, 'Maximum width', true);
   if (scale.height != null) number(scale.height, 2, 16384, 'Maximum height', true);
+  if (scale.percent != null) number(scale.percent, 1, 100, 'Scale percentage');
+  const filenameSuffix = raw.filenameSuffix === undefined ? ' - processed' : raw.filenameSuffix;
+  if (typeof filenameSuffix !== 'string' || filenameSuffix.length > 60 || /[\u0000-\u001f\u007f<>:"/\\|?*]/.test(filenameSuffix)) {
+    throw requestError('The filename suffix must be at most 60 characters, without path separators or reserved filename characters.');
+  }
   if (rate.crf != null) number(rate.crf, 0, 51, 'CRF', true);
   if (rate.preset != null) choice(rate.preset, PRESETS, 'software preset');
   if (rate.videoKbps != null) number(rate.videoKbps, 1, 1000000, 'Video bitrate');
@@ -58,9 +63,11 @@ function normalizeProcessingSettings(raw = {}) {
   const normalized = {
     videoCodec: choice(raw.videoCodec === undefined ? 'unchanged' : raw.videoCodec, ['unchanged', 'h264'], 'video codec'),
     container: choice(raw.container === undefined ? 'source' : raw.container, ['source', ...Object.keys(CONTAINERS)], 'container'),
-    scale: { mode: scaleMode, width: scaleMode === 'fit' ? number(scale.width, 2, 16384, 'Maximum width', true) : null,
-      height: scaleMode === 'fit' ? number(scale.height, 2, 16384, 'Maximum height', true) : null,
-      allowUpscale: scaleMode === 'fit' ? scale.allowUpscale ?? false : false },
+    filenameSuffix,
+    scale: { mode: scaleMode, width: ['fit', 'width'].includes(scaleMode) ? number(scale.width, 2, 16384, 'Maximum width', true) : null,
+      height: ['fit', 'height'].includes(scaleMode) ? number(scale.height, 2, 16384, 'Maximum height', true) : null,
+      percent: scaleMode === 'percent' ? number(scale.percent, 1, 100, 'Scale percentage') : null,
+      allowUpscale: scaleMode !== 'unchanged' ? scale.allowUpscale ?? false : false },
     frameRate: raw.frameRate == null ? null : number(raw.frameRate, 0.1, 120, 'Frame rate'),
     rate: { mode: rateMode, crf: rateMode === 'quality' ? rate.crf ?? 18 : 18,
       preset: rateMode === 'automatic' ? 'medium' : rate.preset ?? 'medium',
@@ -127,13 +134,47 @@ function geometry(video, scale, encode) {
   if (scale.mode === 'unchanged') return { width: Math.ceil(width / 2) * 2, height: Math.ceil(height / 2) * 2,
     rotationDegrees: 0, sampleAspectRatio: sar };
   const displayWidth = width * (aspectRatio(sar) ?? 1);
-  const factor = Math.min(scale.width / displayWidth, scale.height / height,
+  const factor = Math.min(scale.mode === 'percent' ? scale.percent / 100 : Infinity,
+    scale.width == null ? Infinity : scale.width / displayWidth, scale.height == null ? Infinity : scale.height / height,
+    16384 / displayWidth, 16384 / height,
     ...(scale.allowUpscale ? [] : [1, width / displayWidth]));
   const outputWidth = Math.max(2, Math.floor(displayWidth * factor / 2) * 2);
   const outputHeight = Math.max(2, Math.floor(height * factor / 2) * 2);
   const [n, d] = String(sar || '1:1').split(':').map(Number);
   return { width: outputWidth, height: outputHeight, rotationDegrees: 0,
     sampleAspectRatio: rationalAspect(width * outputHeight * n, height * outputWidth * d) };
+}
+function processingFilename(name, extension, suffix = ' - processed') {
+  const stem = String(name || 'Local media').split(/[\\/]/).at(-1).replace(/\.[^.]*$/, '')
+    .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').trim().slice(0, 180) || 'Local media';
+  return `${stem}${suffix}${extension ? `.${extension}` : ''}`;
+}
+
+function sizeEstimate(plan, source) {
+  const video = plan.streams.find(stream => stream.role === 'video');
+  const audio = plan.streams.find(stream => stream.role === 'audio');
+  const videoBitrate = plan.rateBudget?.videoBitrate ?? (video?.action === 'copy' ? source.video?.bitRate : null);
+  const audioBitrate = audio ? audio.bitRate ?? (audio.action === 'copy' ? source.audio?.bitRate : null) : 0;
+  const result = { bytes: null, exact: false, videoBitrate: videoBitrate ?? null, audioBitrate: audioBitrate ?? null,
+    explanation: 'Size varies with quality and content; measured after processing.' };
+  if (!['executable', 'no-op'].includes(plan.status)) return { ...result, explanation: 'Complete a valid review to estimate size.' };
+  if (plan.status === 'no-op') return { ...result, bytes: source.sourceSize ?? null, exact: source.sourceSize != null,
+    explanation: source.sourceSize != null ? 'Exact size: existing original bytes.' : 'Original file size is unavailable.' };
+  if (plan.rateBudget) return { ...result, bytes: plan.rateBudget.estimatedBytes,
+    explanation: plan.rateBudget.estimatedBytes == null ? 'Cannot estimate without a known audio bitrate.' : 'Estimate includes audio and a container reserve; actual bytes are measured before publication.' };
+  // Estimate only from available rate evidence. CRF and MP3 VBR cannot honestly
+  // be predicted from the size of the source or an unrelated source bitrate.
+  const duration = plan.timing.durationSeconds;
+  if ((!video || videoBitrate > 0) && (!audio || audioBitrate > 0) && duration > 0) {
+    const bytes = ((videoBitrate || 0) + (audioBitrate || 0)) * duration / 8;
+    return { ...result, bytes: Math.ceil(bytes * 1.03 + 16384 + duration * ((plan.output.frameRate || 0) * 24 + (audio ? 800 : 0))),
+      explanation: 'Estimate from selected stream bitrates, retained duration, and container reserve; actual size varies.' };
+  }
+  if (plan.streams.length && plan.streams.every(stream => stream.action === 'copy') && !plan.cuts
+    && source.extraStreams?.total === plan.streams.length && !source.extraStreams?.chapters && source.sourceSize > 0) {
+    return { ...result, bytes: Math.ceil(source.sourceSize * 1.03 + 16384), explanation: 'Approximate remux size from the complete source; container overhead varies.' };
+  }
+  return result;
 }
 function mappedTime(time, ranges) {
   if (!Number.isFinite(time)) return null;
@@ -169,6 +210,9 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
   };
   const finish = (status, reason, message) => {
     Object.assign(plan, { status, reason, message });
+    const extension = status === 'no-op' ? String(inputFilename || '').match(/\.([a-zA-Z0-9]{1,12})$/)?.[1] || plan.output.extension : plan.output.extension;
+    plan.downloadFilename = extension || status === 'no-op' ? processingFilename(inputFilename, extension, settings.filenameSuffix) : null;
+    plan.sizeEstimate = sizeEstimate(plan, source);
     plan.key = crypto.createHash('sha256').update(JSON.stringify(plan)).digest('hex');
     return plan;
   };
@@ -248,7 +292,7 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
     if (settings.frameRate != null && (!video.frameRate || settings.frameRate > video.frameRate + 0.000001)) {
       return unsupported('Choose a frame rate no higher than the known source frame rate.');
     }
-    const encodeVideo = Boolean(cuts || settings.scale.mode === 'fit' || settings.frameRate != null
+    const encodeVideo = Boolean(cuts || settings.scale.mode !== 'unchanged' || settings.frameRate != null
       || settings.rate.mode !== 'automatic' || (settings.videoCodec === 'h264' && (video.codec !== 'h264' || video.pixelFormat !== 'yuv420p')));
     const outputCodec = settings.videoCodec === 'unchanged' ? video.codec : settings.videoCodec;
     if (encodeVideo && outputCodec !== 'h264') return unsupported('These cuts or encoding changes require a supported encoder. Choose H.264 explicitly; the source codec will not be changed automatically.');
@@ -259,7 +303,7 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
     plan.streams.push({ role: 'video', index: video.streamIndex, action: encodeVideo ? 'encode' : 'copy', codec: video.codec,
       ...(encodeVideo ? { encoder: 'libx264', crf: settings.rate.crf, preset: settings.rate.preset, pixelFormat: 'yuv420p' } : {}) });
     plan.changes.push(encodeVideo ? `Encode H.264 with ${settings.rate.mode === 'automatic' || settings.rate.mode === 'quality' ? `CRF ${settings.rate.crf}; final size varies` : settings.rate.mode === 'size' ? 'a maximum-size two-pass bitrate budget' : `${settings.rate.videoKbps} kbps average video bitrate`}.` : 'Copy the selected video without re-encoding.');
-    if (settings.scale.mode === 'fit') plan.changes.push(`Fit within ${settings.scale.width} × ${settings.scale.height}: ${resolved.width} × ${resolved.height}, preserving display aspect${settings.scale.allowUpscale ? '' : ' without upscaling'}.`);
+    if (settings.scale.mode !== 'unchanged') plan.changes.push(`Scale to ${resolved.width} × ${resolved.height}, adjusted to fit display aspect${settings.scale.allowUpscale ? '' : ' without upscaling'}; even encoder dimensions, no cropping.`);
     else if (encodeVideo && (video.width % 2 || video.height % 2)) plan.changes.push(`Pad coded dimensions minimally to ${resolved.width} × ${resolved.height}; no source pixels are cropped.`);
     if (encodeVideo && video.rotationDegrees) plan.changes.push(`Apply the ${video.rotationDegrees}° display rotation once.`);
     if (settings.frameRate != null) plan.changes.push(`Reduce frame rate to ${settings.frameRate} fps without changing playback duration.`);
@@ -343,4 +387,4 @@ function publicProcessingPlan(plan) {
   return { ...result, streams: streams.map(({ role, index, action }) => ({ role, index, action })) };
 }
 
-module.exports = { normalizeProcessingSettings, planProcessing, publicProcessingPlan, processingOptions, PRESETS };
+module.exports = { normalizeProcessingSettings, planProcessing, publicProcessingPlan, processingOptions, processingFilename, PRESETS };
