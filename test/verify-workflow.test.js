@@ -41,7 +41,7 @@ test('Verify requires real media tools and Windows runs the workspace cleanup re
   const windows = workflow.slice(workflow.indexOf('  windows-launcher:'));
   for (const name of ['launcher', 'ytdlp-manager', 'media-workspace', 'media-workspace-api', 'workspace-cleanup',
     'media-inspection', 'ffmpeg-capabilities', 'conversion-compatibility', 'conversion-assessment', 'conversion-workspace', 'conversion-ui', 'conversion-plan', 'conversion-lifecycle', 'edited-conversion',
-    'processing-plan', 'processing-workspace', 'processing-profile']) {
+    'processing-plan', 'processing-workspace', 'processing-profile', 'local-processing-queue', 'local-processing-api']) {
     assert.ok(windows.includes(`test/${name}.test.js`));
   }
 });

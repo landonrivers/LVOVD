@@ -517,7 +517,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /Cuts and output settings apply together to your original source/);
   assert.match(html, /Re-encoding is not lossless/);
   assert.doesNotMatch(html, /id="(?:local-open-editor|local-open-converter|media-converter|create-edited-file|convert-edited-file)"/);
-  assert.match(html, /id="conversion-start"[^>]*>Process File<\/button>/);
+  assert.match(html, /id="conversion-start"[^>]*>Process Selected File<\/button>/);
   assert.match(html, /id="conversion-download"[^>]*>Download<\/a>/);
   assert.match(html, /Processing stays on this computer/);
   assert.doesNotMatch(html, /LOCAL EDIT WORKSPACE/i);
@@ -617,8 +617,11 @@ test('editor markup keeps the downloader primary and makes local timeline intera
 test('coordinator invalidates old updates and releases playback before Discard', () => {
   const source = fs.readFileSync(path.join(ROOT, 'public', 'local-workspace.js'), 'utf8');
   const discard = source.slice(source.indexOf('async function discard()'), source.indexOf('function beginUpload('));
-  assert.ok(discard.indexOf("video.removeAttribute('src')") < discard.indexOf('await removeOwned(id)'));
-  assert.match(discard, /reset\(`Local file removed/);
+  assert.ok(discard.includes('editor.reset()'));
+  assert.ok(discard.indexOf('editor.reset()') < discard.indexOf('await removeOwned(id)'));
+  assert.match(discard, /removedIds\.add\(id\)/);
+  assert.match(discard, /entries\.delete\(id\)/);
+  assert.match(discard, /if \(entries\.size\) selectEntry/);
   assert.match(discard, /data.cleanup\?.message/);
   assert.match(source, /generation !== token/);
   assert.doesNotMatch(source, /partial temporary data was removed/);
@@ -631,8 +634,8 @@ test('Preview editor action stays secondary, explains eligible or ineligible sta
   const server = fs.readFileSync(path.join(ROOT, 'app-server.js'), 'utf8');
 
   assert.match(html, /class="preview-actions"[\s\S]*id="download-button" class="button primary big"[\s\S]*id="open-editor-button" class="button secondary editor-action big"[^>]*>Edit Source Video<\/button>/);
-  assert.match(styles, /\.button\.secondary\.editor-action\s*\{[^}]*color:\s*#effff6;[^}]*linear-gradient\(135deg, #245f47, #2d7757\)/);
-  assert.match(styles, /\.button\.secondary\.editor-action:hover\s*\{[^}]*linear-gradient\(135deg, #2a6d51, #358b65\)/);
+  assert.match(styles, /\.button\.secondary\.editor-action\s*\{[^}]*color:\s*#fff;[^}]*background:\s*var\(--action-green\)/);
+  assert.match(styles, /\.button\.secondary\.editor-action:hover\s*\{[^}]*background:\s*var\(--action-green-hover\)/);
   assert.match(app, /currentInfo\.kind !== 'media'[\s\S]*Collections and playlists cannot be opened/);
   assert.match(app, /currentInfo\.capabilities\?\.live\?\.isLive[\s\S]*Live media cannot be opened/);
   assert.match(app, /!\['av', 'video'\]\.includes\(content\)/);

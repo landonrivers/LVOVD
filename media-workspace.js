@@ -20,6 +20,7 @@ const { ConversionOperations } = require('./conversion-workspace');
 const { runConversionProcess } = require('./conversion-process');
 const { OutputRetirement } = require('./output-retirement');
 const { ProcessingOperations } = require('./processing-workspace');
+const { LocalProcessingQueue } = require('./local-processing-queue');
 const {
   MAX_KEEP_RANGES,
   roundMilliseconds,
@@ -428,7 +429,8 @@ class MediaWorkspaceManager {
     assessConversion = assessBroadCompatibilityMp4,
     maxConvertedBytes = MAX_LOCAL_MEDIA_BYTES,
     conversionTerminationGraceMs = 250,
-    cleanupRetryDelaysMs = CLEANUP_RETRY_DELAYS_MS
+    cleanupRetryDelaysMs = CLEANUP_RETRY_DELAYS_MS,
+    localProcessingLimits = {}
   } = {}) {
     this.tempDir = tempDir;
     this.maxBytes = maxBytes;
@@ -454,6 +456,7 @@ class MediaWorkspaceManager {
     this.cleanupPending = new Map();
     this.cleanupRetryDelaysMs = [...cleanupRetryDelaysMs];
     this.rootPromise = null;
+    this.localProcessing = new LocalProcessingQueue(this, localProcessingLimits);
   }
 
   async workRoot() {
@@ -521,6 +524,7 @@ class MediaWorkspaceManager {
       conversion: { status: 'idle', percent: null, message: null, failure: null, output: null, targetId: null,
         terminationPending: false, cleanupPaths: new Set(), cleanupDirectories: new Set(), attemptPath: null, activeInputAssetId: null },
       processingReview: null,
+      queuedProcessingJobId: null,
       retiredOutputs: new Map(),
       compatibility: null,
       playbackProxy: false,
@@ -533,6 +537,7 @@ class MediaWorkspaceManager {
       cancelRequested: false,
       activeOperation: urlOrigin ? 'acquiring' : 'receiving',
       activePromise: null,
+      receivingPromise: null,
       render: {
         status: 'idle',
         percent: null,
@@ -583,6 +588,7 @@ class MediaWorkspaceManager {
       inspection: workspace.inspection,
       sourceAssetId: workspace.sourceAssetId,
       activeOperation: workspace.activeOperation,
+      queuedProcessingJobId: workspace.queuedProcessingJobId,
       editor: { ...workspace.editor, eligible: Boolean(workspace.inspection?.video && workspace.inspection.durationSeconds > 0) },
       conversion: this.conversions.publicState(workspace),
       outputCleanup: this.outputRetirement.state(workspace),
@@ -630,6 +636,7 @@ class MediaWorkspaceManager {
     for (const response of workspace.listeners) {
       try { response.write(payload); } catch {}
     }
+    this.localProcessing.workspaceChanged(workspace);
   }
 
   update(workspace, patch) {
@@ -778,7 +785,9 @@ class MediaWorkspaceManager {
     displayName,
     claimedType = null,
     declaredLength = null,
-    purpose = 'edit'
+    purpose = 'edit',
+    maximumReceivedBytes = this.maxBytes,
+    onWorkspace = null
   } = {}) {
     if (!WORKSPACE_PURPOSES.has(purpose)) {
       throw workspaceRequestError('Unsupported local workspace purpose.', 400);
@@ -794,7 +803,7 @@ class MediaWorkspaceManager {
     const partialPath = path.join(workspace.tempDir, 'source.partial');
     const sourcePath = path.join(workspace.tempDir, 'source.bin');
     let received = 0;
-    const maxBytes = this.maxBytes;
+    const maxBytes = Math.min(this.maxBytes, maximumReceivedBytes);
     const counter = new Transform({
       transform: (chunk, _encoding, callback) => {
         received += chunk.length;
@@ -805,9 +814,32 @@ class MediaWorkspaceManager {
       }
     });
 
+    // Install ownership before the collection can expose this receiving entry.
+    // This promise owns copying/rename only: it never waits for Discard cleanup,
+    // which in turn must await this promise before deleting or releasing bytes.
+    const receiving = Promise.resolve().then(async () => {
+      let output, closed;
+      try {
+        output = this.createWriteStream(partialPath, { flags: 'wx' });
+        closed = output.closed ? Promise.resolve() : new Promise(resolve => output.once('close', resolve));
+        await pipeline(readable, counter, output, { signal: workspace.abortController.signal });
+        if (workspace.cancelRequested || workspace.abortController.signal.aborted) throw workspaceCancelledError();
+        await this.fs.rename(partialPath, sourcePath);
+      } finally {
+        // A pipeline rejection is not itself proof that an asynchronous file
+        // close has finished. Keep ownership until the actual writer closes.
+        if (output) { if (!output.closed) output.destroy(); await closed; }
+        else { readable.destroy(); counter.destroy(); }
+      }
+    });
+    workspace.receivingPromise = receiving;
+    workspace.activePromise = receiving;
+    receiving.finally(() => { workspace.receivingPromise = null; }).catch(() => {});
+
     try {
-      await pipeline(readable, counter, this.createWriteStream(partialPath, { flags: 'wx' }));
-      if (workspace.cancelRequested) throw workspaceCancelledError();
+      if (onWorkspace) onWorkspace(workspace);
+      await receiving;
+      if (workspace.cancelRequested || workspace.abortController.signal.aborted || !this.workspaces.has(workspace.id)) throw workspaceCancelledError();
       if (!received) {
         throw workspaceUserError(
           'The selected local file is empty.',
@@ -822,7 +854,6 @@ class MediaWorkspaceManager {
           400
         );
       }
-      await this.fs.rename(partialPath, sourcePath);
       const sourceAsset = this.registerAsset(workspace, {
         role: 'source',
         filePath: sourcePath,
@@ -847,9 +878,11 @@ class MediaWorkspaceManager {
       workspace.activePromise.catch(() => {});
       return workspace;
     } catch (error) {
-      await this.removeWorkspaceFiles(workspace);
-      this.workspaces.delete(workspace.id);
-      if (readable.aborted || isWorkspaceCancellation(error)) {
+      const cancelled = workspace.cancelRequested || workspace.abortController.signal.aborted || readable.aborted || isWorkspaceCancellation(error);
+      // Intake failures use the same invalidation/resource/cleanup owner as a
+      // concurrent DELETE. Its wait covers receiving, not this caller's catch.
+      await this.discard(workspace.id);
+      if (cancelled) {
         throw Object.assign(workspaceCancelledError(), { cleanup: this.cleanupStatus(workspace) });
       }
       error.cleanup = this.cleanupStatus(workspace);
@@ -917,6 +950,7 @@ class MediaWorkspaceManager {
     validateEditorInspection(workspace.inspection);
     if (workspace.activeOperation) throw workspaceRequestError('A local workspace operation is already running.', 409);
     if (workspace.editor.status === 'ready' && workspace.playbackAssetId) return workspace;
+    if (workspace.queuedProcessingJobId) throw workspaceRequestError('This file is queued for processing. Preview can prepare after it finishes or is cancelled.', 409);
     workspace.cancelRequested = false;
     workspace.abortController = new AbortController();
     workspace.activeOperation = 'editor';
@@ -1216,7 +1250,7 @@ class MediaWorkspaceManager {
     if (workspace.status !== 'ready' || !sourceAsset || !workspace.inspection) {
       throw workspaceRequestError('The local media workspace is not ready to create an edited file.', 409);
     }
-    if (workspace.activeOperation) {
+    if (workspace.activeOperation || workspace.queuedProcessingJobId) {
       throw workspaceRequestError('A local workspace operation is already running.', 409);
     }
     if (this.outputRetirement.state(workspace).blocked || workspace.conversion.cleanupPaths.size) {
@@ -1475,6 +1509,9 @@ class MediaWorkspaceManager {
   }
 
   cleanupStatus(workspaceOrId) {
+    if (workspaceOrId?.receivingPromise || (typeof workspaceOrId === 'string' && this.discards.has(workspaceOrId) && !this.cleanupPending.has(workspaceOrId))) {
+      return { status: 'pending', message: 'Owned resources must close before temporary files can be removed.' };
+    }
     if (typeof workspaceOrId !== 'string' && workspaceOrId?.activeOperation === 'converting' && !workspaceOrId.cleanupRecord) {
       return { status: 'pending', message: 'Conversion termination is pending. Temporary files remain owned until the process exits.' };
     }
@@ -1588,6 +1625,7 @@ class MediaWorkspaceManager {
     if (!workspace) return Promise.resolve(false);
     // Invalidate first, independently of process shutdown or physical deletion.
     this.workspaces.delete(workspaceId);
+    this.localProcessing.workspaceRemoved(workspace);
     this.closeListeners(workspace);
     const task = this.discardOwnedWorkspace(workspace, expired);
     this.discards.set(workspaceId, task);
@@ -1638,9 +1676,10 @@ class MediaWorkspaceManager {
   }
 
   async cleanupExpired(now = this.now()) {
+    this.localProcessing.sweep(now);
     const removed = [];
     for (const workspace of this.workspaces.values()) {
-      if (workspace.activeOperation || ['waiting', 'acquiring', 'receiving', 'inspecting', 'proxying', 'cancelling'].includes(workspace.status)) continue;
+      if (workspace.activeOperation || workspace.queuedProcessingJobId || ['waiting', 'acquiring', 'receiving', 'inspecting', 'proxying', 'cancelling'].includes(workspace.status)) continue;
       if (now - workspace.lastAccessAt < this.ttlMs) continue;
       await this.discard(workspace.id, { expired: true });
       removed.push(workspace.id);
@@ -1649,6 +1688,7 @@ class MediaWorkspaceManager {
   }
 
   async clearAll() {
+    this.localProcessing.clear();
     for (const id of [...this.workspaces.keys()]) await this.discard(id);
   }
 }

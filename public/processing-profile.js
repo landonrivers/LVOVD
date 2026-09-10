@@ -6,7 +6,7 @@
   if (root?.document) root.LVOVDProcessingProfile = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createProcessingProfileApi() {
   function defaults() {
-    return { videoCodec: 'unchanged', container: 'source', filenameSuffix: ' - processed', scale: { mode: 'unchanged', width: null, height: null, percent: null, allowUpscale: false },
+    return { videoCodec: 'unchanged', container: 'source', filenameSuffix: '-processed', scale: { mode: 'unchanged', width: null, height: null, percent: null, allowUpscale: false },
       frameRate: null, rate: { mode: 'automatic', crf: 18, preset: 'medium', videoKbps: null, maximumMB: null, twoPass: false },
       audio: { codec: 'unchanged', bitrateKbps: null } };
   }
@@ -16,6 +16,7 @@
     if (!Number.isFinite(duration) || duration <= 0) return null;
     return { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: Math.round(duration * 1000) / 1000 }] };
   }
+  function copySettings(selected) { return clone(selected); }
   function create(workspace) {
     const identity = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId };
     const inspection = clone(workspace.inspection), initialPlan = fullPlan(inspection.durationSeconds);
@@ -36,6 +37,7 @@
       },
       draft() { return { ...identity, draftRevision, editPlan: clone(editPlan), settings: clone(settings) }; },
       submit(plan) {
+        if ((plan.workspaceId && plan.workspaceId !== identity.workspaceId) || (plan.sourceAssetId && plan.sourceAssetId !== identity.sourceAssetId)) throw new Error('The processing review belongs to another file.');
         if (plan.draftRevision !== draftRevision) throw new Error('The processing review is out of date. Review the current settings again.');
         submitted = { ...identity, draftRevision, editPlan: clone(plan.editPlan || editPlan), settings: clone(plan.settings || settings), planKey: plan.key };
         return clone(submitted);
@@ -46,5 +48,5 @@
         submitted: clone(submitted), result: clone(result) }; }
     };
   }
-  return { defaults, fullPlan, create };
+  return { defaults, fullPlan, copySettings, create };
 });

@@ -11,8 +11,13 @@
   const settingsForm = $('#processing-settings'), start = $('#conversion-start'), retry = $('#conversion-retry'), cancel = $('#conversion-cancel');
   let generation = 0, workspaceId = null, snapshot = null, upload = null, starting = false, source = null, profile = null;
   let plan = null, planVersion = 0, planBusy = false, reviewInFlight = false, reviewQueued = false, reviewTimer = null, retryTimer = null;
-  let operationRequest = false, previewRequest = false, discarding = false, resetting = false, retainedCleanupId = null;
-  let previewAttempted = false, previewError = null;
+  let operationRequest = false, discarding = false, resetting = false;
+  const entries = new Map(), cleanupIds = new Set(), removedIds = new Set(), removedDuringUpload = new Set();
+  let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
+  let batchVersion = 0, batchPlans = [], batchBusy = false;
+  let uploadGeneration = 0;
+  let acquiring = false;
+  let sharedSettings = profiles.defaults();
 
   const processingHelp = {
     relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
@@ -67,7 +72,7 @@
 
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(workspaceId || upload || starting || retainedCleanupId), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -80,12 +85,123 @@
     return data;
   }
   function number(selector) { const value = $(selector).value.trim(); return value === '' ? null : Number(value); }
+  function currentJob(id = workspaceId) { return jobs.find(job => job.workspaceId === id); }
+  function jobActive(id = workspaceId) { return ['queued', 'starting', 'running', 'cancelling'].includes(currentJob(id)?.status); }
+  function processingElsewhere() { return jobs.some(job => ['starting', 'running', 'cancelling'].includes(job.status)); }
+  function saveSelected() {
+    const entry = entries.get(workspaceId); if (!entry) return;
+    if (profile && editor.authoringState().workspaceId === workspaceId) profile.update({ editorState: editor.authoringState() });
+    Object.assign(entry, { snapshot, profile, plan,
+      warnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value), detailsOpen: $('#local-media-details').open, scaleChoice: $('#processing-scale').value });
+  }
+  function setSelectValue(selector, value) {
+    const select = $(selector), text = value == null ? '' : String(value);
+    if (![...select.options].some(option => option.value === text)) {
+      const option = document.createElement('option'); option.value = text; option.textContent = `${text} (review availability)`; select.append(option);
+    }
+    select.value = text;
+  }
+  function restoreSettings(settings, preferredScale = null) {
+    settingsForm.reset();
+    setSelectValue('#processing-video-codec', settings.videoCodec); setSelectValue('#processing-container', settings.container);
+    const scale = settings.scale;
+    const fitPreset = `${scale.width}x${scale.height}`;
+    const fitChoice = preferredScale === 'fit' ? 'fit' : [...$('#processing-scale').options].some(option => option.value === fitPreset) ? fitPreset : 'fit';
+    setSelectValue('#processing-scale', scale.mode === 'unchanged' ? 'unchanged' : scale.mode === 'fit' ? fitChoice : `${scale.mode}:${scale[scale.mode]}`);
+    $('#processing-width').value = scale.width ?? ''; $('#processing-height').value = scale.height ?? '';
+    $('#processing-no-upscale').checked = !scale.allowUpscale; setSelectValue('#processing-frame-rate', settings.frameRate);
+    settingsForm.querySelector(`[name="processing-rate"][value="${settings.rate.mode}"]`).checked = true;
+    $('#processing-crf').value = settings.rate.crf; setSelectValue('#processing-preset', settings.rate.preset);
+    $('#processing-video-bitrate').value = settings.rate.videoKbps ?? ''; $('#processing-maximum-mb').value = settings.rate.maximumMB ?? '';
+    $('#processing-two-pass').checked = settings.rate.twoPass;
+    setSelectValue('#processing-audio-codec', settings.audio.codec); $('#processing-audio-bitrate').value = settings.audio.bitrateKbps ?? '';
+    $('#processing-suffix-enabled').checked = settings.filenameSuffix !== ''; $('#processing-filename-suffix').value = settings.filenameSuffix;
+  }
+  function renderFiles() {
+    const list = $('#processing-file-list'), scroll = list.scrollTop;
+    // Keep native options mounted across progress updates: replacing the selected
+    // row can flash the platform highlight and lose the keyboard selection.
+    const options = new Map([...list.options].map(option => [option.value, option]));
+    for (const [id, option] of options) if (!entries.has(id)) option.remove();
+    for (const [id, entry] of entries) {
+      let option = options.get(id);
+      if (!option) { option = document.createElement('option'); option.value = id; list.append(option); }
+      const job = currentJob(id), name = entry.snapshot.source?.name || 'Preparing local file…';
+      const label = name + (job ? ' — ' + job.status : '');
+      if (option.textContent !== label) option.textContent = label;
+      if (option.selected !== (id === workspaceId)) option.selected = id === workspaceId;
+    }
+    list.scrollTop = scroll;
+    $('#processing-file-count').textContent = `${entries.size} ${entries.size === 1 ? 'file' : 'files'}`;
+    $('#processing-add-files').disabled = entries.size + pendingUploads.length + (upload ? 1 : 0) >= (limits.maxEntries || 20) || Boolean(starting);
+    const counts = ['queued', 'starting', 'running', 'completed', 'failed', 'cancelled'].map(state => {
+      const count = jobs.filter(job => job.status === state).length; return count ? `${count} ${state}` : null;
+    }).filter(Boolean);
+    $('#processing-collection-status').textContent = [uploadName ? `Copying ${uploadName}${pendingUploads.length ? ` · ${pendingUploads.length} waiting` : ''}` : null, ...counts].filter(Boolean).join(' · ');
+  }
+  function selectEntry(id) {
+    const entry = entries.get(id); if (!entry) return;
+    if (id === workspaceId) { if (!entry.previewAttempted) preparePreview(); return; }
+    saveSelected(); closeHelp(); generation++; planVersion++; clearTimeout(reviewTimer); clearTimeout(retryTimer);
+    workspaceId = id; snapshot = entry.snapshot; profile = entry.profile; plan = entry.plan;
+    operationRequest = false; discarding = false; planBusy = false; reviewQueued = false;
+    resetting = true;
+    if (profile) {
+      const settings = profile.state().settings;
+      restoreSettings(entry.videoDraft && ['m4a', 'mp3'].includes(settings.container) ? { ...settings, ...entry.videoDraft } : settings, entry.scaleChoice);
+    } else settingsForm.reset();
+    editor.restore(snapshot, profile?.state().editorState); $('#local-media-details').open = Boolean(entry.detailsOpen);
+    resetting = false;
+    accept(snapshot);
+    if (plan && plan.draftRevision === profile?.draft().draftRevision) {
+      renderPlan(); for (const box of $('#conversion-warnings').querySelectorAll('input')) box.checked = entry.warnings?.includes(box.value) || false;
+    } else if (profile) invalidatePlan();
+    else {
+      $('#processing-plan-facts').replaceChildren(); $('#conversion-warnings').replaceChildren(); $('#conversion-changes').replaceChildren();
+      $('#conversion-plan-title').textContent = 'This file needs a complete inspection before processing.';
+      $('#processing-filename-preview').textContent = '';
+    }
+    renderFiles(); processingControls();
+  }
+  function acceptCollection(data) {
+    if (!data || data.id !== collectionId) return;
+    if (Number.isSafeInteger(data.revision)) { if (data.revision < collectionRevision) return; collectionRevision = data.revision; }
+    jobs = data.jobs || []; limits = data.limits || limits;
+    const live = new Set(), authoritativeIds = new Set((data.workspaces || []).map(item => item.id));
+    for (const id of removedIds) if (!authoritativeIds.has(id) && !removedDuringUpload.has(id)) removedIds.delete(id);
+    for (const dataWorkspace of data.workspaces || []) {
+      if (removedIds.has(dataWorkspace.id)) continue;
+      live.add(dataWorkspace.id);
+      let entry = entries.get(dataWorkspace.id);
+      if (!entry) { entry = { snapshot: dataWorkspace, profile: null, plan: null }; entries.set(dataWorkspace.id, entry); }
+      entry.snapshot = dataWorkspace; entry.seenInCollection = true;
+      if (!entry.profile && dataWorkspace.inspection && dataWorkspace.sourceAssetId) {
+        entry.profile = profiles.create(dataWorkspace); entry.needsInitialReview = true;
+        if (sharedSettings) copyOutputSettings(entry, sharedSettings);
+      }
+      if (entry.profile && dataWorkspace.conversion?.output) entry.profile.acceptResult(dataWorkspace.conversion.output);
+      if (dataWorkspace.playback?.url) { entry.previewRequest = false; entry.previewError = null; }
+    }
+    for (const [id, entry] of entries) if (entry.seenInCollection && !live.has(id)) { entries.delete(id); removedIds.add(id); invalidateBatch(); }
+    if (!entries.has(workspaceId)) { const hadSelection = Boolean(workspaceId); workspaceId = null; profile = null; snapshot = null; editor.reset(); if (entries.size) selectEntry(entries.keys().next().value); else if (hadSelection) reset(); }
+    else { const entry = entries.get(workspaceId); profile = entry.profile; accept(entry.snapshot); }
+    renderFiles(); processingControls(); publish();
+  }
+  async function ensureCollection() {
+    if (collectionId) return collectionId;
+    if (!collectionPromise) collectionPromise = post('/api/processing/collection', {}).then(data => {
+      const collection = data.collection || data; collectionId = collection.id;
+      connect(); acceptCollection(collection); return collectionId;
+    }).finally(() => { collectionPromise = null; });
+    return collectionPromise;
+  }
   function rateMode() { return settingsForm.querySelector('input[name="processing-rate"]:checked').value; }
   function readSettings() {
-    const settings = profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
+    const settings = profile?.state().settings || profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
     settings.container = $('#processing-container').value;
     settings.filenameSuffix = $('#processing-suffix-enabled').checked ? $('#processing-filename-suffix').value : '';
     if (hasVideo) {
+      settings.scale = profiles.defaults().scale; settings.rate = profiles.defaults().rate;
       settings.videoCodec = $('#processing-video-codec').value;
       const scale = $('#processing-scale').value;
       settings.scale.mode = scale === 'unchanged' ? 'unchanged' : scale.includes(':') ? scale.split(':')[0] : 'fit';
@@ -102,6 +218,12 @@
       if (settings.rate.mode === 'quality') settings.rate.crf = number('#processing-crf');
       if (settings.rate.mode === 'bitrate') Object.assign(settings.rate, { videoKbps: number('#processing-video-bitrate'), twoPass: $('#processing-two-pass').checked });
       if (settings.rate.mode === 'size') Object.assign(settings.rate, { maximumMB: number('#processing-maximum-mb'), twoPass: true });
+    } else if (snapshot?.inspection?.video && !entries.get(workspaceId)?.copiedInactiveVideo) {
+      // An explicit audio target keeps the video's inactive controls available
+      // for returning to video, while the submitted audio operation has no
+      // video transforms. Copied incompatible requests still require review.
+      const defaults = profiles.defaults();
+      for (const key of ['videoCodec', 'scale', 'frameRate', 'rate']) settings[key] = defaults[key];
     }
     if (hasAudio) settings.audio = { codec: $('#processing-audio-codec').value, bitrateKbps: number('#processing-audio-bitrate') };
     return settings;
@@ -111,6 +233,8 @@
     for (const id of ['processing-video-settings', 'processing-transform-settings', 'processing-rate-mode', 'processing-rate-help', 'processing-bitrate-fields', 'processing-size-fields']) $(`#${id}`).hidden = !hasVideo;
     $('#processing-rate-settings').hidden = !hasVideo && !hasAudio;
     $('#processing-audio-settings').hidden = !hasAudio;
+    const requested = profile?.state().settings;
+    $('#processing-clear-video-settings').hidden = hasVideo || !requested || (requested.videoCodec === 'unchanged' && requested.scale.mode === 'unchanged' && requested.frameRate == null && requested.rate.mode === 'automatic');
     $('#processing-scale-fields').hidden = $('#processing-scale').value !== 'fit';
     const mode = rateMode();
     $('#processing-quality-fields').hidden = !hasVideo || mode !== 'quality';
@@ -126,11 +250,12 @@
     $('#processing-video-bitrate').max = mode === 'bitrate' ? '1000000' : '';
     $('#processing-maximum-mb').max = mode === 'size' ? '107374.1824' : '';
     $('#processing-rate-help').textContent = {
-      automatic: 'Auto: copy where possible; required H.264 encoding uses CRF 18. Size can vary.',
+      automatic: '',
       quality: 'Quality is in control. Bitrate and file size vary with the footage.',
       bitrate: 'Video bitrate is in control. File size is an estimate, not an exact result.',
       size: 'Maximum size is in control. Video bitrate is calculated after reserving audio and container space.'
     }[mode];
+    $('#processing-rate-help').hidden = !hasVideo || !$('#processing-rate-help').textContent;
     for (const control of settingsForm.elements) control.disabled = Boolean(control.closest('[hidden]'));
     const suffix = $('#processing-filename-suffix'); suffix.disabled = !$('#processing-suffix-enabled').checked;
     suffix.setCustomValidity(/[\u0000-\u001f\u007f<>:"/\\|?*]/.test(suffix.value) ? 'Use a suffix without path separators or reserved filename characters.' : '');
@@ -155,11 +280,15 @@
   function refreshDraft() {
     if (!profile || resetting) return;
     const authoring = editor.authoringState();
-    const changed = profile.update({ editPlan: authoring.editPlan, editorState: authoring, settings: readSettings() });
-    if (changed) invalidatePlan();
+    const settings = readSettings(), settingsChanged = JSON.stringify(settings) !== JSON.stringify(profile.state().settings);
+    const changed = profile.update({ ...(authoring.editPlan ? { editPlan: authoring.editPlan } : {}), editorState: authoring, settings });
+    if (settingsChanged && sharedSettings) applyOutputSettings(settings);
+    if (changed) invalidatePlan(true);
     renderSettings(); processingControls();
   }
-  function invalidatePlan() {
+  function invalidatePlan(draftChanged = false) {
+    const entry = entries.get(workspaceId); if (entry) entry.plan = null;
+    if (draftChanged) invalidateBatch();
     planVersion++; plan = null; planBusy = true; reviewQueued = true;
     clearTimeout(reviewTimer); clearTimeout(retryTimer); retry.hidden = true;
     $('#conversion-warnings').replaceChildren(); $('#conversion-changes').replaceChildren(); $('#processing-plan-facts').replaceChildren();
@@ -170,15 +299,15 @@
   function reset(text = '') {
     closeHelp();
     generation++; planVersion++;
-    closeSource(); clearTimeout(reviewTimer); clearTimeout(retryTimer);
-    const oldUpload = upload; upload = null; oldUpload?.abort();
+    clearTimeout(reviewTimer); clearTimeout(retryTimer);
     workspaceId = null; snapshot = null; profile = null; starting = false; plan = null; planBusy = false; reviewQueued = false;
-    operationRequest = false; previewRequest = false; previewAttempted = false; previewError = null; discarding = false;
+    operationRequest = false; discarding = false;
     $('#processing-file-list').replaceChildren();
-    editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = Boolean(retainedCleanupId); input.value = '';
-    progress.hidden = true; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
+    sharedSettings = profiles.defaults(); $('#processing-apply-all').checked = true;
+    editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
+    progress.hidden = !upload; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
     $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
-    settingsForm.reset(); message(text); publish();
+    settingsForm.reset(); message(text); renderFiles(); publish();
   }
   function appendFact(list, label, value) {
     const item = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
@@ -192,13 +321,7 @@
   function sizeInMB(bytes) { return Number.isFinite(bytes) && bytes >= 0 ? `${(bytes / 1e6).toFixed(3)} MB` : 'Size unavailable'; }
   function renderFacts(data) {
     $('#local-media-name').textContent = data.source?.name || 'Local media';
-    const files = $('#processing-file-list');
-    if (files.options[0]?.value !== data.sourceAssetId) {
-      const option = document.createElement('option');
-      option.value = data.sourceAssetId; option.textContent = data.source?.name || 'Local media'; option.selected = true;
-      files.replaceChildren(option);
-    }
-    files.title = data.source?.name || 'Local media';
+    $('#processing-file-list').title = data.source?.name || 'Local media';
     const inspection = data.inspection || {};
     $('#local-media-summary').textContent = [facts.mediaKindLabel(inspection.mediaKind), inspection.format,
       inspection.video && facts.familiarCodecName(inspection.video.codec), inspection.audio && facts.familiarCodecName(inspection.audio.codec),
@@ -207,21 +330,28 @@
     for (const [label, value] of facts.inspectionFacts(data)) appendFact(list, label, value);
   }
   function processingControls() {
+    const { previewRequest = false, previewError = null } = entries.get(workspaceId) || {};
     const state = snapshot?.conversion || {}, current = profile?.state();
-    const busy = Boolean(snapshot?.activeOperation || operationRequest || previewRequest || discarding);
+    const busy = Boolean(snapshot?.activeOperation || operationRequest || previewRequest || discarding || jobActive());
     const acknowledged = [...$('#conversion-warnings').querySelectorAll('input[required]')].every(box => box.checked);
     start.disabled = !profile || busy || planBusy || Boolean(plan && !['executable', 'no-op'].includes(plan.status)) || !acknowledged
       || state.cleanupPending || snapshot?.outputCleanup?.blocked;
-    start.textContent = 'Process File';
-    cancel.hidden = !['running', 'validating', 'cancelling'].includes(state.status);
+    start.textContent = 'Process Selected File';
+    cancel.hidden = !jobActive() && !['running', 'validating', 'cancelling'].includes(state.status);
     cancel.disabled = state.status === 'cancelling' || discarding;
     $('#processing-reset').disabled = !profile || discarding;
+    $('#processing-process-all').hidden = entries.size < 2;
+    $('#processing-process-all').textContent = `Process All Files (${entries.size})`;
+    $('#processing-process-all').disabled = batchBusy || Boolean(upload || starting);
+    $('#processing-cancel-all').hidden = !jobs.some(job => ['queued', 'starting', 'running', 'cancelling'].includes(job.status));
+    $('#processing-apply-all').disabled = !profile || discarding;
     const preview = $('#processing-prepare-preview');
     preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url) || (!previewError && snapshot?.editor?.status !== 'failed');
-    preview.disabled = busy;
-    $('#processing-preview-note').textContent = !snapshot?.inspection?.video ? 'Audio file — choose output settings, then Process File.'
+    preview.disabled = busy || processingElsewhere();
+    $('#processing-preview-note').textContent = !snapshot?.inspection ? 'Source preparation must finish before preview or processing.' : !snapshot.inspection.video ? 'Audio file — choose output settings, then Process Selected File.'
       : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings.'
         : previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing playback from the selected original file…'
+          : !snapshot?.playback?.url && processingElsewhere() ? 'Playback will prepare after the current processing finishes.'
           : previewError ? `${previewError} You can still review processing settings or retry playback.` : '';
     $('#conversion-cleanup').hidden = !state.cleanupPending && !snapshot?.outputCleanup?.blocked;
     $('#conversion-cleanup').disabled = busy;
@@ -232,12 +362,17 @@
     const phases = { preparing: 'Preparing', analyzing: 'Analyzing', 'pass-1': 'Pass 1', 'pass-2': 'Pass 2', encoding: 'Encoding', validating: 'Validating', retrying: 'Fitting the size target' };
     const phaseProgress = state.status === 'running' && Number.isFinite(state.phasePercent)
       ? `${Math.floor(state.phasePercent)}% of this phase${Number.isFinite(state.percent) ? ` · about ${Math.floor(state.percent)}% overall` : ' · overall progress indeterminate'}` : null;
-    $('#conversion-status').textContent = [phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
+    const queueJob = currentJob();
+    const queueMessage = queueJob?.status === 'queued' ? `Queued · Draft ${queueJob.draftRevision}` : queueJob?.status === 'starting' ? `Starting · Draft ${queueJob.draftRevision}`
+      : queueJob?.status === 'cancelled' ? `Cancelled · Draft ${queueJob.draftRevision}` : queueJob?.status === 'failed' ? queueJob.message : null;
+    $('#conversion-status').textContent = [queueMessage, phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
       state.cleanupPending ? 'Some temporary attempt files remain. Retry cleanup or Remove File.' : null].filter(Boolean).join(' · ');
     const submitted = current?.submitted, newer = submitted && submitted.draftRevision !== current.draftRevision;
-    $('#processing-draft-status').textContent = current ? `Draft ${current.draftRevision}`
-      + (newer ? ` · Newer settings or cuts. The submitted work remains draft ${submitted.draftRevision}.` : '')
-      + (editor.hasPendingWork() ? ' · Pending cut selection is not applied until Remove Section.' : '') : '';
+    $('#processing-draft-status').textContent = current ? [
+      newer ? `Newer settings or cuts. The submitted work remains draft ${submitted.draftRevision}.` : null,
+      editor.hasPendingWork() ? 'Pending cut selection is not applied until Remove Section.' : null
+    ].filter(Boolean).join(' · ') : '';
+    $('#processing-draft-status').hidden = !$('#processing-draft-status').textContent;
     const output = state.output;
     $('#conversion-output').hidden = !output;
     if (output) {
@@ -269,14 +404,18 @@
   }
   function accept(data) {
     if (!data || data.id !== workspaceId || discarding) return;
-    snapshot = data; publish();
-    if (data.playback?.url) previewError = null;
+    snapshot = data; const entry = entries.get(workspaceId); if (entry) entry.snapshot = data; publish();
+    if (data.playback?.url && entry) { entry.previewRequest = false; entry.previewError = null; }
     const inspected = Boolean(data.inspection && data.sourceAssetId);
-    ready.hidden = !inspected; intake.hidden = true; choose.disabled = true;
-    progress.hidden = data.status === 'ready';
-    $('#workspace-progress-label').textContent = data.message || 'Preparing local media…';
-    const bar = $('#workspace-progress-bar'); bar.classList.toggle('indeterminate', data.percent == null);
-    bar.style.width = `${data.percent == null ? 36 : Math.max(0, Math.min(100, data.percent))}%`;
+    ready.hidden = !entries.size; intake.hidden = true; choose.disabled = false;
+    settingsForm.hidden = !inspected; $('#local-media-details').hidden = !inspected; $('#processing-apply-settings').hidden = !inspected;
+    renderFacts(data);
+    progress.hidden = data.status === 'ready' && !upload;
+    if (!upload) {
+      $('#workspace-progress-label').textContent = data.message || 'Preparing local media…';
+      const bar = $('#workspace-progress-bar'); bar.classList.toggle('indeterminate', data.percent == null);
+      bar.style.width = `${data.percent == null ? 36 : Math.max(0, Math.min(100, data.percent))}%`;
+    }
     $('#workspace-failure').hidden = data.status !== 'error';
     if (data.status === 'error') {
       $('#workspace-failure-title').textContent = data.failure?.title || data.message;
@@ -284,24 +423,35 @@
       $('#workspace-failure-help').textContent = [data.failure?.help, data.cleanup?.message].filter(Boolean).join(' ');
     }
     if (inspected) {
-      renderFacts(data); editor.update(data); editor.show(Boolean(data.editor?.eligible));
-      if (!profile) { profile = profiles.create(data); profile.update({ editorState: editor.authoringState() }); invalidatePlan(); }
+      editor.update(data); editor.show(Boolean(data.editor?.eligible));
+      if (!profile) { profile = profiles.create(data); if (entry) { entry.profile = profile; if (sharedSettings) copyOutputSettings(entry, sharedSettings); }
+        restoreSettings(profile.state().settings); profile.update({ editorState: editor.authoringState() }); invalidatePlan(); }
       if (data.conversion?.output) profile.acceptResult(data.conversion.output);
+      if (entry?.needsInitialReview) { entry.needsInitialReview = false; restoreSettings(profile.state().settings); invalidatePlan(); }
       renderSettings();
     }
     message(data.status === 'error' ? data.message : '', data.status === 'error');
     processingControls();
     if (inspected && data.status === 'ready' && data.editor?.eligible && !data.playback?.url
-      && !data.activeOperation && !previewAttempted) preparePreview();
+      && !data.activeOperation && !jobActive() && !processingElsewhere() && !entry?.previewAttempted) preparePreview();
   }
-  function connect(id, token) {
+  function connect() {
     closeSource();
-    const eventSource = new root.EventSource(`/api/workspace/progress?workspace=${encodeURIComponent(id)}`); source = eventSource;
+    const eventSource = new root.EventSource(`/api/processing/queue/progress?collection=${encodeURIComponent(collectionId)}`); source = eventSource;
     eventSource.onmessage = event => {
-      if (generation !== token || workspaceId !== id || source !== eventSource) return;
-      try { accept(JSON.parse(event.data)); } catch { message('Unreadable local workspace update.', true); }
+      if (source !== eventSource) return;
+      try { acceptCollection(JSON.parse(event.data)); } catch { message('Unreadable local workspace update.', true); }
     };
-    eventSource.onerror = () => { if (generation === token && workspaceId === id) message('Workspace connection interrupted; reconnecting…', true); };
+    eventSource.onerror = () => {
+      if (source !== eventSource) return;
+      if (!entries.size && !upload && !starting) {
+        // An empty disconnected collection is reclaimable on the server.
+        // A later intake creates one fresh collection instead of reusing a
+        // permanently expired ID or keeping a reconnect loop alive.
+        closeSource(); collectionId = null; collectionRevision = -1; jobs = [];
+        message('Local connection closed. Add files to begin again.');
+      } else message('Workspace connection interrupted; reconnecting…', true);
+    };
   }
   async function removeOwned(id) {
     const response = await root.fetch(`/api/workspace?workspace=${encodeURIComponent(id)}`, { method: 'DELETE', cache: 'no-store' });
@@ -309,61 +459,102 @@
     if (!response.ok && response.status !== 404) throw new Error(data.error || 'Remove File could not complete.');
     return data;
   }
-  function hasTemporaryWork() { return Boolean(profile?.hasChanges() || editor.hasPendingWork() || snapshot?.activeOperation || snapshot?.playback || snapshot?.conversion?.output || snapshot?.editedOutput || upload || starting || retainedCleanupId); }
+  function entryHasWork(entry) { return Boolean(entry?.profile?.hasChanges() || Object.values(entry?.profile?.state().editorState?.pendingCut || {}).some(Number.isFinite)
+    || entry?.snapshot.activeOperation || entry?.snapshot.playback || entry?.snapshot.conversion?.output || entry?.snapshot.editedOutput || jobActive(entry?.snapshot.id)); }
+  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || cleanupIds.size); }
   async function discard() {
     if (discarding) return;
-    if (hasTemporaryWork() && !root.confirm('Remove this file and discard its cuts, output settings, and temporary results? Any running work will be cancelled.')) return;
+    saveSelected();
+    if (entryHasWork(entries.get(workspaceId)) && !root.confirm('Remove this file and discard its cuts, output settings, and temporary results? Any queued or running work for this file will be cancelled.')) return;
     if (!workspaceId) { reset('Local copy cancelled. Cleanup of any partial copy will be attempted.'); return; }
-    const id = workspaceId, token = ++generation;
+    const id = workspaceId, entry = entries.get(id);
+    ++generation;
     discarding = true; planVersion++; clearTimeout(reviewTimer); reviewQueued = false;
-    closeSource(); editor.show(false);
-    const video = $('#editor-video'), playback = video.getAttribute('src'), time = video.currentTime;
-    video.pause(); video.removeAttribute('src'); video.load();
+    editor.reset(); removedIds.add(id); if (upload) removedDuringUpload.add(id); invalidateBatch();
     message('Removing local file…'); processingControls();
     try {
       const data = await removeOwned(id);
-      if (generation !== token || workspaceId !== id) return;
-      retainedCleanupId = data.cleanup && data.cleanup.status !== 'complete' ? id : null;
-      reset(`Local file removed. ${data.cleanup?.message || ''}`); $('#workspace-retry-cleanup').hidden = !retainedCleanupId; choose.focus();
+      if (data.cleanup && data.cleanup.status !== 'complete') cleanupIds.add(id);
+      entries.delete(id);
+      if (workspaceId === id) { workspaceId = null; profile = null; snapshot = null; discarding = false; if (entries.size) selectEntry(entries.keys().next().value); else reset(); }
+      $('#workspace-retry-cleanup').hidden = !cleanupIds.size;
+      renderFiles(); message(`Local file removed. ${data.cleanup?.message || ''}`); publish();
     } catch (error) {
-      if (generation !== token || workspaceId !== id) return;
+      removedIds.delete(id); if (!entries.has(id)) entries.set(id, entry);
       discarding = false; operationRequest = false;
-      if (playback) { video.src = playback; video.addEventListener('loadedmetadata', () => { if (workspaceId === id) video.currentTime = time; }, { once: true }); }
-      connect(id, token); editor.show(Boolean(snapshot?.editor?.eligible)); invalidatePlan(); message(error.message, true); processingControls();
+      if (!workspaceId || workspaceId === id) { workspaceId = null; selectEntry(id); }
+      renderFiles(); message(error.message, true); processingControls();
     }
   }
-  function beginUpload(file) {
-    if (!file || workspaceId || upload || starting || retainedCleanupId) return;
-    if (!file.size || file.size > 100 * 1024 ** 3) return message('Choose one nonempty video or audio file up to 100 GiB.', true);
-    const token = ++generation; intake.hidden = true; progress.hidden = false; choose.disabled = true;
-    const xhr = new root.XMLHttpRequest(); upload = xhr; publish();
+  async function beginUpload(file) {
+    if (!file || upload) return;
+    const uploadToken = uploadGeneration;
+    if (!workspaceId) intake.hidden = true; progress.hidden = false;
+    try { await ensureCollection(); } catch (error) {
+      if (uploadToken !== uploadGeneration) return;
+      pendingUploads = []; starting = false; progress.hidden = true; if (!workspaceId) intake.hidden = false;
+      message(error.message, true); publish(); return;
+    }
+    if (uploadToken !== uploadGeneration) return;
+    const xhr = new root.XMLHttpRequest(); upload = xhr; uploadName = file.name; starting = false;
+    if (!workspaceId) intake.hidden = true; progress.hidden = false; publish(); renderFiles();
     xhr.open('POST', '/api/media/local'); xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.setRequestHeader('X-LVOVD-Filename', encodeURIComponent(file.name));
+    xhr.setRequestHeader('X-LVOVD-Collection', collectionId);
     xhr.upload.onprogress = event => {
-      if (generation !== token) return;
+      if (upload !== xhr) return;
       $('#workspace-progress-label').textContent = `Copying ${file.name.slice(0, 255)} · ${facts.formatBytes(event.loaded)} / ${facts.formatBytes(file.size)}`;
       $('#workspace-progress-bar').style.width = `${Math.min(100, event.loaded / file.size * 100)}%`;
     };
-    xhr.onerror = () => { if (generation === token) reset('The local file copy was interrupted.'); };
-    xhr.onabort = () => { if (generation === token) reset('Local copy cancelled. Cleanup of the partial copy will be attempted.'); };
+    function finish(text) {
+      if (upload !== xhr) return;
+      upload = null; uploadName = null; input.value = ''; progress.hidden = snapshot?.status === 'ready' || !snapshot;
+      removedDuringUpload.clear();
+      if (!workspaceId) intake.hidden = false;
+      if (text) message(text, true);
+      renderFiles(); publish();
+      const next = pendingUploads.shift(); if (next) beginUpload(next);
+    }
+    xhr.onerror = () => finish('The local file copy was interrupted. Other files are unchanged.');
+    xhr.onabort = () => finish('Local copy cancelled. Cleanup of the partial copy will be attempted.');
     xhr.onload = () => {
       let data; try { data = JSON.parse(xhr.responseText); } catch {}
-      if (generation !== token) { if (data?.workspaceId) removeOwned(data.workspaceId).catch(() => {}); return; }
-      upload = null;
-      if (xhr.status < 200 || xhr.status >= 300 || !data?.workspaceId) { reset([data?.error || 'Local intake failed.', data?.cleanup?.message].filter(Boolean).join(' ')); return; }
-      workspaceId = data.workspaceId; accept(data.workspace); connect(workspaceId, token);
+      if (upload !== xhr) return;
+      if (xhr.status < 200 || xhr.status >= 300 || !data?.workspaceId) { finish([data?.error || 'Local intake failed.', data?.cleanup?.message].filter(Boolean).join(' ')); return; }
+      if (!removedIds.has(data.workspaceId) && !removedDuringUpload.has(data.workspaceId)) {
+        let entry = entries.get(data.workspaceId);
+        if (!entry) {
+          entry = { snapshot: data.workspace, profile: data.workspace.inspection ? profiles.create(data.workspace) : null, plan: null, needsInitialReview: true };
+          if (entry.profile && sharedSettings) copyOutputSettings(entry, sharedSettings);
+          entries.set(data.workspaceId, entry);
+        }
+        if (!workspaceId) selectEntry(data.workspaceId);
+      }
+      finish();
     };
     xhr.send(file);
   }
+  function addFiles(files) {
+    if (!files.length) return;
+    const maximum = limits.maxEntries || 20;
+    if (files.length + entries.size + pendingUploads.length + (upload || starting ? 1 : 0) > maximum) return message(`Add at most ${maximum} files in total. No files were added.`, true);
+    if (files.some(file => !file.size || file.size > 100 * 1024 ** 3)) return message('Each file must be nonempty and no larger than 100 GiB. No files were added.', true);
+    const sourceBytes = [...entries.values()].reduce((sum, entry) => sum + (entry.snapshot.source?.size || 0), 0);
+    if (sourceBytes + [...pendingUploads, ...files].reduce((sum, file) => sum + file.size, 0) > 100 * 1024 ** 3) return message('Combined source files must fit within 100 GiB. No files were added.', true);
+    pendingUploads.push(...files); if (!upload && !starting) { starting = true; beginUpload(pendingUploads.shift()); }
+    publish(); renderFiles();
+  }
   async function acquire(detail) {
-    if (!detail || workspaceId || upload || starting || retainedCleanupId) { publish(); return; }
-    const token = ++generation; starting = true; publish(); intake.hidden = true; progress.hidden = false;
+    if (!detail || entries.size || upload || starting || cleanupIds.size) { publish(); return; }
+    const token = ++generation; starting = true; acquiring = true; publish(); intake.hidden = true; progress.hidden = false;
     message('Acquiring the selected source once for local use…'); panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try {
+      const ownedCollection = await ensureCollection();
       const data = await post('/api/workspace/url', detail);
       if (generation !== token) { if (data.workspaceId) await removeOwned(data.workspaceId); return; }
-      starting = false; workspaceId = data.workspaceId; accept(data.workspace); connect(workspaceId, token);
-    } catch (error) { if (generation === token) reset(error.message); }
+      const attached = await post('/api/processing/collection/attach', { collectionId: ownedCollection, workspaceId: data.workspaceId });
+      starting = false; acquiring = false; acceptCollection(attached.collection || attached);
+    } catch (error) { if (generation === token) { acquiring = false; reset(error.message); } }
   }
   function renderOptions(options) {
     if (!options) return;
@@ -424,6 +615,7 @@
       const data = await post('/api/processing/plan', submittedDraft);
       if (token !== generation || version !== planVersion || submittedDraft.draftRevision !== profile?.draft().draftRevision) return;
       plan = data.plan; renderPlan();
+      const entry = entries.get(workspaceId); if (entry) entry.plan = plan;
       if (plan.reason === 'capability-check' || plan.options?.checked === false) {
         retry.hidden = false; retry.disabled = true; retry.textContent = 'Retry Capability Check (available in 30 seconds)';
         retryTimer = setTimeout(() => { if (token === generation && version === planVersion) { retry.disabled = false; retry.textContent = 'Retry Capability Check'; } }, 30000);
@@ -436,20 +628,49 @@
     }
   }
   async function preparePreview() {
-    if (!profile || !snapshot?.editor?.eligible || snapshot?.playback?.url || snapshot?.activeOperation || previewRequest || discarding) return;
-    const token = generation; previewRequest = true; previewAttempted = true; previewError = null; processingControls();
-    try { const data = await post('/api/workspace/editor', { workspaceId, sourceAssetId: snapshot.sourceAssetId }); if (token === generation) accept(data.workspace); }
-    catch (error) { if (token === generation && !snapshot?.playback?.url) previewError = error.message; }
-    finally { if (token === generation) { previewRequest = false; processingControls(); } }
+    const id = workspaceId, entry = entries.get(id);
+    if (!profile || !entry || !snapshot?.editor?.eligible || snapshot?.playback?.url || snapshot?.activeOperation || jobActive() || processingElsewhere() || entry.previewRequest || discarding) return;
+    const sourceAssetId = snapshot.sourceAssetId, request = {};
+    Object.assign(entry, { previewRequest: true, previewAttempted: true, previewError: null, previewToken: request });
+    const ownsRequest = () => entries.get(id) === entry && !removedIds.has(id)
+      && entry.previewToken === request && entry.snapshot.sourceAssetId === sourceAssetId;
+    processingControls();
+    try {
+      const data = await post('/api/workspace/editor', { workspaceId: id, sourceAssetId });
+      if (ownsRequest()) {
+        entry.snapshot = { ...entry.snapshot, playback: data.workspace.playback, editor: data.workspace.editor };
+        if (workspaceId === id) accept(entry.snapshot);
+      }
+    } catch (error) {
+      if (ownsRequest() && !entry.snapshot.playback?.url) entry.previewError = error.message;
+    } finally {
+      // Selection can move A -> B -> A while the request is pending. Settlement
+      // belongs to the live entry/request; controls read that entry directly.
+      if (ownsRequest()) { entry.previewRequest = false; if (workspaceId === id) processingControls(); }
+    }
   }
   $('#processing-prepare-preview').addEventListener('click', preparePreview);
-  $('#processing-file-list').addEventListener('change', () => {
-    // Selection belongs to this one original source. Re-selecting never resets
-    // its profile or reacquires media; playback preparation is idempotent.
-    if (!previewAttempted) preparePreview();
-  });
+  $('#processing-file-list').addEventListener('change', event => selectEntry(event.target.value));
   settingsForm.addEventListener('submit', event => event.preventDefault());
+  $('#processing-clear-video-settings').addEventListener('click', () => {
+    if (!profile) return;
+    const settings = profile.state().settings, defaults = profiles.defaults();
+    for (const key of ['videoCodec', 'scale', 'frameRate', 'rate']) settings[key] = defaults[key];
+    const entry = entries.get(workspaceId); entry.copiedInactiveVideo = false; entry.videoDraft = null;
+    profile.update({ settings }); if (sharedSettings) applyOutputSettings(settings);
+    restoreSettings(settings); invalidatePlan(true); renderSettings(); processingControls();
+  });
   function settingsChanged(event) {
+    if (event.target.id === 'processing-container') {
+      const entry = entries.get(workspaceId);
+      if (entry) {
+        entry.copiedInactiveVideo = false;
+        if (snapshot?.inspection?.video && ['m4a', 'mp3'].includes(event.target.value) && !['m4a', 'mp3'].includes(profile.state().settings.container)) {
+          const previous = profile.state().settings; entry.videoDraft = {};
+          for (const key of ['videoCodec', 'scale', 'frameRate', 'rate']) entry.videoDraft[key] = structuredClone(previous[key]);
+        }
+      }
+    }
     if (event.target.id === 'processing-video-bitrate') settingsForm.querySelector('[name="processing-rate"][value="bitrate"]').checked = true;
     if (event.target.id === 'processing-maximum-mb') settingsForm.querySelector('[name="processing-rate"][value="size"]').checked = true;
     if (event.target.name === 'processing-rate') {
@@ -463,14 +684,108 @@
     $(`#${id}`).addEventListener('change', refreshDraft); $(`#${id}`).addEventListener('input', refreshDraft);
   }
   document.addEventListener('lvovd:editor-plan-changed', refreshDraft);
-  document.addEventListener('lvovd:editor-state-changed', () => { if (profile) { profile.update({ editorState: editor.authoringState() }); processingControls(); } });
+  document.addEventListener('lvovd:editor-state-changed', () => { if (profile && !resetting && editor.authoringState().workspaceId === workspaceId) { profile.update({ editorState: editor.authoringState() }); processingControls(); } });
   $('#processing-reset').addEventListener('click', () => {
     if (!profile) return;
     if ((profile.hasChanges() || editor.hasPendingWork()) && !root.confirm('Reset this file’s cuts and output settings? The original source and any previous download will be kept.')) return;
+    sharedSettings = null; $('#processing-apply-all').checked = false;
     resetting = true; settingsForm.reset(); editor.resetFile(); profile.reset(); resetting = false;
-    profile.update({ editorState: editor.authoringState() }); invalidatePlan(); renderSettings(); processingControls();
+    const entry = entries.get(workspaceId); entry.videoDraft = null; entry.copiedInactiveVideo = false;
+    profile.update({ editorState: editor.authoringState() }); invalidatePlan(true); renderSettings(); processingControls();
   });
   retry.addEventListener('click', reviewPlan);
+  function invalidateBatch() {
+    batchVersion++; batchPlans = []; $('#processing-batch-submit').disabled = true;
+    if (!$('#processing-batch-review').hidden) $('#processing-batch-files').textContent = 'Files or settings changed. Choose Process All Files to review the current drafts again.';
+  }
+  function batchCanSubmit() {
+    const selected = batchPlans.filter(item => item.selected?.checked);
+    $('#processing-batch-submit').disabled = batchBusy || !selected.length || selected.some(item => item.warnings.some(box => !box.checked)
+      || item.entry.profile.draft().draftRevision !== item.plan.draftRevision || jobActive(item.entry.snapshot.id));
+  }
+  function copyOutputSettings(entry, settings) {
+    const changed = entry.profile.update({ settings: profiles.copySettings(settings) });
+    if (changed) {
+      entry.plan = null; entry.scaleChoice = null; entry.copiedInactiveVideo = true; entry.videoDraft = null;
+    }
+    return changed;
+  }
+  function applyOutputSettings(settings) {
+    sharedSettings = profiles.copySettings(settings);
+    let changed = false;
+    for (const [id, entry] of entries) {
+      if (id !== workspaceId && entry.profile) changed = copyOutputSettings(entry, settings) || changed;
+    }
+    if (changed) invalidateBatch();
+  }
+  $('#processing-apply-all').addEventListener('change', event => {
+    if (!event.target.checked || !profile) { sharedSettings = null; return; }
+    saveSelected(); applyOutputSettings(profile.state().settings);
+    message('All output settings now apply to every file. Cuts, queued work and existing downloads stay unchanged.');
+  });
+  $('#processing-process-all').addEventListener('click', async () => {
+    saveSelected(); invalidateBatch(); const version = batchVersion;
+    batchBusy = true; $('#processing-batch-review').hidden = false; $('#processing-batch-files').textContent = 'Reviewing files…'; processingControls();
+    const reviewed = [];
+    try {
+      for (const entry of entries.values()) {
+        if (version !== batchVersion) return;
+        const draft = entry.profile?.draft(), output = entry.snapshot.conversion?.output;
+        const revision = output?.draftRevision ?? output?.processingSnapshot?.draftRevision ?? output?.provenance?.draftRevision;
+        let reason = !draft ? 'Source preparation is not complete.' : jobActive(entry.snapshot.id) ? 'Already queued or running.'
+          : output && revision === draft.draftRevision ? 'This draft already has a successful download.' : null;
+        let reviewedPlan = null;
+        if (!reason) {
+          try {
+            reviewedPlan = (await post('/api/processing/plan', draft)).plan;
+            if (!['executable', 'no-op'].includes(reviewedPlan.status)) reason = reviewedPlan.message;
+          } catch (error) { reason = error.message; }
+        }
+        if (version !== batchVersion) return;
+        reviewed.push({ entry, plan: reviewedPlan, reason });
+      }
+      $('#processing-batch-files').replaceChildren(); batchPlans = reviewed;
+      for (const item of reviewed) {
+        const row = document.createElement('div'); row.className = 'processing-batch-row';
+        const label = document.createElement('label'), checkbox = document.createElement('input'), title = document.createElement('span');
+        checkbox.type = 'checkbox'; checkbox.checked = !item.reason; checkbox.disabled = Boolean(item.reason); item.selected = checkbox; item.warnings = [];
+        title.textContent = item.entry.snapshot.source?.name || 'Local file'; label.append(checkbox, title); row.append(label);
+        const summary = document.createElement('p'); summary.className = 'help';
+        summary.textContent = item.reason || [`Draft ${item.plan.draftRevision}`, facts.formatDuration(item.plan.timing?.durationSeconds), item.plan.downloadFilename, item.plan.message].filter(Boolean).join(' · ');
+        row.append(summary); checkbox.addEventListener('change', batchCanSubmit);
+        if (!item.reason) {
+          const details = document.createElement('details'), heading = document.createElement('summary'), settings = document.createElement('p');
+          heading.textContent = 'Output settings'; details.className = 'processing-review-details'; settings.className = 'help';
+          const output = item.plan.output || {}, requested = item.plan.settings;
+          settings.textContent = [output.videoCodec && facts.familiarCodecName(output.videoCodec), output.container,
+            output.width && `${output.width} × ${output.height}`, output.frameRate && `${output.frameRate} fps`,
+            output.videoCodec && rateDescription(requested.rate), output.audioCodec ? `${facts.familiarCodecName(output.audioCodec)} audio${requested.audio.bitrateKbps ? ` · ${requested.audio.bitrateKbps} kbps` : ''}` : 'No audio output',
+            item.plan.sizeEstimate?.bytes != null ? `${sizeInMB(item.plan.sizeEstimate.bytes)} ${item.plan.sizeEstimate.exact ? 'exact' : 'estimated'}` : item.plan.sizeEstimate?.explanation].filter(Boolean).join(' · ');
+          const changes = document.createElement('ul');
+          for (const change of item.plan.changes || []) { const line = document.createElement('li'); line.textContent = change; changes.append(line); }
+          details.append(heading, settings, changes); row.append(details);
+        }
+        if (!item.reason) for (const warning of item.plan.warnings || []) {
+          const warningLabel = document.createElement('label'); warningLabel.className = 'conversion-warning';
+          if (warning.required !== false) { const box = document.createElement('input'); box.type = 'checkbox'; box.value = warning.id; box.addEventListener('change', batchCanSubmit); item.warnings.push(box); warningLabel.append(box); }
+          const text = document.createElement('span'); text.textContent = warning.message; warningLabel.append(text); row.append(warningLabel);
+        }
+        $('#processing-batch-files').append(row);
+      }
+    } finally { batchBusy = false; batchCanSubmit(); processingControls(); }
+  });
+  $('#processing-batch-close').addEventListener('click', () => { invalidateBatch(); $('#processing-batch-review').hidden = true; });
+  $('#processing-batch-submit').addEventListener('click', async () => {
+    batchCanSubmit(); if ($('#processing-batch-submit').disabled) return;
+    const chosen = batchPlans.filter(item => item.selected.checked);
+    batchBusy = true; batchCanSubmit(); processingControls();
+    try {
+      const requests = chosen.map(item => ({ ...item.entry.profile.submit(item.plan), acknowledgedWarnings: item.warnings.filter(box => box.checked).map(box => box.value) }));
+      const data = await post('/api/processing/queue', { collectionId, entries: requests });
+      acceptCollection(data.collection || data); invalidateBatch(); $('#processing-batch-review').hidden = true;
+    } catch (error) { message(error.message, true); invalidateBatch(); }
+    finally { batchBusy = false; processingControls(); }
+  });
   start.addEventListener('click', async () => {
     if (start.disabled) return;
     if (!settingsForm.reportValidity()) return;
@@ -478,40 +793,51 @@
     const token = generation, reviewed = plan, submitted = profile.submit(reviewed);
     operationRequest = true; processingControls();
     try {
-      const data = await post('/api/processing/start', { ...submitted,
-        acknowledgedWarnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value) });
-      if (token === generation) accept(data.workspace);
+      const data = await post('/api/processing/queue', { collectionId, entries: [{ ...submitted,
+        acknowledgedWarnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value) }] });
+      acceptCollection(data.collection || data);
     } catch (error) { if (token === generation) { $('#conversion-plan-title').textContent = error.message; plan = null; } }
     finally { if (token === generation) { operationRequest = false; processingControls(); } }
   });
-  for (const [button, endpoint] of [[cancel, '/api/conversion/cancel'], [$('#conversion-cleanup'), '/api/conversion/cleanup']]) {
+  for (const [button, endpoint] of [[cancel, '/api/processing/queue/cancel'], [$('#processing-cancel-all'), '/api/processing/queue/cancel'], [$('#conversion-cleanup'), '/api/conversion/cleanup']]) {
     button.addEventListener('click', async () => {
       const token = generation; button.disabled = true;
-      try { const data = await post(endpoint, { workspaceId }); if (token === generation) accept(data.workspace); }
+      try {
+        const data = await post(endpoint, endpoint.includes('/queue/') ? { collectionId, ...(button === cancel ? { workspaceId } : {}) } : { workspaceId });
+        if (data.collection || data.id === collectionId) acceptCollection(data.collection || data);
+        else if (token === generation) accept(data.workspace);
+      }
       catch (error) { if (token === generation) $('#conversion-status').textContent = error.message; }
       finally { if (token === generation) processingControls(); }
     });
   }
   $('#workspace-retry-cleanup').addEventListener('click', async () => {
-    const button = $('#workspace-retry-cleanup'), id = retainedCleanupId; if (!id) return; button.disabled = true;
-    try { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') { retainedCleanupId = null; button.hidden = true; choose.disabled = false; publish(); } message(data.cleanup?.message || 'Temporary cleanup complete.'); }
+    const button = $('#workspace-retry-cleanup'); if (!cleanupIds.size) return; button.disabled = true;
+    try { for (const id of cleanupIds) { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') cleanupIds.delete(id); message(data.cleanup?.message || 'Temporary cleanup complete.'); } button.hidden = !cleanupIds.size; publish(); }
     catch (error) { message(error.message, true); }
     finally { button.disabled = false; }
   });
   choose.addEventListener('click', () => input.click());
-  input.addEventListener('change', () => { if (input.files?.length !== 1) message('Choose exactly one local video or audio file.', true); else beginUpload(input.files[0]); });
-  for (const selector of ['#workspace-discard', '#workspace-cancel', '#workspace-failure-discard']) $(selector).addEventListener('click', discard);
-  for (const name of ['dragenter', 'dragover']) panel.addEventListener(name, event => { event.preventDefault(); if (!workspaceId && !upload) intake.classList.add('dragover'); });
+  $('#processing-add-files').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => addFiles([...input.files || []]));
+  for (const selector of ['#workspace-discard', '#workspace-failure-discard']) $(selector).addEventListener('click', discard);
+  $('#workspace-cancel').addEventListener('click', () => {
+    if (upload || pendingUploads.length || starting) {
+      uploadGeneration++; pendingUploads = []; starting = false;
+      if (acquiring) { acquiring = false; generation++; }
+      if (upload) upload.abort(); else { progress.hidden = true; if (!workspaceId) intake.hidden = false; publish(); }
+    }
+    else discard();
+  });
+  for (const name of ['dragenter', 'dragover']) panel.addEventListener(name, event => { event.preventDefault(); intake.classList.add('dragover'); });
   panel.addEventListener('dragleave', () => intake.classList.remove('dragover'));
   panel.addEventListener('drop', event => {
     event.preventDefault(); intake.classList.remove('dragover');
-    const files = [...(event.dataTransfer?.files || [])];
-    if (files.length !== 1) message('Choose exactly one local video or audio file. No files were added.', true);
-    else if (workspaceId || upload || starting || retainedCleanupId) message('Remove the current file before adding another. No files were added.', true);
-    else beginUpload(files[0]);
+    addFiles([...(event.dataTransfer?.files || [])]);
   });
   root.addEventListener('beforeunload', event => { if (hasTemporaryWork()) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
-  root.LVOVDLocalWorkspace = { accept, profileState() { if (profile) profile.update({ editorState: editor.authoringState() }); return profile?.state() || null; } };
+  root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
+    collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits) }; } };
   publish();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

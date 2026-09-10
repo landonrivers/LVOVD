@@ -16,6 +16,7 @@ test.beforeAll(async () => {
   ffmpeg(['-f', 'lavfi', '-i', 'sine=frequency=600:sample_rate=48000:duration=3', path.join(root, 'generated.wav')]);
   ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=15', '-c:v', 'libx264', '-preset', 'ultrafast', path.join(root, 'longer.mp4')]);
   ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=390x520:rate=20:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(root, 'portrait example.mp4')]);
+  await fs.writeFile(path.join(root, 'invalid.mp4'), 'Harmless generated invalid media fixture.');
 });
 test.afterAll(async () => { if (root) await fs.rm(root, { recursive: true, force: true }); });
 test.beforeEach(async ({ page }) => {
@@ -24,17 +25,51 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(async ({ page }) => {
   page.removeAllListeners('dialog'); page.on('dialog', dialog => dialog.accept());
-  const discard = page.locator('#workspace-discard');
-  if (await discard.isVisible()) { await discard.click(); await expect(page.locator('#media-drop-zone')).toBeVisible(); }
+  const discard = page.locator('#workspace-discard:visible, #workspace-failure-discard:visible').first();
+  while (await discard.isVisible()) {
+    const before = await page.locator('#processing-file-list option').count();
+    await discard.click();
+    await expect(page.locator('#processing-file-list option')).toHaveCount(before - 1);
+  }
+  await expect(page.locator('#media-drop-zone')).toBeVisible();
 });
 async function intake(page, filename = 'generated.mp4') {
-  const connection = page.waitForRequest(request => request.url().includes('/api/workspace/progress?workspace='));
+  const uploaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/media/local');
   await page.locator('#media-file-input').setInputFiles(path.join(root, filename));
-  const id = new URL((await connection).url()).searchParams.get('workspace');
+  await uploaded;
   await expect(page.locator('#local-media-ready')).toBeVisible();
   await expect(page.locator('#workspace-progress')).toBeHidden();
   await expect(page.locator('#conversion-start')).toBeEnabled();
-  return id;
+  return page.evaluate(() => window.LVOVDLocalWorkspace.profileState().workspaceId);
+}
+async function intakeFiles(page, filenames, { waitForReview = true, independentSettings = true } = {}) {
+  await page.locator('#media-file-input').setInputFiles(filenames.map(filename => path.join(root, filename)));
+  await expect(page.locator('#processing-file-list option')).toHaveCount(filenames.length);
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.sourceAssetId && entry.inspection))).toBe(true);
+  await expect(page.locator('#workspace-progress')).toBeHidden();
+  if (waitForReview) await expect(page.locator('#conversion-start')).toBeEnabled();
+  // Individual-profile scenarios explicitly opt out of the product's default sharing.
+  await expect(page.locator('#processing-apply-all')).toBeChecked();
+  if (independentSettings) await page.locator('#processing-apply-all').uncheck();
+  return page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+}
+async function selectFile(page, workspaceId) {
+  await page.locator('#processing-file-list').selectOption(workspaceId);
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.profileState().workspaceId)).toBe(workspaceId);
+}
+async function submitAll(page) {
+  await page.locator('#processing-process-all').click();
+  await expect(page.locator('#processing-batch-review')).toBeVisible();
+  await expect(page.locator('#processing-batch-review')).not.toContainText('Reviewing');
+  for (const box of await page.locator('#processing-batch-review input[type="checkbox"]:enabled').all()) await box.check();
+  await expect(page.locator('#processing-batch-submit')).toBeEnabled();
+  await page.locator('#processing-batch-submit').click();
+}
+function decodedTone(file) {
+  const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-'], { windowsHide: true, timeout: 30000 });
+  const start = 48000, end = Math.min(start + 48000, pcm.length / 4); let crossings = 0;
+  for (let sample = start + 1; sample < end; sample++) if (pcm.readFloatLE((sample - 1) * 4) <= 0 && pcm.readFloatLE(sample * 4) > 0) crossings++;
+  return crossings * 48000 / (end - start);
 }
 async function snapshot(workspaceId) {
   const response = await fetch(`http://127.0.0.1:3017/api/workspace/progress?workspace=${workspaceId}`);
@@ -80,8 +115,8 @@ test('unified workbench offers default no-op, keyboard access, byte-exact downlo
   const result = await downloaded(page); expect(result.bytes).toEqual(await fs.readFile(path.join(root, 'generated.mp4')));
   const state = await snapshot(id); expect(state.assets.map(asset => asset.role)).toEqual(['source']); expect(state.playback.assetId).toBe(state.sourceAssetId); expect(state.playback.proxy).toBe(false);
   await expect(page.locator('#processing-file-list option')).toHaveCount(1);
-  await expect(page.locator('#processing-file-list')).toHaveValue(state.sourceAssetId);
-  await page.locator('#processing-file-list').selectOption(state.sourceAssetId);
+  await expect(page.locator('#processing-file-list')).toHaveValue(id);
+  await page.locator('#processing-file-list').selectOption(id);
   await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
   await expect(page.locator('#processing-prepare-preview')).toBeHidden();
   expect(previews).toEqual([{ workspaceId: id, sourceAssetId: state.sourceAssetId }]);
@@ -153,7 +188,7 @@ test('linked rate and size controls review the current cuts and keep a completed
   await page.locator('#processing-suffix-enabled').check(); await page.locator('#processing-filename-suffix').fill('../bad');
   await expect(page.locator('#conversion-start')).toBeDisabled();
   page.once('dialog', dialog => dialog.accept()); await page.locator('#processing-reset').click();
-  await expect(page.locator('#processing-filename-suffix')).toHaveValue(' - processed');
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('-processed');
   await expect(page.locator('#processing-suffix-enabled')).toBeChecked();
 });
 
@@ -322,8 +357,8 @@ test('container-only MOV to MP4 remux keeps automatic original playback separate
 
 test('cuts plus H.264 settings make one real original-source result while pending cuts, playhead and zoom survive', async ({ page }) => {
   const uploads = [], connections = [], processing = [], renders = [];
-  page.on('request', request => { if (request.url().endsWith('/api/media/local')) uploads.push(request); if (request.url().includes('/api/workspace/progress')) connections.push(request);
-    if (request.url().endsWith('/api/processing/start')) processing.push(request.postDataJSON()); if (request.url().endsWith('/api/workspace/render')) renders.push(request); });
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/media/local') uploads.push(request); if (request.url().includes('/api/processing/queue/progress')) connections.push(request);
+    if (request.url().endsWith('/api/processing/queue')) processing.push(...request.postDataJSON().entries); if (request.url().endsWith('/api/workspace/render')) renders.push(request); });
   const id = await intake(page); await expect(page.locator('#editor-video')).toHaveAttribute('src', /api/);
   await cut(page); await exact(page, 'cut-start-time', '3'); await page.locator('#timeline-zoom-in').click(); await page.locator('#go-to-start').click();
   const window = await page.locator('#timeline-visible-label').textContent(), time = await page.locator('#editor-video').evaluate(video => video.currentTime);
@@ -405,15 +440,24 @@ test('narrow video workflow exposes keyboard timeline, scale and maximum-size re
   await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-unified-narrow.png') });
 });
 
-test('additional dropped files are rejected and Remove File confirmation preserves or invalidates the entry', async ({ page, request }) => {
+test('additional local files are accepted and Remove File confirmation invalidates only its selected entry', async ({ page, request }) => {
   const uploads = []; page.on('request', request => { if (request.url().endsWith('/api/media/local')) uploads.push(request); });
   const id = await intake(page);
-  await page.locator('#media-workspace-panel').evaluate(panel => { const dataTransfer = new DataTransfer(); dataTransfer.items.add(new File(['x'], 'extra-a.mp4')); dataTransfer.items.add(new File(['x'], 'extra-b.mp4')); panel.dispatchEvent(new DragEvent('drop', { dataTransfer, bubbles: true, cancelable: true })); });
-  await expect(page.locator('#workspace-status')).toContainText('exactly one'); expect(uploads).toHaveLength(1);
+  const dropped = await Promise.all(['portrait example.mp4', 'generated.wav'].map(async name => ({ name, bytes: [...await fs.readFile(path.join(root, name))] })));
+  await page.locator('#media-workspace-panel').evaluate((panel, files) => {
+    const dataTransfer = new DataTransfer();
+    for (const file of files) dataTransfer.items.add(new File([new Uint8Array(file.bytes)], file.name));
+    panel.dispatchEvent(new DragEvent('drop', { dataTransfer, bubbles: true, cancelable: true }));
+  }, dropped);
+  await expect(page.locator('#processing-file-list option')).toHaveCount(3); expect(uploads).toHaveLength(3);
+  await selectFile(page, id);
   await exact(page, 'editor-start-time', '1'); page.once('dialog', dialog => dialog.dismiss()); await page.locator('#workspace-discard').click();
   await expect(page.locator('#local-media-ready')).toBeVisible();
-  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click(); await expect(page.locator('#media-drop-zone')).toBeVisible();
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2); await expect(page.locator('#local-media-ready')).toBeVisible();
   expect((await request.get(`/api/workspace/progress?workspace=${id}`)).status()).toBe(404);
+  const remaining = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  for (const entry of remaining.entries) expect((await snapshot(entry.workspaceId)).sourceAssetId).toBe(entry.sourceAssetId);
 });
 
 test('video cuts apply to audio extraction and Reset Range keeps the selected encoding settings', async ({ page }) => {
@@ -449,4 +493,490 @@ test('cancellation preserves current cuts and admits an explicit retry with immu
   expect((await snapshot(id)).conversion.status).toBe('cancelled'); await expect(page.locator('#editor-start-time')).toHaveValue('00:00:00.500');
   await processFile(page); await expect(page.locator('#conversion-output-target')).not.toContainText('Previous draft');
   expect((await snapshot(id)).conversion.output.processingSnapshot.settings.rate.preset).toBe('ultrafast');
+});
+
+test('multiple local entries restore independent authoring and settings through one browser progress connection', async ({ page }) => {
+  const uploads = [], connections = [], previews = [];
+  page.on('request', request => {
+    const endpoint = new URL(request.url()).pathname;
+    if (endpoint === '/api/media/local') uploads.push(request);
+    if (endpoint.endsWith('/progress')) connections.push(request.url());
+    if (endpoint === '/api/workspace/editor') previews.push(request.postDataJSON());
+  });
+  const collection = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4', 'generated.wav']);
+  const [first, second, audio] = collection.entries;
+  await expect(page.locator('#processing-file-list')).toHaveValue(first.workspaceId);
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
+  expect(previews.map(request => request.workspaceId)).toEqual([first.workspaceId]);
+  await cut(page); await exact(page, 'cut-start-time', '3'); await page.locator('#timeline-zoom-in').click();
+  await page.locator('#go-to-start').click();
+  await page.locator('[name="processing-rate"][value="quality"]').check(); await exact(page, 'processing-crf', '24');
+  await page.locator('#processing-filename-suffix').fill('_first');
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.seeking)).toBe(false);
+  const firstView = await page.evaluate(() => window.LVOVDEditorView.authoringState());
+  const firstProfile = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+  await selectFile(page, second.workspaceId);
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.videoHeight)).toBe(520);
+  await exact(page, 'editor-end-time', '2'); await exact(page, 'cut-start-time', '0.5');
+  await page.locator('#processing-scale').selectOption('percent:50'); await page.locator('#processing-filename-suffix').fill('_portrait');
+  await page.locator('#timeline-zoom-in').click();
+  const secondView = await page.evaluate(() => window.LVOVDEditorView.authoringState());
+  await selectFile(page, audio.workspaceId);
+  await expect(page.locator('#media-editor')).toBeHidden();
+  await page.locator('#processing-container').selectOption('m4a'); await page.locator('#processing-audio-codec').selectOption('aac');
+  await page.locator('#processing-filename-suffix').fill('_audio');
+  await selectFile(page, first.workspaceId);
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('_first');
+  await expect(page.locator('#processing-crf')).toHaveValue('24');
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.seeking)).toBe(false);
+  expect(await page.evaluate(() => window.LVOVDEditorView.authoringState())).toEqual(firstView);
+  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).draftRevision).toBe(firstProfile.draftRevision);
+  await selectFile(page, second.workspaceId);
+  expect(await page.evaluate(() => window.LVOVDEditorView.authoringState())).toEqual(secondView);
+  await expect(page.locator('#processing-scale')).toHaveValue('percent:50');
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('_portrait');
+  await page.evaluate(() => { const state = window.LVOVDLocalWorkspace.collectionState(); state.entries[0].settings.filenameSuffix = '_mutated'; state.entries[0].editPlan.keepRanges.length = 0; });
+  await selectFile(page, first.workspaceId);
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('_first');
+  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).editPlan).toEqual(firstProfile.editPlan);
+  expect(uploads).toHaveLength(3); expect(connections).toHaveLength(1);
+  expect(connections[0]).toContain('/api/processing/queue/progress?collection=');
+  expect(previews.map(request => request.workspaceId)).toEqual([first.workspaceId, second.workspaceId]);
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBe(4);
+  await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-multiple-files-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#processing-file-list').focus(); await page.keyboard.press('ArrowDown');
+  await expect(page.locator('#processing-file-list')).toHaveValue(second.workspaceId);
+  await page.locator('#processing-process-all').focus(); await expect(page.locator('#processing-process-all')).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBe(4);
+  await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-multiple-files-narrow.png') });
+});
+
+test('a delayed preview for another entry cannot replace the selected player or its profile', async ({ page }) => {
+  let release, arrived;
+  const hold = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { arrived = resolve; });
+  let firstRequest = true;
+  await page.route('**/api/workspace/editor', async route => {
+    if (!firstRequest) return route.continue();
+    firstRequest = false; const response = await route.fetch(); arrived(); await hold; await route.fulfill({ response });
+  });
+  const collection = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4'], { waitForReview: false }); await waiting;
+  const [first, second] = collection.entries;
+  await selectFile(page, second.workspaceId);
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.videoHeight)).toBe(520);
+  await exact(page, 'editor-end-time', '2'); await page.locator('#processing-filename-suffix').fill('_selected');
+  release(); await expect(page.locator('#editor-media-name')).toHaveText('portrait example.mp4');
+  await expect(page.locator('#editor-end-time')).toHaveValue('00:00:02.000');
+  await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(second.sourceAssetId));
+  await selectFile(page, first.workspaceId);
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.videoHeight)).toBe(90);
+  await expect(page.locator('#editor-end-time')).toHaveValue('00:00:05.000');
+  await selectFile(page, second.workspaceId); await expect(page.locator('#processing-filename-suffix')).toHaveValue('_selected');
+});
+
+test('returning to a file before its preview prepares settles selected controls and preserves its profile', async ({ page }) => {
+  let release, arrived;
+  const hold = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { arrived = resolve; });
+  let first = true;
+  await page.route('**/api/workspace/editor', async route => {
+    if (!first) return route.continue();
+    first = false; arrived(); await hold; await route.continue();
+  });
+  try {
+    const collection = await intakeFiles(page, ['generated.mp4', 'generated.wav'], { waitForReview: false }); await waiting;
+    const [a, b] = collection.entries;
+    await exact(page, 'editor-start-time', '0.5'); await exact(page, 'editor-end-time', '4.5');
+    await page.locator('#go-to-start').click();
+    await page.locator('#timeline-zoom-in').click();
+    await exact(page, 'cut-start-time', '2');
+    await page.locator('#processing-filename-suffix').fill('_pending_a');
+    const before = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+    await selectFile(page, b.workspaceId); await expect(page.locator('#conversion-start')).toBeEnabled();
+    await page.locator('#processing-filename-suffix').fill('_b');
+    await selectFile(page, a.workspaceId);
+    await expect(page.locator('#processing-preview-note')).toContainText('Preparing playback');
+    release();
+    await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
+    await expect(page.locator('#conversion-start')).toBeEnabled();
+    await expect(page.locator('#processing-preview-note')).not.toContainText('Preparing');
+    const after = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+    expect(after.editPlan).toEqual(before.editPlan); expect(after.settings).toEqual(before.settings);
+    expect(after.editorState.pendingCut).toEqual(before.editorState.pendingCut);
+    expect(after.editorState.visibleWindow).toEqual(before.editorState.visibleWindow);
+    expect(after.editorState.playheadSeconds).toBe(before.editorState.playheadSeconds);
+    await selectFile(page, b.workspaceId); await expect(page.locator('#processing-filename-suffix')).toHaveValue('_b');
+  } finally { release(); }
+});
+
+for (const outcome of ['failure and retry', 'removed', 'another file selected']) {
+  test(`pending preview after A to B to A settles safely with ${outcome}`, async ({ page }) => {
+    let release, arrived;
+    const hold = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { arrived = resolve; });
+    let first = true;
+    const previews = [], connections = [];
+    page.on('request', request => {
+      if (new URL(request.url()).pathname === '/api/workspace/editor') previews.push(request.postDataJSON());
+      if (new URL(request.url()).pathname === '/api/processing/queue/progress') connections.push(request.url());
+    });
+    await page.route('**/api/workspace/editor', async route => {
+      if (!first) return route.continue();
+      first = false; arrived(); await hold;
+      // Exercise an actual server rejection before any preparation, then let
+      // Retry submit the unchanged authoritative source ID successfully.
+      return route.continue(outcome === 'failure and retry'
+        ? { postData: JSON.stringify({ ...route.request().postDataJSON(), sourceAssetId: 'unavailable-fixture-source' }) } : {});
+    });
+    try {
+      const collection = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4'], { waitForReview: false }); await waiting;
+      const [a, b] = collection.entries;
+      await page.locator('#processing-filename-suffix').fill('_pending_a');
+      await exact(page, 'cut-start-time', '2');
+      await selectFile(page, b.workspaceId); await expect(page.locator('#conversion-start')).toBeEnabled();
+      await page.locator('#processing-filename-suffix').fill('_b');
+      await exact(page, 'editor-end-time', '2');
+      const bProfile = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+      await selectFile(page, a.workspaceId);
+      await expect(page.locator('#processing-preview-note')).toContainText('Preparing playback');
+      if (outcome === 'removed') {
+        page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+        await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+      } else if (outcome === 'another file selected') await selectFile(page, b.workspaceId);
+      const completed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/editor'
+        && response.request().postDataJSON().workspaceId === a.workspaceId);
+      release(); const response = await completed; await response.finished();
+      if (outcome === 'failure and retry') {
+        expect(response.status()).toBe(409);
+        await expect(page.locator('#processing-preview-note')).not.toContainText('Preparing playback');
+        await expect(page.locator('#processing-prepare-preview')).toBeVisible();
+        await expect(page.locator('#processing-prepare-preview')).toBeEnabled();
+        await expect(page.locator('#conversion-start')).toBeEnabled();
+        await page.locator('#processing-prepare-preview').click();
+        await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
+        await expect(page.locator('#processing-prepare-preview')).toBeHidden();
+        await expect(page.locator('#processing-preview-note')).toBeEmpty();
+        await expect(page.locator('#conversion-start')).toBeEnabled();
+        await expect(page.locator('#processing-filename-suffix')).toHaveValue('_pending_a');
+        await expect(page.locator('#cut-start-time')).toHaveValue('00:00:02.000');
+        expect(previews.filter(item => item.workspaceId === a.workspaceId)).toHaveLength(2);
+        await selectFile(page, b.workspaceId);
+      } else {
+        expect(response.status()).toBe(outcome === 'removed' ? 404 : 202);
+        await expect(page.locator('#processing-file-list')).toHaveValue(b.workspaceId);
+        await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(b.sourceAssetId));
+        if (outcome === 'removed') {
+          const state = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+          expect(state.entries.map(entry => entry.workspaceId)).toEqual([b.workspaceId]);
+        }
+      }
+      await expect(page.locator('#conversion-start')).toBeEnabled();
+      const after = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+      expect(after.workspaceId).toBe(b.workspaceId); expect(after.editPlan).toEqual(bProfile.editPlan);
+      expect(after.settings).toEqual(bProfile.settings); expect(connections).toHaveLength(1);
+    } finally { release(); }
+  });
+}
+
+test('removing a completed entry preserves an unrelated pending upload and its remaining file list', async ({ page }) => {
+  await intake(page); await page.locator('#conversion-start').click();
+  await expect(page.locator('#conversion-download')).toBeVisible();
+  let release, arrived;
+  const hold = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { arrived = resolve; });
+  const failed = []; let first = true;
+  page.on('requestfailed', request => { if (new URL(request.url()).pathname === '/api/media/local') failed.push(request.url()); });
+  await page.route('**/api/media/local', async route => {
+    if (!first) return route.continue(); first = false; arrived(); await hold; await route.continue();
+  });
+  try {
+    await page.locator('#media-file-input').setInputFiles(['portrait example.mp4', 'generated.wav'].map(name => path.join(root, name)));
+    await waiting;
+    page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+    await expect(page.locator('#processing-file-list option')).toHaveCount(0);
+    release();
+    await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+    await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.inspection))).toBe(true);
+    await expect(page.locator('#conversion-start')).toBeEnabled();
+    await expect(page.locator('#processing-file-list option')).toHaveText(['portrait example.mp4', 'generated.wav']);
+    expect(failed).toEqual([]);
+  } finally { release(); }
+});
+
+test('an older queue HTTP snapshot cannot overwrite newer progress or remove a subsequently added file', async ({ page }) => {
+  const connections = []; page.on('request', request => { if (new URL(request.url()).pathname === '/api/processing/queue/progress') connections.push(request); });
+  const firstId = await intake(page);
+  let release, arrived;
+  const hold = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { arrived = resolve; });
+  let firstResponse = true;
+  await page.route('**/api/processing/queue', async route => {
+    if (!firstResponse) return route.continue();
+    firstResponse = false; const response = await route.fetch(); arrived(); await hold; await route.fulfill({ response });
+  });
+  await page.locator('#conversion-start').click(); await waiting;
+  await expect(page.locator('#conversion-download')).toBeVisible();
+  const originalUrl = await page.locator('#conversion-download').getAttribute('href');
+  await page.locator('#media-file-input').setInputFiles(path.join(root, 'portrait example.mp4'));
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.sourceAssetId && entry.inspection))).toBe(true);
+  const secondId = (await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState())).entries.find(entry => entry.workspaceId !== firstId).workspaceId;
+  const released = page.waitForResponse(response => new URL(response.url()).pathname === '/api/processing/queue');
+  release(); await released;
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  await expect(page.locator('#conversion-download')).toHaveAttribute('href', originalUrl);
+  expect((await downloaded(page)).bytes).toEqual(await fs.readFile(path.join(root, 'generated.mp4')));
+  await selectFile(page, secondId); await expect(page.locator('#editor-media-name')).toHaveText('portrait example.mp4');
+  await processFile(page); expect((await downloaded(page)).bytes).toEqual(await fs.readFile(path.join(root, 'portrait example.mp4')));
+  await selectFile(page, firstId); await expect(page.locator('#conversion-download')).toHaveAttribute('href', originalUrl);
+  expect(connections).toHaveLength(1);
+});
+
+test('Apply output settings copies every setting and reviews incompatible files without copying cuts', async ({ page }) => {
+  const collection = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4', 'generated.wav']);
+  const [first, second, audio] = collection.entries;
+  await cut(page); await page.locator('#processing-video-codec').selectOption('h264');
+  await page.locator('[name="processing-rate"][value="quality"]').check(); await exact(page, 'processing-crf', '24');
+  await page.locator('#processing-scale').selectOption('percent:50'); await page.locator('#processing-filename-suffix').fill('_shared');
+  await selectFile(page, second.workspaceId); await exact(page, 'editor-end-time', '2'); await exact(page, 'cut-start-time', '0.5');
+  await page.locator('#timeline-zoom-in').click(); const before = await page.evaluate(() => window.LVOVDEditorView.authoringState());
+  await selectFile(page, first.workspaceId);
+  await page.getByRole('checkbox', { name: 'Apply output settings to all', exact: true }).check();
+  await selectFile(page, second.workspaceId);
+  await expect(page.locator('#processing-crf')).toHaveValue('24'); await expect(page.locator('#processing-filename-suffix')).toHaveValue('_shared');
+  await expect(page.locator('#processing-scale')).toHaveValue('percent:50');
+  expect(await page.evaluate(() => window.LVOVDEditorView.authoringState())).toEqual(before);
+  await selectFile(page, audio.workspaceId); await expect(page.locator('#conversion-start')).toBeDisabled();
+  await expect(page.locator('#conversion-plan-title')).not.toContainText('Reviewing');
+  await expect(page.locator('#conversion-plan')).toContainText(/video|supported|audio/i);
+  await page.locator('#processing-process-all').click(); await expect(page.locator('#processing-batch-review')).toBeVisible();
+  await expect(page.locator('#processing-batch-review')).toContainText('generated.wav');
+  await expect(page.locator('#processing-batch-review')).toContainText(/review|invalid|unavailable|cannot/i);
+  expect((await snapshot(first.workspaceId)).conversion.output).toBeNull();
+  expect((await snapshot(second.workspaceId)).conversion.output).toBeNull();
+  const unavailable = page.locator('.processing-batch-row').filter({ hasText: 'generated.wav' });
+  await expect(unavailable.locator('input[type="checkbox"]')).toBeDisabled();
+  for (const box of await page.locator('#processing-batch-review input[type="checkbox"]:enabled').all()) await box.check();
+  await page.locator('#processing-batch-submit').click();
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().jobs.map(job => job.status))).toEqual(['completed', 'completed']);
+  expect((await snapshot(audio.workspaceId)).conversion.output).toBeNull();
+  await selectFile(page, first.workspaceId); const firstOutput = probe((await downloaded(page, 'shared-first.mp4')).file);
+  expect(firstOutput.streams.find(stream => stream.codec_type === 'video').width).toBe(80);
+  expect(Math.abs(Number(firstOutput.format.duration) - 3)).toBeLessThanOrEqual(0.08);
+  await selectFile(page, second.workspaceId); const secondOutput = probe((await downloaded(page, 'shared-second.mp4')).file);
+  expect(secondOutput.streams.find(stream => stream.codec_type === 'video').width).toBe(194); // 50% fit rounds down to even encoder dimensions.
+  expect(Math.abs(Number(secondOutput.format.duration) - 2)).toBeLessThanOrEqual(0.08);
+});
+
+test('a file that fails real inspection leaves the Files list usable and does not prevent processing another entry', async ({ page }) => {
+  await page.locator('#media-file-input').setInputFiles([path.join(root, 'invalid.mp4'), path.join(root, 'generated.mp4')]);
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  await expect(page.locator('#processing-file-list')).toBeVisible(); await expect(page.locator('#workspace-failure')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.status)).toBe('ready');
+  const collection = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  const [invalid, valid] = collection.entries;
+  expect(invalid.workspace.status).toBe('error');
+  await selectFile(page, valid.workspaceId); await processFile(page);
+  expect((await downloaded(page)).bytes).toEqual(await fs.readFile(path.join(root, 'generated.mp4')));
+  await page.locator('#processing-container').selectOption('mov');
+  await page.locator('#processing-file-list').selectOption(invalid.workspace.id);
+  await expect(page.locator('#workspace-failure')).toBeVisible();
+  await expect(page.locator('#processing-file-list')).toBeVisible();
+  await submitAll(page);
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().jobs.map(job => job.status))).toEqual(['completed']);
+  expect((await snapshot(invalid.workspace.id)).status).toBe('error');
+  await selectFile(page, valid.workspaceId);
+  await expect(page.locator('#conversion-output-settings')).toContainText('Container: mov');
+  const output = await downloaded(page, 'after-invalid.mov');
+  expect(probe(output.file).streams.map(stream => stream.codec_name)).toEqual(['h264', 'aac']);
+});
+
+test('Process All queues independent immutable drafts and downloads each file with its own retained content', async ({ page }) => {
+  test.setTimeout(90000);
+  const submitted = []; page.on('request', request => { if (new URL(request.url()).pathname === '/api/processing/queue') submitted.push(request.postDataJSON()); });
+  const collection = await intakeFiles(page, ['longer.mp4', 'generated.mp4', 'generated.wav']);
+  const [first, second, audio] = collection.entries;
+  await page.locator('[name="processing-rate"][value="quality"]').check(); await page.locator('#processing-preset').selectOption('veryslow');
+  await exact(page, 'editor-start-time', '0.5');
+  await selectFile(page, second.workspaceId); await cut(page); await page.locator('[name="processing-rate"][value="quality"]').check();
+  await exact(page, 'processing-crf', '24'); await page.locator('#processing-filename-suffix').fill('_second');
+  const secondRevision = (await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).draftRevision;
+  await selectFile(page, audio.workspaceId); await page.locator('#processing-container').selectOption('m4a');
+  await page.locator('#processing-audio-codec').selectOption('aac'); await page.locator('#processing-filename-suffix').fill('_audio');
+  await selectFile(page, first.workspaceId); await submitAll(page);
+  expect(submitted).toHaveLength(1); expect(submitted[0].entries.map(entry => entry.workspaceId)).toEqual([first.workspaceId, second.workspaceId, audio.workspaceId]);
+  await selectFile(page, second.workspaceId);
+  await expect.poll(() => page.evaluate(id => window.LVOVDLocalWorkspace.collectionState().jobs.find(job => job.workspaceId === id)?.status, second.workspaceId)).toBe('queued');
+  await page.locator('#processing-filename-suffix').fill('_newer'); await exact(page, 'editor-end-time', '4');
+  await expect(page.locator('#conversion-download')).toBeVisible({ timeout: 60000 });
+  await expect(page.locator('#conversion-output-target')).toContainText('Previous draft');
+  const secondOutput = await downloaded(page, 'batch-second.mp4'), secondInspection = probe(secondOutput.file);
+  expect(secondOutput.name).toBe('generated_second.mp4');
+  expect(Math.abs(Number(secondInspection.format.duration) - 3)).toBeLessThanOrEqual(0.08);
+  expect(secondInspection.streams.find(stream => stream.codec_type === 'video').width).toBe(160);
+  expect(decodedTone(secondOutput.file)).toBeCloseTo(700, -1);
+  expect((await snapshot(second.workspaceId)).conversion.output.processingSnapshot.draftRevision).toBe(secondRevision);
+  await expect(page.locator('#editor-end-time')).toHaveValue('00:00:04.000');
+  await selectFile(page, audio.workspaceId); await expect(page.locator('#conversion-download')).toBeVisible();
+  const audioOutput = await downloaded(page, 'batch-audio.m4a');
+  expect(audioOutput.name).toBe('generated_audio.m4a');
+  expect(probe(audioOutput.file).streams.map(stream => stream.codec_type)).toEqual(['audio']);
+  expect(decodedTone(audioOutput.file)).toBeCloseTo(600, -1);
+  await selectFile(page, first.workspaceId); const firstOutput = await downloaded(page, 'batch-first.mp4');
+  expect(Math.abs(Number(probe(firstOutput.file).format.duration) - 14.5)).toBeLessThanOrEqual(0.08);
+  expect(probe(firstOutput.file).streams.map(stream => stream.codec_type)).toEqual(['video']);
+  const jobs = (await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState())).jobs;
+  expect(jobs.map(job => job.status)).toEqual(['completed', 'completed', 'completed']);
+});
+
+test('queued Remove and Reset affect only their file while Cancel All preserves earlier downloads and stops later starts', async ({ page, request }) => {
+  test.setTimeout(90000);
+  const previews = []; page.on('request', request => { if (new URL(request.url()).pathname === '/api/workspace/editor') previews.push(request.postDataJSON()); });
+  const collection = await intakeFiles(page, ['longer.mp4', 'generated.mp4', 'portrait example.mp4']);
+  const [first, second, third] = collection.entries;
+  await processFile(page); const firstUrl = await page.locator('#conversion-download').getAttribute('href');
+  await page.locator('[name="processing-rate"][value="quality"]').check(); await page.locator('#processing-preset').selectOption('veryslow');
+  await exact(page, 'editor-start-time', '0.5');
+  await selectFile(page, second.workspaceId); await processFile(page);
+  const secondUrl = await page.locator('#conversion-download').getAttribute('href'), previous = (await downloaded(page)).bytes;
+  await cut(page); await page.locator('[name="processing-rate"][value="quality"]').check();
+  await selectFile(page, third.workspaceId); await exact(page, 'editor-end-time', '2');
+  await selectFile(page, first.workspaceId); await submitAll(page);
+  await selectFile(page, second.workspaceId);
+  await expect.poll(() => page.evaluate(id => window.LVOVDLocalWorkspace.collectionState().jobs.find(job => job.workspaceId === id)?.status, second.workspaceId)).toBe('queued');
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#processing-reset').click();
+  await expect(page.locator('#editor-start-time')).toHaveValue('00:00:00.000');
+  await expect(page.locator('#conversion-download')).toHaveAttribute('href', secondUrl);
+  await selectFile(page, third.workspaceId);
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  expect((await request.get(`/api/workspace/progress?workspace=${third.workspaceId}`)).status()).toBe(404);
+  await page.locator('#media-file-input').setInputFiles(path.join(root, 'generated.mov'));
+  await expect(page.locator('#processing-file-list option')).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.sourceAssetId && entry.inspection))).toBe(true);
+  const waitingPreview = (await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState())).entries.find(entry => ![first.workspaceId, second.workspaceId].includes(entry.workspaceId));
+  await selectFile(page, waitingPreview.workspaceId);
+  await expect(page.locator('#processing-preview-note')).toContainText('after');
+  expect(previews.some(body => body.workspaceId === waitingPreview.workspaceId)).toBe(false);
+  await page.locator('#processing-cancel-all').click();
+  await expect(page.locator('#processing-cancel-all')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().jobs.map(job => job.status))).toEqual(['cancelled', 'cancelled']);
+  await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(waitingPreview.sourceAssetId));
+  expect(previews.filter(body => body.workspaceId === waitingPreview.workspaceId)).toHaveLength(1);
+  await selectFile(page, second.workspaceId);
+  await expect(page.locator('#conversion-download')).toHaveAttribute('href', secondUrl);
+  expect((await downloaded(page)).bytes).toEqual(previous);
+  expect((await snapshot(second.workspaceId)).conversion.output.processingSnapshot.editPlan.keepRanges).toEqual([{ startSeconds: 0, endSeconds: 5 }]);
+  await selectFile(page, first.workspaceId);
+  await expect(page.locator('#editor-start-time')).toHaveValue('00:00:00.500');
+  await expect(page.locator('#processing-preset')).toHaveValue('veryslow');
+  await expect(page.locator('#conversion-download')).toHaveAttribute('href', firstUrl);
+  expect((await downloaded(page)).bytes).toEqual(await fs.readFile(path.join(root, 'longer.mp4')));
+  await selectFile(page, second.workspaceId); await processFile(page);
+  expect((await downloaded(page)).bytes).toEqual(previous);
+});
+
+
+test('shared output checkbox follows setting changes and new files, stops when unchecked, and Reset stays local', async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeEventSource = window.EventSource;
+    window.EventSource = class extends NativeEventSource { constructor(...args) { super(...args); window.sharedSettingsProgress = this; } };
+  });
+  await page.reload();
+  const initial = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4'], { independentSettings: false });
+  const [a, b] = initial.entries;
+  await expect(page.locator('#processing-apply-all')).toBeChecked();
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('-processed');
+  await expect(page.locator('#processing-rate-help')).toBeHidden();
+  await expect(page.locator('#processing-budget-help')).toHaveCount(0);
+  await expect(page.locator('#processing-apply-help')).toHaveText('Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged.');
+  await page.locator('#conversion-start').click(); await expect(page.locator('#conversion-download')).toBeVisible();
+  const previous = await downloaded(page);
+  await page.locator('#processing-video-codec').selectOption('h264');
+  await page.locator('[name="processing-rate"][value="quality"]').check(); await exact(page, 'processing-crf', '24');
+  await expect(page.getByRole('checkbox', { name: 'Apply output settings to all', exact: true })).toBeChecked();
+  await expect(page.locator('#processing-apply-settings summary, [name="processing-apply-group"]')).toHaveCount(0);
+  await page.locator('#processing-filename-suffix').fill('_linked');
+  let state = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  expect(state.entries[1].settings).toEqual(state.entries[0].settings);
+  expect(state.entries[0].result.filename).toBe(previous.name);
+  await selectFile(page, b.workspaceId); await exact(page, 'processing-crf', '22');
+  state = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  expect(state.entries.every(entry => entry.settings.rate.crf === 22)).toBe(true);
+  await page.locator('#processing-apply-all').uncheck(); await exact(page, 'processing-crf', '21');
+  state = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  expect(state.entries.map(entry => entry.settings.rate.crf)).toEqual([22, 21]);
+  await page.locator('#processing-apply-all').check();
+  // Deliver the real upload response before aggregate progress to cover both intake orderings.
+  await page.evaluate(() => {
+    const stream = window.sharedSettingsProgress; window.savedSharedProgress = stream.onmessage;
+    stream.onmessage = event => { window.pendingSharedProgress = event; };
+  });
+  await page.locator('#media-file-input').setInputFiles(path.join(root, 'generated.wav'));
+  await expect(page.locator('#processing-file-list option')).toHaveCount(3);
+  // Intake may return before inspection; resume progress so the actual inspector can publish its facts.
+  await page.evaluate(() => {
+    const stream = window.sharedSettingsProgress; stream.onmessage = window.savedSharedProgress;
+    if (window.pendingSharedProgress) stream.onmessage(window.pendingSharedProgress);
+  });
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.inspection))).toBe(true);
+  state = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  expect(state.entries.every(entry => JSON.stringify(entry.settings) === JSON.stringify(state.entries[0].settings))).toBe(true);
+  const otherDrafts = state.entries.filter(entry => entry.workspaceId !== b.workspaceId);
+  await selectFile(page, b.workspaceId);
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#processing-reset').click();
+  await expect(page.locator('#processing-apply-all')).not.toBeChecked();
+  state = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+  expect(state.entries.filter(entry => entry.workspaceId !== b.workspaceId).map(entry => entry.settings)).toEqual(otherDrafts.map(entry => entry.settings));
+  expect(state.entries.find(entry => entry.workspaceId === b.workspaceId).settings.videoCodec).toBe('unchanged');
+  await selectFile(page, a.workspaceId);
+  expect((await downloaded(page)).bytes).toEqual(previous.bytes);
+});
+
+test('file selection stays mounted and readable through progress with clear selected/all processing actions', async ({ page }, testInfo) => {
+  const state = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4', 'generated.wav']);
+  const [a, b] = state.entries;
+  await expect(page.locator('#processing-review-title')).toHaveText('Ready to process selected file');
+  await expect(page.locator('#processing-draft-status')).toBeHidden();
+  await expect(page.locator('#conversion-start')).toHaveText('Process Selected File');
+  await expect(page.locator('#processing-process-all')).toHaveText('Process All Files (3)');
+  await page.locator('#processing-file-list').evaluate(list => {
+    window.fileOptionsBeforeProgress = [...list.options];
+    window.fileListRemovals = 0;
+    new MutationObserver(records => { window.fileListRemovals += records.reduce((n, record) => n + record.removedNodes.length, 0); }).observe(list, { childList: true });
+  });
+  await selectFile(page, b.workspaceId);
+  await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(b.sourceAssetId));
+  await selectFile(page, a.workspaceId); await processFile(page);
+  expect(await page.locator('#processing-file-list').evaluate(list => [...list.options].every((option, i) => option === window.fileOptionsBeforeProgress[i]))).toBe(true);
+  expect(await page.evaluate(() => window.fileListRemovals)).toBe(0);
+  for (const focus of ['#processing-file-list', '#conversion-start']) {
+    await page.locator(focus).focus();
+    const colors = await page.locator('#processing-file-list option:checked').evaluate(option => {
+      const style = getComputedStyle(option); return { text: style.webkitTextFillColor, background: style.backgroundImage }; // The opaque gradient covers Chromium's native highlight color.
+    });
+    expect(colors).toEqual({ text: 'rgb(255, 255, 255)', background: 'linear-gradient(rgb(73, 52, 96), rgb(73, 52, 96))' });
+  }
+  for (const selector of ['#conversion-start', '#processing-process-all', '#open-editor-button']) {
+    for (const hover of [false, true]) {
+      if (hover && selector !== '#open-editor-button') await page.locator(selector).hover();
+      else await page.mouse.move(0, 0);
+      const appearance = await page.locator(selector).evaluate(button => {
+        const style = getComputedStyle(button), colors = style.backgroundImage.match(/rgb\([^)]+\)/g) || [];
+        const luminance = color => { const c = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number).map(x => x / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4); return c[0] * .2126 + c[1] * .7152 + c[2] * .0722; };
+        return { colors, contrast: colors.map(color => 1.05 / (luminance(color) + .05)), text: style.color, size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
+      });
+      expect(appearance.colors).toHaveLength(2); expect(appearance.text).toBe('rgb(255, 255, 255)');
+      expect(appearance.size).toBeGreaterThanOrEqual(19); expect(appearance.weight).toBeGreaterThanOrEqual(700);
+      expect(Math.min(...appearance.contrast)).toBeGreaterThanOrEqual(3); // WCAG large bold text threshold.
+    }
+  }
+  await page.locator('#media-workspace-panel').screenshot({ path: testInfo.outputPath('workbench-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#processing-file-list').focus(); await page.keyboard.press('ArrowDown');
+  await expect(page.locator('#processing-file-list')).toHaveValue(b.workspaceId);
+  await page.locator('#processing-process-all').focus(); await expect(page.locator('#processing-process-all')).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator('#media-workspace-panel').screenshot({ path: testInfo.outputPath('workbench-narrow.png') });
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#processing-process-all')).toHaveText('Process All Files (2)');
 });

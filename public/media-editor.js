@@ -528,6 +528,7 @@
     let playheadDrag = null;
     let playheadSeekFrame = null;
     let pendingPlayheadTime = null;
+    let playbackGeneration = 0;
 
     function setStatus(message, type = '') {
       workspaceStatus.textContent = message || '';
@@ -535,6 +536,7 @@
     }
 
     function resetEditor() {
+      playbackGeneration++;
       if (animationFrame != null) root.cancelAnimationFrame(animationFrame);
       if (playheadSeekFrame != null) root.cancelAnimationFrame(playheadSeekFrame);
       animationFrame = null;
@@ -951,9 +953,10 @@
       if (!editPlan) return;
       if (data.playback?.url && video.getAttribute('src') !== data.playback.url) {
         const playheadTime = video.currentTime;
+        const playbackToken = playbackGeneration;
         video.src = data.playback.url;
         video.addEventListener('loadedmetadata', () => {
-          if (activeWorkspaceId === data.id) video.currentTime = playheadTime;
+          if (activeWorkspaceId === data.id && playbackGeneration === playbackToken) video.currentTime = playheadTime;
         }, { once: true });
       }
       proxyNote.textContent = data.playback?.url
@@ -1165,6 +1168,26 @@
       update(data) {
         if (data?.id !== activeWorkspaceId) { resetEditor(); activeWorkspaceId = data?.id || null; }
         renderWorkspace(data);
+      },
+      restore(data, saved) {
+        resetEditor(); activeWorkspaceId = data?.id || null;
+        renderWorkspace(data);
+        if (!editPlan || !saved || saved.workspaceId !== activeWorkspaceId) return;
+        if (saved.authoring) {
+          authoringState = recomputeAuthoringState(structuredClone(saved.authoring), durationSeconds);
+          editPlan = authoringState.editPlan;
+        }
+        pendingCut = saved.pendingCut ? { ...saved.pendingCut } : { startSeconds: null, endSeconds: null };
+        visibleWindow = clampVisibleWindow(saved.visibleWindow || visibleWindow, durationSeconds);
+        const position = clamp(Number(saved.playheadSeconds) || 0, 0, durationSeconds);
+        // Override only this source load's initial seek. A response/load from
+        // an earlier selection cannot seek the newly selected file.
+        const playbackToken = ++playbackGeneration;
+        video.currentTime = position;
+        if (video.readyState === 0) video.addEventListener('loadedmetadata', () => {
+          if (playbackToken === playbackGeneration && activeWorkspaceId === data.id) { video.currentTime = position; renderPlayhead(); }
+        }, { once: true });
+        renderTimeline();
       },
       show(visible) {
         editor.hidden = !visible || !editPlan;
