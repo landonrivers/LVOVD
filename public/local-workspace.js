@@ -17,6 +17,7 @@
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let uploadGeneration = 0;
   let acquiring = false;
+  let sharedSettings = null;
 
   const processingHelp = {
     relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
@@ -117,12 +118,18 @@
     $('#processing-suffix-enabled').checked = settings.filenameSuffix !== ''; $('#processing-filename-suffix').value = settings.filenameSuffix;
   }
   function renderFiles() {
-    const list = $('#processing-file-list'), scroll = list.scrollTop; list.replaceChildren();
+    const list = $('#processing-file-list'), scroll = list.scrollTop;
+    // Keep native options mounted across progress updates: replacing the selected
+    // row can flash the platform highlight and lose the keyboard selection.
+    const options = new Map([...list.options].map(option => [option.value, option]));
+    for (const [id, option] of options) if (!entries.has(id)) option.remove();
     for (const [id, entry] of entries) {
-      const option = document.createElement('option'); option.value = id;
-      const job = currentJob(id); option.textContent = entry.snapshot.source?.name || 'Preparing local file…';
-      if (job) option.textContent += ` — ${job.status}`;
-      option.selected = id === workspaceId; list.append(option);
+      let option = options.get(id);
+      if (!option) { option = document.createElement('option'); option.value = id; list.append(option); }
+      const job = currentJob(id), name = entry.snapshot.source?.name || 'Preparing local file…';
+      const label = name + (job ? ' — ' + job.status : '');
+      if (option.textContent !== label) option.textContent = label;
+      if (option.selected !== (id === workspaceId)) option.selected = id === workspaceId;
     }
     list.scrollTop = scroll;
     $('#processing-file-count').textContent = `${entries.size} ${entries.size === 1 ? 'file' : 'files'}`;
@@ -168,7 +175,10 @@
       let entry = entries.get(dataWorkspace.id);
       if (!entry) { entry = { snapshot: dataWorkspace, profile: null, plan: null }; entries.set(dataWorkspace.id, entry); }
       entry.snapshot = dataWorkspace; entry.seenInCollection = true;
-      if (!entry.profile && dataWorkspace.inspection && dataWorkspace.sourceAssetId) { entry.profile = profiles.create(dataWorkspace); entry.needsInitialReview = true; }
+      if (!entry.profile && dataWorkspace.inspection && dataWorkspace.sourceAssetId) {
+        entry.profile = profiles.create(dataWorkspace); entry.needsInitialReview = true;
+        if (sharedSettings) copyOutputSettings(entry, sharedSettings);
+      }
       if (entry.profile && dataWorkspace.conversion?.output) entry.profile.acceptResult(dataWorkspace.conversion.output);
       if (dataWorkspace.playback?.url) { entry.previewRequest = false; entry.previewError = null; }
     }
@@ -269,7 +279,9 @@
   function refreshDraft() {
     if (!profile || resetting) return;
     const authoring = editor.authoringState();
-    const changed = profile.update({ ...(authoring.editPlan ? { editPlan: authoring.editPlan } : {}), editorState: authoring, settings: readSettings() });
+    const settings = readSettings(), settingsChanged = JSON.stringify(settings) !== JSON.stringify(profile.state().settings);
+    const changed = profile.update({ ...(authoring.editPlan ? { editPlan: authoring.editPlan } : {}), editorState: authoring, settings });
+    if (settingsChanged && sharedSettings) applyOutputSettings(settings);
     if (changed) invalidatePlan(true);
     renderSettings(); processingControls();
   }
@@ -290,6 +302,7 @@
     workspaceId = null; snapshot = null; profile = null; starting = false; plan = null; planBusy = false; reviewQueued = false;
     operationRequest = false; discarding = false;
     $('#processing-file-list').replaceChildren();
+    sharedSettings = null; $('#processing-apply-all').checked = false;
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = !upload; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
     $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
@@ -322,18 +335,19 @@
     const acknowledged = [...$('#conversion-warnings').querySelectorAll('input[required]')].every(box => box.checked);
     start.disabled = !profile || busy || planBusy || Boolean(plan && !['executable', 'no-op'].includes(plan.status)) || !acknowledged
       || state.cleanupPending || snapshot?.outputCleanup?.blocked;
-    start.textContent = 'Process File';
+    start.textContent = 'Process Selected File';
     cancel.hidden = !jobActive() && !['running', 'validating', 'cancelling'].includes(state.status);
     cancel.disabled = state.status === 'cancelling' || discarding;
     $('#processing-reset').disabled = !profile || discarding;
     $('#processing-process-all').hidden = entries.size < 2;
+    $('#processing-process-all').textContent = `Process All Files (${entries.size})`;
     $('#processing-process-all').disabled = batchBusy || Boolean(upload || starting);
     $('#processing-cancel-all').hidden = !jobs.some(job => ['queued', 'starting', 'running', 'cancelling'].includes(job.status));
-    $('#processing-apply-all').disabled = !profile || entries.size < 2 || discarding;
+    $('#processing-apply-all').disabled = !profile || discarding;
     const preview = $('#processing-prepare-preview');
     preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url) || (!previewError && snapshot?.editor?.status !== 'failed');
     preview.disabled = busy || processingElsewhere();
-    $('#processing-preview-note').textContent = !snapshot?.inspection ? 'Source preparation must finish before preview or processing.' : !snapshot.inspection.video ? 'Audio file — choose output settings, then Process File.'
+    $('#processing-preview-note').textContent = !snapshot?.inspection ? 'Source preparation must finish before preview or processing.' : !snapshot.inspection.video ? 'Audio file — choose output settings, then Process Selected File.'
       : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings.'
         : previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing playback from the selected original file…'
           : !snapshot?.playback?.url && processingElsewhere() ? 'Playback will prepare after the current processing finishes.'
@@ -353,9 +367,11 @@
     $('#conversion-status').textContent = [queueMessage, phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
       state.cleanupPending ? 'Some temporary attempt files remain. Retry cleanup or Remove File.' : null].filter(Boolean).join(' · ');
     const submitted = current?.submitted, newer = submitted && submitted.draftRevision !== current.draftRevision;
-    $('#processing-draft-status').textContent = current ? `Draft ${current.draftRevision}`
-      + (newer ? ` · Newer settings or cuts. The submitted work remains draft ${submitted.draftRevision}.` : '')
-      + (editor.hasPendingWork() ? ' · Pending cut selection is not applied until Remove Section.' : '') : '';
+    $('#processing-draft-status').textContent = current ? [
+      newer ? `Newer settings or cuts. The submitted work remains draft ${submitted.draftRevision}.` : null,
+      editor.hasPendingWork() ? 'Pending cut selection is not applied until Remove Section.' : null
+    ].filter(Boolean).join(' · ') : '';
+    $('#processing-draft-status').hidden = !$('#processing-draft-status').textContent;
     const output = state.output;
     $('#conversion-output').hidden = !output;
     if (output) {
@@ -407,9 +423,10 @@
     }
     if (inspected) {
       editor.update(data); editor.show(Boolean(data.editor?.eligible));
-      if (!profile) { profile = profiles.create(data); if (entry) entry.profile = profile; profile.update({ editorState: editor.authoringState() }); invalidatePlan(); }
+      if (!profile) { profile = profiles.create(data); if (entry) { entry.profile = profile; if (sharedSettings) copyOutputSettings(entry, sharedSettings); }
+        restoreSettings(profile.state().settings); profile.update({ editorState: editor.authoringState() }); invalidatePlan(); }
       if (data.conversion?.output) profile.acceptResult(data.conversion.output);
-      if (entry?.needsInitialReview) { entry.needsInitialReview = false; invalidatePlan(); }
+      if (entry?.needsInitialReview) { entry.needsInitialReview = false; restoreSettings(profile.state().settings); invalidatePlan(); }
       renderSettings();
     }
     message(data.status === 'error' ? data.message : '', data.status === 'error');
@@ -505,7 +522,11 @@
       if (xhr.status < 200 || xhr.status >= 300 || !data?.workspaceId) { finish([data?.error || 'Local intake failed.', data?.cleanup?.message].filter(Boolean).join(' ')); return; }
       if (!removedIds.has(data.workspaceId) && !removedDuringUpload.has(data.workspaceId)) {
         let entry = entries.get(data.workspaceId);
-        if (!entry) { entry = { snapshot: data.workspace, profile: data.workspace.inspection ? profiles.create(data.workspace) : null, plan: null }; entries.set(data.workspaceId, entry); }
+        if (!entry) {
+          entry = { snapshot: data.workspace, profile: data.workspace.inspection ? profiles.create(data.workspace) : null, plan: null, needsInitialReview: true };
+          if (entry.profile && sharedSettings) copyOutputSettings(entry, sharedSettings);
+          entries.set(data.workspaceId, entry);
+        }
         if (!workspaceId) selectEntry(data.workspaceId);
       }
       finish();
@@ -635,7 +656,8 @@
     const settings = profile.state().settings, defaults = profiles.defaults();
     for (const key of ['videoCodec', 'scale', 'frameRate', 'rate']) settings[key] = defaults[key];
     const entry = entries.get(workspaceId); entry.copiedInactiveVideo = false; entry.videoDraft = null;
-    profile.update({ settings }); restoreSettings(settings); invalidatePlan(true); renderSettings(); processingControls();
+    profile.update({ settings }); if (sharedSettings) applyOutputSettings(settings);
+    restoreSettings(settings); invalidatePlan(true); renderSettings(); processingControls();
   });
   function settingsChanged(event) {
     if (event.target.id === 'processing-container') {
@@ -665,6 +687,7 @@
   $('#processing-reset').addEventListener('click', () => {
     if (!profile) return;
     if ((profile.hasChanges() || editor.hasPendingWork()) && !root.confirm('Reset this file’s cuts and output settings? The original source and any previous download will be kept.')) return;
+    sharedSettings = null; $('#processing-apply-all').checked = false;
     resetting = true; settingsForm.reset(); editor.resetFile(); profile.reset(); resetting = false;
     const entry = entries.get(workspaceId); entry.videoDraft = null; entry.copiedInactiveVideo = false;
     profile.update({ editorState: editor.authoringState() }); invalidatePlan(true); renderSettings(); processingControls();
@@ -679,21 +702,25 @@
     $('#processing-batch-submit').disabled = batchBusy || !selected.length || selected.some(item => item.warnings.some(box => !box.checked)
       || item.entry.profile.draft().draftRevision !== item.plan.draftRevision || jobActive(item.entry.snapshot.id));
   }
-  $('#processing-apply-all').addEventListener('click', () => {
-    if (!profile) return;
-    saveSelected();
-    const groups = [...panel.querySelectorAll('[name="processing-apply-group"]:checked')].map(box => box.value);
-    if (!groups.length) return message('Select at least one output setting group.', true);
-    const settings = profile.state().settings; let changed = 0;
-    for (const [id, entry] of entries) {
-      if (id === workspaceId || !entry.profile) continue;
-      if (entry.profile.update({ settings: profiles.copySettings(entry.profile.state().settings, settings, groups) })) {
-        entry.plan = null; if (groups.includes('picture')) entry.scaleChoice = null;
-        if (groups.some(group => ['video', 'picture', 'rate'].includes(group))) { entry.copiedInactiveVideo = true; entry.videoDraft = null; }
-        changed++;
-      }
+  function copyOutputSettings(entry, settings) {
+    const changed = entry.profile.update({ settings: profiles.copySettings(settings) });
+    if (changed) {
+      entry.plan = null; entry.scaleChoice = null; entry.copiedInactiveVideo = true; entry.videoDraft = null;
     }
-    invalidateBatch(); renderFiles(); message(`Output settings applied to ${changed} ${changed === 1 ? 'file' : 'files'}. Review each file before processing; cuts and queued work are unchanged.`);
+    return changed;
+  }
+  function applyOutputSettings(settings) {
+    sharedSettings = profiles.copySettings(settings);
+    let changed = false;
+    for (const [id, entry] of entries) {
+      if (id !== workspaceId && entry.profile) changed = copyOutputSettings(entry, settings) || changed;
+    }
+    if (changed) invalidateBatch();
+  }
+  $('#processing-apply-all').addEventListener('change', event => {
+    if (!event.target.checked || !profile) { sharedSettings = null; return; }
+    saveSelected(); applyOutputSettings(profile.state().settings);
+    message('All output settings now apply to every file. Cuts, queued work and existing downloads stay unchanged.');
   });
   $('#processing-process-all').addEventListener('click', async () => {
     saveSelected(); invalidateBatch(); const version = batchVersion;

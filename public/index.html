@@ -384,16 +384,10 @@
                   <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed <button class="processing-help-button" type="button" data-processing-help="speed" aria-label="Help: encoding speed">?</button></span><select id="processing-preset"><option value="medium">Medium</option></select></label>
                 </fieldset>
               </form>
-              <details id="processing-apply-settings" class="processing-shared-settings">
-                <summary>Apply output settings to all</summary>
-                <p class="help">Copy selected groups from this file. Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged.</p>
-                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="video" checked />Codec and output</label>
-                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="picture" checked />Scale and frame rate</label>
-                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="rate" checked />Compression</label>
-                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="audio" checked />Audio</label>
-                <label class="processing-check"><input type="checkbox" name="processing-apply-group" value="suffix" />Filename suffix</label>
-                <button id="processing-apply-all" class="button secondary mini" type="button">Apply selected settings</button>
-              </details>
+              <div id="processing-apply-settings" class="processing-shared-settings">
+                <label class="processing-check"><input id="processing-apply-all" type="checkbox" aria-describedby="processing-apply-help" />Apply output settings to all</label>
+                <p id="processing-apply-help" class="help">While checked, all output settings, including the suffix, apply to every file and newly added files. Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged. Uncheck to change one file.</p>
+              </div>
             </aside>
             <div class="processing-preview">
               <div class="preview-actions"><p id="processing-preview-note" class="help" role="status"></p><button id="processing-prepare-preview" class="button secondary mini" type="button" hidden>Retry Preview</button></div>
@@ -519,7 +513,7 @@
             </div>
           </div>
           <section id="processing-finish" class="processing-finish" aria-labelledby="processing-review-title">
-            <h3 id="processing-review-title">Ready to process</h3>
+            <h3 id="processing-review-title">Ready to process selected file</h3>
             <p id="processing-draft-status" class="help" role="status"></p>
             <dl id="processing-plan-facts" class="processing-plan-facts"></dl>
             <div id="conversion-plan" aria-live="polite"><h4 id="conversion-plan-title"></h4><details class="processing-review-details"><summary>Processing details</summary><ul id="conversion-changes"></ul></details></div>
@@ -531,15 +525,15 @@
                 <input id="processing-filename-suffix" type="text" form="processing-settings" aria-label="Filename suffix" maxlength="60" value=" - processed" autocomplete="off" spellcheck="false" aria-describedby="processing-filename-preview" />
                 <p id="processing-filename-preview" class="help"></p>
               </div>
-              <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process File</button>
-              <button id="processing-process-all" class="button primary processing-primary" type="button" hidden>Process All Files</button>
+              <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process Selected File</button>
+              <button id="processing-process-all" class="button primary processing-primary processing-all" type="button" hidden>Process All Files</button>
               <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
               <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>
               <button id="processing-cancel-all" class="text-button" type="button" hidden>Cancel All</button>
             </div>
             <section id="processing-batch-review" class="processing-batch-review" aria-labelledby="processing-batch-title" hidden>
               <h4 id="processing-batch-title">Review files to process</h4>
-              <p class="help">Files run one at a time in list order. Select the reviewed files and acknowledge their warnings. Unchanged files download original bytes. Queued files and successful current drafts are excluded; Process File can run a completed draft again. A failure does not stop the remaining files.</p>
+              <p class="help">Files run one at a time in list order. Select the reviewed files and acknowledge their warnings. Unchanged files download original bytes. Queued files and successful current drafts are excluded; Process Selected File can run a completed draft again. A failure does not stop the remaining files.</p>
               <div id="processing-batch-files"></div>
               <button id="processing-batch-submit" class="button secondary" type="button" disabled>Queue reviewed files</button>
               <button id="processing-batch-close" class="text-button" type="button">Close review</button>

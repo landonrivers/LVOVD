@@ -16,13 +16,7 @@
     if (!Number.isFinite(duration) || duration <= 0) return null;
     return { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: Math.round(duration * 1000) / 1000 }] };
   }
-  const settingGroups = { video: ['videoCodec', 'container'], picture: ['scale', 'frameRate'], rate: ['rate'], audio: ['audio'], suffix: ['filenameSuffix'] };
-  function copySettings(current, selected, groups) {
-    if (!Array.isArray(groups) || groups.some(group => !Object.hasOwn(settingGroups, group))) throw new Error('Choose supported output setting groups.');
-    const next = clone(current);
-    for (const group of groups) for (const key of settingGroups[group]) next[key] = clone(selected[key]);
-    return next;
-  }
+  function copySettings(selected) { return clone(selected); }
   function create(workspace) {
     const identity = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId };
     const inspection = clone(workspace.inspection), initialPlan = fullPlan(inspection.durationSeconds);

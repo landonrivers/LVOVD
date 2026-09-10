@@ -25,7 +25,7 @@ test('README ships truthful editing, privacy, temporary-file, and Download Histo
 
   assert.ok(readme.indexOf('## Quick Start') < readme.indexOf('## What it can do'));
   assert.match(readme, /choose or drop multiple video\/audio files into the unified \*\*Local Media\*\* workbench/i);
-  assert.match(readme, /\*\*Process File\*\*.*committed cuts.*directly to the original working source/);
+  assert.match(readme, /\*\*Process Selected File\*\*.*committed cuts.*directly to the original working source/);
   assert.match(readme, /at most one bitrate correction; an oversized result is rejected/);
   assert.match(readme, /Local files can be processed sequentially; playlist intake remains deferred/);
   assert.match(readme, /Edit Source Video[\s\S]*selected source[\s\S]*Compatible\/Maximum[\s\S]*resolution[\s\S]*Manual source choice/i);
