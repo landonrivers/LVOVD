@@ -17,7 +17,7 @@
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let uploadGeneration = 0;
   let acquiring = false;
-  let sharedSettings = null;
+  let sharedSettings = profiles.defaults();
 
   const processingHelp = {
     relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
@@ -250,11 +250,12 @@
     $('#processing-video-bitrate').max = mode === 'bitrate' ? '1000000' : '';
     $('#processing-maximum-mb').max = mode === 'size' ? '107374.1824' : '';
     $('#processing-rate-help').textContent = {
-      automatic: 'Auto: copy where possible; required H.264 encoding uses CRF 18. Size can vary.',
+      automatic: '',
       quality: 'Quality is in control. Bitrate and file size vary with the footage.',
       bitrate: 'Video bitrate is in control. File size is an estimate, not an exact result.',
       size: 'Maximum size is in control. Video bitrate is calculated after reserving audio and container space.'
     }[mode];
+    $('#processing-rate-help').hidden = !hasVideo || !$('#processing-rate-help').textContent;
     for (const control of settingsForm.elements) control.disabled = Boolean(control.closest('[hidden]'));
     const suffix = $('#processing-filename-suffix'); suffix.disabled = !$('#processing-suffix-enabled').checked;
     suffix.setCustomValidity(/[\u0000-\u001f\u007f<>:"/\\|?*]/.test(suffix.value) ? 'Use a suffix without path separators or reserved filename characters.' : '');
@@ -302,7 +303,7 @@
     workspaceId = null; snapshot = null; profile = null; starting = false; plan = null; planBusy = false; reviewQueued = false;
     operationRequest = false; discarding = false;
     $('#processing-file-list').replaceChildren();
-    sharedSettings = null; $('#processing-apply-all').checked = false;
+    sharedSettings = profiles.defaults(); $('#processing-apply-all').checked = true;
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = !upload; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
     $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();

@@ -42,12 +42,15 @@ async function intake(page, filename = 'generated.mp4') {
   await expect(page.locator('#conversion-start')).toBeEnabled();
   return page.evaluate(() => window.LVOVDLocalWorkspace.profileState().workspaceId);
 }
-async function intakeFiles(page, filenames, { waitForReview = true } = {}) {
+async function intakeFiles(page, filenames, { waitForReview = true, independentSettings = true } = {}) {
   await page.locator('#media-file-input').setInputFiles(filenames.map(filename => path.join(root, filename)));
   await expect(page.locator('#processing-file-list option')).toHaveCount(filenames.length);
   await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.sourceAssetId && entry.inspection))).toBe(true);
   await expect(page.locator('#workspace-progress')).toBeHidden();
   if (waitForReview) await expect(page.locator('#conversion-start')).toBeEnabled();
+  // Individual-profile scenarios explicitly opt out of the product's default sharing.
+  await expect(page.locator('#processing-apply-all')).toBeChecked();
+  if (independentSettings) await page.locator('#processing-apply-all').uncheck();
   return page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
 }
 async function selectFile(page, workspaceId) {
@@ -185,7 +188,7 @@ test('linked rate and size controls review the current cuts and keep a completed
   await page.locator('#processing-suffix-enabled').check(); await page.locator('#processing-filename-suffix').fill('../bad');
   await expect(page.locator('#conversion-start')).toBeDisabled();
   page.once('dialog', dialog => dialog.accept()); await page.locator('#processing-reset').click();
-  await expect(page.locator('#processing-filename-suffix')).toHaveValue(' - processed');
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('-processed');
   await expect(page.locator('#processing-suffix-enabled')).toBeChecked();
 });
 
@@ -879,13 +882,17 @@ test('shared output checkbox follows setting changes and new files, stops when u
     window.EventSource = class extends NativeEventSource { constructor(...args) { super(...args); window.sharedSettingsProgress = this; } };
   });
   await page.reload();
-  const initial = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4']);
+  const initial = await intakeFiles(page, ['generated.mp4', 'portrait example.mp4'], { independentSettings: false });
   const [a, b] = initial.entries;
+  await expect(page.locator('#processing-apply-all')).toBeChecked();
+  await expect(page.locator('#processing-filename-suffix')).toHaveValue('-processed');
+  await expect(page.locator('#processing-rate-help')).toBeHidden();
+  await expect(page.locator('#processing-budget-help')).toHaveCount(0);
+  await expect(page.locator('#processing-apply-help')).toHaveText('Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged.');
   await page.locator('#conversion-start').click(); await expect(page.locator('#conversion-download')).toBeVisible();
   const previous = await downloaded(page);
   await page.locator('#processing-video-codec').selectOption('h264');
   await page.locator('[name="processing-rate"][value="quality"]').check(); await exact(page, 'processing-crf', '24');
-  await page.locator('#processing-apply-all').focus(); await page.keyboard.press('Space');
   await expect(page.getByRole('checkbox', { name: 'Apply output settings to all', exact: true })).toBeChecked();
   await expect(page.locator('#processing-apply-settings summary, [name="processing-apply-group"]')).toHaveCount(0);
   await page.locator('#processing-filename-suffix').fill('_linked');

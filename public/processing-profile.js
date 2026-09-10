@@ -6,7 +6,7 @@
   if (root?.document) root.LVOVDProcessingProfile = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createProcessingProfileApi() {
   function defaults() {
-    return { videoCodec: 'unchanged', container: 'source', filenameSuffix: ' - processed', scale: { mode: 'unchanged', width: null, height: null, percent: null, allowUpscale: false },
+    return { videoCodec: 'unchanged', container: 'source', filenameSuffix: '-processed', scale: { mode: 'unchanged', width: null, height: null, percent: null, allowUpscale: false },
       frameRate: null, rate: { mode: 'automatic', crf: 18, preset: 'medium', videoKbps: null, maximumMB: null, twoPass: false },
       audio: { codec: 'unchanged', bitrateKbps: null } };
   }

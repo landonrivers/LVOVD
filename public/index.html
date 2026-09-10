@@ -362,12 +362,12 @@
                     <label><input type="radio" name="processing-rate" value="bitrate" />Bitrate</label>
                     <label><input type="radio" name="processing-rate" value="size" />File size</label>
                   </div>
-                  <p id="processing-rate-help" class="help">No rate override. Copy where the complete operation permits.</p>
+                  <p id="processing-rate-help" class="help" hidden></p>
                   <div id="processing-quality-fields" hidden>
                     <label class="field processing-value-row" for="processing-crf"><span>H.264 quality <button class="processing-help-button" type="button" data-processing-help="quality" aria-label="Help: H.264 quality">?</button></span><input id="processing-crf" type="number" min="0" max="51" step="1" value="18" /><small>CRF</small></label>
                   </div>
                   <div id="processing-bitrate-fields">
-                    <label class="field processing-value-row" for="processing-video-bitrate"><span><span id="processing-video-rate-label">Video bitrate</span> <button class="processing-help-button" type="button" data-processing-help="video" aria-label="Help: video bitrate">?</button></span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="any" aria-describedby="processing-budget-help" /><small>kbps</small></label>
+                    <label class="field processing-value-row" for="processing-video-bitrate"><span><span id="processing-video-rate-label">Video bitrate</span> <button class="processing-help-button" type="button" data-processing-help="video" aria-label="Help: video bitrate">?</button></span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="any" /><small>kbps</small></label>
                     <label id="processing-two-pass-field" class="processing-check" hidden><input id="processing-two-pass" type="checkbox" />2-pass encoding <button class="processing-help-button" type="button" data-processing-help="passes" aria-label="Help: two-pass encoding">?</button></label>
                   </div>
                 <fieldset id="processing-audio-settings">
@@ -377,16 +377,15 @@
                   <p id="processing-audio-rate-help" class="help">Auto keeps copied audio or uses the codec default. No automatic downmix.</p>
                 </fieldset>
                   <div id="processing-size-fields">
-                    <label class="field processing-value-row" for="processing-maximum-mb"><span><span id="processing-size-label">Estimated file size</span> <button class="processing-help-button" type="button" data-processing-help="size" aria-label="Help: file size">?</button></span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" aria-describedby="processing-budget-help" /><small>MB</small></label>
-                    <p id="processing-budget-help" class="help">Editing a calculated field makes it the target; the other values update. Size includes audio and the duration after cuts. 1 MB = 1,000,000 bytes.</p>
+                    <label class="field processing-value-row" for="processing-maximum-mb"><span><span id="processing-size-label">Estimated file size</span> <button class="processing-help-button" type="button" data-processing-help="size" aria-label="Help: file size">?</button></span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" /><small>MB</small></label>
                     <p id="processing-size-policy" class="help" hidden>Maximum per output, using two passes and at most one size correction. Actual bytes are checked before publication.</p>
                   </div>
                   <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed <button class="processing-help-button" type="button" data-processing-help="speed" aria-label="Help: encoding speed">?</button></span><select id="processing-preset"><option value="medium">Medium</option></select></label>
                 </fieldset>
               </form>
               <div id="processing-apply-settings" class="processing-shared-settings">
-                <label class="processing-check"><input id="processing-apply-all" type="checkbox" aria-describedby="processing-apply-help" />Apply output settings to all</label>
-                <p id="processing-apply-help" class="help">While checked, all output settings, including the suffix, apply to every file and newly added files. Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged. Uncheck to change one file.</p>
+                <label class="processing-check"><input id="processing-apply-all" type="checkbox" checked aria-describedby="processing-apply-help" />Apply output settings to all</label>
+                <p id="processing-apply-help" class="help">Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged.</p>
               </div>
             </aside>
             <div class="processing-preview">
@@ -522,7 +521,7 @@
             <div class="local-media-actions">
               <div class="processing-suffix">
                 <label class="processing-check"><input id="processing-suffix-enabled" type="checkbox" form="processing-settings" checked />Add a suffix</label>
-                <input id="processing-filename-suffix" type="text" form="processing-settings" aria-label="Filename suffix" maxlength="60" value=" - processed" autocomplete="off" spellcheck="false" aria-describedby="processing-filename-preview" />
+                <input id="processing-filename-suffix" type="text" form="processing-settings" aria-label="Filename suffix" maxlength="60" value="-processed" autocomplete="off" spellcheck="false" aria-describedby="processing-filename-preview" />
                 <p id="processing-filename-preview" class="help"></p>
               </div>
               <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process Selected File</button>

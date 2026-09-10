@@ -52,7 +52,7 @@ function normalizeProcessingSettings(raw = {}) {
   if (scale.width != null) number(scale.width, 2, 16384, 'Maximum width', true);
   if (scale.height != null) number(scale.height, 2, 16384, 'Maximum height', true);
   if (scale.percent != null) number(scale.percent, 1, 100, 'Scale percentage');
-  const filenameSuffix = raw.filenameSuffix === undefined ? ' - processed' : raw.filenameSuffix;
+  const filenameSuffix = raw.filenameSuffix === undefined ? '-processed' : raw.filenameSuffix;
   if (typeof filenameSuffix !== 'string' || filenameSuffix.length > 60 || /[\u0000-\u001f\u007f<>:"/\\|?*]/.test(filenameSuffix)) {
     throw requestError('The filename suffix must be at most 60 characters, without path separators or reserved filename characters.');
   }
@@ -144,7 +144,7 @@ function geometry(video, scale, encode) {
   return { width: outputWidth, height: outputHeight, rotationDegrees: 0,
     sampleAspectRatio: rationalAspect(width * outputHeight * n, height * outputWidth * d) };
 }
-function processingFilename(name, extension, suffix = ' - processed') {
+function processingFilename(name, extension, suffix = '-processed') {
   const stem = String(name || 'Local media').split(/[\\/]/).at(-1).replace(/\.[^.]*$/, '')
     .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').trim().slice(0, 180) || 'Local media';
   return `${stem}${suffix}${extension ? `.${extension}` : ''}`;

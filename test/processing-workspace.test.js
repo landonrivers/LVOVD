@@ -92,7 +92,7 @@ test('complete default processing aliases the original with immutable revision/p
   const before = await fsp.readdir(workspace.tempDir), body = await review(request());
   await manager.processing.start(body); const output = workspace.conversion.output;
   assert.equal(output.noOp, true); assert.equal(output.assetId, workspace.sourceAssetId); assert.equal(output.draftRevision, 0);
-  assert.equal(output.filename, 'source - processed.mp4'); assert.equal(control.calls.length, 0); assert.equal(control.outputProbes, 0);
+  assert.equal(output.filename, 'source-processed.mp4'); assert.equal(control.calls.length, 0); assert.equal(control.outputProbes, 0);
   assert.deepEqual(await fsp.readdir(workspace.tempDir), before); assert.ok(Object.isFrozen(output.processingSnapshot.settings));
   await manager.processing.start(body); assert.equal(manager.conversions.resolve(workspace.id, output.assetId).asset.id, output.assetId);
 });
