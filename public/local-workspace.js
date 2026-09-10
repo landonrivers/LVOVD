@@ -175,6 +175,7 @@
       let entry = entries.get(dataWorkspace.id);
       if (!entry) { entry = { snapshot: dataWorkspace, profile: null, plan: null }; entries.set(dataWorkspace.id, entry); }
       entry.snapshot = dataWorkspace; entry.seenInCollection = true;
+      entry.progressRevision = collectionRevision;
       if (!entry.profile && dataWorkspace.inspection && dataWorkspace.sourceAssetId) {
         entry.profile = profiles.create(dataWorkspace); entry.needsInitialReview = true;
         if (sharedSettings) copyOutputSettings(entry, sharedSettings);
@@ -630,14 +631,17 @@
   async function preparePreview() {
     const id = workspaceId, entry = entries.get(id);
     if (!profile || !entry || !snapshot?.editor?.eligible || snapshot?.playback?.url || snapshot?.activeOperation || jobActive() || processingElsewhere() || entry.previewRequest || discarding) return;
-    const sourceAssetId = snapshot.sourceAssetId, request = {};
+    const sourceAssetId = snapshot.sourceAssetId, request = { progressRevision: entry.progressRevision };
     Object.assign(entry, { previewRequest: true, previewAttempted: true, previewError: null, previewToken: request });
     const ownsRequest = () => entries.get(id) === entry && !removedIds.has(id)
       && entry.previewToken === request && entry.snapshot.sourceAssetId === sourceAssetId;
     processingControls();
     try {
       const data = await post('/api/workspace/editor', { workspaceId: id, sourceAssetId });
-      if (ownsRequest()) {
+      // A preparing acknowledgement can arrive after aggregate progress has
+      // already supplied ready playback or a retryable failure for this entry.
+      // Use HTTP only while no newer authoritative entry snapshot has arrived.
+      if (ownsRequest() && entry.progressRevision === request.progressRevision) {
         entry.snapshot = { ...entry.snapshot, playback: data.workspace.playback, editor: data.workspace.editor };
         if (workspaceId === id) accept(entry.snapshot);
       }

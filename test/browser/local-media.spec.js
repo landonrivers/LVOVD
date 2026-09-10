@@ -16,6 +16,16 @@ test.beforeAll(async () => {
   ffmpeg(['-f', 'lavfi', '-i', 'sine=frequency=600:sample_rate=48000:duration=3', path.join(root, 'generated.wav')]);
   ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=15', '-c:v', 'libx264', '-preset', 'ultrafast', path.join(root, 'longer.mp4')]);
   ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=390x520:rate=20:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(root, 'portrait example.mp4')]);
+  // Both require the asynchronous Matroska/FFV1 playback-proxy path. The tiny
+  // 1x1 source inspects successfully but libx264 cannot encode its odd geometry.
+  for (const [name, size] of [['proxy-ready', '160x90'], ['proxy-failed', '1x1']]) {
+    const file = path.join(root, name + '.mkv');
+    ffmpeg(['-f', 'lavfi', '-i', 'testsrc=size=' + size + ':rate=10:duration=5', '-c:v', 'ffv1', file]);
+    const source = probe(file);
+    expect(source.format.format_name).toContain('matroska');
+    expect(source.streams[0].codec_name).toBe('ffv1');
+    expect(source.streams[0].width + 'x' + source.streams[0].height).toBe(size);
+  }
   await fs.writeFile(path.join(root, 'invalid.mp4'), 'Harmless generated invalid media fixture.');
 });
 test.afterAll(async () => { if (root) await fs.rm(root, { recursive: true, force: true }); });
@@ -675,6 +685,118 @@ for (const outcome of ['failure and retry', 'removed', 'another file selected'])
       const after = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
       expect(after.workspaceId).toBe(b.workspaceId); expect(after.editPlan).toEqual(bProfile.editPlan);
       expect(after.settings).toEqual(bProfile.settings); expect(connections).toHaveLength(1);
+    } finally { release(); }
+  });
+}
+
+
+for (const outcome of ['ready', 'failed']) {
+  test(`late preparing acknowledgement preserves newer proxy ${outcome} through selection round trips`, async ({ page }, testInfo) => {
+    // Observe when the real response JSON has reached the coordinator. A next-task
+    // marker runs after its await continuations, without sleeping or mocking data.
+    await page.addInitScript(() => {
+      window.previewResponsesRead = [];
+      const readJSON = Response.prototype.json;
+      Response.prototype.json = async function (...args) {
+        const data = await readJSON.apply(this, args);
+        if (new URL(this.url).pathname === '/api/workspace/editor') {
+          setTimeout(() => window.previewResponsesRead.push(data.workspace.id), 0);
+        }
+        return data;
+      };
+    });
+    await page.reload();
+    const bId = await intake(page);
+    await processFile(page); const previous = await downloaded(page);
+    await page.locator('#media-file-input').setInputFiles(path.join(root, 'proxy-' + outcome + '.mkv'));
+    await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+    await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().entries.every(entry => entry.inspection))).toBe(true);
+    const initial = await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
+    const a = initial.entries.find(entry => entry.workspaceId !== bId), b = initial.entries.find(entry => entry.workspaceId === bId);
+    expect(a.inspection.video.codec).toBe('ffv1');
+    expect(a.workspace.editor.eligible).toBe(true); expect(a.workspace.playback).toBeNull();
+    const aState = () => page.evaluate(id => window.LVOVDLocalWorkspace.collectionState().entries.find(entry => entry.workspaceId === id), a.workspaceId);
+    const requests = []; let release, accepted;
+    const hold = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { accepted = resolve; });
+    await page.route('**/api/workspace/editor', async route => {
+      if (route.request().postDataJSON().workspaceId !== a.workspaceId) return route.continue();
+      requests.push(route.request().postDataJSON());
+      if (requests.length > 1) return route.continue();
+      const response = await route.fetch();
+      // Capture AFTER the real server accepts and starts proxy work, not before it.
+      accepted({ status: response.status(), body: await response.json() });
+      await hold; await route.fulfill({ response });
+    });
+    try {
+      await selectFile(page, a.workspaceId);
+      const acknowledgement = await waiting;
+      expect(acknowledgement.status).toBe(202);
+      expect(acknowledgement.body.workspace.editor.status).toBe('preparing');
+      expect(acknowledgement.body.workspace.activeOperation).toBe('proxying');
+      expect(acknowledgement.body.workspace.playback).toBeNull();
+      await exact(page, 'editor-start-time', '0.5'); await exact(page, 'editor-end-time', '4.5');
+      await page.locator('#go-to-start').click(); await page.locator('#timeline-zoom-in').click();
+      await exact(page, 'cut-start-time', '2');
+      await page.locator('#processing-filename-suffix').fill('_shared_preview');
+      const authored = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+      await selectFile(page, bId);
+      // Only aggregate SSE can have supplied this terminal state: HTTP is held.
+      await expect.poll(async () => (await aState()).workspace.editor.status).toBe(outcome);
+      const terminal = (await aState()).workspace;
+      expect(terminal.activeOperation).toBeNull();
+      if (outcome === 'ready') {
+        expect(terminal.playback.proxy).toBe(true);
+        expect(terminal.playback.role).toBe('playback-proxy');
+        expect(terminal.playback.assetId).not.toBe(a.sourceAssetId);
+      } else {
+        expect(terminal.playback).toBeNull(); expect(terminal.editor.failure).toBeTruthy();
+      }
+      await selectFile(page, a.workspaceId);
+      release();
+      await expect.poll(() => page.evaluate(id => window.previewResponsesRead.filter(value => value === id).length, a.workspaceId)).toBe(1);
+      const settled = (await aState()).workspace;
+      await testInfo.attach('preview-ordering', { contentType: 'application/json', body: JSON.stringify({
+        source: { codec: a.inspection.video.codec, width: a.inspection.video.width, height: a.inspection.video.height },
+        acknowledgement: acknowledgement.body.workspace.editor.status,
+        terminal: { editor: terminal.editor, playback: terminal.playback },
+        settled: { editor: settled.editor, playback: settled.playback },
+        retryVisible: await page.locator('#processing-prepare-preview').isVisible(),
+        note: await page.locator('#processing-preview-note').textContent()
+      }, null, 2) });
+      expect(settled.editor).toEqual(terminal.editor);
+      expect(settled.playback).toEqual(terminal.playback);
+      await expect(page.locator('#processing-preview-note')).not.toContainText('Preparing playback');
+      const preserved = await page.evaluate(() => window.LVOVDLocalWorkspace.profileState());
+      expect(preserved.editPlan).toEqual(authored.editPlan); expect(preserved.settings).toEqual(authored.settings);
+      expect(preserved.editorState.pendingCut).toEqual(authored.editorState.pendingCut);
+      expect(preserved.editorState.visibleWindow).toEqual(authored.editorState.visibleWindow);
+      expect(preserved.editorState.playheadSeconds).toBe(authored.editorState.playheadSeconds);
+      await selectFile(page, bId);
+      await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(b.sourceAssetId));
+      expect((await downloaded(page)).bytes).toEqual(previous.bytes);
+      expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).editPlan).toEqual(b.editPlan);
+      await expect(page.locator('#processing-apply-all')).toBeChecked();
+      await expect(page.locator('#processing-filename-suffix')).toHaveValue('_shared_preview');
+      await selectFile(page, a.workspaceId);
+      if (outcome === 'ready') {
+        await expect(page.locator('#editor-video')).toHaveAttribute('src', terminal.playback.url);
+        await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
+        await expect(page.locator('#processing-prepare-preview')).toBeHidden();
+        expect(requests).toHaveLength(1);
+      } else {
+        const retry = page.locator('#processing-prepare-preview');
+        await expect(retry).toBeVisible(); await expect(retry).toBeEnabled();
+        // This source still cannot be encoded. Retry must reach the real server,
+        // settle again and remain retryable, rather than leave a stuck request.
+        const retried = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/editor');
+        await retry.click(); expect((await retried).status()).toBe(202);
+        await expect.poll(() => page.evaluate(id => window.previewResponsesRead.filter(value => value === id).length, a.workspaceId)).toBe(2);
+        await expect.poll(async () => (await aState()).workspace.editor.status).toBe('failed');
+        await expect(retry).toBeEnabled(); await expect(retry).toBeVisible();
+        await expect(page.locator('#processing-preview-note')).not.toContainText('Preparing playback');
+        expect(requests).toHaveLength(2);
+      }
+      expect((await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState())).jobs).toEqual(initial.jobs);
     } finally { release(); }
   });
 }
