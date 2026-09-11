@@ -42,7 +42,7 @@ class LocalProcessingQueue {
       if (!collection.intake?.active && !collection.intakeSlots.size && !collection.members.size && !collection.uploads && !collection.listener
         && !this.removedCleanup(collection).length && this.manager.now() - collection.lastAccessAt >= this.manager.ttlMs) this.collections.delete(collection.id);
     }
-    if (this.collections.size >= this.limits.maxCollections) throw requestError('The local workbench limit is reached. Remove an unused collection first.', 409);
+    if (this.collections.size >= this.limits.maxCollections) throw requestError('The local workbench limit is reached. Reopen or remove a previous workbench below. Workbenches open in another tab must be closed there first.', 409);
     const collection = { id: crypto.randomUUID(), members: new Set(), jobs: new Map(), uploads: 0, intakeSlots: new Set(), intake: null,
       listener: null, disconnected: false, lastAccessAt: this.manager.now(), admitting: false, admissionEpoch: 0, revision: 0 };
     this.collections.set(collection.id, collection); this.listen();
@@ -51,7 +51,7 @@ class LocalProcessingQueue {
 
   snapshot(id, { touch = true } = {}) {
     const collection = this.get(id, { touch });
-    return { id: collection.id, revision: ++collection.revision, limits: this.limits,
+    return { id: collection.id, revision: ++collection.revision, connectionEpoch: collection.connectionEpoch || 0, limits: this.limits,
       sourceBytesReserved: [...this.reservations.values()].reduce((sum, item) => sum + item.bytes, 0),
       uploads: collection.uploads, intake: this.intake?.snapshot(collection) || null, removedCleanup: this.removedCleanup(collection),
       workspaces: [...collection.members].map(workspaceId => this.manager.get(workspaceId, { touch: false }))
@@ -59,6 +59,32 @@ class LocalProcessingQueue {
       jobs: [...collection.jobs.values()].map(job => ({ id: job.id, workspaceId: job.workspaceId,
         sourceAssetId: job.sourceAssetId, draftRevision: job.draftRevision, planKey: job.planKey,
         status: job.status, message: job.message, failure: job.failure || null })) };
+  }
+
+  recoveryList() {
+    this.reap();
+    return [...this.collections.values()].filter(collection => !this.dropEmptyDisconnected(collection)).map(collection => ({
+      id: collection.id, names: [...collection.members].map(id => this.manager.get(id, { touch: false })?.source.displayName).filter(Boolean),
+      files: collection.members.size, cleanup: this.removedCleanup(collection),
+      busy: Boolean(collection.uploads || collection.admitting || collection.intake?.active || [...collection.jobs.values()].some(job => LIVE.has(job.status))),
+      available: !collection.listener && !collection.discarding && !(collection.recoveringUntil > this.manager.now())
+    }));
+  }
+
+  recoverable(id) {
+    const collection = this.get(id);
+    if (collection.listener || collection.discarding || collection.recoveringUntil > this.manager.now()) throw requestError('This workbench is open or being recovered in another tab. Refresh the list after closing that tab.', 409);
+    return collection;
+  }
+
+  reopen(id) {
+    const collection = this.recoverable(id);
+    for (const workspaceId of collection.members) this.manager.get(workspaceId);
+    // Bridge the HTTP acknowledgement and the new progress connection. A lost
+    // acknowledgement expires; two recovery requests cannot claim it at once.
+    collection.recoveringUntil = this.manager.now() + 10000;
+    collection.connectionEpoch = (collection.connectionEpoch || 0) + 1;
+    return this.snapshot(id);
   }
 
   emit(collection) {
@@ -79,8 +105,11 @@ class LocalProcessingQueue {
     catch { this.closeListener(collection); }
   }
 
-  subscribe(id, response) {
+  subscribe(id, response, connectionEpoch = 0) {
     const collection = this.get(id);
+    if (connectionEpoch !== (collection.connectionEpoch || 0)) throw requestError('This workbench was reopened by a newer page.', 409);
+    if (collection.discarding) throw requestError('This workbench is being removed.', 409);
+    collection.recoveringUntil = 0;
     this.closeListener(collection);
     collection.listener = response; collection.disconnected = false;
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -116,7 +145,7 @@ class LocalProcessingQueue {
 
   dropEmptyDisconnected(collection) {
     if (collection.disconnected && !collection.listener && !collection.intake?.active && !collection.intakeSlots.size && !collection.members.size
-      && !collection.uploads && !collection.admitting && !this.removedCleanup(collection).length
+      && !collection.uploads && !collection.admitting && !collection.discarding && !(collection.recoveringUntil > this.manager.now()) && !this.removedCleanup(collection).length
       && !this.order.some(job => job.collectionId === collection.id && LIVE.has(job.status))) {
       this.collections.delete(collection.id);
       return true;
@@ -176,6 +205,7 @@ class LocalProcessingQueue {
   }
 
   reserve(collection, bytes, ownedSlot = null) {
+    if (collection.discarding) throw requestError('This workbench is being removed.', 409);
     this.reap();
     if (!Number.isSafeInteger(bytes) || bytes <= 0) throw requestError('Collection uploads require a finite positive Content-Length.', 400);
     const liveEntries = new Set([...collection.members, ...collection.intakeSlots]).size + collection.uploads;
@@ -390,6 +420,8 @@ class LocalProcessingQueue {
   async discardCollection(id) {
     const collection = this.get(id);
     if (collection.uploads || collection.admitting) throw requestError('Wait for the current intake or admission before removing the collection.', 409);
+    if (collection.discarding) throw requestError('This workbench is already being removed.', 409);
+    collection.discarding = true;
     this.intake?.stop(collection);
     collection.admissionEpoch++;
     for (const job of collection.jobs.values()) {
@@ -397,16 +429,17 @@ class LocalProcessingQueue {
       if (job.status === 'queued') this.finish(job, 'cancelled', 'The local collection was removed.');
     }
     this.closeListener(collection);
-    this.collections.delete(id);
+    collection.disconnected = true;
     const discarded = [];
-    for (const workspaceId of collection.members) {
-      this.owners.delete(workspaceId);
+    for (const workspaceId of [...collection.members]) {
       discarded.push(this.manager.discard(workspaceId));
     }
     // Invalidate every member before awaiting any child's termination/cleanup.
-    await Promise.all(discarded);
-    this.reap();
-    return { id, removed: true, cleanupPending: [...this.reservations.values()].some(item => item.collectionId === id) };
+    try {
+      await Promise.all(discarded);
+      await collection.intake?.promise;
+    } finally { collection.discarding = false; this.reap(); this.dropEmptyDisconnected(collection); }
+    return { id, removed: true, cleanupPending: this.removedCleanup(collection).length > 0 };
   }
 
   sweep(now = this.manager.now()) {

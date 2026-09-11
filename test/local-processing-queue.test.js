@@ -389,7 +389,8 @@ test('collection Discard invalidates all result URLs before waiting for active p
   await until(() => control.children[0]?.written);
   const discarded = queue.discardCollection(collection.id);
   assert.equal(manager.conversions.resolve(a.id, aId), null); assert.equal(manager.conversions.resolve(b.id, bId), null);
-  assert.equal(conversionSlotBusy(), true); assert.throws(() => queue.snapshot(collection.id), { statusCode: 404 });
+  assert.equal(conversionSlotBusy(), true); assert.equal(queue.snapshot(collection.id).workspaces.length, 0);
+  assert.deepEqual(queue.snapshot(collection.id).removedCleanup.map(item => item.workspaceId).sort(), [a.id, b.id].sort(), 'both owners remain reachable until physical cleanup settles');
   control.children[0].finish(1); await discarded; assert.equal(conversionSlotBusy(), false);
   assert.equal(control.calls.length, 1);
 });
@@ -403,4 +404,23 @@ test('removing a collection invalidates downloads and preserves deletion failure
   assert.equal(manager.conversions.resolve(workspace.id, assetId), null);
   await until(() => manager.cleanupPending.get(workspace.id)?.status === 'failed');
   assert.equal(manager.cleanupPending.get(workspace.id).directory, directory);
+});
+
+test('reopening a disconnected workbench preserves admitted processing and a lost reopen acknowledgement expires', async t => {
+  const { manager, queue, collection, control, add, review, jobs, settled } = await setup(t);
+  const a = await add('first.mp4'), b = await add('second.mp4'); control.hold = true;
+  await queue.enqueue(collection.id, [await review(a), await review(b)]); await until(() => control.children[0]?.written);
+  const before = jobs(), bytes = queue.snapshot(collection.id).sourceBytesReserved;
+  const previous = response(); queue.subscribe(collection.id, previous); previous.end();
+  assert.deepEqual(queue.reopen(collection.id).jobs, before);
+  assert.throws(() => queue.reopen(collection.id), { statusCode: 409 });
+  const elapsed = manager.now() + 10001; manager.now = () => elapsed;
+  const reopened = queue.reopen(collection.id); assert.deepEqual(reopened.jobs, before);
+  assert.equal(a.lastAccessAt, elapsed); assert.equal(b.lastAccessAt, elapsed);
+  assert.throws(() => queue.subscribe(collection.id, response(), reopened.connectionEpoch - 1), { statusCode: 409 });
+  const resumed = response(); queue.subscribe(collection.id, resumed, reopened.connectionEpoch);
+  assert.equal(queue.snapshot(collection.id).sourceBytesReserved, bytes);
+  control.hold = false; control.children[0].finish(0); await settled();
+  assert.equal(control.calls.length, 2); assert.deepEqual(jobs().map(job => job.status), ['completed', 'completed']);
+  assert.equal(a.conversion.output.processingSnapshot.retainedDurationSeconds, 6); assert.equal(b.conversion.output.processingSnapshot.retainedDurationSeconds, 6);
 });

@@ -285,6 +285,12 @@
           <button id="media-choose-button" class="button secondary" type="button">Choose Media Files</button>
         </div>
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+        <section id="workspace-recovery" class="workspace-progress" aria-label="Previous local workbenches" hidden>
+          <div class="progress-head"><strong>Previous local workbenches</strong><button id="workspace-recovery-refresh" class="text-button" type="button">Refresh list</button></div>
+          <p class="help">Reopen retained files and downloads, or remove them to free temporary storage. Draft cuts and output settings reset after reloading; existing downloads and queued work keep their settings.</p>
+          <div id="workspace-recovery-list"></div>
+          <p id="workspace-recovery-status" class="help" role="status"></p>
+        </section>
         <section id="processing-import" class="workspace-progress" aria-label="Playlist import" hidden>
           <div class="progress-head"><strong id="processing-import-status" role="status"></strong><button id="processing-import-cancel" class="text-button" type="button">Cancel Import</button></div>
           <ul id="processing-import-items" class="help"></ul>
@@ -530,7 +536,7 @@
                 <p id="processing-filename-preview" class="help"></p>
               </div>
               <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process Selected File</button>
-              <button id="processing-process-all" class="button primary processing-primary processing-all" type="button" hidden>Process All Files</button>
+              <button id="processing-process-all" class="button primary processing-primary processing-all" type="button" hidden>Review All Files</button>
               <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
               <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>
               <button id="processing-cancel-all" class="text-button" type="button" hidden>Cancel All</button>

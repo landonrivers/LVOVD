@@ -634,8 +634,8 @@ test('Preview editor action stays secondary, explains eligible or ineligible sta
   const server = fs.readFileSync(path.join(ROOT, 'app-server.js'), 'utf8');
 
   assert.match(html, /class="preview-actions"[\s\S]*id="download-button" class="button primary big"[\s\S]*id="open-editor-button" class="button secondary editor-action big"[^>]*>Edit Source Video<\/button>/);
-  assert.match(styles, /\.button\.secondary\.editor-action\s*\{[^}]*color:\s*#fff;[^}]*background:\s*var\(--action-green\)/);
-  assert.match(styles, /\.button\.secondary\.editor-action:hover\s*\{[^}]*background:\s*var\(--action-green-hover\)/);
+  assert.match(styles, /\.button\.secondary\.editor-action\s*\{[^}]*color:\s*#fff;[^}]*background:\s*linear-gradient\(/);
+  assert.match(styles, /\.button\.secondary\.editor-action:hover\s*\{[^}]*background:\s*linear-gradient\(/);
   assert.match(app, /currentInfo\.kind !== 'media'[\s\S]*Collections and playlists cannot be opened/);
   assert.match(app, /currentInfo\.capabilities\?\.live\?\.isLive[\s\S]*Live media cannot be opened/);
   assert.match(app, /!\['av', 'video'\]\.includes\(content\)/);

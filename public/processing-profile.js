@@ -20,7 +20,8 @@
   function create(workspace) {
     const identity = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId };
     const inspection = clone(workspace.inspection), initialPlan = fullPlan(inspection.durationSeconds);
-    let editPlan = clone(initialPlan), settings = defaults(), editorState = null, draftRevision = 0, submitted = null, result = null;
+    let editPlan = clone(initialPlan), settings = defaults(), editorState = null,
+      draftRevision = Number.isSafeInteger(workspace.processingRevision) ? workspace.processingRevision + 1 : 0, submitted = null, result = null;
     return {
       update(next) {
         const nextPlan = next.editPlan || editPlan, nextSettings = next.settings || settings;

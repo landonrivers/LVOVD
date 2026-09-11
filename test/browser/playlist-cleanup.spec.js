@@ -22,7 +22,7 @@ test.beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), 'lvovd-playlist-cleanup-')); fixture = await playlistSource(root);
   process.env.YTDLP_PATH = managedBinaryPath(); process.env.LVOVD_DATA_DIR = path.join(root, 'history');
   process.env.HOST = '127.0.0.1'; process.env.PORT = String(45000 + process.pid % 10000);
-  childProcess.spawn = (command, ...args) => { if (command === process.env.YTDLP_PATH) sourceSpawns++; return originalSpawn(command, ...args); };
+  childProcess.spawn = (command, ...args) => { if (command === process.env.YTDLP_PATH && !args[0]?.includes('--version')) sourceSpawns++; return originalSpawn(command, ...args); };
   app = require('../../app-server'); ({ server } = require('../../server'));
   const manager = app.mediaWorkspaces; manager.tempDir = root; manager.maxBytes = 1000000;
   manager.localProcessing.limits = Object.freeze({ ...manager.localProcessing.limits, maxSourceBytes: 1000000 });
@@ -181,3 +181,68 @@ test('automatic removed cleanup clears recovery before an older retry acknowledg
     await expect(page.locator('#media-drop-zone')).toBeVisible();
   } finally { retryControl?.release.resolve(); responseRelease.resolve(); hold.release(); }
 });
+
+test('previous-workbench removal survives refresh and failed deletion without affecting the current workbench', async ({ page }) => {
+  await page.locator('#media-file-input').setInputFiles(fixture.files[0].file);
+  await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
+  await expect(page.locator('#conversion-download')).toBeVisible();
+  const previous = await state(page), previousId = (await profile(page)).workspaceId;
+  const manager = app.mediaWorkspaces, directory = manager.get(previousId).tempDir;
+  page.on('dialog', dialog => dialog.accept()); await page.reload();
+  await page.locator('#media-file-input').setInputFiles(fixture.files[1].file);
+  await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
+  await expect(page.locator('#conversion-download')).toBeVisible(); const retained = await download(page), current = await state(page);
+  const previousRow = page.locator(`[data-recovery-collection="${previous.collectionId}"]`);
+  blocked.add(path.resolve(directory)); await previousRow.getByRole('button', { name: 'Remove workbench' }).click();
+  await expect(previousRow).toContainText('pending/failed cleanups');
+  expect(manager.get(previousId)).toBeNull(); expect((await fs.stat(directory)).isDirectory()).toBe(true);
+  expect((await state(page)).collectionId).toBe(current.collectionId); expect(await download(page)).toEqual(retained);
+  const failedRetry = page.waitForResponse(response => new URL(response.url()).pathname === '/api/processing/cleanup');
+  await previousRow.getByRole('button', { name: 'Retry cleanup', exact: true }).click(); expect((await failedRetry).ok()).toBe(true);
+  await expect(previousRow).toContainText('pending/failed cleanups'); expect(await download(page)).toEqual(retained);
+  await page.reload();
+  const cleanup = page.locator(`[data-recovery-collection="${previous.collectionId}"]`).getByRole('button', { name: 'Open cleanup' });
+  await expect(cleanup).toBeEnabled(); await cleanup.focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('#workspace-retry-cleanup')).toBeEnabled();
+  const before = manager.localProcessing.snapshot(previous.collectionId).sourceBytesReserved;
+  await page.locator('#workspace-retry-cleanup').click(); await expect(page.locator('#workspace-removed-cleanup')).toContainText('cleanup failed');
+  expect(manager.localProcessing.snapshot(previous.collectionId).sourceBytesReserved).toBe(before);
+  blocked.delete(path.resolve(directory)); await expect(page.locator('#workspace-retry-cleanup')).toBeEnabled(); await page.locator('#workspace-retry-cleanup').click();
+  await expect(page.locator('#workspace-retry-cleanup')).toBeHidden(); await expect(fs.stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+  await page.locator('#media-file-input').setInputFiles(fixture.files[2].file);
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  expect(sourceSpawns).toBe(0); expect(fixture.requests.length).toBe(0);
+  expect(manager.get(current.selectedId)).toBeTruthy();
+});
+
+for (const action of ['removed', 'reopened elsewhere']) {
+  test(`a delayed reopen acknowledgement cannot revive a workbench ${action}`, async ({ page }) => {
+    await page.locator('#media-file-input').setInputFiles(fixture.files[0].file);
+    await expect(page.locator('#conversion-start')).toBeEnabled(); const original = await state(page);
+    page.on('dialog', dialog => dialog.accept()); await page.reload();
+    const accepted = gate(), release = gate(), manager = app.mediaWorkspaces, originalNow = manager.now;
+    let other;
+    await page.route('**/api/processing/collection/reopen', async route => {
+      const response = await route.fetch(); accepted.resolve(); await release.promise; await route.fulfill({ response });
+    });
+    try {
+      await page.locator(`[data-recovery-collection="${original.collectionId}"]`).getByRole('button', { name: 'Reopen files' }).click();
+      await accepted.promise; const elapsed = manager.now() + 10001; manager.now = () => elapsed;
+      if (action === 'removed') {
+        const result = await page.request.post(base + '/api/processing/collection/remove', { data: { collectionId: original.collectionId }, headers: { Origin: base, 'Sec-Fetch-Site': 'same-origin' } });
+        expect(result.ok()).toBe(true);
+      } else {
+        other = await page.context().newPage(); await other.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+        await other.goto(base); await other.locator(`[data-recovery-collection="${original.collectionId}"]`).getByRole('button', { name: 'Reopen files' }).click();
+        await expect(other.locator('#processing-file-list option')).toHaveCount(1);
+      }
+      release.resolve();
+      await expect.poll(async () => (await state(page)).collectionId).toBeNull();
+      await expect(page.locator('#processing-file-list option')).toHaveCount(0);
+      await expect(page.locator('#media-drop-zone')).toBeVisible();
+      if (other) { await expect(other.locator('#processing-file-list option')).toHaveCount(1); expect(manager.localProcessing.get(original.collectionId).listener).toBeTruthy(); }
+      else expect(manager.get(original.selectedId)).toBeNull();
+      expect(sourceSpawns).toBe(0); expect(fixture.requests.length).toBe(0);
+    } finally { release.resolve(); manager.now = originalNow; if (other) await other.close(); }
+  });
+}

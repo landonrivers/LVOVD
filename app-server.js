@@ -2067,6 +2067,16 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && ['/api/processing/collections', '/api/processing/collection/reopen', '/api/processing/collection/remove'].includes(requestUrl.pathname)) {
+    try {
+      const body = await readJsonBody(req), queue = mediaWorkspaces.localProcessing;
+      assertOnlyKeys(body, new Set(requestUrl.pathname === '/api/processing/collections' ? [] : ['collectionId']), 'Workbench recovery request');
+      if (requestUrl.pathname.endsWith('/reopen')) return json(res, 200, { collection: queue.reopen(body.collectionId) });
+      if (requestUrl.pathname.endsWith('/remove')) { queue.recoverable(body.collectionId); await queue.discardCollection(body.collectionId); }
+      return json(res, 200, { collections: queue.recoveryList() });
+    } catch (error) { return json(res, error.statusCode || 400, { error: error.statusCode ? error.message : 'The previous workbench could not be recovered.' }); }
+  }
+
   if (req.method === 'POST' && ['/api/processing/collection', '/api/processing/collection/attach', '/api/processing/queue', '/api/processing/queue/cancel'].includes(requestUrl.pathname)) {
     try {
       const body = await readJsonBody(req);
@@ -2086,7 +2096,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && requestUrl.pathname === '/api/processing/queue/progress') {
-    try { mediaWorkspaces.localProcessing.subscribe(requestUrl.searchParams.get('collection'), res); }
+    try { mediaWorkspaces.localProcessing.subscribe(requestUrl.searchParams.get('collection'), res, Number(requestUrl.searchParams.get('epoch') || 0)); }
     catch (error) { return json(res, error.statusCode || 404, { error: 'Local file collection not found or expired.' }); }
     return;
   }

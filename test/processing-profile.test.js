@@ -45,6 +45,14 @@ test('Reset File restores original intent, increments revision and keeps previou
   assert.equal(profile.draft().draftRevision, 2);
 });
 
+test('reopened files start above the server review revision without relabelling the previous result or restoring unsent intent', () => {
+  const profile = create({ ...source(), processingRevision: 12 });
+  const previous = { draftRevision: 9, assetId: 'existing-result' }; profile.acceptResult(previous);
+  assert.equal(profile.draft().draftRevision, 13); assert.deepEqual(profile.draft().settings, defaults());
+  assert.deepEqual(profile.draft().editPlan, fullPlan(10)); assert.equal(profile.state().editorState, null);
+  assert.deepEqual(profile.state().result, previous);
+});
+
 test('pending UI state does not change committed revision and stale reviewed submission is rejected', () => {
   const profile = create(source());
   const reviewed = { ...profile.draft(), key: 'review-a' };

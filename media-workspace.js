@@ -590,6 +590,7 @@ class MediaWorkspaceManager {
       sourceAssetId: workspace.sourceAssetId,
       activeOperation: workspace.activeOperation,
       queuedProcessingJobId: workspace.queuedProcessingJobId,
+      processingRevision: workspace.processingReview?.revision ?? null,
       editor: { ...workspace.editor, eligible: Boolean(workspace.inspection?.video && workspace.inspection.durationSeconds > 0) },
       conversion: this.conversions.publicState(workspace),
       outputCleanup: this.outputRetirement.state(workspace),

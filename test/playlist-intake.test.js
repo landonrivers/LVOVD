@@ -330,3 +330,18 @@ test('an empty disconnected collection keeps failed cleanup reachable until expl
   x.control.blockCleanup = false; await x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: id });
   assert.equal(x.queue.dropEmptyDisconnected(x.collection), true);
 });
+
+test('removing a disconnected workbench waits for pending intake creation and preserves failed cleanup for reopening', async t => {
+  const x = await setup(t), entered = gate(), release = gate(), create = x.manager.createUrlWorkspace.bind(x.manager);
+  x.control.blockCleanup = true;
+  x.manager.createUrlWorkspace = async options => { entered.resolve(); await release.promise; return create(options); };
+  x.intake.admit(x.request()); await entered.promise;
+  const removed = x.queue.discardCollection(x.collection.id);
+  assert.equal(x.queue.snapshot(x.collection.id).sourceBytesReserved, 1000);
+  assert.equal(x.queue.recoveryList()[0].available, false);
+  assert.throws(() => x.queue.reopen(x.collection.id), { statusCode: 409 });
+  release.resolve(); assert.equal((await removed).cleanupPending, true);
+  assert.equal(x.queue.recoveryList()[0].available, true);
+  const reopened = x.queue.reopen(x.collection.id); assert.equal(reopened.removedCleanup[0].status, 'failed');
+  assert.equal(reopened.sourceBytesReserved, 1000); assert.equal(x.control.calls.length, 0);
+});

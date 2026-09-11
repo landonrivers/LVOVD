@@ -19,6 +19,8 @@
   let removedCleanup = new Map(), cleanupBusy = false;
   let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
   let sharedSettings = profiles.defaults();
+  let recoveryItems = [], recoveryBusy = false, recoveryVersion = 0;
+  let connectionEpoch = 0;
 
   const processingHelp = {
     relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
@@ -72,8 +74,9 @@
   root.addEventListener('resize', positionHelp); document.addEventListener('scroll', positionHelp, true);
 
   function publish() {
+    updateRecoveryControls();
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || importStarting || intakeBatch?.active), importActive: Boolean(importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || recoveryBusy || importStarting || intakeBatch?.active), importActive: Boolean(recoveryBusy || importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -200,13 +203,73 @@
     renderFiles(); processingControls(); publish();
   }
   async function ensureCollection() {
+    if (recoveryBusy) throw new Error('Wait for the previous workbench to finish opening or removing.');
     if (collectionId) return collectionId;
     if (!collectionPromise) collectionPromise = post('/api/processing/collection', {}).then(data => {
       const collection = data.collection || data; collectionId = collection.id;
+      connectionEpoch = collection.connectionEpoch || 0;
       connect(); acceptCollection(collection); return collectionId;
-    }).finally(() => { collectionPromise = null; });
+    }).catch(error => { refreshRecovery(); throw error; }).finally(() => { collectionPromise = null; });
     return collectionPromise;
   }
+  function updateRecoveryControls() {
+    for (const button of panel.querySelectorAll('[data-recovery-action]')) {
+      const item = recoveryItems.find(item => item.id === button.dataset.recoveryId);
+      button.disabled = recoveryBusy || !item?.available || (button.dataset.recoveryAction === 'reopen'
+        && Boolean(entries.size || upload || starting || pendingUploads.length || removedCleanup.size || cleanupIds.size || importStarting))
+        || (button.dataset.recoveryAction === 'retry' && !item?.cleanup.some(cleanup => cleanup.status === 'failed'));
+    }
+    $('#workspace-recovery-refresh').disabled = recoveryBusy;
+  }
+  function renderRecovery() {
+    const list = $('#workspace-recovery-list'); list.replaceChildren();
+    for (const item of recoveryItems.filter(item => item.id !== collectionId)) {
+      const row = document.createElement('div'); row.className = 'workspace-recovery-row'; row.dataset.recoveryCollection = item.id;
+      const title = document.createElement('strong'); title.textContent = item.names.join(', ') || (item.cleanup.length ? 'Removed files awaiting cleanup' : 'Local workbench'); row.append(title);
+      const summary = document.createElement('div'); summary.className = 'help';
+      summary.textContent = `${item.files} ${item.files === 1 ? 'file' : 'files'}${item.cleanup.length ? ` · ${item.cleanup.length} pending/failed cleanups` : ''}${item.busy ? ' · Work still active' : ''}${item.available ? '' : ' · Open or being recovered in another tab; close it there, then refresh this list'}`; row.append(summary);
+      const actions = document.createElement('div'); actions.className = 'inline-actions';
+      const choices = [['reopen', !item.files && item.cleanup.length && !item.busy ? 'Open cleanup' : 'Reopen files']];
+      if (item.files || item.busy || !item.cleanup.length) choices.push(['remove', 'Remove workbench']);
+      if (item.cleanup.length) choices.push(['retry', 'Retry cleanup']);
+      for (const [action, label] of choices) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'button secondary mini'; button.textContent = label;
+        button.dataset.recoveryAction = action; button.dataset.recoveryId = item.id; button.addEventListener('click', () => recoverWorkbench(item, action)); actions.append(button);
+      }
+      row.append(actions); list.append(row);
+    }
+    $('#workspace-recovery').hidden = !list.childElementCount; updateRecoveryControls();
+  }
+  async function refreshRecovery() {
+    const version = ++recoveryVersion;
+    try {
+      const data = await post('/api/processing/collections', {});
+      if (version !== recoveryVersion) return;
+      recoveryItems = data.collections; renderRecovery();
+    } catch (error) { if (version === recoveryVersion) $('#workspace-recovery-status').textContent = error.message; }
+  }
+  async function recoverWorkbench(item, action) {
+    if (recoveryBusy) return;
+    if (action === 'remove' && !root.confirm('Remove this previous workbench, cancel its active work, and delete its temporary files and downloads?')) return;
+    recoveryBusy = true; ++recoveryVersion; publish();
+    $('#workspace-recovery-status').textContent = action === 'remove' ? 'Removing owned files; waiting for any active resources to close…' : action === 'retry' ? 'Retrying owned cleanup…' : 'Reopening retained files…';
+    try {
+      if (action === 'retry') {
+        for (const cleanup of item.cleanup) if (cleanup.status === 'failed') await post('/api/processing/cleanup', { collectionId: item.id, workspaceId: cleanup.workspaceId });
+        $('#workspace-recovery-status').textContent = 'Cleanup retried. Any remaining owned files stay listed.'; return;
+      }
+      const data = await post(`/api/processing/collection/${action}`, { collectionId: item.id });
+      if (action === 'reopen') {
+        closeSource(); collectionId = item.id; connectionEpoch = data.collection.connectionEpoch; collectionRevision = -1; ++generation;
+        // HTTP only claims the handoff. Fresh progress supplies files/results;
+        // a delayed acknowledgement must not restore already-removed assets.
+        connect();
+      }
+      $('#workspace-recovery-status').textContent = action === 'remove' ? 'Removal requested. Any pending cleanup remains listed until deletion succeeds.' : '';
+    } catch (error) { $('#workspace-recovery-status').textContent = error.message; }
+    finally { recoveryBusy = false; await refreshRecovery(); publish(); }
+  }
+  $('#workspace-recovery-refresh').addEventListener('click', refreshRecovery);
   function rateMode() { return settingsForm.querySelector('input[name="processing-rate"]:checked').value; }
   function readSettings() {
     const settings = profile?.state().settings || profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
@@ -353,7 +416,7 @@
     cancel.disabled = state.status === 'cancelling' || discarding;
     $('#processing-reset').disabled = !profile || discarding;
     $('#processing-process-all').hidden = entries.size < 2;
-    $('#processing-process-all').textContent = `Process All Files (${entries.size})`;
+    $('#processing-process-all').textContent = `Review All Files (${entries.size})`;
     $('#processing-process-all').disabled = batchBusy || Boolean(upload || starting);
     $('#processing-cancel-all').hidden = !jobs.some(job => ['queued', 'starting', 'running', 'cancelling'].includes(job.status));
     $('#processing-apply-all').disabled = !profile || discarding;
@@ -449,7 +512,7 @@
   }
   function connect() {
     closeSource();
-    const eventSource = new root.EventSource(`/api/processing/queue/progress?collection=${encodeURIComponent(collectionId)}`); source = eventSource;
+    const eventSource = new root.EventSource(`/api/processing/queue/progress?collection=${encodeURIComponent(collectionId)}&epoch=${connectionEpoch}`); source = eventSource;
     eventSource.onmessage = event => {
       if (source !== eventSource) return;
       try { acceptCollection(JSON.parse(event.data)); } catch { message('Unreadable local workspace update.', true); }
@@ -547,6 +610,7 @@
     xhr.send(file);
   }
   function addFiles(files) {
+    if (recoveryBusy) return message('Wait for the previous workbench to finish opening or removing.', true);
     if (!files.length) return;
     const maximum = limits.maxEntries || 20;
     if (files.length + entries.size + pendingUploads.length + (upload || starting ? 1 : 0) > maximum) return message(`Add at most ${maximum} files in total. No files were added.`, true);
@@ -711,7 +775,7 @@
   retry.addEventListener('click', reviewPlan);
   function invalidateBatch() {
     batchVersion++; batchPlans = []; $('#processing-batch-submit').disabled = true;
-    if (!$('#processing-batch-review').hidden) $('#processing-batch-files').textContent = 'Files or settings changed. Choose Process All Files to review the current drafts again.';
+    if (!$('#processing-batch-review').hidden) $('#processing-batch-files').textContent = 'Files or settings changed. Choose Review All Files to review the current drafts again.';
   }
   function batchCanSubmit() {
     const selected = batchPlans.filter(item => item.selected?.checked);
@@ -905,5 +969,5 @@
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
   root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
     collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
-  publish();
+  publish(); refreshRecovery();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
