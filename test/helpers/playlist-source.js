@@ -20,7 +20,7 @@ async function playlistSource(root) {
   let base;
   const server = http.createServer(async (req, res) => {
     const route = new URL(req.url, base).pathname; requests.push({ path: route, method: req.method });
-    if (holds.has(route)) { const hold = holds.get(route); hold.arrived(); await hold.promise; }
+    if (holds.has(route) && !holds.get(route).afterBytes) { const hold = holds.get(route); hold.arrived(); await hold.promise; }
     if (res.destroyed) return;
     if (failures.has(route)) { res.writeHead(failures.get(route)); res.end('Synthetic fixture rejection'); return; }
     if (route === '/feed.xml') {
@@ -34,15 +34,23 @@ async function playlistSource(root) {
       res.end(`<html><head><title>Generated item ${page[1]}</title></head><body><video controls src="${base}/source-${page[1]}.mp4"></video></body></html>`); return;
     }
     const media = route.match(/^\/source-([0-2])\.mp4$/);
-    if (media) { const bytes = files[Number(media[1])].bytes; res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': bytes.length }); res.end(req.method === 'HEAD' ? undefined : bytes); return; }
+    if (media) {
+      const bytes = files[Number(media[1])].bytes, hold = holds.get(route);
+      res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': bytes.length });
+      if (req.method !== 'HEAD' && hold?.afterBytes) {
+        res.write(bytes.subarray(0, hold.afterBytes)); hold.arrived(); await hold.promise;
+        if (!res.destroyed) res.end(bytes.subarray(hold.afterBytes));
+      } else res.end(req.method === 'HEAD' ? undefined : bytes);
+      return;
+    }
     res.writeHead(404); res.end();
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
   return { base, url: base + '/feed.xml', files, requests, failures,
-    hold(route) {
+    hold(route, { afterBytes = null } = {}) {
       let release, arrived; const promise = new Promise(resolve => { release = resolve; }), accepted = new Promise(resolve => { arrived = resolve; });
-      holds.set(route, { promise, arrived, release });
+      holds.set(route, { promise, arrived, release, afterBytes });
       return { accepted, release() { holds.delete(route); release(); } };
     },
     async close() { for (const hold of holds.values()) hold.release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

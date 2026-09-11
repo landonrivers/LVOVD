@@ -2031,6 +2031,11 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && requestUrl.pathname === '/api/processing/cleanup') {
+    try { return json(res, 200, { collection: await mediaWorkspaces.localProcessing.retryRemovedCleanup(await readJsonBody(req)) }); }
+    catch (error) { return json(res, error.statusCode || 400, { error: error.message || 'Removed-file cleanup could not complete.' }); }
+  }
+
   if (req.method === 'POST' && ['/api/processing/import', '/api/processing/import/cancel'].includes(requestUrl.pathname)) {
     try {
       const body = await readJsonBody(req);

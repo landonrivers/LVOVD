@@ -87,3 +87,36 @@ for (const kind of ['unknown total', 'separate streams and merge intermediates',
     assert.equal(observed[0].args[observed[0].args.indexOf('--extractor-retries') + 1], '0');
   });
 }
+
+test('removed-file cleanup endpoint enforces origin and collection ownership and never acquires media', async () => {
+  const { collection } = await setup(), queue = app.mediaWorkspaces.localProcessing, manager = app.mediaWorkspaces;
+  const owner = queue.get(collection.id), key = queue.reserve(owner, 100), workspace = await manager.createUrlWorkspace({ displayName: 'Removed fixture', purpose: 'local' });
+  queue.attach(owner, workspace, key); workspace.activeOperation = null;
+  const directory = workspace.tempDir; await fs.writeFile(path.join(directory, 'owned.part'), 'small fixture');
+  const originalFs = manager.fs; let block = true, attempts = 0;
+  manager.fs = { ...originalFs, rm: async (file, options) => {
+    if (file === directory) { attempts++; if (block) throw Object.assign(new Error('Synthetic EACCES'), { code: 'EACCES' }); }
+    return fs.rm(file, options);
+  } };
+  try {
+    await manager.discard(workspace.id); const initialAttempts = attempts, sourceRequests = app.remoteSourceRequests.size;
+    const other = (await call('/api/processing/collection', {})).body.collection;
+    const body = { collectionId: collection.id, workspaceId: workspace.id };
+    for (const headers of [{ Origin: 'https://hostile.example' }, { Host: 'hostile.example' }, { 'Sec-Fetch-Site': 'cross-site' }]) {
+      assert.equal((await call('/api/processing/cleanup', body, headers)).status, 403);
+    }
+    assert.equal((await call('/api/processing/cleanup', { ...body, collectionId: other.id })).status, 409);
+    assert.equal((await call('/api/processing/cleanup', { ...body, workspaceId: crypto.randomUUID() })).status, 409);
+    assert.equal((await call('/api/processing/cleanup', { ...body, path: directory })).status, 400);
+    assert.equal((await call('/api/processing/cleanup', { ...body, ffmpeg: '-y' })).status, 400);
+    assert.equal(attempts, initialAttempts);
+    let response = await call('/api/processing/cleanup', body);
+    assert.equal(response.status, 200); assert.equal(response.body.collection.removedCleanup[0].status, 'failed');
+    assert.equal(response.body.collection.sourceBytesReserved, 100); assert.equal(attempts, initialAttempts + 1);
+    assert.equal(JSON.stringify(response.body).includes(directory), false); assert.equal(JSON.stringify(response.body).includes('Synthetic EACCES'), false);
+    block = false; response = await call('/api/processing/cleanup', body);
+    assert.equal(response.status, 200); assert.deepEqual(response.body.collection.removedCleanup, []);
+    assert.equal(response.body.collection.sourceBytesReserved, 0); assert.equal(queue.entryCount(owner), 0);
+    await assert.rejects(fs.stat(directory), { code: 'ENOENT' }); assert.equal(app.remoteSourceRequests.size, sourceRequests);
+  } finally { block = false; await manager.retryCleanup(workspace.id); manager.fs = originalFs; }
+});

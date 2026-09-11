@@ -254,3 +254,79 @@ test('Preview admission evidence expires and stays bounded without discarding a 
   assert.throws(() => x.intake.admit({ ...x.request(), previewId: fresh.playlistImportId }), { statusCode: 409 });
   assert.equal(x.control.calls.length, 0);
 });
+
+for (const pending of ['acquisition', 'workspace creation']) {
+  test(`removed cleanup remains owned through pending ${pending}, retry and a later import`, async t => {
+    const x = await setup(t, { discoverCapabilities: async () => ({ available: false }) }), existing = await x.upload(), arrived = gate(), release = gate();
+    let active;
+    if (pending === 'workspace creation') {
+      const create = x.manager.createUrlWorkspace.bind(x.manager);
+      x.manager.createUrlWorkspace = async options => { arrived.resolve(); await release.promise; active = await create(options); return active; };
+    } else x.control.onAcquire = async workspace => { active = workspace; await fs.writeFile(path.join(workspace.tempDir, 'owned.part'), 'partial fixture'); arrived.resolve(); await release.promise; };
+    const intent = { workspaceId: existing.id, sourceAssetId: existing.sourceAssetId, draftRevision: 1,
+      editPlan: { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 5 }] }, settings: {} };
+    const plan = await x.manager.processing.plan(intent); x.queue.kick = () => {};
+    await x.queue.enqueue(x.collection.id, [{ ...intent, planKey: plan.key, acknowledgedWarnings: plan.warnings.map(item => item.id) }]);
+    const queued = x.queue.snapshot(x.collection.id).jobs;
+    x.control.blockCleanup = true; const body = x.request(); x.intake.admit(body); await arrived.promise;
+    const id = x.collection.intake.items[0].id;
+    x.intake.cancel({ collectionId: x.collection.id, requestId: body.requestId });
+    let snapshot = x.queue.snapshot(x.collection.id);
+    assert.deepEqual(snapshot.removedCleanup.map(item => [item.workspaceId, item.status]), [[id, 'pending']]);
+    assert.equal(snapshot.sourceBytesReserved, 1000);
+    await x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: id });
+    assert.equal(x.manager.cleanupPending.size, 0, 'retry cannot remove files before the pending owner settles');
+    release.resolve(); await x.settle(); snapshot = x.queue.snapshot(x.collection.id);
+    assert.equal(snapshot.removedCleanup[0].status, 'failed'); const directory = x.manager.cleanupPending.get(id).directory;
+    assert.equal((await fs.stat(directory)).isDirectory(), true); assert.equal(snapshot.sourceBytesReserved, 1000);
+    x.intake.admit(x.request()); await x.settle(); snapshot = x.queue.snapshot(x.collection.id);
+    assert.equal(snapshot.intake.items[0].workspaceId, null); assert.equal(snapshot.intake.items[0].failure.category, 'local_source_budget');
+    assert.equal(snapshot.removedCleanup[0].workspaceId, id, 'recovery is independent of the new import display');
+    const other = x.queue.createCollection();
+    await assert.rejects(x.queue.retryRemovedCleanup({ collectionId: other.id, workspaceId: id }), { statusCode: 409 });
+    await assert.rejects(x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: existing.id }), { statusCode: 409 });
+    await assert.rejects(x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: id, path: directory }), { statusCode: 400 });
+    snapshot = await x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: id });
+    assert.equal(snapshot.removedCleanup[0].status, 'failed'); assert.equal(snapshot.sourceBytesReserved, 1000);
+    x.control.blockCleanup = false;
+    snapshot = await x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: id });
+    assert.deepEqual(snapshot.removedCleanup, []); assert.equal(snapshot.sourceBytesReserved, 50); assert.equal(x.queue.entryCount(x.collection), 1);
+    await assert.rejects(fs.stat(directory), { code: 'ENOENT' });
+    assert.deepEqual(snapshot.jobs, queued); assert.deepEqual(await fs.readFile(existing.assets.get(existing.sourceAssetId).filePath), Buffer.alloc(50));
+    assert.equal(x.control.calls.length, pending === 'workspace creation' ? 0 : 1);
+    const added = await x.upload(20); assert.ok(added.sourceAssetId); assert.equal(x.queue.snapshot(x.collection.id).sourceBytesReserved, 70);
+  });
+}
+
+test('successful bounded automatic cleanup publishes removal and releases only its reservation', async t => {
+  const x = await setup(t, { cleanupRetryDelaysMs: [1] }), existing = await x.upload(), arrived = gate(), release = gate(), automatic = gate(), allowDelete = gate();
+  let active, failures = 1; const rm = x.manager.fs.rm, updates = [];
+  x.collection.listener = { write(text) { updates.push(JSON.parse(text.slice(6))); return true; }, end() {} };
+  x.control.onAcquire = async workspace => { active = workspace; arrived.resolve(); await release.promise; };
+  x.manager.fs.rm = async (...args) => {
+    if (active && (args[0] === active.tempDir || args[0] === active.cleanupRecord?.directory)) {
+      if (failures-- > 0) throw Object.assign(new Error('Transient removal fixture'), { code: 'EBUSY' });
+      automatic.resolve(); await allowDelete.promise;
+    }
+    return rm(...args);
+  };
+  const body = x.request(); x.intake.admit(body); await arrived.promise;
+  x.intake.cancel({ collectionId: x.collection.id, requestId: body.requestId }); release.resolve(); await x.settle(); await automatic.promise;
+  assert.equal(x.queue.snapshot(x.collection.id).removedCleanup[0].status, 'pending');
+  assert.equal(x.queue.snapshot(x.collection.id).sourceBytesReserved, 1000);
+  const record = x.manager.cleanupPending.get(active.id); allowDelete.resolve(); await record.promise;
+  assert.equal(updates.at(-1).removedCleanup.length, 0); assert.equal(updates.at(-1).sourceBytesReserved, 50);
+  assert.ok(x.manager.get(existing.id)); assert.equal(x.control.calls.length, 1);
+});
+
+test('an empty disconnected collection keeps failed cleanup reachable until explicit local recovery', async t => {
+  const x = await setup(t), arrived = gate(), release = gate(); x.control.blockCleanup = true;
+  x.control.onAcquire = async () => { arrived.resolve(); await release.promise; };
+  const body = x.request(); x.intake.admit(body); await arrived.promise; x.intake.cancel({ collectionId: x.collection.id, requestId: body.requestId });
+  release.resolve(); await x.settle(); const id = x.queue.snapshot(x.collection.id).removedCleanup[0].workspaceId;
+  x.collection.disconnected = true; assert.equal(x.queue.dropEmptyDisconnected(x.collection), false);
+  x.control.now = 2000; x.queue.sweep(x.control.now); x.queue.createCollection();
+  assert.equal(x.queue.collections.has(x.collection.id), true);
+  x.control.blockCleanup = false; await x.queue.retryRemovedCleanup({ collectionId: x.collection.id, workspaceId: id });
+  assert.equal(x.queue.dropEmptyDisconnected(x.collection), true);
+});

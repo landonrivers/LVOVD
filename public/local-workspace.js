@@ -16,6 +16,7 @@
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let uploadGeneration = 0;
+  let removedCleanup = new Map(), cleanupBusy = false;
   let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
   let sharedSettings = profiles.defaults();
 
@@ -72,7 +73,7 @@
 
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(entries.size || upload || starting || cleanupIds.size || importStarting || intakeBatch?.active), importActive: Boolean(importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || importStarting || intakeBatch?.active), importActive: Boolean(importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -167,6 +168,7 @@
   function acceptCollection(data) {
     if (!data || data.id !== collectionId) return;
     if (Number.isSafeInteger(data.revision)) { if (data.revision < collectionRevision) return; collectionRevision = data.revision; }
+    removedCleanup = new Map((data.removedCleanup || []).map(item => [item.workspaceId, item])); renderCleanup();
     jobs = data.jobs || []; limits = data.limits || limits; intakeBatch = data.intake || null;
     renderImport();
     // Descriptors have no source or inspection until the real acquisition starts.
@@ -454,7 +456,7 @@
     };
     eventSource.onerror = () => {
       if (source !== eventSource) return;
-      if (!entries.size && !upload && !starting && !importStarting && !intakeBatch?.active) {
+      if (!entries.size && !upload && !starting && !importStarting && !intakeBatch?.active && !removedCleanup.size && !cleanupIds.size) {
         // An empty disconnected collection is reclaimable on the server.
         // A later intake creates one fresh collection instead of reusing a
         // permanently expired ID or keeping a reconnect loop alive.
@@ -471,7 +473,7 @@
   }
   function entryHasWork(entry) { return Boolean(entry?.snapshot.intakePending || entry?.profile?.hasChanges() || Object.values(entry?.profile?.state().editorState?.pendingCut || {}).some(Number.isFinite)
     || entry?.snapshot.activeOperation || entry?.snapshot.playback || entry?.snapshot.conversion?.output || entry?.snapshot.editedOutput || jobActive(entry?.snapshot.id)); }
-  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || importStarting || intakeBatch?.active || cleanupIds.size); }
+  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || importStarting || intakeBatch?.active || removedCleanup.size || cleanupIds.size); }
   async function discard() {
     if (discarding) return;
     saveSelected();
@@ -484,10 +486,10 @@
     message('Removing local file…'); processingControls();
     try {
       const data = await removeOwned(id);
-      if (data.cleanup && data.cleanup.status !== 'complete') cleanupIds.add(id);
+      if (!entry?.seenInCollection && data.cleanup && data.cleanup.status !== 'complete') cleanupIds.add(id);
       entries.delete(id);
       if (workspaceId === id) { workspaceId = null; profile = null; snapshot = null; discarding = false; if (entries.size) selectEntry(entries.keys().next().value); else reset(); }
-      $('#workspace-retry-cleanup').hidden = !cleanupIds.size;
+      renderCleanup();
       renderFiles(); message(`Local file removed. ${data.cleanup?.message || ''}`); publish();
     } catch (error) {
       removedIds.delete(id); if (!entries.has(id)) entries.set(id, entry);
@@ -555,7 +557,7 @@
     publish(); renderFiles();
   }
   async function acquire(detail) {
-    if (!detail || entries.size || upload || starting || cleanupIds.size) { publish(); return; }
+    if (!detail || entries.size || upload || starting || cleanupIds.size || removedCleanup.size) { publish(); return; }
     const token = ++generation; starting = true; acquiring = true; publish(); intake.hidden = true; progress.hidden = false;
     message('Acquiring the selected source once for local use…'); panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try {
@@ -824,11 +826,26 @@
       finally { if (token === generation) processingControls(); }
     });
   }
+  function renderCleanup() {
+    const list = $('#workspace-removed-cleanup'); list.replaceChildren(); list.hidden = !removedCleanup.size;
+    for (const item of removedCleanup.values()) {
+      const row = document.createElement('li'); row.textContent = item.name + ' — cleanup ' + item.status + '. ' + item.message; list.append(row);
+    }
+    const button = $('#workspace-retry-cleanup'); button.hidden = !cleanupIds.size && !removedCleanup.size;
+    button.disabled = cleanupBusy || (!cleanupIds.size && ![...removedCleanup.values()].some(item => item.status === 'failed'));
+  }
   $('#workspace-retry-cleanup').addEventListener('click', async () => {
-    const button = $('#workspace-retry-cleanup'); if (!cleanupIds.size) return; button.disabled = true;
-    try { for (const id of cleanupIds) { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') cleanupIds.delete(id); message(data.cleanup?.message || 'Temporary cleanup complete.'); } button.hidden = !cleanupIds.size; publish(); }
-    catch (error) { message(error.message, true); }
-    finally { button.disabled = false; }
+    if (cleanupBusy) return; cleanupBusy = true; renderCleanup();
+    const owner = collectionId;
+    try {
+      for (const item of [...removedCleanup.values()]) if (item.status === 'failed') {
+        const data = await post('/api/processing/cleanup', { collectionId: owner, workspaceId: item.workspaceId });
+        if (collectionId === owner) acceptCollection(data.collection);
+      }
+      for (const id of cleanupIds) { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') cleanupIds.delete(id); }
+      publish();
+    } catch (error) { if (cleanupIds.size || removedCleanup.size) message(error.message, true); }
+    finally { cleanupBusy = false; renderCleanup(); }
   });
   choose.addEventListener('click', () => input.click());
   $('#processing-add-files').addEventListener('click', () => input.click());
@@ -858,6 +875,9 @@
     const list = $('#processing-import-items'); list.replaceChildren();
     for (const item of intakeBatch?.items || []) {
       const row = document.createElement('li'); row.textContent = item.title + ' — ' + (item.removed ? 'Removed' : item.status) + (item.message === 'Not started' || item.message === 'Cancelled — not started' ? ' (not started)' : '');
+      if (item.failure && (!item.workspaceId || item.removed)) {
+        const detail = document.createElement('div'); detail.textContent = [item.failure.title, item.failure.explanation, item.failure.help].filter(Boolean).join(' '); row.append(detail);
+      }
       list.append(row);
     }
   }

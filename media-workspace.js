@@ -1536,6 +1536,7 @@ class MediaWorkspaceManager {
     if (record.promise) return record.promise;
     if (record.status === 'complete') return;
     record.status = 'pending';
+    if (!this.workspaces.has(record.workspace.id)) this.localProcessing.cleanupChanged(record.workspace.id);
     record.promise = (async () => {
       await this.releaseReadStreams(record.workspace);
       record.attempts += 1;
@@ -1567,6 +1568,7 @@ class MediaWorkspaceManager {
     finally {
       record.promise = null;
       if (this.workspaces.has(record.workspace.id)) this.emit(record.workspace);
+      else this.localProcessing.cleanupChanged(record.workspace.id);
     }
   }
 
@@ -1632,7 +1634,7 @@ class MediaWorkspaceManager {
     this.closeListeners(workspace);
     const task = this.discardOwnedWorkspace(workspace, expired);
     this.discards.set(workspaceId, task);
-    task.finally(() => this.discards.delete(workspaceId)).catch(() => {});
+    task.finally(() => { this.discards.delete(workspaceId); this.localProcessing.cleanupChanged(workspaceId); }).catch(() => {});
     return task;
   }
 

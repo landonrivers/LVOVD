@@ -149,7 +149,7 @@ class PlaylistIntake {
           if (maximumBytes <= 0) throw requestError('The original-source storage budget is full. Remove files or retry cleanup before importing.', 413);
           reservationKey = this.queue.reserve(collection, maximumBytes, item.id);
           const reservation = this.queue.reservations.get(reservationKey);
-          reservation.workspaceId = item.id; reservation.fixed = true; reservation.preparing = true;
+          reservation.workspaceId = item.id; reservation.displayName = item.title; reservation.fixed = true; reservation.preparing = true;
           workspace = await this.manager.createUrlWorkspace({ id: item.id, purpose: 'local', displayName: item.title, sourceName: batch.sourceName, waiting: true });
           reservation.preparing = false;
           if (!this.current(collection, batch) || item.removed) throw cancelled();

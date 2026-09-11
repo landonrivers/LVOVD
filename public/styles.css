@@ -248,7 +248,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .workspace-progress .progress-head { margin-bottom: 9px; }
 #processing-import-status { min-width: 0; overflow-wrap: anywhere; }
 #processing-import-cancel { flex: 0 0 auto; }
-#processing-import-items { max-height: 10rem; overflow: auto; padding-left: 18px; overflow-wrap: anywhere; }
+#workspace-removed-cleanup, #processing-import-items { max-height: 10rem; overflow: auto; padding-left: 18px; overflow-wrap: anywhere; }
 .workspace-failure { margin-top: 12px; }
 .workspace-failure-action { margin-top: 11px; }
 .media-editor { margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.08); }

@@ -40,7 +40,7 @@ class LocalProcessingQueue {
     for (const collection of this.collections.values()) {
       if (this.dropEmptyDisconnected(collection)) continue;
       if (!collection.intake?.active && !collection.intakeSlots.size && !collection.members.size && !collection.uploads && !collection.listener
-        && this.manager.now() - collection.lastAccessAt >= this.manager.ttlMs) this.collections.delete(collection.id);
+        && !this.removedCleanup(collection).length && this.manager.now() - collection.lastAccessAt >= this.manager.ttlMs) this.collections.delete(collection.id);
     }
     if (this.collections.size >= this.limits.maxCollections) throw requestError('The local workbench limit is reached. Remove an unused collection first.', 409);
     const collection = { id: crypto.randomUUID(), members: new Set(), jobs: new Map(), uploads: 0, intakeSlots: new Set(), intake: null,
@@ -53,7 +53,7 @@ class LocalProcessingQueue {
     const collection = this.get(id, { touch });
     return { id: collection.id, revision: ++collection.revision, limits: this.limits,
       sourceBytesReserved: [...this.reservations.values()].reduce((sum, item) => sum + item.bytes, 0),
-      uploads: collection.uploads, intake: this.intake?.snapshot(collection) || null,
+      uploads: collection.uploads, intake: this.intake?.snapshot(collection) || null, removedCleanup: this.removedCleanup(collection),
       workspaces: [...collection.members].map(workspaceId => this.manager.get(workspaceId, { touch: false }))
         .filter(Boolean).map(workspace => this.manager.publicWorkspace(workspace)),
       jobs: [...collection.jobs.values()].map(job => ({ id: job.id, workspaceId: job.workspaceId,
@@ -116,12 +116,43 @@ class LocalProcessingQueue {
 
   dropEmptyDisconnected(collection) {
     if (collection.disconnected && !collection.listener && !collection.intake?.active && !collection.intakeSlots.size && !collection.members.size
-      && !collection.uploads && !collection.admitting
+      && !collection.uploads && !collection.admitting && !this.removedCleanup(collection).length
       && !this.order.some(job => job.collectionId === collection.id && LIVE.has(job.status))) {
       this.collections.delete(collection.id);
       return true;
     }
     return false;
+  }
+
+  // Recovery follows existing reservation ownership, independently of the last
+  // import display. Never expose paths or mistake logical removal for deletion.
+  removedCleanup(collection) {
+    const items = [];
+    for (const reservation of this.reservations.values()) {
+      const id = reservation.workspaceId;
+      if (reservation.collectionId !== collection.id || !id || this.manager.workspaces.has(id) || collection.intakeSlots.has(id)) continue;
+      const cleanup = this.manager.cleanupPending.has(id) || this.manager.discards.has(id)
+        ? this.manager.cleanupStatus(id)
+        : { status: 'pending', message: 'Owned intake resources must settle before temporary files can be removed.' };
+      if (cleanup.status !== 'complete') items.push({ workspaceId: id, name: reservation.displayName || 'Removed file', ...cleanup });
+    }
+    return items;
+  }
+
+  cleanupChanged(workspaceId) {
+    const ids = new Set([...this.reservations.values()].filter(item => item.workspaceId === workspaceId).map(item => item.collectionId));
+    this.reap();
+    for (const id of ids) { const collection = this.collections.get(id); if (collection) this.emit(collection); }
+  }
+
+  async retryRemovedCleanup(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.workspaceId !== 'string' || Object.keys(body).some(key => !['collectionId', 'workspaceId'].includes(key))) throw requestError('Invalid removed-file cleanup request.', 400);
+    const collection = this.get(body.collectionId);
+    const reservation = [...this.reservations.values()].find(item => item.collectionId === collection.id && item.workspaceId === body.workspaceId);
+    if (!reservation || this.manager.workspaces.has(body.workspaceId) || collection.intakeSlots.has(body.workspaceId)) throw requestError('That removed file does not belong to this collection.', 409);
+    if (!reservation.preparing && !this.manager.discards.has(body.workspaceId)) await this.manager.retryCleanup(body.workspaceId);
+    this.cleanupChanged(body.workspaceId);
+    return this.snapshot(collection.id);
   }
 
   reap() {
@@ -165,6 +196,7 @@ class LocalProcessingQueue {
     if (this.owners.has(workspace.id)) throw requestError('This workspace already belongs to a local collection.', 409);
     collection.members.add(workspace.id); this.owners.set(workspace.id, collection.id);
     this.reservations.get(reservationKey).workspaceId = workspace.id;
+    this.reservations.get(reservationKey).displayName = workspace.source.displayName;
     this.emit(collection);
   }
 
@@ -386,7 +418,7 @@ class LocalProcessingQueue {
     this.reap();
     for (const collection of [...this.collections.values()]) {
       if (collection.intake?.active && now - collection.intake.createdAt >= this.manager.ttlMs) this.intake.stop(collection, 'Playlist import expired.');
-      if (!collection.intake?.active && !collection.members.size && !collection.uploads && !collection.admitting && now - collection.lastAccessAt >= this.manager.ttlMs) {
+      if (!collection.intake?.active && !collection.members.size && !collection.uploads && !collection.admitting && !this.removedCleanup(collection).length && now - collection.lastAccessAt >= this.manager.ttlMs) {
         this.closeListener(collection); this.collections.delete(collection.id);
       }
     }
