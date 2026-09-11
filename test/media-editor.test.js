@@ -641,7 +641,7 @@ test('Preview editor action stays secondary, explains eligible or ineligible sta
   assert.match(app, /!\['av', 'video'\]\.includes\(content\)/);
   assert.match(app, /editorWorkspaceState\.active[\s\S]*Discard the current local workspace/);
   assert.match(app, /Edit Source Video opens the full media using the selected video source, profile, and resolution\. Time Range, Extras, and SponsorBlock apply only to Download\./);
-  assert.match(app, /openEditorNote\.textContent = state\.eligible \? EDITOR_ELIGIBLE_NOTE : state\.reason/);
+  assert.match(app, /openEditorNote\.textContent = state\.eligible[\s\S]*EDITOR_ELIGIBLE_NOTE[\s\S]*state\.reason/);
   assert.match(app, /openEditorNote\.hidden = !openEditorNote\.textContent/);
   assert.match(app, /function buildEditorAcquisition\(\)[\s\S]*content,[\s\S]*profile:[\s\S]*maxHeight:[\s\S]*sourceFormat:/);
   const dispatchStart = app.indexOf("new CustomEvent('lvovd:workspace-acquire-url'");

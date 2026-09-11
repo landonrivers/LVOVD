@@ -480,12 +480,13 @@ class MediaWorkspaceManager {
     origin = 'local',
     sourceName = null,
     waiting = false,
-    purpose = 'edit'
+    purpose = 'edit',
+    id = crypto.randomUUID()
   } = {}) {
     if (!WORKSPACE_PURPOSES.has(purpose)) {
       throw workspaceRequestError('Unsupported local workspace purpose.', 400);
     }
-    if (origin === 'url' && purpose !== 'edit') {
+    if (origin === 'url' && !['edit', 'local'].includes(purpose)) {
       throw workspaceRequestError('URL media acquisition is available only for editing.', 400);
     }
     const root = await this.workRoot();
@@ -493,7 +494,7 @@ class MediaWorkspaceManager {
     const now = this.now();
     const urlOrigin = origin === 'url';
     const workspace = {
-      id: crypto.randomUUID(),
+      id,
       purpose,
       status: waiting ? 'waiting' : urlOrigin ? 'acquiring' : 'receiving',
       phase: waiting ? 'waiting' : urlOrigin ? 'acquiring' : 'receiving',
@@ -705,21 +706,22 @@ class MediaWorkspaceManager {
     return asset;
   }
 
-  async createUrlWorkspace({ displayName, sourceName = null, waiting = false } = {}) {
+  async createUrlWorkspace({ displayName, sourceName = null, waiting = false, purpose = 'edit', id } = {}) {
     try {
       return await this.createWorkspace({
         displayName,
         origin: 'url',
         sourceName,
         waiting,
-        purpose: 'edit'
+        purpose,
+        id
       });
     } catch (error) {
       throw withLocalFailure(error, { operation: 'workspace_creation' });
     }
   }
 
-  async adoptAcquiredFile(workspaceId, filePath, { displayName = null } = {}) {
+  async adoptAcquiredFile(workspaceId, filePath, { displayName = null, maximumBytes = this.maxBytes } = {}) {
     const workspace = this.get(workspaceId, { touch: false });
     if (!workspace || workspace.cancelRequested) throw workspaceCancelledError();
     if (!filePath || !isPathInside(workspace.tempDir, filePath)) {
@@ -741,7 +743,8 @@ class MediaWorkspaceManager {
         { operation: 'output_collection', reason: 'output_inconsistent' }
       );
     }
-    if (stat.size > this.maxBytes) throw this.tooLargeError();
+    if (stat.size > Math.min(this.maxBytes, maximumBytes)) throw this.tooLargeError();
+    if (this.workspaces.get(workspaceId) !== workspace || workspace.cancelRequested || workspace.abortController.signal.aborted) throw workspaceCancelledError();
 
     const sourceAsset = this.registerAsset(workspace, {
       role: 'source',
@@ -1642,7 +1645,7 @@ class MediaWorkspaceManager {
         && !workspace.child;
       workspace.cancelRequested = true;
       if (!workspace.abortController.signal.aborted) workspace.abortController.abort();
-      if (workspace.child) {
+      if (workspace.child && !workspace.stopAcquisition) {
         try { workspace.child.kill(); } catch {}
       }
       if (operation === 'rendering') {

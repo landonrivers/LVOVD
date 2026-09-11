@@ -16,7 +16,7 @@
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let uploadGeneration = 0;
-  let acquiring = false;
+  let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
   let sharedSettings = profiles.defaults();
 
   const processingHelp = {
@@ -72,7 +72,7 @@
 
   function publish() {
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(entries.size || upload || starting || cleanupIds.size), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size || importStarting || intakeBatch?.active), importActive: Boolean(importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -127,7 +127,8 @@
       let option = options.get(id);
       if (!option) { option = document.createElement('option'); option.value = id; list.append(option); }
       const job = currentJob(id), name = entry.snapshot.source?.name || 'Preparing local file…';
-      const label = name + (job ? ' — ' + job.status : '');
+      const importing = intakeBatch?.items.find(item => item.id === id && !['ready', 'cancelled'].includes(item.status));
+      const label = name + (job ? ' — ' + job.status : importing ? ' — ' + importing.status : entry.snapshot.intakePending ? ' — waiting' : '');
       if (option.textContent !== label) option.textContent = label;
       if (option.selected !== (id === workspaceId)) option.selected = id === workspaceId;
     }
@@ -166,10 +167,18 @@
   function acceptCollection(data) {
     if (!data || data.id !== collectionId) return;
     if (Number.isSafeInteger(data.revision)) { if (data.revision < collectionRevision) return; collectionRevision = data.revision; }
-    jobs = data.jobs || []; limits = data.limits || limits;
-    const live = new Set(), authoritativeIds = new Set((data.workspaces || []).map(item => item.id));
+    jobs = data.jobs || []; limits = data.limits || limits; intakeBatch = data.intake || null;
+    renderImport();
+    // Descriptors have no source or inspection until the real acquisition starts.
+    const workspaces = [...(data.workspaces || [])];
+    for (const item of intakeBatch?.items || []) if (!item.workspaceId && !item.removed && item.status === 'waiting') {
+      workspaces.push({ id: item.id, status: 'waiting', phase: 'waiting', message: item.message,
+        source: { name: item.title, size: null, origin: 'url' }, sourceAssetId: null, inspection: null,
+        activeOperation: null, editor: { eligible: false }, playback: null, intakePending: true });
+    }
+    const live = new Set(), authoritativeIds = new Set(workspaces.map(item => item.id));
     for (const id of removedIds) if (!authoritativeIds.has(id) && !removedDuringUpload.has(id)) removedIds.delete(id);
-    for (const dataWorkspace of data.workspaces || []) {
+    for (const dataWorkspace of workspaces) {
       if (removedIds.has(dataWorkspace.id)) continue;
       live.add(dataWorkspace.id);
       let entry = entries.get(dataWorkspace.id);
@@ -445,7 +454,7 @@
     };
     eventSource.onerror = () => {
       if (source !== eventSource) return;
-      if (!entries.size && !upload && !starting) {
+      if (!entries.size && !upload && !starting && !importStarting && !intakeBatch?.active) {
         // An empty disconnected collection is reclaimable on the server.
         // A later intake creates one fresh collection instead of reusing a
         // permanently expired ID or keeping a reconnect loop alive.
@@ -460,9 +469,9 @@
     if (!response.ok && response.status !== 404) throw new Error(data.error || 'Remove File could not complete.');
     return data;
   }
-  function entryHasWork(entry) { return Boolean(entry?.profile?.hasChanges() || Object.values(entry?.profile?.state().editorState?.pendingCut || {}).some(Number.isFinite)
+  function entryHasWork(entry) { return Boolean(entry?.snapshot.intakePending || entry?.profile?.hasChanges() || Object.values(entry?.profile?.state().editorState?.pendingCut || {}).some(Number.isFinite)
     || entry?.snapshot.activeOperation || entry?.snapshot.playback || entry?.snapshot.conversion?.output || entry?.snapshot.editedOutput || jobActive(entry?.snapshot.id)); }
-  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || cleanupIds.size); }
+  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || importStarting || intakeBatch?.active || cleanupIds.size); }
   async function discard() {
     if (discarding) return;
     saveSelected();
@@ -840,8 +849,41 @@
     addFiles([...(event.dataTransfer?.files || [])]);
   });
   root.addEventListener('beforeunload', event => { if (hasTemporaryWork()) { event.preventDefault(); event.returnValue = ''; } });
+  function renderImport() {
+    $('#processing-import').hidden = !intakeBatch && !importStarting;
+    $('#processing-import-status').textContent = intakeBatch?.active || !importStarting ? intakeBatch?.message || '' : 'Submitting selected items…';
+    if (intakeBatch) $('#processing-import-status').textContent += ` ${intakeBatch.items.filter(item => item.status === 'ready' && !item.removed).length} of ${intakeBatch.items.length} ready.`;
+    $('#processing-import-cancel').hidden = !intakeBatch?.active;
+    $('#processing-import-cancel').disabled = intakeBatch?.status === 'cancelled';
+    const list = $('#processing-import-items'); list.replaceChildren();
+    for (const item of intakeBatch?.items || []) {
+      const row = document.createElement('li'); row.textContent = item.title + ' — ' + (item.removed ? 'Removed' : item.status) + (item.message === 'Not started' || item.message === 'Cancelled — not started' ? ' (not started)' : '');
+      list.append(row);
+    }
+  }
+  async function importPlaylist(detail) {
+    if (importStarting || intakeBatch?.active) { publish(); return; }
+    const token = {}; importRequest = token; importStarting = true; renderImport(); publish();
+    try {
+      const id = await ensureCollection();
+      const data = await post('/api/processing/import', { collectionId: id, requestId: root.crypto.randomUUID(), ...structuredClone(detail) });
+      if (importRequest !== token || collectionId !== id) return;
+      acceptCollection(data.collection);
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) { if (importRequest === token) message(error.message, true); }
+    finally { if (importRequest === token) { importStarting = false; renderImport(); publish(); } }
+  }
+  $('#processing-import-cancel').addEventListener('click', async () => {
+    if (!intakeBatch?.active) return;
+    const id = collectionId, requestId = intakeBatch.id;
+    try {
+      const data = await post('/api/processing/import/cancel', { collectionId: id, requestId });
+      if (collectionId === id) acceptCollection(data.collection);
+    } catch (error) { message(error.message, true); }
+  });
+  document.addEventListener('lvovd:workspace-import-playlist', event => importPlaylist(event.detail));
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
   root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
-    collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits) }; } };
+    collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
   publish();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

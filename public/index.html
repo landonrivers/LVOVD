@@ -285,6 +285,10 @@
           <button id="media-choose-button" class="button secondary" type="button">Choose Media Files</button>
         </div>
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+        <section id="processing-import" class="workspace-progress" aria-label="Playlist import" hidden>
+          <div class="progress-head"><strong id="processing-import-status" role="status"></strong><button id="processing-import-cancel" class="text-button" type="button">Cancel Import</button></div>
+          <ul id="processing-import-items" class="help"></ul>
+        </section>
         <button id="workspace-retry-cleanup" class="text-button" type="button" hidden>Retry Removed File Cleanup</button>
         <section id="workspace-progress" class="workspace-progress" hidden>
           <div class="progress-head"><strong id="workspace-progress-label">Copying local media…</strong><button id="workspace-cancel" class="text-button" type="button">Cancel / Discard</button></div>

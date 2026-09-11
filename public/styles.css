@@ -246,6 +246,9 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .workspace-progress { margin-top: 12px; padding: 13px 14px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(8,8,12,.45); }
 #workspace-status:empty { min-height: 0; margin-top: 0; }
 .workspace-progress .progress-head { margin-bottom: 9px; }
+#processing-import-status { min-width: 0; overflow-wrap: anywhere; }
+#processing-import-cancel { flex: 0 0 auto; }
+#processing-import-items { max-height: 10rem; overflow: auto; padding-left: 18px; overflow-wrap: anywhere; }
 .workspace-failure { margin-top: 12px; }
 .workspace-failure-action { margin-top: 11px; }
 .media-editor { margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.08); }

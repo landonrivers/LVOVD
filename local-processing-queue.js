@@ -39,11 +39,11 @@ class LocalProcessingQueue {
     this.reap();
     for (const collection of this.collections.values()) {
       if (this.dropEmptyDisconnected(collection)) continue;
-      if (!collection.members.size && !collection.uploads && !collection.listener
+      if (!collection.intake?.active && !collection.intakeSlots.size && !collection.members.size && !collection.uploads && !collection.listener
         && this.manager.now() - collection.lastAccessAt >= this.manager.ttlMs) this.collections.delete(collection.id);
     }
     if (this.collections.size >= this.limits.maxCollections) throw requestError('The local workbench limit is reached. Remove an unused collection first.', 409);
-    const collection = { id: crypto.randomUUID(), members: new Set(), jobs: new Map(), uploads: 0,
+    const collection = { id: crypto.randomUUID(), members: new Set(), jobs: new Map(), uploads: 0, intakeSlots: new Set(), intake: null,
       listener: null, disconnected: false, lastAccessAt: this.manager.now(), admitting: false, admissionEpoch: 0, revision: 0 };
     this.collections.set(collection.id, collection); this.listen();
     return this.snapshot(collection.id);
@@ -53,7 +53,7 @@ class LocalProcessingQueue {
     const collection = this.get(id, { touch });
     return { id: collection.id, revision: ++collection.revision, limits: this.limits,
       sourceBytesReserved: [...this.reservations.values()].reduce((sum, item) => sum + item.bytes, 0),
-      uploads: collection.uploads,
+      uploads: collection.uploads, intake: this.intake?.snapshot(collection) || null,
       workspaces: [...collection.members].map(workspaceId => this.manager.get(workspaceId, { touch: false }))
         .filter(Boolean).map(workspace => this.manager.publicWorkspace(workspace)),
       jobs: [...collection.jobs.values()].map(job => ({ id: job.id, workspaceId: job.workspaceId,
@@ -115,7 +115,7 @@ class LocalProcessingQueue {
   }
 
   dropEmptyDisconnected(collection) {
-    if (collection.disconnected && !collection.listener && !collection.members.size
+    if (collection.disconnected && !collection.listener && !collection.intake?.active && !collection.intakeSlots.size && !collection.members.size
       && !collection.uploads && !collection.admitting
       && !this.order.some(job => job.collectionId === collection.id && LIVE.has(job.status))) {
       this.collections.delete(collection.id);
@@ -126,22 +126,35 @@ class LocalProcessingQueue {
 
   reap() {
     for (const [key, reservation] of this.reservations) {
-      if (reservation.workspaceId && !this.manager.workspaces.has(reservation.workspaceId)
+      if (!reservation.preparing && reservation.workspaceId && !this.manager.workspaces.has(reservation.workspaceId)
         && !this.manager.discards.has(reservation.workspaceId) && !this.manager.cleanupPending.has(reservation.workspaceId)) {
         this.reservations.delete(key);
       }
     }
   }
 
-  reserve(collection, bytes) {
+  entryCount(collection) {
+    const ids = new Set([...collection.members, ...collection.intakeSlots]);
+    for (const reservation of this.reservations.values()) if (reservation.collectionId === collection.id && reservation.workspaceId) ids.add(reservation.workspaceId);
+    return ids.size + collection.uploads;
+  }
+
+  reservedFileCount() {
+    return new Set([...this.reservations].map(([key, item]) => item.workspaceId || key)
+      .concat([...this.collections.values()].flatMap(collection => [...collection.intakeSlots]))).size;
+  }
+
+  reserve(collection, bytes, ownedSlot = null) {
     this.reap();
     if (!Number.isSafeInteger(bytes) || bytes <= 0) throw requestError('Collection uploads require a finite positive Content-Length.', 400);
-    if (collection.members.size + collection.uploads >= this.limits.maxEntries) throw requestError(`A local workbench accepts at most ${this.limits.maxEntries} files.`, 409);
+    const liveEntries = new Set([...collection.members, ...collection.intakeSlots]).size + collection.uploads;
+    if (liveEntries - (ownedSlot && collection.intakeSlots.has(ownedSlot) ? 1 : 0) >= this.limits.maxEntries) throw requestError(`A local workbench accepts at most ${this.limits.maxEntries} files.`, 409);
     const used = [...this.reservations.values()].reduce((sum, item) => sum + item.bytes, 0);
     if (bytes > this.manager.maxBytes || used + bytes > this.limits.maxSourceBytes) throw requestError('The local original-source storage budget is full. Remove files or retry pending cleanup first.', 413);
+    if (this.entryCount(collection) - (ownedSlot && collection.intakeSlots.has(ownedSlot) ? 1 : 0) >= this.limits.maxEntries) throw requestError(`A local workbench accepts at most ${this.limits.maxEntries} files.`, 409);
     // Failed cleanup still consumes bounded intake slots as well as its byte
     // reservation. Repeated tiny failed files cannot bypass the byte bound.
-    if (this.reservations.size >= this.limits.maxCollections * this.limits.maxEntries) throw requestError('Temporary file cleanup must finish before adding more files.', 409);
+    if (this.reservedFileCount() - (ownedSlot && collection.intakeSlots.has(ownedSlot) ? 1 : 0) >= this.limits.maxCollections * this.limits.maxEntries) throw requestError('Temporary file cleanup must finish before adding more files.', 409);
     const key = crypto.randomUUID();
     this.reservations.set(key, { bytes, workspaceId: null, collectionId: collection.id });
     return key;
@@ -315,9 +328,13 @@ class LocalProcessingQueue {
   }
 
   workspaceChanged(workspace) {
+    this.intake?.changed(workspace);
+    if (workspace.cleanupRecord?.status === 'complete') {
+      for (const reservation of this.reservations.values()) if (reservation.workspaceId === workspace.id) reservation.bytes = 0;
+    }
     if (workspace.source.size > 0) {
       for (const reservation of this.reservations.values()) {
-        if (reservation.workspaceId === workspace.id) reservation.bytes = Math.min(reservation.bytes, workspace.source.size);
+        if (!reservation.fixed && reservation.workspaceId === workspace.id) reservation.bytes = Math.min(reservation.bytes, workspace.source.size);
       }
     }
     const collection = this.collections.get(this.owners.get(workspace.id));
@@ -325,6 +342,7 @@ class LocalProcessingQueue {
   }
 
   workspaceRemoved(workspace) {
+    this.intake?.removed(workspace.id);
     const collection = this.collections.get(this.owners.get(workspace.id));
     if (!collection) return;
     collection.members.delete(workspace.id); this.owners.delete(workspace.id);
@@ -340,6 +358,7 @@ class LocalProcessingQueue {
   async discardCollection(id) {
     const collection = this.get(id);
     if (collection.uploads || collection.admitting) throw requestError('Wait for the current intake or admission before removing the collection.', 409);
+    this.intake?.stop(collection);
     collection.admissionEpoch++;
     for (const job of collection.jobs.values()) {
       job.cancelled = true;
@@ -366,7 +385,8 @@ class LocalProcessingQueue {
     }
     this.reap();
     for (const collection of [...this.collections.values()]) {
-      if (!collection.members.size && !collection.uploads && !collection.admitting && now - collection.lastAccessAt >= this.manager.ttlMs) {
+      if (collection.intake?.active && now - collection.intake.createdAt >= this.manager.ttlMs) this.intake.stop(collection, 'Playlist import expired.');
+      if (!collection.intake?.active && !collection.members.size && !collection.uploads && !collection.admitting && now - collection.lastAccessAt >= this.manager.ttlMs) {
         this.closeListener(collection); this.collections.delete(collection.id);
       }
     }
@@ -374,6 +394,7 @@ class LocalProcessingQueue {
 
   clear() {
     for (const collection of this.collections.values()) {
+      this.intake?.stop(collection);
       for (const job of collection.jobs.values()) {
         job.cancelled = true;
         if (job.status === 'queued') this.finish(job, 'cancelled', 'Local processing was cleared.');
