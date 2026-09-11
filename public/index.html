@@ -545,7 +545,7 @@
               <h4 id="processing-batch-title">Review files to process</h4>
               <p class="help">Files run one at a time in list order. Select the reviewed files and acknowledge their warnings. Unchanged files download original bytes. Queued files and successful current drafts are excluded; Process Selected File can run a completed draft again. A failure does not stop the remaining files.</p>
               <div id="processing-batch-files"></div>
-              <button id="processing-batch-submit" class="button secondary" type="button" disabled>Queue reviewed files</button>
+              <button id="processing-batch-submit" class="button primary processing-primary processing-queue-action" type="button" disabled>Queue And Process</button>
               <button id="processing-batch-close" class="text-button" type="button">Close review</button>
             </section>
             <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
@@ -556,6 +556,10 @@
               <div><p class="eyebrow">PROCESSED FILE</p><h4 id="conversion-output-name"></h4><p id="conversion-output-facts" class="help"></p><p id="conversion-output-target" class="help"></p><p id="conversion-output-settings" class="help"></p></div>
               <a id="conversion-download" class="button secondary">Download</a>
             </section>
+          </section>
+          <section id="processing-results" class="processing-results" aria-labelledby="processing-results-title" hidden>
+            <div class="progress-head"><strong id="processing-results-title">Local processing queue</strong><span id="processing-results-summary" class="help" role="status"></span></div>
+            <div id="processing-results-list" class="output-list"></div>
           </section>
         </section>
       </section>

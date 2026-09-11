@@ -143,6 +143,59 @@
       const count = jobs.filter(job => job.status === state).length; return count ? `${count} ${state}` : null;
     }).filter(Boolean);
     $('#processing-collection-status').textContent = [uploadName ? `Copying ${uploadName}${pendingUploads.length ? ` · ${pendingUploads.length} waiting` : ''}` : null, ...counts].filter(Boolean).join(' · ');
+    renderProcessingResults();
+  }
+  function renderProcessingResults() {
+    const list = $('#processing-results-list'), live = new Set();
+    let readyCount = 0, activeCount = 0, failedCount = 0, cancelledCount = 0;
+    for (const [id, entry] of entries) {
+      const conversion = entry.snapshot.conversion || {}, output = conversion.output, job = currentJob(id);
+      if (!job && !output) continue;
+      live.add(id);
+      if (output) readyCount++;
+      const active = jobActive(id), status = job?.status || conversion.status;
+      if (active) activeCount++;
+      if (status === 'failed') failedCount++;
+      if (status === 'cancelled') cancelledCount++;
+      const outputRevision = output?.draftRevision ?? output?.processingSnapshot?.draftRevision;
+      const older = output && outputRevision !== entry.profile?.draft().draftRevision;
+      const label = { queued: 'Queued', starting: 'Starting', running: 'Processing', cancelling: 'Cancelling', completed: 'Ready', ready: 'Ready', failed: 'Failed', cancelled: 'Cancelled' }[status] || status;
+      const progress = status === 'running' && Number.isFinite(conversion.percent) ? `${Math.floor(conversion.percent)}%` : null;
+      const view = {
+        source: entry.snapshot.source?.name || 'Local file',
+        status: [label, active && conversion.status === 'running' && conversion.message, progress,
+          (active || status === 'failed' || status === 'cancelled') && Number.isSafeInteger(job?.draftRevision) ? `Draft ${job.draftRevision}` : null,
+          status === 'failed' && (job?.failure?.explanation || conversion.failure?.explanation || job?.message)].filter(Boolean).join(' · '),
+        name: output?.filename || '', url: output?.downloadUrl || '',
+        facts: output ? [`${sizeInMB(output.size)}`, facts.formatDuration(output.inspection?.durationSeconds),
+          output.noOp ? 'Original bytes' : 'Processed file', Number.isSafeInteger(outputRevision) ? `Draft ${outputRevision}` : null,
+          older ? 'Previous draft; download unchanged' : null].filter(Boolean).join(' · ') : ''
+      };
+      let row = [...list.children].find(row => row.dataset.processingResult === id);
+      if (!row) {
+        row = document.createElement('div'); row.className = 'output-row'; row.dataset.processingResult = id;
+        const detail = document.createElement('div'), sourceButton = document.createElement('button');
+        sourceButton.type = 'button'; sourceButton.className = 'text-button processing-result-source'; sourceButton.addEventListener('click', () => selectEntry(id));
+        const statusText = document.createElement('small'), name = document.createElement('strong'), info = document.createElement('small');
+        detail.append(sourceButton, statusText, name, info);
+        const download = document.createElement('a'); download.className = 'button secondary mini'; download.textContent = 'Download';
+        row.append(detail, download); row.parts = { sourceButton, statusText, name, info, download }; list.append(row);
+      }
+      // Preserve links/focus and avoid replacing unchanged result DOM for every
+      // other file's progress tick. The server-owned output is the authority.
+      const key = JSON.stringify(view);
+      if (row.resultKey === key) continue;
+      row.resultKey = key;
+      const { sourceButton, statusText, name, info, download } = row.parts;
+      sourceButton.textContent = view.source; statusText.textContent = view.status;
+      name.textContent = view.name; info.textContent = view.facts; download.hidden = !view.url;
+      if (view.url) { download.href = view.url; download.download = view.name; download.setAttribute('aria-label', `Download ${view.name}`); }
+      else { download.removeAttribute('href'); download.removeAttribute('download'); download.removeAttribute('aria-label'); }
+    }
+    for (const row of [...list.children]) if (!live.has(row.dataset.processingResult)) row.remove();
+    $('#processing-results').hidden = !live.size;
+    const summary = [`${readyCount} ${readyCount === 1 ? 'file' : 'files'} ready`, activeCount && `${activeCount} in progress`, failedCount && `${failedCount} failed`, cancelledCount && `${cancelledCount} cancelled`].filter(Boolean).join(' · ');
+    if ($('#processing-results-summary').textContent !== summary) $('#processing-results-summary').textContent = summary;
   }
   function selectEntry(id) {
     const entry = entries.get(id); if (!entry) return;
@@ -405,6 +458,7 @@
     for (const [label, value] of facts.inspectionFacts(data)) appendFact(list, label, value);
   }
   function processingControls() {
+    renderProcessingResults();
     const { previewRequest = false, previewError = null } = entries.get(workspaceId) || {};
     const state = snapshot?.conversion || {}, current = profile?.state();
     const busy = Boolean(snapshot?.activeOperation || operationRequest || previewRequest || discarding || jobActive());

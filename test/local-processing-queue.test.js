@@ -406,6 +406,32 @@ test('removing a collection invalidates downloads and preserves deletion failure
   assert.equal(manager.cleanupPending.get(workspace.id).directory, directory);
 });
 
+test('draining an oversized progress snapshot does not publish it again without a newer update', async t => {
+  const { queue, collection, add } = await setup(t);
+  await add();
+  const reader = response(); reader.blocked = true;
+  queue.subscribe(collection.id, reader);
+  for (let i = 0; i < 6; i++) reader.emit('drain');
+  assert.equal(reader.writes.length, 1, 'a write accepted with backpressure must not become a new progress event');
+  assert.equal(queue.get(collection.id).waitingForDrain, false);
+  reader.end();
+});
+
+test('coalesced progress that also fills the buffer settles and an old reader cannot replay it', async t => {
+  const { manager, queue, collection, add } = await setup(t);
+  const workspace = await add(), first = response(); first.blocked = true;
+  queue.subscribe(collection.id, first);
+  for (let i = 0; i < 20; i++) { workspace.conversion.percent = i; manager.emit(workspace); }
+  first.emit('drain');
+  assert.equal(first.writes.length, 2); assert.match(first.writes[1], /"percent":19/);
+  first.emit('drain'); assert.equal(first.writes.length, 2);
+  manager.emit(workspace); manager.emit(workspace);
+  const second = response(); second.blocked = true; queue.subscribe(collection.id, second);
+  first.emit('drain'); second.emit('drain');
+  assert.equal(second.writes.length, 1, 'replacement starts with its own fresh state, not the old pending update');
+  assert.equal(first.writes.length, 3); second.end();
+});
+
 test('reopening a disconnected workbench preserves admitted processing and a lost reopen acknowledgement expires', async t => {
   const { manager, queue, collection, control, add, review, jobs, settled } = await setup(t);
   const a = await add('first.mp4'), b = await add('second.mp4'); control.hold = true;

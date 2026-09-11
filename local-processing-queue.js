@@ -89,7 +89,8 @@ class LocalProcessingQueue {
 
   emit(collection) {
     if (!this.collections.has(collection.id) || !collection.listener) return;
-    if (collection.waitingForDrain) return;
+    if (collection.waitingForDrain) { collection.progressPending = true; return; }
+    collection.progressPending = false;
     try {
       const response = collection.listener;
       if (response.write(`data: ${JSON.stringify(this.snapshot(collection.id, { touch: false }))}\n\n`) === false) {
@@ -98,7 +99,11 @@ class LocalProcessingQueue {
         collection.waitingForDrain = true;
         response.once('drain', () => {
           if (collection.listener !== response) return;
-          collection.waitingForDrain = false; this.emit(collection);
+          collection.waitingForDrain = false;
+          // write(false) already accepted the snapshot. Drain only signals
+          // capacity; replaying it unconditionally creates an endless loop
+          // whenever one complete snapshot exceeds the transport buffer.
+          if (collection.progressPending) this.emit(collection);
         });
       }
     }
@@ -134,6 +139,7 @@ class LocalProcessingQueue {
 
   closeListener(collection) {
     collection.waitingForDrain = false;
+    collection.progressPending = false;
     clearInterval(collection.heartbeat); collection.heartbeat = null;
     const response = collection.listener; collection.listener = null;
     if (response) collection.disconnected = true;
