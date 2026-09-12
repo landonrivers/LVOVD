@@ -49,6 +49,53 @@ test.afterEach(async ({ page, request }) => {
   await expect(page.locator('#media-drop-zone')).toBeVisible();
 });
 
+test('two imported playlist files expose distinct MP3 downloads together without changing the editor', async ({ page }, testInfo) => {
+  await preview(page, [0, 2]); await page.locator('#open-editor-button').click();
+  await expect.poll(async () => (await state(page)).intake?.status, { timeout: 30000 }).toBe('ready');
+  await expect.poll(async () => (await state(page)).intake?.active).toBe(false);
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  const imported = await state(page), selectedId = imported.selectedId;
+  expect(imported.entries).toHaveLength(2);
+  const acquired = fixture.requests.length;
+  await page.locator('#processing-container').selectOption('mp3');
+  await page.getByRole('button', { name: 'Review All Files (2)', exact: true }).click();
+  await expect(page.locator('#processing-batch-review')).not.toContainText('Reviewing files');
+  for (const box of await page.locator('#processing-batch-review input[type=checkbox]:enabled').all()) await box.check();
+  await page.getByRole('button', { name: 'Queue And Process', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Processing results', exact: true })).toBeInViewport();
+  await expect(page.locator('#processing-results-summary')).toHaveText('2 of 2 completed · 2 downloads available');
+  const results = page.locator('#processing-results');
+  await expect(results.getByRole('link', { name: /^Download MP3/ })).toHaveCount(2);
+  const bytes = [];
+  for (const [index, sourceIndex] of [0, 2].entries()) {
+    const row = results.locator('[data-processing-result]').nth(index), filename = `Generated item ${sourceIndex}-processed.mp3`;
+    await expect(row.getByRole('heading')).toHaveText(filename);
+    await expect(row).toContainText(`Source: Generated item ${sourceIndex}.mp4`);
+    await expect(row).toContainText('MP3 audio encoded');
+    const waiting = page.waitForEvent('download');
+    await row.getByRole('link', { name: `Download MP3 — ${filename}`, exact: true }).click();
+    const downloaded = await waiting; expect(await downloaded.failure()).toBeNull(); expect(downloaded.suggestedFilename()).toBe(filename);
+    const output = testInfo.outputPath(filename); await downloaded.saveAs(output); bytes.push(await fs.readFile(output));
+    const inspected = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', output], { encoding: 'utf8', windowsHide: true }));
+    expect(inspected.streams.map(stream => stream.codec_name)).toEqual(['mp3']);
+    expect(Math.abs(Number(inspected.format.duration) - 6)).toBeLessThan(.06);
+    const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', output, '-ac', '1', '-ar', '48000', '-f', 'f32le', '-'], { windowsHide: true, maxBuffer: 2 * 1024 * 1024 });
+    let crossings = 0;
+    for (let sample = 12001; sample < 36000; sample++) if (pcm.readFloatLE((sample - 1) * 4) <= 0 && pcm.readFloatLE(sample * 4) > 0) crossings++;
+    expect(Math.abs(crossings * 2 - (400 + sourceIndex * 300))).toBeLessThanOrEqual(4);
+    expect((await state(page)).selectedId).toBe(selectedId);
+  }
+  expect(bytes[0].equals(bytes[1])).toBe(false); expect(fixture.requests.length).toBe(acquired);
+  await results.screenshot({ path: testInfo.outputPath('playlist-mp3-results-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await results.screenshot({ path: testInfo.outputPath('playlist-mp3-results-narrow.png') });
+  await results.getByRole('button', { name: 'Edit source — Generated item 2.mp4', exact: true }).click();
+  expect((await state(page)).selectedId).toBe(imported.entries[1].workspaceId);
+  await expect(page.locator('#editor-media-name')).toHaveText('Generated item 2.mp4');
+  await expect(page.locator('#processing-file-list')).toBeFocused();
+});
+
 test('playlist selection appends inspected files, inherits shared settings and retains individual authoring and downloads', async ({ page }) => {
   const connections = []; page.on('request', request => { if (request.url().includes('/api/processing/queue/progress')) connections.push(request.url()); });
   const prior = await existing(page);

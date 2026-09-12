@@ -12,6 +12,7 @@ let root, app, server, base;
 const connections = [];
 const state = page => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
 function media(command, args) { return execFileSync(command, args, { windowsHide: true, timeout: 30000 }); }
+function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 
 test.beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), 'lvovd-browser-progress-'));
@@ -121,7 +122,19 @@ test('two shared MP3 jobs finish with the first selected and oversized progress 
   expect(await page.evaluate(() => window.selectedRulerTick.isConnected)).toBe(true);
   const after = (await state(page)).entries[0];
   expect(after.editPlan).toEqual(authored.editPlan); expect(after.editorState.pendingCut).toEqual(authored.editorState.pendingCut); expect(after.editorState.visibleWindow).toEqual(authored.editorState.visibleWindow);
-  await expect(page.locator('#processing-results-summary')).toHaveText('2 files ready');
+  await expect(page.getByRole('heading', { name: 'Processing results', exact: true })).toBeVisible();
+  await expect(page.locator('#processing-results').getByRole('link', { name: /^Download MP3/ })).toHaveCount(2);
+  await expect(page.locator('#processing-results-summary')).toHaveText('2 of 2 completed · 2 downloads available');
+  await expect(page.locator('#processing-finish #conversion-output')).toHaveCount(0);
+  for (const [index, sourceName] of ['first.mp4', 'second.mp4'].entries()) {
+    const row = page.locator('[data-processing-result]').nth(index);
+    await expect(row.getByRole('heading')).toHaveText(sourceName.replace('.mp4', '-processed.mp3'));
+    await expect(row.getByRole('button', { name: sourceName, exact: true })).toHaveCount(0);
+    await expect(row.getByRole('button', { name: `Edit source — ${sourceName}`, exact: true })).toBeVisible();
+    await row.getByText('Result details', { exact: true }).click();
+    await expect(row).toContainText('MP3 audio encoded'); await expect(row).not.toContainText('Audio codec unchanged');
+    await row.getByText('Result details', { exact: true }).click();
+  }
   const originals = [];
   for (const [index, tone, duration] of [[0, 500, 2], [1, 900, 3]]) {
     const link = page.locator('#processing-results-list a').nth(index);
@@ -141,6 +154,11 @@ test('two shared MP3 jobs finish with the first selected and oversized progress 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator('#processing-results-list a').nth(1).focus(); await expect(page.locator('#processing-results-list a').nth(1)).toBeFocused();
   await page.locator('#processing-results').screenshot({ path: testInfo.outputPath('local-results-narrow.png') });
+  await page.locator('[data-processing-result]').nth(1).getByRole('button', { name: 'Edit source — second.mp4', exact: true }).click();
+  expect((await state(page)).selectedId).toBe(before.entries[1].workspaceId);
+  await expect(page.locator('#editor-start-time')).toHaveValue('00:00:00.000');
+  await page.locator('[data-processing-result]').nth(0).getByRole('button', { name: 'Edit source — first.mp4', exact: true }).click();
+  expect((await state(page)).entries[0].editPlan).toEqual(authored.editPlan);
   await page.reload();
   await page.locator(`[data-recovery-collection="${collection.id}"]`).getByRole('button', { name: 'Reopen files' }).click();
   await expect(page.locator('#conversion-download')).toBeVisible();
@@ -155,7 +173,7 @@ test('two shared MP3 jobs finish with the first selected and oversized progress 
   expect(errors).toEqual([]); expect(badRequests).toEqual([]);
 });
 
-test('the shared results list keeps an earlier download after failure and exposes the next completed file', async ({ page, request }) => {
+test('the shared results list keeps an earlier download after failure and exposes the next completed file', async ({ page, request }, testInfo) => {
   await page.locator('#media-file-input').setInputFiles(['first', 'second'].map(name => path.join(root, name + '.mp4')));
   await expect.poll(async () => (await state(page)).entries.filter(entry => entry.inspection).length).toBe(2);
   await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
@@ -175,16 +193,99 @@ test('the shared results list keeps an earlier download after failure and expose
     for (const box of await page.locator('#processing-batch-review input[type=checkbox]:enabled').all()) await box.check();
     await page.getByRole('button', { name: 'Queue And Process', exact: true }).click();
     await expect.poll(async () => (await state(page)).jobs.map(job => job.status)).toEqual(['failed', 'completed']);
-    await expect(page.locator('#processing-results-summary')).toHaveText('2 files ready · 1 failed');
+    await expect(page.locator('#processing-results-summary')).toHaveText('1 of 2 completed · 1 failed · 2 downloads available');
     const first = page.locator(`[data-processing-result="${firstId}"]`);
-    await expect(first).toContainText('Failed'); await expect(first).toContainText('Previous draft; download unchanged');
+    await expect(first).toContainText('Latest attempt failed'); await expect(first).toContainText('Previous result available');
+    await expect(first.getByRole('link', { name: /^Download MP4/ })).toBeVisible();
     await expect(first.locator('a')).toHaveAttribute('href', previousUrl);
     const waiting = page.waitForEvent('download'); await first.locator('a').click(); const downloaded = await waiting;
     expect(await fs.readFile(await downloaded.path())).toEqual(original);
     await expect(page.locator('#processing-results-list a').nth(1)).toHaveAttribute('download', 'second-processed.mp3');
     await expectSettledProgress(manager.localProcessing.get(before.collectionId), 'failed and completed');
+    await page.locator('#processing-results').screenshot({ path: testInfo.outputPath('previous-result-after-failure.png') });
+    // A failed repeat of the *same* draft also leaves a previous result, not
+    // a successful result of the latest attempt. Revision equality is not enough.
+    const second = page.locator('[data-processing-result]').nth(1), secondId = before.entries[1].workspaceId;
+    const previousMP3 = await second.locator('a').getAttribute('href');
+    const previousBytes = await (await request.get(base + previousMP3)).body();
+    await second.getByRole('button', { name: 'Edit source — second.mp4', exact: true }).click();
+    const revision = (await state(page)).entries[1].draftRevision;
+    manager.fs = { ...fs, rename: async (from, to) => {
+      if (path.dirname(to) === manager.get(secondId).tempDir) throw Object.assign(new Error('Synthetic repeated publication failure'), { code: 'EACCES' });
+      return fs.rename(from, to);
+    } };
+    await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
+    await expect(second).toContainText('Latest attempt failed'); await expect(second).toContainText('Previous result available');
+    expect((await state(page)).entries[1].draftRevision).toBe(revision);
+    await expect(second.getByRole('link', { name: /^Download MP3/ })).toHaveAttribute('href', previousMP3);
+    expect(await (await request.get(base + previousMP3)).body()).toEqual(previousBytes);
+    await first.getByRole('button', { name: 'Edit source — first.mp4', exact: true }).click();
     page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
     await expect(first).toHaveCount(0); expect((await request.get(base + previousUrl)).status()).toBe(404);
     await expect(page.locator('#processing-results-list a')).toHaveCount(1);
   } finally { manager.fs = fs; }
+});
+
+test('accepted batch reveals results once and preserves focus and scroll through real sequential progress', async ({ page }, testInfo) => {
+  await page.evaluate(() => {
+    window.resultsReveals = 0;
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (...args) {
+      if (this.id === 'processing-results') window.resultsReveals++;
+      return scroll.apply(this, args);
+    };
+  });
+  await page.locator('#media-file-input').setInputFiles(['first', 'second'].map(name => path.join(root, name + '.mp4')));
+  await expect.poll(async () => (await state(page)).entries.filter(entry => entry.inspection).length).toBe(2);
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(2);
+  await page.locator('#processing-container').selectOption('mp3');
+  await page.locator('#processing-process-all').click();
+  await expect(page.locator('#processing-batch-review')).not.toContainText('Reviewing files');
+  for (const box of await page.locator('#processing-batch-review input[type=checkbox]:enabled').all()) await box.check();
+  const before = await state(page), manager = app.mediaWorkspaces;
+  // Hold only real publication after FFmpeg and validation. Advance each file
+  // explicitly so assertions observe actual queued/processing/completed states.
+  const gates = before.entries.map(entry => ({ directory: manager.get(entry.workspaceId).tempDir, reached: deferred(), release: deferred() }));
+  manager.fs = { ...fs, rename: async (from, to) => {
+    const gate = gates.find(item => item.directory === path.dirname(to));
+    if (gate) { gate.reached.resolve(); await gate.release.promise; }
+    return fs.rename(from, to);
+  } };
+  try {
+    await page.getByRole('button', { name: 'Queue And Process', exact: true }).click();
+    await gates[0].reached.promise;
+    const heading = page.getByRole('heading', { name: 'Processing results', exact: true });
+    await expect(heading).toBeFocused(); await expect(heading).toBeInViewport();
+    await expect(page.locator('#processing-results-summary')).toHaveText('0 of 2 completed · 1 queued · 1 processing · 0 downloads available');
+    expect(await page.evaluate(() => window.resultsReveals)).toBe(1);
+    const collection = manager.localProcessing.get(before.collectionId);
+    const stable = async focus => {
+      // Observe painted state, including native scroll anchoring from the
+      // initial admission layout, before emitting the next real progress update.
+      const painted = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await painted();
+      const viewport = () => page.evaluate(() => ({ y: window.scrollY, top: document.querySelector('#processing-results').getBoundingClientRect().top, height: document.documentElement.scrollHeight, video: document.querySelector('#editor-video').readyState, active: document.activeElement.id, reveals: window.resultsReveals }));
+      const initial = await viewport(), scrollY = initial.y;
+      manager.localProcessing.emit(collection);
+      await expect.poll(() => page.evaluate(() => window.progressRevision)).toBeGreaterThanOrEqual(collection.revision);
+      await painted();
+      await expect(focus).toBeFocused();
+      console.log(JSON.stringify({ initial, updated: await viewport() }));
+      expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
+      expect(await page.evaluate(() => window.resultsReveals)).toBe(1);
+      expect((await state(page)).selectedId).toBe(before.selectedId);
+    };
+    await stable(heading);
+    gates[0].release.resolve(); await gates[1].reached.promise;
+    await expect(page.locator('#processing-results-summary')).toHaveText('1 of 2 completed · 1 processing · 1 download available');
+    const firstDownload = page.getByRole('link', { name: 'Download MP3 — first-processed.mp3', exact: true });
+    await firstDownload.focus(); await stable(firstDownload);
+    await page.locator('#processing-results').screenshot({ path: testInfo.outputPath('processing-results-in-progress.png') });
+    const scrollY = await page.evaluate(() => window.scrollY);
+    gates[1].release.resolve();
+    await expect(page.locator('#processing-results-summary')).toHaveText('2 of 2 completed · 2 downloads available');
+    await expect(firstDownload).toBeFocused(); expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
+    await stable(firstDownload);
+  } finally { for (const gate of gates) gate.release.resolve(); manager.fs = fs; }
 });

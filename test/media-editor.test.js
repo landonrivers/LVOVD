@@ -506,8 +506,8 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'processing-reset',
     'processing-finish',
     'conversion-start',
-    'conversion-output',
-    'conversion-download',
+    'processing-results',
+    'processing-result-template',
     'timeline-zoom-in',
     'timeline-zoom-out',
     'timeline-fit'
@@ -518,7 +518,8 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /Re-encoding is not lossless/);
   assert.doesNotMatch(html, /id="(?:local-open-editor|local-open-converter|media-converter|create-edited-file|convert-edited-file)"/);
   assert.match(html, /id="conversion-start"[^>]*>Process Selected File<\/button>/);
-  assert.match(html, /id="conversion-download"[^>]*>Download<\/a>/);
+  assert.match(html, /data-result="download"/);
+  assert.match(html, /data-result="edit"[^>]*>Edit source<\/button>/);
   assert.match(html, /Processing stays on this computer/);
   assert.doesNotMatch(html, /LOCAL EDIT WORKSPACE/i);
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);

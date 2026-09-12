@@ -1013,7 +1013,9 @@ test('queued Remove and Reset affect only their file while Cancel All preserves 
   await page.locator('#processing-cancel-all').click();
   await expect(page.locator('#processing-cancel-all')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().jobs.map(job => job.status))).toEqual(['cancelled', 'cancelled']);
-  await expect(page.locator('#processing-results-summary')).toHaveText('2 files ready · 2 cancelled');
+  await expect(page.locator('#processing-results-summary')).toHaveText('0 of 2 completed · 2 cancelled · 2 downloads available');
+  await expect(page.locator(`[data-processing-result="${second.workspaceId}"]`)).toContainText('Latest attempt cancelled');
+  await expect(page.locator(`[data-processing-result="${second.workspaceId}"]`)).toContainText('Previous result available');
   await expect(page.locator(`[data-processing-result="${second.workspaceId}"] a`)).toHaveAttribute('href', secondUrl);
   await expect(page.locator(`[data-processing-result="${first.workspaceId}"] a`)).toHaveAttribute('href', firstUrl);
   await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(waitingPreview.sourceAssetId));

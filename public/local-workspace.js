@@ -147,55 +147,108 @@
   }
   function renderProcessingResults() {
     const list = $('#processing-results-list'), live = new Set();
-    let readyCount = 0, activeCount = 0, failedCount = 0, cancelledCount = 0;
+    let completed = 0, downloads = 0, queued = 0, running = 0, failed = 0, cancelled = 0;
+    // These IDs continue to identify the selected file's result, now within
+    // the single shared results area instead of a duplicate download card.
+    const selectedIds = { name: 'conversion-output-name', facts: 'conversion-output-facts', target: 'conversion-output-target', settings: 'conversion-output-settings', download: 'conversion-download' };
+    for (const element of list.querySelectorAll('[id]')) element.removeAttribute('id');
     for (const [id, entry] of entries) {
       const conversion = entry.snapshot.conversion || {}, output = conversion.output, job = currentJob(id);
       if (!job && !output) continue;
       live.add(id);
-      if (output) readyCount++;
       const active = jobActive(id), status = job?.status || conversion.status;
-      if (active) activeCount++;
-      if (status === 'failed') failedCount++;
-      if (status === 'cancelled') cancelledCount++;
-      const outputRevision = output?.draftRevision ?? output?.processingSnapshot?.draftRevision;
-      const older = output && outputRevision !== entry.profile?.draft().draftRevision;
-      const label = { queued: 'Queued', starting: 'Starting', running: 'Processing', cancelling: 'Cancelling', completed: 'Ready', ready: 'Ready', failed: 'Failed', cancelled: 'Cancelled' }[status] || status;
+      const unsuccessful = status === 'failed' || status === 'cancelled';
+      if (output?.downloadUrl) downloads++;
+      if (status === 'queued') queued++;
+      else if (active) running++;
+      else if (status === 'failed') failed++;
+      else if (status === 'cancelled') cancelled++;
+      else if (output && (!job || job.planKey === output.planKey)) completed++;
+      const details = describeProcessingResult(output, entry.profile?.draft().draftRevision);
+      const previous = Boolean(output && (active || unsuccessful || details.older));
+      const label = { queued: 'Queued', starting: 'Starting', running: 'Processing', cancelling: 'Cancelling', completed: 'Completed', ready: 'Completed', failed: 'Latest attempt failed', cancelled: 'Latest attempt cancelled' }[status] || status;
       const progress = status === 'running' && Number.isFinite(conversion.percent) ? `${Math.floor(conversion.percent)}%` : null;
+      const sourceName = entry.snapshot.source?.name || 'Local file';
       const view = {
-        source: entry.snapshot.source?.name || 'Local file',
+        source: `Source: ${sourceName}`, edit: `Edit source — ${sourceName}`,
         status: [label, active && conversion.status === 'running' && conversion.message, progress,
           (active || status === 'failed' || status === 'cancelled') && Number.isSafeInteger(job?.draftRevision) ? `Draft ${job.draftRevision}` : null,
+          previous && 'Previous result available',
           status === 'failed' && (job?.failure?.explanation || conversion.failure?.explanation || job?.message)].filter(Boolean).join(' · '),
-        name: output?.filename || '', url: output?.downloadUrl || '',
-        facts: output ? [`${sizeInMB(output.size)}`, facts.formatDuration(output.inspection?.durationSeconds),
-          output.noOp ? 'Original bytes' : 'Processed file', Number.isSafeInteger(outputRevision) ? `Draft ${outputRevision}` : null,
-          older ? 'Previous draft; download unchanged' : null].filter(Boolean).join(' · ') : ''
+        name: output?.filename || 'Awaiting processed file', url: output?.downloadUrl || '', previous,
+        ...details
       };
       let row = [...list.children].find(row => row.dataset.processingResult === id);
       if (!row) {
-        row = document.createElement('div'); row.className = 'output-row'; row.dataset.processingResult = id;
-        const detail = document.createElement('div'), sourceButton = document.createElement('button');
-        sourceButton.type = 'button'; sourceButton.className = 'text-button processing-result-source'; sourceButton.addEventListener('click', () => selectEntry(id));
-        const statusText = document.createElement('small'), name = document.createElement('strong'), info = document.createElement('small');
-        detail.append(sourceButton, statusText, name, info);
-        const download = document.createElement('a'); download.className = 'button secondary mini'; download.textContent = 'Download';
-        row.append(detail, download); row.parts = { sourceButton, statusText, name, info, download }; list.append(row);
+        row = $('#processing-result-template').content.firstElementChild.cloneNode(true); row.dataset.processingResult = id;
+        row.parts = Object.fromEntries([...row.querySelectorAll('[data-result]')].map(element => [element.dataset.result, element]));
+        row.parts.edit.addEventListener('click', () => {
+          selectEntry(id);
+          $('#processing-file-list').focus({ preventScroll: true });
+          $('#local-media-ready').scrollIntoView({ block: 'start', behavior: 'instant' });
+        });
+        list.append(row);
+      }
+      if (id === workspaceId && output) {
+        row.id = 'conversion-output';
+        for (const [part, selectedId] of Object.entries(selectedIds)) row.parts[part].id = selectedId;
       }
       // Preserve links/focus and avoid replacing unchanged result DOM for every
       // other file's progress tick. The server-owned output is the authority.
       const key = JSON.stringify(view);
       if (row.resultKey === key) continue;
       row.resultKey = key;
-      const { sourceButton, statusText, name, info, download } = row.parts;
-      sourceButton.textContent = view.source; statusText.textContent = view.status;
-      name.textContent = view.name; info.textContent = view.facts; download.hidden = !view.url;
-      if (view.url) { download.href = view.url; download.download = view.name; download.setAttribute('aria-label', `Download ${view.name}`); }
+      const { download, edit } = row.parts;
+      for (const part of ['name', 'source', 'status', 'format', 'summary', 'facts', 'target', 'settings']) row.parts[part].textContent = view[part] || '';
+      row.dataset.previous = String(previous); row.parts.details.hidden = !output;
+      edit.setAttribute('aria-label', view.edit);
+      download.hidden = !view.url;
+      download.textContent = `Download ${view.format || 'file'}`;
+      if (view.url) { download.href = view.url; download.download = view.name; download.setAttribute('aria-label', `${download.textContent} — ${view.name}${previous ? ' (previous result)' : ''}`); }
       else { download.removeAttribute('href'); download.removeAttribute('download'); download.removeAttribute('aria-label'); }
     }
     for (const row of [...list.children]) if (!live.has(row.dataset.processingResult)) row.remove();
     $('#processing-results').hidden = !live.size;
-    const summary = [`${readyCount} ${readyCount === 1 ? 'file' : 'files'} ready`, activeCount && `${activeCount} in progress`, failedCount && `${failedCount} failed`, cancelledCount && `${cancelledCount} cancelled`].filter(Boolean).join(' · ');
+    const summary = [`${completed} of ${live.size} completed`, queued && `${queued} queued`, running && `${running} processing`, failed && `${failed} failed`, cancelled && `${cancelled} cancelled`, `${downloads} ${downloads === 1 ? 'download' : 'downloads'} available`].filter(Boolean).join(' · ');
     if ($('#processing-results-summary').textContent !== summary) $('#processing-results-summary').textContent = summary;
+  }
+  function describeProcessingResult(output, currentRevision) {
+    if (!output) return {};
+    const inspection = output.inspection || {}, video = inspection.video, audio = inspection.audio;
+    const processed = output.processingSnapshot, settings = processed?.settings, effective = processed?.output || {};
+    const kind = inspection.container?.kind;
+    const format = kind === 'mp4' && effective.extension === 'm4a' && !video ? 'M4A'
+      : ({ mp3: 'MP3', mp4: 'MP4', mov: 'MOV', matroska: 'MKV', webm: 'WebM', wav: 'WAV', flac: 'FLAC', ogg: 'Ogg', avi: 'AVI' })[kind] || inspection.format || 'file';
+    const revision = output.draftRevision ?? processed?.draftRevision ?? output.provenance?.draftRevision;
+    const older = Number.isInteger(revision) && revision !== currentRevision;
+    const treatment = role => {
+      const stream = inspection[role]; if (!stream) return null;
+      const action = processed?.streams?.find(item => item.role === role)?.action;
+      return `${facts.familiarCodecName(stream.codec)} ${role}${output.noOp ? ' in unchanged original bytes' : action === 'encode' ? ' encoded' : action === 'copy' ? ' copied without re-encoding' : ''}`;
+    };
+    return { format, older,
+      summary: [`${sizeInMB(output.size)}`, facts.formatDuration(inspection.durationSeconds), output.noOp && 'Unchanged file — original bytes', treatment('video'), treatment('audio')].filter(Boolean).join(' · '),
+      facts: [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
+        video && `${facts.familiarCodecName(video.codec)} · ${video.width} × ${video.height}`,
+        video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
+        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · '),
+      target: `${output.noOp ? 'Existing original bytes; no processing required' : 'Processed from the original source'}`
+        + (Number.isInteger(revision) ? ` · Draft ${revision}` : '') + (older ? ' · Previous draft; this download has not changed.' : ''),
+      settings: settings ? [video && rateDescription(settings.rate), `Container: ${effective.container || kind || inspection.format}`,
+        video && treatment('video'), audio && treatment('audio'),
+        video && (settings.scale?.mode === 'fit' ? `Fit within ${settings.scale.width} × ${settings.scale.height}${settings.scale.allowUpscale ? '' : ' · no upscale'}`
+          : settings.scale?.mode === 'percent' ? `Scale ${settings.scale.percent}%` : ['width', 'height'].includes(settings.scale?.mode) ? `Fit ${settings.scale.mode} ${settings.scale[settings.scale.mode]}` : 'Scale unchanged'),
+        video && (settings.frameRate ? `${settings.frameRate} fps requested` : 'Frame rate unchanged'),
+        settings.audio?.bitrateKbps ? `${settings.audio.bitrateKbps} kbps audio requested` : null,
+        output.effectiveVideoBitrate ? `Final video bitrate budget ${(output.effectiveVideoBitrate / 1000).toFixed(1)} kbps` : null,
+        video?.bitRate > 0 ? `Measured video ${(video.bitRate / 1000).toFixed(1)} kbps average` : null,
+        output.attempts > 1 ? `Size fitting used ${output.attempts} attempts` : null].filter(Boolean).join(' · ') : ''
+    };
+  }
+  function revealProcessingResults() {
+    if ($('#processing-results').hidden) return;
+    $('#processing-results-title').focus({ preventScroll: true });
+    $('#processing-results').scrollIntoView({ block: 'start', behavior: 'instant' });
   }
   function selectEntry(id) {
     const entry = entries.get(id); if (!entry) return;
@@ -433,8 +486,8 @@
     $('#processing-file-list').replaceChildren();
     sharedSettings = profiles.defaults(); $('#processing-apply-all').checked = true;
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
-    progress.hidden = !upload; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
-    $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
+    progress.hidden = !upload; $('#workspace-failure').hidden = true;
+    $('#processing-results-list').replaceChildren(); $('#conversion-warnings').replaceChildren();
     settingsForm.reset(); message(text); renderFiles(); publish();
   }
   function appendFact(list, label, value) {
@@ -502,34 +555,6 @@
       editor.hasPendingWork() ? 'Pending cut selection is not applied until Remove Section.' : null
     ].filter(Boolean).join(' · ') : '';
     $('#processing-draft-status').hidden = !$('#processing-draft-status').textContent;
-    const output = state.output;
-    $('#conversion-output').hidden = !output;
-    if (output) {
-      const inspection = output.inspection || {}, video = inspection.video, audio = inspection.audio;
-      $('#conversion-output-name').textContent = output.filename;
-      $('#conversion-output-facts').textContent = [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
-        video && facts.familiarCodecName(video.codec), video && `${video.width} × ${video.height}`,
-        video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
-        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · ');
-      const revision = output.draftRevision ?? output.processingSnapshot?.draftRevision ?? output.provenance?.draftRevision;
-      $('#conversion-output-target').textContent = `${output.noOp ? 'Existing original bytes; no processing required' : 'Processed from the original source'}`
-        + (Number.isInteger(revision) ? ` · Draft ${revision}` : '')
-        + (Number.isInteger(revision) && revision !== current?.draftRevision ? ' · Previous draft; this download has not changed.' : '');
-      $('#conversion-download').href = output.downloadUrl; $('#conversion-download').download = output.filename;
-      const processed = output.processingSnapshot, actualSettings = processed?.settings;
-      $('#conversion-output-settings').textContent = actualSettings ? [video && rateDescription(actualSettings.rate),
-        `Container: ${actualSettings.container === 'source' ? 'keep source' : actualSettings.container}`,
-        video && `Requested ${actualSettings.videoCodec === 'unchanged' ? 'unchanged video codec' : facts.familiarCodecName(actualSettings.videoCodec)}`,
-        video && (actualSettings.scale?.mode === 'fit' ? `Fit within ${actualSettings.scale.width} × ${actualSettings.scale.height}${actualSettings.scale.allowUpscale ? '' : ' · no upscale'}`
-          : actualSettings.scale?.mode === 'percent' ? `Scale ${actualSettings.scale.percent}%`
-            : ['width', 'height'].includes(actualSettings.scale?.mode) ? `Fit ${actualSettings.scale.mode} ${actualSettings.scale[actualSettings.scale.mode]}` : 'Scale unchanged'),
-        video && (actualSettings.frameRate ? `${actualSettings.frameRate} fps requested` : 'Frame rate unchanged'),
-        audio && (actualSettings.audio?.codec === 'unchanged' ? 'Audio codec unchanged' : `${facts.familiarCodecName(actualSettings.audio?.codec)} audio`),
-        actualSettings.audio?.bitrateKbps ? `${actualSettings.audio.bitrateKbps} kbps audio` : null,
-        output.effectiveVideoBitrate ? `Final video bitrate budget ${(output.effectiveVideoBitrate / 1000).toFixed(1)} kbps` : null,
-        video?.bitRate > 0 ? `Measured video ${(video.bitRate / 1000).toFixed(1)} kbps average` : null,
-        output.attempts > 1 ? `Size fitting used ${output.attempts} attempts` : null].filter(Boolean).join(' · ') : '';
-    }
   }
   function accept(data) {
     if (!data || data.id !== workspaceId || discarding) return;
@@ -911,11 +936,14 @@
   $('#processing-batch-submit').addEventListener('click', async () => {
     batchCanSubmit(); if ($('#processing-batch-submit').disabled) return;
     const chosen = batchPlans.filter(item => item.selected.checked);
+    const id = collectionId, token = generation, initiatingFocus = document.activeElement;
     batchBusy = true; batchCanSubmit(); processingControls();
     try {
       const requests = chosen.map(item => ({ ...item.entry.profile.submit(item.plan), acknowledgedWarnings: item.warnings.filter(box => box.checked).map(box => box.value) }));
       const data = await post('/api/processing/queue', { collectionId, entries: requests });
+      if (collectionId !== id) return;
       acceptCollection(data.collection || data); invalidateBatch(); $('#processing-batch-review').hidden = true;
+      if (token === generation && (document.activeElement === initiatingFocus || document.activeElement === document.body)) revealProcessingResults();
     } catch (error) { message(error.message, true); invalidateBatch(); }
     finally { batchBusy = false; processingControls(); }
   });
@@ -929,6 +957,7 @@
       const data = await post('/api/processing/queue', { collectionId, entries: [{ ...submitted,
         acknowledgedWarnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value) }] });
       acceptCollection(data.collection || data);
+      if (token === generation) revealProcessingResults();
     } catch (error) { if (token === generation) { $('#conversion-plan-title').textContent = error.message; plan = null; } }
     finally { if (token === generation) { operationRequest = false; processingControls(); } }
   });
