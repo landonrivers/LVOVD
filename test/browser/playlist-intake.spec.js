@@ -49,7 +49,7 @@ test.afterEach(async ({ page, request }) => {
   await expect(page.locator('#media-drop-zone')).toBeVisible();
 });
 
-test('two imported playlist files expose distinct MP3 downloads together without changing the editor', async ({ page }, testInfo) => {
+test('Download All saves both distinct processed playlist MP3s without changing the editor', async ({ page }, testInfo) => {
   await preview(page, [0, 2]); await page.locator('#open-editor-button').click();
   await expect.poll(async () => (await state(page)).intake?.status, { timeout: 30000 }).toBe('ready');
   await expect.poll(async () => (await state(page)).intake?.active).toBe(false);
@@ -66,15 +66,21 @@ test('two imported playlist files expose distinct MP3 downloads together without
   await expect(page.locator('#processing-results-summary')).toHaveText('2 of 2 completed · 2 downloads available');
   const results = page.locator('#processing-results');
   await expect(results.getByRole('link', { name: /^Download MP3/ })).toHaveCount(2);
+  const downloads = [];
+  page.on('download', download => downloads.push(download));
+  await results.getByRole('button', { name: 'Download All (2)', exact: true }).click();
+  await expect.poll(() => downloads.length).toBe(2);
+  await expect(page.locator('#processing-download-note')).toContainText('2 of 2 downloads requested');
+  expect((await state(page)).selectedId).toBe(selectedId);
   const bytes = [];
   for (const [index, sourceIndex] of [0, 2].entries()) {
     const row = results.locator('[data-processing-result]').nth(index), filename = `Generated item ${sourceIndex}-processed.mp3`;
     await expect(row.getByRole('heading')).toHaveText(filename);
     await expect(row).toContainText(`Source: Generated item ${sourceIndex}.mp4`);
     await expect(row).toContainText('MP3 audio encoded');
-    const waiting = page.waitForEvent('download');
-    await row.getByRole('link', { name: `Download MP3 — ${filename}`, exact: true }).click();
-    const downloaded = await waiting; expect(await downloaded.failure()).toBeNull(); expect(downloaded.suggestedFilename()).toBe(filename);
+    await expect(row.getByRole('link', { name: `Download MP3 — ${filename}`, exact: true })).toBeVisible();
+    const downloaded = downloads.find(download => download.suggestedFilename() === filename);
+    expect(downloaded).toBeTruthy(); expect(await downloaded.failure()).toBeNull();
     const output = testInfo.outputPath(filename); await downloaded.saveAs(output); bytes.push(await fs.readFile(output));
     const inspected = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', output], { encoding: 'utf8', windowsHide: true }));
     expect(inspected.streams.map(stream => stream.codec_name)).toEqual(['mp3']);

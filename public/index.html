@@ -554,23 +554,25 @@
             <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
           </section>
           <section id="processing-results" class="processing-results" aria-labelledby="processing-results-title" hidden>
-            <div class="progress-head"><h3 id="processing-results-title" tabindex="-1">Processing results</h3><span id="processing-results-summary" class="help" role="status"></span></div>
-            <div id="processing-results-list"></div>
+            <div class="progress-head">
+              <div><h3 id="processing-results-title" tabindex="-1">Processing results</h3><span id="processing-results-summary" class="help" role="status"></span></div>
+              <button id="processing-download-all" class="button primary" type="button" hidden>Download All</button>
+            </div>
+            <p id="processing-download-note" class="help" role="status" hidden></p>
+            <div id="processing-results-list" tabindex="0" role="region" aria-label="Processed files"></div>
             <template id="processing-result-template">
               <article class="processing-result">
                 <div class="processing-result-main">
-                  <span data-result="format" class="processing-result-format"></span>
-                  <h4 data-result="name"></h4>
-                  <p data-result="status" class="processing-result-status"></p>
-                  <p data-result="summary" class="processing-result-summary"></p>
-                  <p data-result="source" class="help processing-result-source"></p>
+                  <div class="processing-result-title"><span data-result="format" class="processing-result-format"></span><h4 data-result="name"></h4></div>
+                  <div class="processing-result-meta"><span data-result="status" class="processing-result-status"></span><span data-result="brief"></span></div>
                   <details data-result="details"><summary>Result details</summary>
+                    <p data-result="source" class="help processing-result-source"></p><p data-result="summary" class="help"></p>
                     <p data-result="facts" class="help"></p><p data-result="target" class="help"></p><p data-result="settings" class="help"></p>
                   </details>
                 </div>
                 <div class="processing-result-actions">
                   <a data-result="download" class="button primary processing-result-download" hidden></a>
-                  <button data-result="edit" class="button secondary" type="button">Edit source</button>
+                  <button data-result="edit" class="text-button" type="button">Edit source</button>
                 </div>
               </article>
             </template>

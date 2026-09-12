@@ -15,6 +15,7 @@
   const entries = new Map(), cleanupIds = new Set(), removedIds = new Set(), removedDuringUpload = new Set();
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
+  let allDownloads = null;
   let uploadGeneration = 0;
   let removedCleanup = new Map(), cleanupBusy = false;
   let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
@@ -199,7 +200,8 @@
       if (row.resultKey === key) continue;
       row.resultKey = key;
       const { download, edit } = row.parts;
-      for (const part of ['name', 'source', 'status', 'format', 'summary', 'facts', 'target', 'settings']) row.parts[part].textContent = view[part] || '';
+      for (const part of ['name', 'source', 'status', 'format', 'brief', 'summary', 'facts', 'target', 'settings']) row.parts[part].textContent = view[part] || '';
+      row.parts.name.title = view.name;
       row.dataset.previous = String(previous); row.parts.details.hidden = !output;
       edit.setAttribute('aria-label', view.edit);
       download.hidden = !view.url;
@@ -211,6 +213,10 @@
     $('#processing-results').hidden = !live.size;
     const summary = [`${completed} of ${live.size} completed`, queued && `${queued} queued`, running && `${running} processing`, failed && `${failed} failed`, cancelled && `${cancelled} cancelled`, `${downloads} ${downloads === 1 ? 'download' : 'downloads'} available`].filter(Boolean).join(' · ');
     if ($('#processing-results-summary').textContent !== summary) $('#processing-results-summary').textContent = summary;
+    const all = $('#processing-download-all');
+    all.hidden = live.size < 2;
+    all.disabled = Boolean(allDownloads) || discarding || completed !== live.size || downloads !== completed || queued > 0 || running > 0;
+    all.textContent = allDownloads ? `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…` : `Download All (${downloads})`;
   }
   function describeProcessingResult(output, currentRevision) {
     if (!output) return {};
@@ -227,6 +233,7 @@
       return `${facts.familiarCodecName(stream.codec)} ${role}${output.noOp ? ' in unchanged original bytes' : action === 'encode' ? ' encoded' : action === 'copy' ? ' copied without re-encoding' : ''}`;
     };
     return { format, older,
+      brief: `${sizeInMB(output.size)} · ${facts.formatDuration(inspection.durationSeconds)}`,
       summary: [`${sizeInMB(output.size)}`, facts.formatDuration(inspection.durationSeconds), output.noOp && 'Unchanged file — original bytes', treatment('video'), treatment('audio')].filter(Boolean).join(' · '),
       facts: [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
         video && `${facts.familiarCodecName(video.codec)} · ${video.width} × ${video.height}`,
@@ -250,6 +257,42 @@
     $('#processing-results-title').focus({ preventScroll: true });
     $('#processing-results').scrollIntoView({ block: 'start', behavior: 'instant' });
   }
+  $('#processing-download-all').addEventListener('click', () => {
+    // Recheck the current authoritative results at the user's click. Never
+    // substitute a previous output for a failed/cancelled/latest pending job.
+    renderProcessingResults();
+    if ($('#processing-download-all').hidden || $('#processing-download-all').disabled) return;
+    const outputs = [...entries].flatMap(([id, entry]) => {
+      const output = entry.snapshot.conversion?.output;
+      return output?.downloadUrl ? [{ id, assetId: output.assetId, planKey: output.planKey, url: output.downloadUrl, filename: output.filename }] : [];
+    });
+    // Existing protected download endpoints own their readers. No new media
+    // copies, browser buffers, or provider requests. Pace browser requests so
+    // a full 20-file set is not dropped as one burst by the browser's limiter.
+    const run = { collectionId, outputs, index: 0, timer: null }; allDownloads = run;
+    const note = $('#processing-download-note'); note.hidden = false;
+    const requestNext = () => {
+      if (allDownloads !== run) return;
+      const current = collectionId === run.collectionId && outputs.every(item => {
+        const conversion = entries.get(item.id)?.snapshot.conversion, output = conversion?.output, job = currentJob(item.id);
+        return !removedIds.has(item.id) && output?.assetId === item.assetId && output.planKey === item.planKey && output.downloadUrl === item.url
+          && (!job || (job.status === 'completed' && job.planKey === output.planKey))
+          && !['running', 'validating', 'cancelling', 'failed', 'cancelled'].includes(conversion.status);
+      });
+      if (!current) {
+        allDownloads = null; renderProcessingResults();
+        note.textContent = `Results changed. Download All stopped after ${run.index} download ${run.index === 1 ? 'request' : 'requests'}.`; return;
+      }
+      const output = outputs[run.index++];
+      const link = document.createElement('a'); link.href = output.url; link.download = output.filename;
+      link.hidden = true; document.body.append(link); link.click(); link.remove();
+      note.textContent = `${run.index} of ${outputs.length} downloads requested. Your browser may ask to allow multiple downloads.`;
+      if (run.index < outputs.length) run.timer = setTimeout(requestNext, 250);
+      else allDownloads = null;
+      renderProcessingResults();
+    };
+    requestNext();
+  });
   function selectEntry(id) {
     const entry = entries.get(id); if (!entry) return;
     if (id === workspaceId) { if (!entry.previewAttempted) preparePreview(); return; }
@@ -487,7 +530,8 @@
     sharedSettings = profiles.defaults(); $('#processing-apply-all').checked = true;
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = !upload; $('#workspace-failure').hidden = true;
-    $('#processing-results-list').replaceChildren(); $('#conversion-warnings').replaceChildren();
+    clearTimeout(allDownloads?.timer); allDownloads = null;
+    $('#processing-results-list').replaceChildren(); $('#processing-download-note').hidden = true; $('#conversion-warnings').replaceChildren();
     settingsForm.reset(); message(text); renderFiles(); publish();
   }
   function appendFact(list, label, value) {

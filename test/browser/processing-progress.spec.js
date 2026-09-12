@@ -194,6 +194,7 @@ test('the shared results list keeps an earlier download after failure and expose
     await page.getByRole('button', { name: 'Queue And Process', exact: true }).click();
     await expect.poll(async () => (await state(page)).jobs.map(job => job.status)).toEqual(['failed', 'completed']);
     await expect(page.locator('#processing-results-summary')).toHaveText('1 of 2 completed · 1 failed · 2 downloads available');
+    await expect(page.locator('#processing-download-all')).toBeDisabled();
     const first = page.locator(`[data-processing-result="${firstId}"]`);
     await expect(first).toContainText('Latest attempt failed'); await expect(first).toContainText('Previous result available');
     await expect(first.getByRole('link', { name: /^Download MP4/ })).toBeVisible();
@@ -258,7 +259,12 @@ test('accepted batch reveals results once and preserves focus and scroll through
     const heading = page.getByRole('heading', { name: 'Processing results', exact: true });
     await expect(heading).toBeFocused(); await expect(heading).toBeInViewport();
     await expect(page.locator('#processing-results-summary')).toHaveText('0 of 2 completed · 1 queued · 1 processing · 0 downloads available');
+    await expect(page.locator('#processing-download-all')).toBeDisabled();
     expect(await page.evaluate(() => window.resultsReveals)).toBe(1);
+    // Leave space below the viewport: the compact layout can shorten at
+    // completion. Test preservation of the user's scroll position without
+    // hitting the browser's unavoidable clamp at the end of the document.
+    await page.evaluate(() => window.scrollBy(0, -150));
     const collection = manager.localProcessing.get(before.collectionId);
     const stable = async focus => {
       // Observe painted state, including native scroll anchoring from the
@@ -277,15 +283,127 @@ test('accepted batch reveals results once and preserves focus and scroll through
       expect((await state(page)).selectedId).toBe(before.selectedId);
     };
     await stable(heading);
+    const firstScrollY = await page.evaluate(() => window.scrollY);
     gates[0].release.resolve(); await gates[1].reached.promise;
     await expect(page.locator('#processing-results-summary')).toHaveText('1 of 2 completed · 1 processing · 1 download available');
+    await expect(heading).toBeFocused(); expect(await page.evaluate(() => window.scrollY)).toBe(firstScrollY);
     const firstDownload = page.getByRole('link', { name: 'Download MP3 — first-processed.mp3', exact: true });
     await firstDownload.focus(); await stable(firstDownload);
     await page.locator('#processing-results').screenshot({ path: testInfo.outputPath('processing-results-in-progress.png') });
     const scrollY = await page.evaluate(() => window.scrollY);
     gates[1].release.resolve();
     await expect(page.locator('#processing-results-summary')).toHaveText('2 of 2 completed · 2 downloads available');
+    await expect(page.locator('#processing-download-all')).toBeEnabled();
     await expect(firstDownload).toBeFocused(); expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
     await stable(firstDownload);
   } finally { for (const gate of gates) gate.release.resolve(); manager.fs = fs; }
 });
+
+test('twenty results stay compact and all downloads retain their own names and exact no-op bytes', async ({ page }, testInfo) => {
+  test.setTimeout(60000);
+  const original = await fs.readFile(path.join(root, 'first.mp4'));
+  const names = Array.from({ length: 20 }, (_, index) => `Generated source ${String(index + 1).padStart(2, '0')}.mp4`);
+  await page.locator('#media-file-input').setInputFiles(names.map(name => ({ name, mimeType: 'video/mp4', buffer: original })));
+  await expect.poll(async () => (await state(page)).entries.filter(entry => entry.inspection).length, { timeout: 30000 }).toBe(20);
+  await expect(page.locator('#conversion-start')).toBeEnabled();
+  const before = await state(page);
+  await page.getByRole('button', { name: 'Review All Files (20)', exact: true }).click();
+  await expect(page.locator('#processing-batch-review')).not.toContainText('Reviewing files');
+  for (const box of await page.locator('#processing-batch-review input[type=checkbox]:enabled').all()) await box.check();
+  await page.getByRole('button', { name: 'Queue And Process', exact: true }).click();
+  await expect(page.locator('#processing-results-summary')).toHaveText('20 of 20 completed · 20 downloads available');
+  const list = page.getByRole('region', { name: 'Processed files', exact: true });
+  await expect(list.locator('[data-processing-result]')).toHaveCount(20);
+  const geometry = await list.evaluate(element => ({ height: element.clientHeight, content: element.scrollHeight, row: element.firstElementChild.getBoundingClientRect().height }));
+  expect(geometry.height).toBeLessThanOrEqual(480); expect(geometry.content).toBeGreaterThan(geometry.height * 2);
+  expect(geometry.row).toBeLessThanOrEqual(80);
+  await list.focus(); await page.keyboard.press('End');
+  await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  const last = list.locator('[data-processing-result]').last();
+  await last.getByRole('link', { name: /^Download MP4/ }).focus();
+  await expect(last.getByRole('link', { name: /^Download MP4/ })).toBeInViewport();
+  const downloads = []; page.on('download', download => downloads.push(download));
+  await page.getByRole('button', { name: 'Download All (20)', exact: true }).click();
+  await expect.poll(() => downloads.length).toBe(20);
+  expect(downloads.map(download => download.suggestedFilename()).sort()).toEqual(names.map(name => name.replace('.mp4', '-processed.mp4')).sort());
+  for (const download of downloads) { expect(await download.failure()).toBeNull(); expect(await fs.readFile(await download.path())).toEqual(original); }
+  expect((await state(page)).selectedId).toBe(before.selectedId);
+  const collection = app.mediaWorkspaces.localProcessing.get(before.collectionId);
+  await expectSettledProgress(collection, 'twenty completed downloads');
+  await list.evaluate(element => { element.scrollTop = 0; });
+  await page.locator('#processing-results').screenshot({ path: testInfo.outputPath('twenty-results-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator('#processing-results').screenshot({ path: testInfo.outputPath('twenty-results-narrow.png') });
+});
+
+for (const action of ['removed', 'replaced', 'discarded']) {
+  test(`Download All stops its pending browser requests when results are ${action}`, async ({ page }) => {
+    await page.locator('#media-file-input').setInputFiles(['first', 'second'].map(name => path.join(root, name + '.mp4')));
+    await expect.poll(async () => (await state(page)).entries.filter(entry => entry.inspection).length).toBe(2);
+    await expect(page.locator('#conversion-start')).toBeEnabled();
+    await page.locator('#processing-process-all').click();
+    await expect(page.locator('#processing-batch-review')).not.toContainText('Reviewing files');
+    for (const box of await page.locator('#processing-batch-review input[type=checkbox]:enabled').all()) await box.check();
+    await page.getByRole('button', { name: 'Queue And Process', exact: true }).click();
+    await expect(page.locator('#processing-results-summary')).toHaveText('2 of 2 completed · 2 downloads available');
+    // Hold only the browser's next paced download dispatch. Real API requests,
+    // output bytes, processing, selection and removal remain production code.
+    await page.evaluate(() => {
+      const native = window.setTimeout;
+      window.heldDownloadCallbacks = [];
+      window.setTimeout = (callback, delay, ...args) => {
+        if (delay !== 250) return native(callback, delay, ...args);
+        window.heldDownloadCallbacks.push(() => callback(...args)); return -window.heldDownloadCallbacks.length;
+      };
+    });
+    const downloads = []; page.on('download', download => downloads.push(download));
+    await page.getByRole('button', { name: 'Download All (2)', exact: true }).click();
+    await expect.poll(() => downloads.length).toBe(1);
+    expect(downloads[0].suggestedFilename()).toBe('first-processed.mp4');
+    await expect(page.locator('#processing-download-all')).toBeDisabled();
+    await page.getByRole('button', { name: 'Edit source — second.mp4', exact: true }).click();
+    let downloadReleased = false;
+    if (action === 'replaced') {
+      await page.locator('#processing-apply-all').uncheck();
+      await page.locator('#processing-container').selectOption('mp3');
+      await expect(page.locator('#conversion-plan-title')).toContainText('Convert');
+      for (const box of await page.locator('#conversion-warnings input').all()) await box.check();
+      await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
+      await expect(page.locator('#conversion-output-name')).toHaveText('second-processed.mp3');
+    } else {
+      const removal = deferred(), release = deferred();
+      if (action === 'removed') await page.route('**/api/workspace?*', async route => {
+        if (route.request().method() === 'DELETE') { removal.resolve(); await release.promise; }
+        await route.continue();
+      });
+      try {
+        page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+        if (action === 'removed') {
+          await removal.promise;
+          // Browser removal intent invalidates pending dispatch even before the
+          // server receives DELETE or aggregate progress removes this entry.
+          await page.evaluate(() => window.heldDownloadCallbacks.shift()()); downloadReleased = true;
+          await expect(page.locator('#processing-download-note')).toHaveText('Results changed. Download All stopped after 1 download request.');
+          await expect(page.locator('#processing-download-all')).toBeDisabled();
+          expect(downloads.length).toBe(1);
+        }
+      } finally { release.resolve(); }
+      await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+      if (action === 'discarded') {
+        page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+        await expect(page.locator('#media-drop-zone')).toBeVisible();
+      }
+    }
+    if (!downloadReleased) await page.evaluate(() => window.heldDownloadCallbacks.shift()());
+    if (action === 'discarded') {
+      await expect(page.locator('#processing-download-note')).toBeHidden();
+      await expect(page.locator('#processing-results')).toBeHidden();
+    } else await expect(page.locator('#processing-download-note')).toHaveText('Results changed. Download All stopped after 1 download request.');
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    expect(downloads.length).toBe(1);
+    expect(await downloads[0].failure()).toBeNull();
+    expect(await fs.readFile(await downloads[0].path())).toEqual(await fs.readFile(path.join(root, 'first.mp4')));
+    expect(await page.evaluate(() => window.heldDownloadCallbacks.length)).toBe(0);
+  });
+}
