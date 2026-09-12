@@ -11,13 +11,17 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('release metadata consistently prepares the 2.5.0 feature release', () => {
+test('release metadata consistently prepares the 2.6.0 feature release', () => {
   const packageJson = JSON.parse(read('package.json'));
   const packageLock = JSON.parse(read('package-lock.json'));
 
-  assert.equal(packageJson.version, '2.5.0');
-  assert.equal(packageLock.version, '2.5.0');
-  assert.equal(packageLock.packages[''].version, '2.5.0');
+  assert.equal(packageJson.version, '2.6.0');
+  assert.equal(packageLock.version, '2.6.0');
+  assert.equal(packageLock.packages[''].version, '2.6.0');
+  assert.match(read('docs/releases/v2.6.0.md'), /^# LVOVD v2\.6\.0/);
+  assert.match(read('README.md'), /docs\/releases\/v2\.6\.0\.md/);
+  assert.match(read('README.md'), /Download All \(N\)/);
+  assert.match(read('README.md'), /not persisted across server restarts/);
 });
 
 test('README ships truthful editing, privacy, temporary-file, and Download History behavior', () => {

@@ -12,6 +12,8 @@ The long-term product can grow beyond downloading into a small local media compa
 
 ## Current baseline
 
+**v2.6.0 release checkpoint:** the accepted Roadmap 7A–7D3 work now forms the public Local Media workbench baseline: inspection, original-source cuts plus conversion/compression, independent local files, sequential batch processing, selected playlist intake, compact processed results, Download All, and session-local reopening/cleanup recovery. Landon completed manual acceptance of the final results workflow. This release does not mark all of Roadmap #7 complete; the later codec, image, hardware, track/metadata, and packaging work below remains deferred. See [v2.6.0 release notes](docs/releases/v2.6.0.md).
+
 LVOVD currently provides:
 
 - metadata-driven Preview and capability discovery;
