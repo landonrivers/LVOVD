@@ -109,6 +109,37 @@ async function processFile(page) {
   await expect(page.locator('#conversion-output-target')).not.toContainText('Previous draft');
 }
 
+test('refreshed populated workbenches remain reachable when the collection limit is full', async ({ page, request }, testInfo) => {
+  const owned = [];
+  page.on('dialog', dialog => dialog.accept());
+  try {
+    owned.push(await intake(page)); await processFile(page);
+    const first = await downloaded(page, 'before-refresh.mp4');
+    const firstCollection = (await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState())).collectionId;
+    await page.reload(); owned.push(await intake(page, 'generated.mov')); await page.reload();
+    await page.locator('#media-file-input').setInputFiles(path.join(root, 'generated.mp4'));
+    await expect(page.locator('#workspace-status')).toContainText('workbench limit');
+    console.log(JSON.stringify({ refreshLimit: await page.locator('#workspace-status').textContent(), recoveryVisible: await page.locator('#workspace-recovery').isVisible() }));
+    await expect(page.locator('#workspace-recovery')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.locator('#workspace-recovery').screenshot({ path: testInfo.outputPath('workbench-recovery-narrow.png') });
+    const row = page.locator(`[data-recovery-collection="${firstCollection}"]`);
+    await expect(row.getByRole('button', { name: 'Reopen files' })).toBeEnabled();
+    await row.getByRole('button', { name: 'Reopen files' }).click();
+    await expect(page.locator('#conversion-download')).toBeVisible();
+    await expect(page.locator('#conversion-output-target')).toContainText('Previous draft');
+    expect((await downloaded(page, 'after-refresh.mp4')).bytes).toEqual(first.bytes);
+    for (let i = 0; i < 3; i++) {
+      await page.reload(); await page.locator(`[data-recovery-collection="${firstCollection}"]`).getByRole('button', { name: 'Reopen files' }).click();
+      await expect(page.locator('#conversion-download')).toBeVisible();
+      expect((await page.evaluate(() => window.LVOVDLocalWorkspace.collectionState())).collectionId).toBe(firstCollection);
+    }
+    await exact(page, 'editor-end-time', '4'); await processFile(page);
+    expect(Math.abs(Number(probe((await downloaded(page, 'reopened-processed.mp4')).file).format.duration) - 4)).toBeLessThan(.11);
+  } finally { for (const id of owned) await request.delete(`/api/workspace?workspace=${id}`); }
+});
+
 test('unified workbench offers default no-op, keyboard access, byte-exact download and security gate', async ({ page, request }) => {
   const previews = [];
   page.on('request', request => { if (request.url().endsWith('/api/workspace/editor')) previews.push(request.postDataJSON()); });
@@ -982,6 +1013,12 @@ test('queued Remove and Reset affect only their file while Cancel All preserves 
   await page.locator('#processing-cancel-all').click();
   await expect(page.locator('#processing-cancel-all')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState().jobs.map(job => job.status))).toEqual(['cancelled', 'cancelled']);
+  await expect(page.locator('#processing-results-summary')).toHaveText('0 of 2 completed · 2 cancelled · 2 downloads available');
+  await expect(page.locator('#processing-download-all')).toBeDisabled();
+  await expect(page.locator(`[data-processing-result="${second.workspaceId}"]`)).toContainText('Latest attempt cancelled');
+  await expect(page.locator(`[data-processing-result="${second.workspaceId}"]`)).toContainText('Previous result available');
+  await expect(page.locator(`[data-processing-result="${second.workspaceId}"] a`)).toHaveAttribute('href', secondUrl);
+  await expect(page.locator(`[data-processing-result="${first.workspaceId}"] a`)).toHaveAttribute('href', firstUrl);
   await expect(page.locator('#editor-video')).toHaveAttribute('src', new RegExp(waitingPreview.sourceAssetId));
   expect(previews.filter(body => body.workspaceId === waitingPreview.workspaceId)).toHaveLength(1);
   await selectFile(page, second.workspaceId);
@@ -1060,7 +1097,7 @@ test('file selection stays mounted and readable through progress with clear sele
   await expect(page.locator('#processing-review-title')).toHaveText('Ready to process selected file');
   await expect(page.locator('#processing-draft-status')).toBeHidden();
   await expect(page.locator('#conversion-start')).toHaveText('Process Selected File');
-  await expect(page.locator('#processing-process-all')).toHaveText('Process All Files (3)');
+  await expect(page.locator('#processing-process-all')).toHaveText('Review All Files (3)');
   await page.locator('#processing-file-list').evaluate(list => {
     window.fileOptionsBeforeProgress = [...list.options];
     window.fileListRemovals = 0;
@@ -1088,8 +1125,11 @@ test('file selection stays mounted and readable through progress with clear sele
         return { colors, contrast: colors.map(color => 1.05 / (luminance(color) + .05)), text: style.color, size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
       });
       expect(appearance.colors).toHaveLength(2); expect(appearance.text).toBe('rgb(255, 255, 255)');
-      expect(appearance.size).toBeGreaterThanOrEqual(19); expect(appearance.weight).toBeGreaterThanOrEqual(700);
-      expect(Math.min(...appearance.contrast)).toBeGreaterThanOrEqual(3); // WCAG large bold text threshold.
+      if (selector === '#open-editor-button') {
+        expect(appearance.size).toBe(await page.locator('#download-button').evaluate(button => parseFloat(getComputedStyle(button).fontSize)));
+      } else expect(appearance.size).toBeGreaterThanOrEqual(19);
+      expect(appearance.weight).toBeGreaterThanOrEqual(700);
+      expect(Math.min(...appearance.contrast)).toBeGreaterThanOrEqual(selector === '#open-editor-button' ? 4.5 : 3);
     }
   }
   await page.locator('#media-workspace-panel').screenshot({ path: testInfo.outputPath('workbench-desktop.png') });
@@ -1100,5 +1140,5 @@ test('file selection stays mounted and readable through progress with clear sele
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator('#media-workspace-panel').screenshot({ path: testInfo.outputPath('workbench-narrow.png') });
   page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
-  await expect(page.locator('#processing-process-all')).toHaveText('Process All Files (2)');
+  await expect(page.locator('#processing-process-all')).toHaveText('Review All Files (2)');
 });

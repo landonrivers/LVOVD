@@ -129,6 +129,7 @@ class ProcessingOperations {
     const frozenPlan = freeze(structuredClone(plan));
     const snapshot = freeze({ draftRevision: intent.draftRevision, planKey: plan.key,
       editPlan: structuredClone(plan.editPlan), settings: structuredClone(plan.settings),
+      streams: plan.streams.map(({ role, index, action }) => ({ role, index, action })),
       sourceDurationSeconds: workspace.inspection.durationSeconds, retainedDurationSeconds: plan.timing.durationSeconds,
       output: structuredClone(plan.output), rateBudget: structuredClone(plan.rateBudget || null) });
     const provenance = freeze({ inputAssetId: asset.id, inputRole: 'source', inputFilename: workspace.source.displayName,

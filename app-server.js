@@ -38,6 +38,10 @@ const JOB_CANCELLED_CODE = 'LVOVD_JOB_CANCELLED';
 const jobs = new Map();
 const remoteSourceRequests = createSourceRequestCoordinator();
 const mediaWorkspaces = createMediaWorkspaceManager();
+const { PlaylistIntake } = require('./playlist-intake');
+const playlistIntake = new PlaylistIntake(mediaWorkspaces.localProcessing, {
+  coordinator: remoteSourceRequests, acquire: runWorkspaceAcquisition, normalizeAcquisition: normalizeWorkspaceAcquisition, classifyFailure
+});
 let processWorkRootPromise = null;
 
 const CONTENT_MODES = new Set(['av', 'video', 'audio', 'extras']);
@@ -585,7 +589,8 @@ function classifyPreviewError(error, requestedUrl) {
 function normalizePlaylistEntry(entry, index) {
   const id = typeof entry?.id === 'string' ? entry.id : null;
   const extractor = String(entry?.ie_key || entry?.extractor_key || entry?.extractor || '').toLowerCase();
-  const candidates = [entry?.webpage_url, entry?.original_url, entry?.url];
+  const pageFallback = ['url', 'url_transparent'].includes(entry?._type) || (!entry?.formats && !entry?.format_id);
+  const candidates = [entry?.webpage_url, entry?.original_url, pageFallback ? entry?.url : null];
   let entryUrl = candidates.map(safeMediaUrl).find(Boolean) || null;
   // Flat YouTube playlists commonly expose only the video id; keep this extractor-specific fallback.
   if (!entryUrl && id && extractor.includes('youtube')) {
@@ -596,10 +601,12 @@ function normalizePlaylistEntry(entry, index) {
     id,
     title: entry?.title || `Video ${index + 1}`,
     channel: entry?.channel || entry?.uploader || null,
-    duration: Number.isFinite(Number(entry?.duration)) ? Number(entry.duration) : null,
+    duration: entry?.duration != null && Number.isFinite(Number(entry.duration)) ? Number(entry.duration) : null,
     durationString: entry?.duration_string || null,
     thumbnail: bestThumbnail(entry),
-    url: entryUrl
+    url: entryUrl,
+    intakeEligible: Boolean(entryUrl) && !['playlist', 'multi_video'].includes(entry?._type) && entry?.vcodec !== 'none' && entry?.is_live !== true && !['is_live', 'is_upcoming'].includes(entry?.live_status)
+      && entry?.has_drm !== true && !['private', 'premium_only', 'subscriber_only', 'needs_auth', 'unavailable'].includes(entry?.availability)
   };
 }
 
@@ -914,16 +921,17 @@ function buildYtdlpArgs(task, options, outputTemplate, progressTemplate) {
   return args;
 }
 
-function buildWorkspaceAcquisitionArgs(videoUrl, acquisition, outputTemplate) {
+function buildWorkspaceAcquisitionArgs(videoUrl, acquisition, outputTemplate, maximumBytes = MAX_LOCAL_MEDIA_BYTES) {
   const args = [
     ...YTDLP_COMMON_ARGS,
     '--no-playlist',
     '--match-filter', '!is_live',
+    '--retries', '0', '--fragment-retries', '0', '--extractor-retries', '0', '--file-access-retries', '0',
     '--newline',
     '--no-warnings',
     '--progress',
     '--no-simulate',
-    '--max-filesize', String(MAX_LOCAL_MEDIA_BYTES),
+    '--max-filesize', String(maximumBytes),
     '--output', outputTemplate,
     '--progress-template', WORKSPACE_PROGRESS_TEMPLATE,
     '--format', formatSelector(acquisition)
@@ -1067,8 +1075,25 @@ async function findWorkspaceAcquiredFile(workspace) {
   return candidates[0];
 }
 
+async function acquisitionDirectoryBytes(directory) {
+  let total = 0, count = 0;
+  async function visit(dir, depth) {
+    if (depth > 4) throw new Error('Acquisition directory nesting exceeds the bounded source guard.');
+    for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
+      if (++count > 1024) throw new Error('Acquisition directory contains too many temporary files.');
+      const file = path.join(dir, entry.name);
+      try {
+        if (entry.isDirectory()) await visit(file, depth + 1);
+        else if (entry.isFile()) total += (await fsp.stat(file)).size;
+        else throw new Error('Unexpected acquisition directory entry.');
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+  }
+  await visit(directory, 0); return total;
+}
+
 async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display, {
-  spawnProcess = spawn
+  spawnProcess = spawn, maximumBytes = mediaWorkspaces.maxBytes
 } = {}) {
   if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) return;
   if (!YTDLP_PATH) {
@@ -1078,6 +1103,7 @@ async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display
     );
   }
 
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0 || maximumBytes > mediaWorkspaces.maxBytes) throw new Error('Invalid source byte allowance.');
   mediaWorkspaces.update(workspace, {
     status: 'acquiring',
     phase: 'acquiring',
@@ -1087,7 +1113,7 @@ async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display
     bytesTotal: null
   });
   const outputTemplate = path.join(workspace.tempDir, 'source.%(ext)s');
-  const args = buildWorkspaceAcquisitionArgs(videoUrl, acquisition, outputTemplate);
+  const args = buildWorkspaceAcquisitionArgs(videoUrl, acquisition, outputTemplate, maximumBytes);
 
   await new Promise((resolve, reject) => {
     if (workspace.cancelRequested || workspace.abortController.signal.aborted) {
@@ -1096,14 +1122,34 @@ async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display
     }
     let child;
     try {
-      child = spawnProcess(YTDLP_PATH, args, { windowsHide: true, shell: false });
+      child = spawnProcess(YTDLP_PATH, args, { windowsHide: true, shell: false, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       reject(withLocalFailure(error, { operation: 'process_start', tool: 'yt-dlp' }));
       return;
     }
     workspace.child = child;
     const recentErrorLines = [];
-    let settled = false;
+    let settled = false, stopping = false, escalation = null;
+    // A Windows packaged yt-dlp process can own a Python child; on POSIX it
+    // can own an FFmpeg child. Stop this attempt's tree/group, not just its
+    // launcher. Admission and byte ownership still wait for the pipes to close.
+    const stop = () => {
+      if (settled || stopping) return; stopping = true;
+      if (!Number.isSafeInteger(child.pid) || child.pid <= 0) { try { child.kill(); } catch {} return; }
+      if (process.platform === 'win32') {
+        try {
+          const killer = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe'),
+            ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, shell: false, stdio: 'ignore' });
+          const deadline = setTimeout(() => { try { killer.kill(); } catch {} }, 2000);
+          killer.once('close', () => clearTimeout(deadline));
+          killer.once('error', () => { clearTimeout(deadline); try { child.kill(); } catch {} });
+        } catch { try { child.kill(); } catch {} }
+      } else {
+        try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill(); } catch {} }
+        escalation = setTimeout(() => { if (!settled) { try { process.kill(-child.pid, 'SIGKILL'); } catch {} } }, 750);
+      }
+    };
+    workspace.stopAcquisition = stop;
     let sizeFailure = null;
     let localProcessing = null;
     let guardActive = false;
@@ -1112,32 +1158,30 @@ async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display
       if (settled || guardActive || sizeFailure || !workspace.tempDir) return;
       guardActive = true;
       try {
-        const entries = await fsp.readdir(workspace.tempDir, { withFileTypes: true });
-        let total = 0;
-        for (const entry of entries) {
-          if (!entry.isFile()) continue;
-          const stat = await fsp.stat(path.join(workspace.tempDir, entry.name));
-          total += stat.size;
-          if (total > MAX_LOCAL_MEDIA_BYTES) {
-            sizeFailure = mediaWorkspaces.tooLargeError();
-            try { child.kill(); } catch {}
-            break;
-          }
+        if (await acquisitionDirectoryBytes(workspace.tempDir) > maximumBytes) {
+          sizeFailure = mediaWorkspaces.tooLargeError();
+          stop();
         }
-      } catch {}
+      } catch (error) {
+        if (!settled && error.code !== 'ENOENT') {
+          sizeFailure = withLocalFailure(error, { operation: 'local_file_operation' });
+          stop();
+        }
+      }
       finally { guardActive = false; }
     }, 250);
     sizeGuard.unref?.();
     const finish = (callback) => {
       if (settled) return;
       settled = true;
-      clearInterval(sizeGuard);
+      clearInterval(sizeGuard); clearTimeout(escalation);
+      if (workspace.stopAcquisition === stop) workspace.stopAcquisition = null;
       signal.removeEventListener('abort', onAbort);
       if (workspace.child === child) workspace.child = null;
       callback();
     };
     const onAbort = () => {
-      try { child.kill(); } catch {}
+      stop();
     };
     signal.addEventListener('abort', onAbort, { once: true });
 
@@ -1146,10 +1190,10 @@ async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display
       const values = line.slice('__LVOVD_WORKSPACE_PROGRESS__'.length).split('|');
       const downloadedBytes = parseMaybeNumber(values[0]);
       const totalBytes = parseMaybeNumber(values[1]) ?? parseMaybeNumber(values[2]);
-      if ((downloadedBytes != null && downloadedBytes > MAX_LOCAL_MEDIA_BYTES)
-        || (totalBytes != null && totalBytes > MAX_LOCAL_MEDIA_BYTES)) {
+      if ((downloadedBytes != null && downloadedBytes > maximumBytes)
+        || (totalBytes != null && totalBytes > maximumBytes)) {
         sizeFailure = mediaWorkspaces.tooLargeError();
-        try { child.kill(); } catch {}
+        stop();
         return;
       }
       const percentText = Number.parseFloat((values[5] || '').replace('%', '').trim());
@@ -1228,20 +1272,28 @@ async function runWorkspaceAcquisition(workspace, videoUrl, acquisition, display
   });
 
   if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) return;
+  if (await acquisitionDirectoryBytes(workspace.tempDir) > maximumBytes) throw mediaWorkspaces.tooLargeError();
   const acquiredPath = await findWorkspaceAcquiredFile(workspace);
   const stat = await localOperation(
     () => fsp.stat(acquiredPath),
     { operation: 'output_collection' }
   );
-  if (stat.size > MAX_LOCAL_MEDIA_BYTES) throw mediaWorkspaces.tooLargeError();
+  if (stat.size > maximumBytes) throw mediaWorkspaces.tooLargeError();
   const extension = path.extname(acquiredPath).replace(/[^.A-Za-z0-9]/g, '').slice(0, 16) || '.bin';
   const finalPath = path.join(workspace.tempDir, `original-source${extension}`);
   await localOperation(
     () => fsp.rename(acquiredPath, finalPath),
     { operation: 'output_collection' }
   );
+  // The fixed source allowance includes separate streams and merge artifacts.
+  // Release it only after all acquisition-only leftovers are safely removed.
+  for (const entry of await fsp.readdir(workspace.tempDir, { withFileTypes: true })) {
+    const ownedPath = path.join(workspace.tempDir, entry.name);
+    if (ownedPath !== finalPath) await localOperation(() => fsp.rm(ownedPath, { recursive: true, force: true }), { operation: 'local_file_operation' });
+  }
+  if (!mediaWorkspaces.get(workspace.id, { touch: false }) || workspace.cancelRequested) throw workspaceCancelledError();
   await mediaWorkspaces.adoptAcquiredFile(workspace.id, finalPath, {
-    displayName: workspaceDisplayFilename(display.title, finalPath)
+    displayName: workspaceDisplayFilename(display.title, finalPath), maximumBytes
   });
 }
 
@@ -1979,6 +2031,19 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && requestUrl.pathname === '/api/processing/cleanup') {
+    try { return json(res, 200, { collection: await mediaWorkspaces.localProcessing.retryRemovedCleanup(await readJsonBody(req)) }); }
+    catch (error) { return json(res, error.statusCode || 400, { error: error.message || 'Removed-file cleanup could not complete.' }); }
+  }
+
+  if (req.method === 'POST' && ['/api/processing/import', '/api/processing/import/cancel'].includes(requestUrl.pathname)) {
+    try {
+      const body = await readJsonBody(req);
+      const collection = requestUrl.pathname.endsWith('/cancel') ? playlistIntake.cancel(body) : playlistIntake.admit(body);
+      return json(res, 202, { collection });
+    } catch (error) { return json(res, error.statusCode || 400, { error: error.message || 'Playlist import could not start.' }); }
+  }
+
   if (req.method === 'POST' && requestUrl.pathname === '/api/workspace/url') {
     try {
       const body = await readJsonBody(req);
@@ -2002,6 +2067,16 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && ['/api/processing/collections', '/api/processing/collection/reopen', '/api/processing/collection/remove'].includes(requestUrl.pathname)) {
+    try {
+      const body = await readJsonBody(req), queue = mediaWorkspaces.localProcessing;
+      assertOnlyKeys(body, new Set(requestUrl.pathname === '/api/processing/collections' ? [] : ['collectionId']), 'Workbench recovery request');
+      if (requestUrl.pathname.endsWith('/reopen')) return json(res, 200, { collection: queue.reopen(body.collectionId) });
+      if (requestUrl.pathname.endsWith('/remove')) { queue.recoverable(body.collectionId); await queue.discardCollection(body.collectionId); }
+      return json(res, 200, { collections: queue.recoveryList() });
+    } catch (error) { return json(res, error.statusCode || 400, { error: error.statusCode ? error.message : 'The previous workbench could not be recovered.' }); }
+  }
+
   if (req.method === 'POST' && ['/api/processing/collection', '/api/processing/collection/attach', '/api/processing/queue', '/api/processing/queue/cancel'].includes(requestUrl.pathname)) {
     try {
       const body = await readJsonBody(req);
@@ -2021,7 +2096,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && requestUrl.pathname === '/api/processing/queue/progress') {
-    try { mediaWorkspaces.localProcessing.subscribe(requestUrl.searchParams.get('collection'), res); }
+    try { mediaWorkspaces.localProcessing.subscribe(requestUrl.searchParams.get('collection'), res, Number(requestUrl.searchParams.get('epoch') || 0)); }
     catch (error) { return json(res, error.statusCode || 404, { error: 'Local file collection not found or expired.' }); }
     return;
   }
@@ -2181,6 +2256,10 @@ async function handleRequest(req, res) {
     const workspaceId = requestUrl.searchParams.get('workspace');
     const workspace = mediaWorkspaces.get(workspaceId, { touch: false });
     if (!workspace) {
+      if (playlistIntake.removed(workspaceId) && !mediaWorkspaces.cleanupPending.has(workspaceId) && !mediaWorkspaces.discards.has(workspaceId)) {
+        const pending = [...mediaWorkspaces.localProcessing.reservations.values()].some(item => item.workspaceId === workspaceId && item.bytes > 0);
+        return json(res, 200, { ok: true, action: 'discarded', cleanup: { status: pending ? 'pending' : 'complete', message: pending ? 'Waiting for owned intake resources to settle.' : 'Temporary intake removed.' } });
+      }
       if (!mediaWorkspaces.cleanupPending.has(workspaceId) && !mediaWorkspaces.discards.has(workspaceId)) {
         return json(res, 404, { error: 'Local media workspace not found or already discarded.' });
       }
@@ -2210,7 +2289,7 @@ async function handleRequest(req, res) {
     const rawUrl = requestUrl.searchParams.get('url');
     try {
       const videoUrl = parseMediaUrl(rawUrl);
-      const info = await remoteSourceRequests.preview(videoUrl, () => fetchInfo(videoUrl));
+      const info = await remoteSourceRequests.preview(videoUrl, async () => playlistIntake.remember(await fetchInfo(videoUrl)));
       return json(res, 200, info);
     } catch (error) {
       let parsedUrl = rawUrl;
@@ -2316,6 +2395,10 @@ module.exports = {
   runDownloadJob,
   startWorkspaceAcquisition,
   runWorkspaceAcquisition,
+  playlistIntake,
+  remoteSourceRequests,
+  normalizePlaylistEntry,
+  acquisitionDirectoryBytes,
   streamPreparedFile,
   cleanupExpiredTemporaryWork,
   historyStore,

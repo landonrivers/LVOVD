@@ -506,8 +506,8 @@ test('editor markup keeps the downloader primary and makes local timeline intera
     'processing-reset',
     'processing-finish',
     'conversion-start',
-    'conversion-output',
-    'conversion-download',
+    'processing-results',
+    'processing-result-template',
     'timeline-zoom-in',
     'timeline-zoom-out',
     'timeline-fit'
@@ -518,7 +518,8 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(html, /Re-encoding is not lossless/);
   assert.doesNotMatch(html, /id="(?:local-open-editor|local-open-converter|media-converter|create-edited-file|convert-edited-file)"/);
   assert.match(html, /id="conversion-start"[^>]*>Process Selected File<\/button>/);
-  assert.match(html, /id="conversion-download"[^>]*>Download<\/a>/);
+  assert.match(html, /data-result="download"/);
+  assert.match(html, /data-result="edit"[^>]*>Edit source<\/button>/);
   assert.match(html, /Processing stays on this computer/);
   assert.doesNotMatch(html, /LOCAL EDIT WORKSPACE/i);
   assert.doesNotMatch(html, /\b(?:Roadmap|6A1)\b/i);
@@ -634,14 +635,14 @@ test('Preview editor action stays secondary, explains eligible or ineligible sta
   const server = fs.readFileSync(path.join(ROOT, 'app-server.js'), 'utf8');
 
   assert.match(html, /class="preview-actions"[\s\S]*id="download-button" class="button primary big"[\s\S]*id="open-editor-button" class="button secondary editor-action big"[^>]*>Edit Source Video<\/button>/);
-  assert.match(styles, /\.button\.secondary\.editor-action\s*\{[^}]*color:\s*#fff;[^}]*background:\s*var\(--action-green\)/);
-  assert.match(styles, /\.button\.secondary\.editor-action:hover\s*\{[^}]*background:\s*var\(--action-green-hover\)/);
+  assert.match(styles, /\.button\.secondary\.editor-action\s*\{[^}]*color:\s*#fff;[^}]*background:\s*linear-gradient\(/);
+  assert.match(styles, /\.button\.secondary\.editor-action:hover\s*\{[^}]*background:\s*linear-gradient\(/);
   assert.match(app, /currentInfo\.kind !== 'media'[\s\S]*Collections and playlists cannot be opened/);
   assert.match(app, /currentInfo\.capabilities\?\.live\?\.isLive[\s\S]*Live media cannot be opened/);
   assert.match(app, /!\['av', 'video'\]\.includes\(content\)/);
   assert.match(app, /editorWorkspaceState\.active[\s\S]*Discard the current local workspace/);
   assert.match(app, /Edit Source Video opens the full media using the selected video source, profile, and resolution\. Time Range, Extras, and SponsorBlock apply only to Download\./);
-  assert.match(app, /openEditorNote\.textContent = state\.eligible \? EDITOR_ELIGIBLE_NOTE : state\.reason/);
+  assert.match(app, /openEditorNote\.textContent = state\.eligible[\s\S]*EDITOR_ELIGIBLE_NOTE[\s\S]*state\.reason/);
   assert.match(app, /openEditorNote\.hidden = !openEditorNote\.textContent/);
   assert.match(app, /function buildEditorAcquisition\(\)[\s\S]*content,[\s\S]*profile:[\s\S]*maxHeight:[\s\S]*sourceFormat:/);
   const dispatchStart = app.indexOf("new CustomEvent('lvovd:workspace-acquire-url'");

@@ -1190,12 +1190,13 @@
         renderTimeline();
       },
       show(visible) {
+        const wasHidden = editor.hidden;
         editor.hidden = !visible || !editPlan;
         if (!visible) {
           video.pause();
           if (animationFrame != null) root.cancelAnimationFrame(animationFrame);
           animationFrame = null;
-        } else if (editPlan) renderTimeline();
+        } else if (editPlan && wasHidden) renderTimeline();
       },
       reset() { resetEditor(); activeWorkspaceId = null; },
       hasCuts() { return Boolean(editPlan && !isFullDurationEditPlan(editPlan, durationSeconds)); }

@@ -70,9 +70,9 @@ async function until(predicate) {
 function deferred() {
   let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve };
 }
-function progress(id) {
+function progress(id, epoch = 0) {
   return new Promise((resolve, reject) => {
-    const req = http.get({ hostname: '127.0.0.1', port, path: `/api/processing/queue/progress?collection=${id}`,
+    const req = http.get({ hostname: '127.0.0.1', port, path: `/api/processing/queue/progress?collection=${id}&epoch=${epoch}`,
       headers: { Origin: `http://127.0.0.1:${port}`, 'Sec-Fetch-Site': 'same-origin' } }, res => {
       assert.equal(res.statusCode, 200); let buffer = '';
       const waiting = new Set();
@@ -95,6 +95,56 @@ function progress(id) {
     }); req.once('error', reject);
   });
 }
+
+test('previous-workbench recovery is bounded, origin protected, and rechecks active tabs and concurrent claims', async () => {
+  const a = await collection(), workspace = await upload(a.id, 'retained.mp4'); await reviewed(workspace);
+  await collection(); assert.equal((await post('/api/processing/collection', {})).status, 409);
+  const paths = ['/api/processing/collections', '/api/processing/collection/reopen', '/api/processing/collection/remove'];
+  for (const endpoint of paths) {
+    const body = endpoint.endsWith('/collections') ? {} : { collectionId: a.id };
+    for (const headers of [{ Origin: 'https://hostile.example' }, { Host: 'hostile.example' }, { 'Sec-Fetch-Site': 'cross-site' }]) assert.equal((await post(endpoint, body, headers)).status, 403);
+    assert.equal((await post(endpoint, { ...body, path: workspace.tempDir })).status, 400);
+  }
+  let list = await post(paths[0], {}); assert.equal(list.data.collections.length, 2);
+  assert.equal(JSON.stringify(list.data).includes(workspace.tempDir), false);
+  assert.deepEqual(list.data.collections[0].names, ['retained.mp4']); assert.equal(list.data.collections[0].available, true);
+  const active = await progress(a.id);
+  try {
+    for (const endpoint of paths.slice(1)) assert.equal((await post(endpoint, { collectionId: a.id })).status, 409, 'a stale disconnected descriptor cannot seize an active tab');
+  } finally { active.stop(); }
+  await until(() => !mediaWorkspaces.localProcessing.get(a.id).listener);
+  const reopened = await post(paths[1], { collectionId: a.id }); assert.equal(reopened.status, 200);
+  assert.equal(reopened.data.collection.workspaces[0].sourceAssetId, workspace.sourceAssetId);
+  assert.equal(reopened.data.collection.workspaces[0].processingRevision, 0);
+  for (const endpoint of paths.slice(1)) assert.equal((await post(endpoint, { collectionId: a.id })).status, 409, 'opening reserves the handoff to progress');
+  assert.equal((await request(`/api/processing/queue/progress?collection=${a.id}&epoch=0`)).status, 409);
+  const resumed = await progress(a.id, reopened.data.collection.connectionEpoch); resumed.stop(); await until(() => !mediaWorkspaces.localProcessing.get(a.id).listener);
+  assert.deepEqual(await fsp.readFile(workspace.assets.get(workspace.sourceAssetId).filePath), Buffer.from('retained.mp4'));
+});
+
+test('removing a previous workbench retains failed cleanup and capacity until scoped local retry succeeds', async () => {
+  const a = await collection(), workspace = await upload(a.id, 'cleanup.mp4'), other = await collection();
+  const survivor = await upload(other.id, 'survivor.mp4'), directory = workspace.tempDir;
+  const queue = mediaWorkspaces.localProcessing, originalFs = mediaWorkspaces.fs; let blocked = true;
+  mediaWorkspaces.fs = { ...originalFs, rm: async (file, options) => {
+    if (file === directory && blocked) throw Object.assign(new Error('Synthetic permission failure'), { code: 'EACCES' });
+    return fsp.rm(file, options);
+  } };
+  try {
+    const response = await post('/api/processing/collection/remove', { collectionId: a.id }); assert.equal(response.status, 200);
+    const retained = response.data.collections.find(item => item.id === a.id);
+    assert.equal(retained.files, 0); assert.equal(retained.cleanup[0].status, 'failed'); assert.equal(retained.available, true);
+    assert.equal((await post('/api/processing/collection', {})).status, 409);
+    assert.equal(queue.snapshot(a.id).sourceBytesReserved, Buffer.byteLength('cleanup.mp4survivor.mp4'));
+    assert.ok(mediaWorkspaces.get(survivor.id)); assert.equal((await fsp.stat(directory)).isDirectory(), true);
+    blocked = false;
+    const retry = await post('/api/processing/cleanup', { collectionId: a.id, workspaceId: workspace.id }); assert.equal(retry.status, 200);
+    assert.equal(retry.data.collection.sourceBytesReserved, Buffer.byteLength('survivor.mp4'));
+    await assert.rejects(fsp.stat(directory), { code: 'ENOENT' });
+    assert.equal((await post('/api/processing/collection', {})).status, 201);
+    assert.deepEqual(await fsp.readFile(survivor.assets.get(survivor.sourceAssetId).filePath), Buffer.from('survivor.mp4'));
+  } finally { blocked = false; await mediaWorkspaces.retryCleanup(workspace.id); mediaWorkspaces.fs = originalFs; }
+});
 
 for (const deletionFails of [false, true]) {
   test(`DELETE owns an open HTTP upload through writer close and ${deletionFails ? 'retained failed cleanup' : 'physical cleanup'}`, { timeout: 10000 }, async t => {

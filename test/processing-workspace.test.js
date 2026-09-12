@@ -112,6 +112,20 @@ test('custom suffix stays with the reviewed result and cannot rename a previous 
   const plain = await process({ filenameSuffix: '' }); assert.equal(plain.filename, 'source.mp4');
 });
 
+test('published processing facts retain effective stream actions independently of requested unchanged codecs and later results', async t => {
+  const { workspace, process } = await setup(t);
+  const encoded = await process(QUALITY, CUT), snapshot = encoded.processingSnapshot;
+  assert.equal(snapshot.settings.audio.codec, 'unchanged');
+  assert.deepEqual(snapshot.streams, [{ role: 'video', index: 0, action: 'encode' }, { role: 'audio', index: 1, action: 'encode' }]);
+  assert.ok(Object.isFrozen(snapshot.streams)); assert.ok(Object.isFrozen(snapshot.streams[1]));
+  assert.throws(() => { snapshot.streams[1].action = 'copy'; }, TypeError);
+  const unchanged = await process();
+  assert.equal(unchanged.noOp, true);
+  assert.deepEqual(unchanged.processingSnapshot.streams, [{ role: 'video', index: 0, action: 'copy' }, { role: 'audio', index: 1, action: 'copy' }]);
+  assert.equal(workspace.conversion.output, unchanged);
+  assert.equal(snapshot.streams[1].action, 'encode'); assert.equal(snapshot.retainedDurationSeconds, 6);
+});
+
 test('processing uses original without editor/proxy preparation; cuts and settings remain immutable after admission', async t => {
   const { manager, workspace, control, request, review } = await setup(t); control.mode = 'held';
   const body = await review(request(QUALITY, CUT)); await manager.processing.start(body);

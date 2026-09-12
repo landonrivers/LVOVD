@@ -15,9 +15,13 @@
   const entries = new Map(), cleanupIds = new Set(), removedIds = new Set(), removedDuringUpload = new Set();
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
+  let allDownloads = null;
   let uploadGeneration = 0;
-  let acquiring = false;
+  let removedCleanup = new Map(), cleanupBusy = false;
+  let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
   let sharedSettings = profiles.defaults();
+  let recoveryItems = [], recoveryBusy = false, recoveryVersion = 0;
+  let connectionEpoch = 0;
 
   const processingHelp = {
     relationship: ['Choose what to control', 'The fields are linked, but one value drives the calculation. Bitrate targets data per second; size sets a maximum budget and calculates video bitrate. CRF targets visual quality, so bitrate and size vary. You cannot independently promise all three.', 'Editing a calculated bitrate or size selects that target. Audio and retained duration then update the budget. For a first H.264 trial, try Quality 22 with Medium speed, then inspect the result.'],
@@ -71,8 +75,9 @@
   root.addEventListener('resize', positionHelp); document.addEventListener('scroll', positionHelp, true);
 
   function publish() {
+    updateRecoveryControls();
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(entries.size || upload || starting || cleanupIds.size), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || recoveryBusy || importStarting || intakeBatch?.active), importActive: Boolean(recoveryBusy || importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -127,7 +132,8 @@
       let option = options.get(id);
       if (!option) { option = document.createElement('option'); option.value = id; list.append(option); }
       const job = currentJob(id), name = entry.snapshot.source?.name || 'Preparing local file…';
-      const label = name + (job ? ' — ' + job.status : '');
+      const importing = intakeBatch?.items.find(item => item.id === id && !['ready', 'cancelled'].includes(item.status));
+      const label = name + (job ? ' — ' + job.status : importing ? ' — ' + importing.status : entry.snapshot.intakePending ? ' — waiting' : '');
       if (option.textContent !== label) option.textContent = label;
       if (option.selected !== (id === workspaceId)) option.selected = id === workspaceId;
     }
@@ -138,7 +144,155 @@
       const count = jobs.filter(job => job.status === state).length; return count ? `${count} ${state}` : null;
     }).filter(Boolean);
     $('#processing-collection-status').textContent = [uploadName ? `Copying ${uploadName}${pendingUploads.length ? ` · ${pendingUploads.length} waiting` : ''}` : null, ...counts].filter(Boolean).join(' · ');
+    renderProcessingResults();
   }
+  function renderProcessingResults() {
+    const list = $('#processing-results-list'), live = new Set();
+    let completed = 0, downloads = 0, queued = 0, running = 0, failed = 0, cancelled = 0;
+    // These IDs continue to identify the selected file's result, now within
+    // the single shared results area instead of a duplicate download card.
+    const selectedIds = { name: 'conversion-output-name', facts: 'conversion-output-facts', target: 'conversion-output-target', settings: 'conversion-output-settings', download: 'conversion-download' };
+    for (const element of list.querySelectorAll('[id]')) element.removeAttribute('id');
+    for (const [id, entry] of entries) {
+      const conversion = entry.snapshot.conversion || {}, output = conversion.output, job = currentJob(id);
+      if (!job && !output) continue;
+      live.add(id);
+      const active = jobActive(id), status = job?.status || conversion.status;
+      const unsuccessful = status === 'failed' || status === 'cancelled';
+      if (output?.downloadUrl) downloads++;
+      if (status === 'queued') queued++;
+      else if (active) running++;
+      else if (status === 'failed') failed++;
+      else if (status === 'cancelled') cancelled++;
+      else if (output && (!job || job.planKey === output.planKey)) completed++;
+      const details = describeProcessingResult(output, entry.profile?.draft().draftRevision);
+      const previous = Boolean(output && (active || unsuccessful || details.older));
+      const label = { queued: 'Queued', starting: 'Starting', running: 'Processing', cancelling: 'Cancelling', completed: 'Completed', ready: 'Completed', failed: 'Latest attempt failed', cancelled: 'Latest attempt cancelled' }[status] || status;
+      const progress = status === 'running' && Number.isFinite(conversion.percent) ? `${Math.floor(conversion.percent)}%` : null;
+      const sourceName = entry.snapshot.source?.name || 'Local file';
+      const view = {
+        source: `Source: ${sourceName}`, edit: `Edit source — ${sourceName}`,
+        status: [label, active && conversion.status === 'running' && conversion.message, progress,
+          (active || status === 'failed' || status === 'cancelled') && Number.isSafeInteger(job?.draftRevision) ? `Draft ${job.draftRevision}` : null,
+          previous && 'Previous result available',
+          status === 'failed' && (job?.failure?.explanation || conversion.failure?.explanation || job?.message)].filter(Boolean).join(' · '),
+        name: output?.filename || 'Awaiting processed file', url: output?.downloadUrl || '', previous,
+        ...details
+      };
+      let row = [...list.children].find(row => row.dataset.processingResult === id);
+      if (!row) {
+        row = $('#processing-result-template').content.firstElementChild.cloneNode(true); row.dataset.processingResult = id;
+        row.parts = Object.fromEntries([...row.querySelectorAll('[data-result]')].map(element => [element.dataset.result, element]));
+        row.parts.edit.addEventListener('click', () => {
+          selectEntry(id);
+          $('#processing-file-list').focus({ preventScroll: true });
+          $('#local-media-ready').scrollIntoView({ block: 'start', behavior: 'instant' });
+        });
+        list.append(row);
+      }
+      if (id === workspaceId && output) {
+        row.id = 'conversion-output';
+        for (const [part, selectedId] of Object.entries(selectedIds)) row.parts[part].id = selectedId;
+      }
+      // Preserve links/focus and avoid replacing unchanged result DOM for every
+      // other file's progress tick. The server-owned output is the authority.
+      const key = JSON.stringify(view);
+      if (row.resultKey === key) continue;
+      row.resultKey = key;
+      const { download, edit } = row.parts;
+      for (const part of ['name', 'source', 'status', 'format', 'brief', 'summary', 'facts', 'target', 'settings']) row.parts[part].textContent = view[part] || '';
+      row.parts.name.title = view.name;
+      row.dataset.previous = String(previous); row.parts.details.hidden = !output;
+      edit.setAttribute('aria-label', view.edit);
+      download.hidden = !view.url;
+      download.textContent = `Download ${view.format || 'file'}`;
+      if (view.url) { download.href = view.url; download.download = view.name; download.setAttribute('aria-label', `${download.textContent} — ${view.name}${previous ? ' (previous result)' : ''}`); }
+      else { download.removeAttribute('href'); download.removeAttribute('download'); download.removeAttribute('aria-label'); }
+    }
+    for (const row of [...list.children]) if (!live.has(row.dataset.processingResult)) row.remove();
+    $('#processing-results').hidden = !live.size;
+    const summary = [`${completed} of ${live.size} completed`, queued && `${queued} queued`, running && `${running} processing`, failed && `${failed} failed`, cancelled && `${cancelled} cancelled`, `${downloads} ${downloads === 1 ? 'download' : 'downloads'} available`].filter(Boolean).join(' · ');
+    if ($('#processing-results-summary').textContent !== summary) $('#processing-results-summary').textContent = summary;
+    const all = $('#processing-download-all');
+    all.hidden = live.size < 2;
+    all.disabled = Boolean(allDownloads) || discarding || completed !== live.size || downloads !== completed || queued > 0 || running > 0;
+    all.textContent = allDownloads ? `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…` : `Download All (${downloads})`;
+  }
+  function describeProcessingResult(output, currentRevision) {
+    if (!output) return {};
+    const inspection = output.inspection || {}, video = inspection.video, audio = inspection.audio;
+    const processed = output.processingSnapshot, settings = processed?.settings, effective = processed?.output || {};
+    const kind = inspection.container?.kind;
+    const format = kind === 'mp4' && effective.extension === 'm4a' && !video ? 'M4A'
+      : ({ mp3: 'MP3', mp4: 'MP4', mov: 'MOV', matroska: 'MKV', webm: 'WebM', wav: 'WAV', flac: 'FLAC', ogg: 'Ogg', avi: 'AVI' })[kind] || inspection.format || 'file';
+    const revision = output.draftRevision ?? processed?.draftRevision ?? output.provenance?.draftRevision;
+    const older = Number.isInteger(revision) && revision !== currentRevision;
+    const treatment = role => {
+      const stream = inspection[role]; if (!stream) return null;
+      const action = processed?.streams?.find(item => item.role === role)?.action;
+      return `${facts.familiarCodecName(stream.codec)} ${role}${output.noOp ? ' in unchanged original bytes' : action === 'encode' ? ' encoded' : action === 'copy' ? ' copied without re-encoding' : ''}`;
+    };
+    return { format, older,
+      brief: `${sizeInMB(output.size)} · ${facts.formatDuration(inspection.durationSeconds)}`,
+      summary: [`${sizeInMB(output.size)}`, facts.formatDuration(inspection.durationSeconds), output.noOp && 'Unchanged file — original bytes', treatment('video'), treatment('audio')].filter(Boolean).join(' · '),
+      facts: [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
+        video && `${facts.familiarCodecName(video.codec)} · ${video.width} × ${video.height}`,
+        video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
+        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · '),
+      target: `${output.noOp ? 'Existing original bytes; no processing required' : 'Processed from the original source'}`
+        + (Number.isInteger(revision) ? ` · Draft ${revision}` : '') + (older ? ' · Previous draft; this download has not changed.' : ''),
+      settings: settings ? [video && rateDescription(settings.rate), `Container: ${effective.container || kind || inspection.format}`,
+        video && treatment('video'), audio && treatment('audio'),
+        video && (settings.scale?.mode === 'fit' ? `Fit within ${settings.scale.width} × ${settings.scale.height}${settings.scale.allowUpscale ? '' : ' · no upscale'}`
+          : settings.scale?.mode === 'percent' ? `Scale ${settings.scale.percent}%` : ['width', 'height'].includes(settings.scale?.mode) ? `Fit ${settings.scale.mode} ${settings.scale[settings.scale.mode]}` : 'Scale unchanged'),
+        video && (settings.frameRate ? `${settings.frameRate} fps requested` : 'Frame rate unchanged'),
+        settings.audio?.bitrateKbps ? `${settings.audio.bitrateKbps} kbps audio requested` : null,
+        output.effectiveVideoBitrate ? `Final video bitrate budget ${(output.effectiveVideoBitrate / 1000).toFixed(1)} kbps` : null,
+        video?.bitRate > 0 ? `Measured video ${(video.bitRate / 1000).toFixed(1)} kbps average` : null,
+        output.attempts > 1 ? `Size fitting used ${output.attempts} attempts` : null].filter(Boolean).join(' · ') : ''
+    };
+  }
+  function revealProcessingResults() {
+    if ($('#processing-results').hidden) return;
+    $('#processing-results-title').focus({ preventScroll: true });
+    $('#processing-results').scrollIntoView({ block: 'start', behavior: 'instant' });
+  }
+  $('#processing-download-all').addEventListener('click', () => {
+    // Recheck the current authoritative results at the user's click. Never
+    // substitute a previous output for a failed/cancelled/latest pending job.
+    renderProcessingResults();
+    if ($('#processing-download-all').hidden || $('#processing-download-all').disabled) return;
+    const outputs = [...entries].flatMap(([id, entry]) => {
+      const output = entry.snapshot.conversion?.output;
+      return output?.downloadUrl ? [{ id, assetId: output.assetId, planKey: output.planKey, url: output.downloadUrl, filename: output.filename }] : [];
+    });
+    // Existing protected download endpoints own their readers. No new media
+    // copies, browser buffers, or provider requests. Pace browser requests so
+    // a full 20-file set is not dropped as one burst by the browser's limiter.
+    const run = { collectionId, outputs, index: 0, timer: null }; allDownloads = run;
+    const note = $('#processing-download-note'); note.hidden = false;
+    const requestNext = () => {
+      if (allDownloads !== run) return;
+      const current = collectionId === run.collectionId && outputs.every(item => {
+        const conversion = entries.get(item.id)?.snapshot.conversion, output = conversion?.output, job = currentJob(item.id);
+        return !removedIds.has(item.id) && output?.assetId === item.assetId && output.planKey === item.planKey && output.downloadUrl === item.url
+          && (!job || (job.status === 'completed' && job.planKey === output.planKey))
+          && !['running', 'validating', 'cancelling', 'failed', 'cancelled'].includes(conversion.status);
+      });
+      if (!current) {
+        allDownloads = null; renderProcessingResults();
+        note.textContent = `Results changed. Download All stopped after ${run.index} download ${run.index === 1 ? 'request' : 'requests'}.`; return;
+      }
+      const output = outputs[run.index++];
+      const link = document.createElement('a'); link.href = output.url; link.download = output.filename;
+      link.hidden = true; document.body.append(link); link.click(); link.remove();
+      note.textContent = `${run.index} of ${outputs.length} downloads requested. Your browser may ask to allow multiple downloads.`;
+      if (run.index < outputs.length) run.timer = setTimeout(requestNext, 250);
+      else allDownloads = null;
+      renderProcessingResults();
+    };
+    requestNext();
+  });
   function selectEntry(id) {
     const entry = entries.get(id); if (!entry) return;
     if (id === workspaceId) { if (!entry.previewAttempted) preparePreview(); return; }
@@ -166,10 +320,19 @@
   function acceptCollection(data) {
     if (!data || data.id !== collectionId) return;
     if (Number.isSafeInteger(data.revision)) { if (data.revision < collectionRevision) return; collectionRevision = data.revision; }
-    jobs = data.jobs || []; limits = data.limits || limits;
-    const live = new Set(), authoritativeIds = new Set((data.workspaces || []).map(item => item.id));
+    removedCleanup = new Map((data.removedCleanup || []).map(item => [item.workspaceId, item])); renderCleanup();
+    jobs = data.jobs || []; limits = data.limits || limits; intakeBatch = data.intake || null;
+    renderImport();
+    // Descriptors have no source or inspection until the real acquisition starts.
+    const workspaces = [...(data.workspaces || [])];
+    for (const item of intakeBatch?.items || []) if (!item.workspaceId && !item.removed && item.status === 'waiting') {
+      workspaces.push({ id: item.id, status: 'waiting', phase: 'waiting', message: item.message,
+        source: { name: item.title, size: null, origin: 'url' }, sourceAssetId: null, inspection: null,
+        activeOperation: null, editor: { eligible: false }, playback: null, intakePending: true });
+    }
+    const live = new Set(), authoritativeIds = new Set(workspaces.map(item => item.id));
     for (const id of removedIds) if (!authoritativeIds.has(id) && !removedDuringUpload.has(id)) removedIds.delete(id);
-    for (const dataWorkspace of data.workspaces || []) {
+    for (const dataWorkspace of workspaces) {
       if (removedIds.has(dataWorkspace.id)) continue;
       live.add(dataWorkspace.id);
       let entry = entries.get(dataWorkspace.id);
@@ -189,13 +352,73 @@
     renderFiles(); processingControls(); publish();
   }
   async function ensureCollection() {
+    if (recoveryBusy) throw new Error('Wait for the previous workbench to finish opening or removing.');
     if (collectionId) return collectionId;
     if (!collectionPromise) collectionPromise = post('/api/processing/collection', {}).then(data => {
       const collection = data.collection || data; collectionId = collection.id;
+      connectionEpoch = collection.connectionEpoch || 0;
       connect(); acceptCollection(collection); return collectionId;
-    }).finally(() => { collectionPromise = null; });
+    }).catch(error => { refreshRecovery(); throw error; }).finally(() => { collectionPromise = null; });
     return collectionPromise;
   }
+  function updateRecoveryControls() {
+    for (const button of panel.querySelectorAll('[data-recovery-action]')) {
+      const item = recoveryItems.find(item => item.id === button.dataset.recoveryId);
+      button.disabled = recoveryBusy || !item?.available || (button.dataset.recoveryAction === 'reopen'
+        && Boolean(entries.size || upload || starting || pendingUploads.length || removedCleanup.size || cleanupIds.size || importStarting))
+        || (button.dataset.recoveryAction === 'retry' && !item?.cleanup.some(cleanup => cleanup.status === 'failed'));
+    }
+    $('#workspace-recovery-refresh').disabled = recoveryBusy;
+  }
+  function renderRecovery() {
+    const list = $('#workspace-recovery-list'); list.replaceChildren();
+    for (const item of recoveryItems.filter(item => item.id !== collectionId)) {
+      const row = document.createElement('div'); row.className = 'workspace-recovery-row'; row.dataset.recoveryCollection = item.id;
+      const title = document.createElement('strong'); title.textContent = item.names.join(', ') || (item.cleanup.length ? 'Removed files awaiting cleanup' : 'Local workbench'); row.append(title);
+      const summary = document.createElement('div'); summary.className = 'help';
+      summary.textContent = `${item.files} ${item.files === 1 ? 'file' : 'files'}${item.cleanup.length ? ` · ${item.cleanup.length} pending/failed cleanups` : ''}${item.busy ? ' · Work still active' : ''}${item.available ? '' : ' · Open or being recovered in another tab; close it there, then refresh this list'}`; row.append(summary);
+      const actions = document.createElement('div'); actions.className = 'inline-actions';
+      const choices = [['reopen', !item.files && item.cleanup.length && !item.busy ? 'Open cleanup' : 'Reopen files']];
+      if (item.files || item.busy || !item.cleanup.length) choices.push(['remove', 'Remove workbench']);
+      if (item.cleanup.length) choices.push(['retry', 'Retry cleanup']);
+      for (const [action, label] of choices) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'button secondary mini'; button.textContent = label;
+        button.dataset.recoveryAction = action; button.dataset.recoveryId = item.id; button.addEventListener('click', () => recoverWorkbench(item, action)); actions.append(button);
+      }
+      row.append(actions); list.append(row);
+    }
+    $('#workspace-recovery').hidden = !list.childElementCount; updateRecoveryControls();
+  }
+  async function refreshRecovery() {
+    const version = ++recoveryVersion;
+    try {
+      const data = await post('/api/processing/collections', {});
+      if (version !== recoveryVersion) return;
+      recoveryItems = data.collections; renderRecovery();
+    } catch (error) { if (version === recoveryVersion) $('#workspace-recovery-status').textContent = error.message; }
+  }
+  async function recoverWorkbench(item, action) {
+    if (recoveryBusy) return;
+    if (action === 'remove' && !root.confirm('Remove this previous workbench, cancel its active work, and delete its temporary files and downloads?')) return;
+    recoveryBusy = true; ++recoveryVersion; publish();
+    $('#workspace-recovery-status').textContent = action === 'remove' ? 'Removing owned files; waiting for any active resources to close…' : action === 'retry' ? 'Retrying owned cleanup…' : 'Reopening retained files…';
+    try {
+      if (action === 'retry') {
+        for (const cleanup of item.cleanup) if (cleanup.status === 'failed') await post('/api/processing/cleanup', { collectionId: item.id, workspaceId: cleanup.workspaceId });
+        $('#workspace-recovery-status').textContent = 'Cleanup retried. Any remaining owned files stay listed.'; return;
+      }
+      const data = await post(`/api/processing/collection/${action}`, { collectionId: item.id });
+      if (action === 'reopen') {
+        closeSource(); collectionId = item.id; connectionEpoch = data.collection.connectionEpoch; collectionRevision = -1; ++generation;
+        // HTTP only claims the handoff. Fresh progress supplies files/results;
+        // a delayed acknowledgement must not restore already-removed assets.
+        connect();
+      }
+      $('#workspace-recovery-status').textContent = action === 'remove' ? 'Removal requested. Any pending cleanup remains listed until deletion succeeds.' : '';
+    } catch (error) { $('#workspace-recovery-status').textContent = error.message; }
+    finally { recoveryBusy = false; await refreshRecovery(); publish(); }
+  }
+  $('#workspace-recovery-refresh').addEventListener('click', refreshRecovery);
   function rateMode() { return settingsForm.querySelector('input[name="processing-rate"]:checked').value; }
   function readSettings() {
     const settings = profile?.state().settings || profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
@@ -306,8 +529,9 @@
     $('#processing-file-list').replaceChildren();
     sharedSettings = profiles.defaults(); $('#processing-apply-all').checked = true;
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
-    progress.hidden = !upload; $('#workspace-failure').hidden = true; $('#conversion-output').hidden = true;
-    $('#conversion-download').removeAttribute('href'); $('#conversion-warnings').replaceChildren();
+    progress.hidden = !upload; $('#workspace-failure').hidden = true;
+    clearTimeout(allDownloads?.timer); allDownloads = null;
+    $('#processing-results-list').replaceChildren(); $('#processing-download-note').hidden = true; $('#conversion-warnings').replaceChildren();
     settingsForm.reset(); message(text); renderFiles(); publish();
   }
   function appendFact(list, label, value) {
@@ -331,6 +555,7 @@
     for (const [label, value] of facts.inspectionFacts(data)) appendFact(list, label, value);
   }
   function processingControls() {
+    renderProcessingResults();
     const { previewRequest = false, previewError = null } = entries.get(workspaceId) || {};
     const state = snapshot?.conversion || {}, current = profile?.state();
     const busy = Boolean(snapshot?.activeOperation || operationRequest || previewRequest || discarding || jobActive());
@@ -342,7 +567,7 @@
     cancel.disabled = state.status === 'cancelling' || discarding;
     $('#processing-reset').disabled = !profile || discarding;
     $('#processing-process-all').hidden = entries.size < 2;
-    $('#processing-process-all').textContent = `Process All Files (${entries.size})`;
+    $('#processing-process-all').textContent = `Review All Files (${entries.size})`;
     $('#processing-process-all').disabled = batchBusy || Boolean(upload || starting);
     $('#processing-cancel-all').hidden = !jobs.some(job => ['queued', 'starting', 'running', 'cancelling'].includes(job.status));
     $('#processing-apply-all').disabled = !profile || discarding;
@@ -374,34 +599,6 @@
       editor.hasPendingWork() ? 'Pending cut selection is not applied until Remove Section.' : null
     ].filter(Boolean).join(' · ') : '';
     $('#processing-draft-status').hidden = !$('#processing-draft-status').textContent;
-    const output = state.output;
-    $('#conversion-output').hidden = !output;
-    if (output) {
-      const inspection = output.inspection || {}, video = inspection.video, audio = inspection.audio;
-      $('#conversion-output-name').textContent = output.filename;
-      $('#conversion-output-facts').textContent = [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
-        video && facts.familiarCodecName(video.codec), video && `${video.width} × ${video.height}`,
-        video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
-        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · ');
-      const revision = output.draftRevision ?? output.processingSnapshot?.draftRevision ?? output.provenance?.draftRevision;
-      $('#conversion-output-target').textContent = `${output.noOp ? 'Existing original bytes; no processing required' : 'Processed from the original source'}`
-        + (Number.isInteger(revision) ? ` · Draft ${revision}` : '')
-        + (Number.isInteger(revision) && revision !== current?.draftRevision ? ' · Previous draft; this download has not changed.' : '');
-      $('#conversion-download').href = output.downloadUrl; $('#conversion-download').download = output.filename;
-      const processed = output.processingSnapshot, actualSettings = processed?.settings;
-      $('#conversion-output-settings').textContent = actualSettings ? [video && rateDescription(actualSettings.rate),
-        `Container: ${actualSettings.container === 'source' ? 'keep source' : actualSettings.container}`,
-        video && `Requested ${actualSettings.videoCodec === 'unchanged' ? 'unchanged video codec' : facts.familiarCodecName(actualSettings.videoCodec)}`,
-        video && (actualSettings.scale?.mode === 'fit' ? `Fit within ${actualSettings.scale.width} × ${actualSettings.scale.height}${actualSettings.scale.allowUpscale ? '' : ' · no upscale'}`
-          : actualSettings.scale?.mode === 'percent' ? `Scale ${actualSettings.scale.percent}%`
-            : ['width', 'height'].includes(actualSettings.scale?.mode) ? `Fit ${actualSettings.scale.mode} ${actualSettings.scale[actualSettings.scale.mode]}` : 'Scale unchanged'),
-        video && (actualSettings.frameRate ? `${actualSettings.frameRate} fps requested` : 'Frame rate unchanged'),
-        audio && (actualSettings.audio?.codec === 'unchanged' ? 'Audio codec unchanged' : `${facts.familiarCodecName(actualSettings.audio?.codec)} audio`),
-        actualSettings.audio?.bitrateKbps ? `${actualSettings.audio.bitrateKbps} kbps audio` : null,
-        output.effectiveVideoBitrate ? `Final video bitrate budget ${(output.effectiveVideoBitrate / 1000).toFixed(1)} kbps` : null,
-        video?.bitRate > 0 ? `Measured video ${(video.bitRate / 1000).toFixed(1)} kbps average` : null,
-        output.attempts > 1 ? `Size fitting used ${output.attempts} attempts` : null].filter(Boolean).join(' · ') : '';
-    }
   }
   function accept(data) {
     if (!data || data.id !== workspaceId || discarding) return;
@@ -438,14 +635,14 @@
   }
   function connect() {
     closeSource();
-    const eventSource = new root.EventSource(`/api/processing/queue/progress?collection=${encodeURIComponent(collectionId)}`); source = eventSource;
+    const eventSource = new root.EventSource(`/api/processing/queue/progress?collection=${encodeURIComponent(collectionId)}&epoch=${connectionEpoch}`); source = eventSource;
     eventSource.onmessage = event => {
       if (source !== eventSource) return;
       try { acceptCollection(JSON.parse(event.data)); } catch { message('Unreadable local workspace update.', true); }
     };
     eventSource.onerror = () => {
       if (source !== eventSource) return;
-      if (!entries.size && !upload && !starting) {
+      if (!entries.size && !upload && !starting && !importStarting && !intakeBatch?.active && !removedCleanup.size && !cleanupIds.size) {
         // An empty disconnected collection is reclaimable on the server.
         // A later intake creates one fresh collection instead of reusing a
         // permanently expired ID or keeping a reconnect loop alive.
@@ -460,9 +657,9 @@
     if (!response.ok && response.status !== 404) throw new Error(data.error || 'Remove File could not complete.');
     return data;
   }
-  function entryHasWork(entry) { return Boolean(entry?.profile?.hasChanges() || Object.values(entry?.profile?.state().editorState?.pendingCut || {}).some(Number.isFinite)
+  function entryHasWork(entry) { return Boolean(entry?.snapshot.intakePending || entry?.profile?.hasChanges() || Object.values(entry?.profile?.state().editorState?.pendingCut || {}).some(Number.isFinite)
     || entry?.snapshot.activeOperation || entry?.snapshot.playback || entry?.snapshot.conversion?.output || entry?.snapshot.editedOutput || jobActive(entry?.snapshot.id)); }
-  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || cleanupIds.size); }
+  function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || importStarting || intakeBatch?.active || removedCleanup.size || cleanupIds.size); }
   async function discard() {
     if (discarding) return;
     saveSelected();
@@ -475,10 +672,10 @@
     message('Removing local file…'); processingControls();
     try {
       const data = await removeOwned(id);
-      if (data.cleanup && data.cleanup.status !== 'complete') cleanupIds.add(id);
+      if (!entry?.seenInCollection && data.cleanup && data.cleanup.status !== 'complete') cleanupIds.add(id);
       entries.delete(id);
       if (workspaceId === id) { workspaceId = null; profile = null; snapshot = null; discarding = false; if (entries.size) selectEntry(entries.keys().next().value); else reset(); }
-      $('#workspace-retry-cleanup').hidden = !cleanupIds.size;
+      renderCleanup();
       renderFiles(); message(`Local file removed. ${data.cleanup?.message || ''}`); publish();
     } catch (error) {
       removedIds.delete(id); if (!entries.has(id)) entries.set(id, entry);
@@ -536,6 +733,7 @@
     xhr.send(file);
   }
   function addFiles(files) {
+    if (recoveryBusy) return message('Wait for the previous workbench to finish opening or removing.', true);
     if (!files.length) return;
     const maximum = limits.maxEntries || 20;
     if (files.length + entries.size + pendingUploads.length + (upload || starting ? 1 : 0) > maximum) return message(`Add at most ${maximum} files in total. No files were added.`, true);
@@ -546,7 +744,7 @@
     publish(); renderFiles();
   }
   async function acquire(detail) {
-    if (!detail || entries.size || upload || starting || cleanupIds.size) { publish(); return; }
+    if (!detail || entries.size || upload || starting || cleanupIds.size || removedCleanup.size) { publish(); return; }
     const token = ++generation; starting = true; acquiring = true; publish(); intake.hidden = true; progress.hidden = false;
     message('Acquiring the selected source once for local use…'); panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try {
@@ -700,7 +898,7 @@
   retry.addEventListener('click', reviewPlan);
   function invalidateBatch() {
     batchVersion++; batchPlans = []; $('#processing-batch-submit').disabled = true;
-    if (!$('#processing-batch-review').hidden) $('#processing-batch-files').textContent = 'Files or settings changed. Choose Process All Files to review the current drafts again.';
+    if (!$('#processing-batch-review').hidden) $('#processing-batch-files').textContent = 'Files or settings changed. Choose Review All Files to review the current drafts again.';
   }
   function batchCanSubmit() {
     const selected = batchPlans.filter(item => item.selected?.checked);
@@ -782,11 +980,14 @@
   $('#processing-batch-submit').addEventListener('click', async () => {
     batchCanSubmit(); if ($('#processing-batch-submit').disabled) return;
     const chosen = batchPlans.filter(item => item.selected.checked);
+    const id = collectionId, token = generation, initiatingFocus = document.activeElement;
     batchBusy = true; batchCanSubmit(); processingControls();
     try {
       const requests = chosen.map(item => ({ ...item.entry.profile.submit(item.plan), acknowledgedWarnings: item.warnings.filter(box => box.checked).map(box => box.value) }));
       const data = await post('/api/processing/queue', { collectionId, entries: requests });
+      if (collectionId !== id) return;
       acceptCollection(data.collection || data); invalidateBatch(); $('#processing-batch-review').hidden = true;
+      if (token === generation && (document.activeElement === initiatingFocus || document.activeElement === document.body)) revealProcessingResults();
     } catch (error) { message(error.message, true); invalidateBatch(); }
     finally { batchBusy = false; processingControls(); }
   });
@@ -800,6 +1001,7 @@
       const data = await post('/api/processing/queue', { collectionId, entries: [{ ...submitted,
         acknowledgedWarnings: [...$('#conversion-warnings').querySelectorAll('input:checked')].map(box => box.value) }] });
       acceptCollection(data.collection || data);
+      if (token === generation) revealProcessingResults();
     } catch (error) { if (token === generation) { $('#conversion-plan-title').textContent = error.message; plan = null; } }
     finally { if (token === generation) { operationRequest = false; processingControls(); } }
   });
@@ -815,11 +1017,26 @@
       finally { if (token === generation) processingControls(); }
     });
   }
+  function renderCleanup() {
+    const list = $('#workspace-removed-cleanup'); list.replaceChildren(); list.hidden = !removedCleanup.size;
+    for (const item of removedCleanup.values()) {
+      const row = document.createElement('li'); row.textContent = item.name + ' — cleanup ' + item.status + '. ' + item.message; list.append(row);
+    }
+    const button = $('#workspace-retry-cleanup'); button.hidden = !cleanupIds.size && !removedCleanup.size;
+    button.disabled = cleanupBusy || (!cleanupIds.size && ![...removedCleanup.values()].some(item => item.status === 'failed'));
+  }
   $('#workspace-retry-cleanup').addEventListener('click', async () => {
-    const button = $('#workspace-retry-cleanup'); if (!cleanupIds.size) return; button.disabled = true;
-    try { for (const id of cleanupIds) { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') cleanupIds.delete(id); message(data.cleanup?.message || 'Temporary cleanup complete.'); } button.hidden = !cleanupIds.size; publish(); }
-    catch (error) { message(error.message, true); }
-    finally { button.disabled = false; }
+    if (cleanupBusy) return; cleanupBusy = true; renderCleanup();
+    const owner = collectionId;
+    try {
+      for (const item of [...removedCleanup.values()]) if (item.status === 'failed') {
+        const data = await post('/api/processing/cleanup', { collectionId: owner, workspaceId: item.workspaceId });
+        if (collectionId === owner) acceptCollection(data.collection);
+      }
+      for (const id of cleanupIds) { const data = await removeOwned(id); if (!data.cleanup || data.cleanup.status === 'complete') cleanupIds.delete(id); }
+      publish();
+    } catch (error) { if (cleanupIds.size || removedCleanup.size) message(error.message, true); }
+    finally { cleanupBusy = false; renderCleanup(); }
   });
   choose.addEventListener('click', () => input.click());
   $('#processing-add-files').addEventListener('click', () => input.click());
@@ -840,8 +1057,44 @@
     addFiles([...(event.dataTransfer?.files || [])]);
   });
   root.addEventListener('beforeunload', event => { if (hasTemporaryWork()) { event.preventDefault(); event.returnValue = ''; } });
+  function renderImport() {
+    $('#processing-import').hidden = !intakeBatch && !importStarting;
+    $('#processing-import-status').textContent = intakeBatch?.active || !importStarting ? intakeBatch?.message || '' : 'Submitting selected items…';
+    if (intakeBatch) $('#processing-import-status').textContent += ` ${intakeBatch.items.filter(item => item.status === 'ready' && !item.removed).length} of ${intakeBatch.items.length} ready.`;
+    $('#processing-import-cancel').hidden = !intakeBatch?.active;
+    $('#processing-import-cancel').disabled = intakeBatch?.status === 'cancelled';
+    const list = $('#processing-import-items'); list.replaceChildren();
+    for (const item of intakeBatch?.items || []) {
+      const row = document.createElement('li'); row.textContent = item.title + ' — ' + (item.removed ? 'Removed' : item.status) + (item.message === 'Not started' || item.message === 'Cancelled — not started' ? ' (not started)' : '');
+      if (item.failure && (!item.workspaceId || item.removed)) {
+        const detail = document.createElement('div'); detail.textContent = [item.failure.title, item.failure.explanation, item.failure.help].filter(Boolean).join(' '); row.append(detail);
+      }
+      list.append(row);
+    }
+  }
+  async function importPlaylist(detail) {
+    if (importStarting || intakeBatch?.active) { publish(); return; }
+    const token = {}; importRequest = token; importStarting = true; renderImport(); publish();
+    try {
+      const id = await ensureCollection();
+      const data = await post('/api/processing/import', { collectionId: id, requestId: root.crypto.randomUUID(), ...structuredClone(detail) });
+      if (importRequest !== token || collectionId !== id) return;
+      acceptCollection(data.collection);
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) { if (importRequest === token) message(error.message, true); }
+    finally { if (importRequest === token) { importStarting = false; renderImport(); publish(); } }
+  }
+  $('#processing-import-cancel').addEventListener('click', async () => {
+    if (!intakeBatch?.active) return;
+    const id = collectionId, requestId = intakeBatch.id;
+    try {
+      const data = await post('/api/processing/import/cancel', { collectionId: id, requestId });
+      if (collectionId === id) acceptCollection(data.collection);
+    } catch (error) { message(error.message, true); }
+  });
+  document.addEventListener('lvovd:workspace-import-playlist', event => importPlaylist(event.detail));
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
   root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
-    collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits) }; } };
-  publish();
+    collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
+  publish(); refreshRecovery();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

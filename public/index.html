@@ -285,6 +285,17 @@
           <button id="media-choose-button" class="button secondary" type="button">Choose Media Files</button>
         </div>
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+        <section id="workspace-recovery" class="workspace-progress" aria-label="Previous local workbenches" hidden>
+          <div class="progress-head"><strong>Previous local workbenches</strong><button id="workspace-recovery-refresh" class="text-button" type="button">Refresh list</button></div>
+          <p class="help">Reopen retained files and downloads, or remove them to free temporary storage. Draft cuts and output settings reset after reloading; existing downloads and queued work keep their settings.</p>
+          <div id="workspace-recovery-list"></div>
+          <p id="workspace-recovery-status" class="help" role="status"></p>
+        </section>
+        <section id="processing-import" class="workspace-progress" aria-label="Playlist import" hidden>
+          <div class="progress-head"><strong id="processing-import-status" role="status"></strong><button id="processing-import-cancel" class="text-button" type="button">Cancel Import</button></div>
+          <ul id="processing-import-items" class="help"></ul>
+        </section>
+        <ul id="workspace-removed-cleanup" class="help" aria-label="Removed file cleanup" hidden></ul>
         <button id="workspace-retry-cleanup" class="text-button" type="button" hidden>Retry Removed File Cleanup</button>
         <section id="workspace-progress" class="workspace-progress" hidden>
           <div class="progress-head"><strong id="workspace-progress-label">Copying local media…</strong><button id="workspace-cancel" class="text-button" type="button">Cancel / Discard</button></div>
@@ -525,7 +536,7 @@
                 <p id="processing-filename-preview" class="help"></p>
               </div>
               <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process Selected File</button>
-              <button id="processing-process-all" class="button primary processing-primary processing-all" type="button" hidden>Process All Files</button>
+              <button id="processing-process-all" class="button primary processing-primary processing-all" type="button" hidden>Review All Files</button>
               <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
               <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>
               <button id="processing-cancel-all" class="text-button" type="button" hidden>Cancel All</button>
@@ -534,17 +545,37 @@
               <h4 id="processing-batch-title">Review files to process</h4>
               <p class="help">Files run one at a time in list order. Select the reviewed files and acknowledge their warnings. Unchanged files download original bytes. Queued files and successful current drafts are excluded; Process Selected File can run a completed draft again. A failure does not stop the remaining files.</p>
               <div id="processing-batch-files"></div>
-              <button id="processing-batch-submit" class="button secondary" type="button" disabled>Queue reviewed files</button>
+              <button id="processing-batch-submit" class="button primary processing-primary processing-queue-action" type="button" disabled>Queue And Process</button>
               <button id="processing-batch-close" class="text-button" type="button">Close review</button>
             </section>
             <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
             <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
             <p id="output-cleanup-status" class="help" role="status"></p>
             <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
-            <section id="conversion-output" class="editor-edited-output" aria-live="polite" hidden>
-              <div><p class="eyebrow">PROCESSED FILE</p><h4 id="conversion-output-name"></h4><p id="conversion-output-facts" class="help"></p><p id="conversion-output-target" class="help"></p><p id="conversion-output-settings" class="help"></p></div>
-              <a id="conversion-download" class="button secondary">Download</a>
-            </section>
+          </section>
+          <section id="processing-results" class="processing-results" aria-labelledby="processing-results-title" hidden>
+            <div class="progress-head">
+              <div><h3 id="processing-results-title" tabindex="-1">Processing results</h3><span id="processing-results-summary" class="help" role="status"></span></div>
+              <button id="processing-download-all" class="button primary" type="button" hidden>Download All</button>
+            </div>
+            <p id="processing-download-note" class="help" role="status" hidden></p>
+            <div id="processing-results-list" tabindex="0" role="region" aria-label="Processed files"></div>
+            <template id="processing-result-template">
+              <article class="processing-result">
+                <div class="processing-result-main">
+                  <div class="processing-result-title"><span data-result="format" class="processing-result-format"></span><h4 data-result="name"></h4></div>
+                  <div class="processing-result-meta"><span data-result="status" class="processing-result-status"></span><span data-result="brief"></span></div>
+                  <details data-result="details"><summary>Result details</summary>
+                    <p data-result="source" class="help processing-result-source"></p><p data-result="summary" class="help"></p>
+                    <p data-result="facts" class="help"></p><p data-result="target" class="help"></p><p data-result="settings" class="help"></p>
+                  </details>
+                </div>
+                <div class="processing-result-actions">
+                  <a data-result="download" class="button primary processing-result-download" hidden></a>
+                  <button data-result="edit" class="text-button" type="button">Edit source</button>
+                </div>
+              </article>
+            </template>
           </section>
         </section>
       </section>
