@@ -6,7 +6,7 @@ You're here because you don't trust any of those browser extensions or sketchy s
 
 ![LVOVD in use](example.png)  
 
-LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring one video into the local editor, and **let your own computer do the work**.
+LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring local files into the workbench, and **let your own computer do the work**.
 
 > Use LVOVD only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
@@ -106,6 +106,8 @@ http://localhost:3000
 
 ## What it can do
 
+**v2.6.0 — Local Media Workbench & Batch Processing.** See the [release notes](docs/releases/v2.6.0.md) for the changes, update instructions, and supported scope.
+
 - Download **Video + Audio**, **Video Only**, **Audio Only**, or **Extras Only**.
 - Prefer editor-friendly **H.264/AAC MP4** when the source provides it, or choose **Maximum Quality** to preserve the best available source streams.
 - Export audio as **Source Audio, M4A/AAC, MP3, Opus, FLAC, or WAV**. Converted formats are created locally with FFmpeg after source audio is downloaded.
@@ -114,10 +116,34 @@ http://localhost:3000
 - Preview playlists/collections and choose individual entries.
 - Optionally use yt-dlp's SponsorBlock integration to mark or remove supported segment categories.
 - Show real yt-dlp download progress, speed, ETA, and processing stages.
-- Choose or drop one local video into a temporary editing workspace.
+- Choose or drop multiple video/audio files into the unified **Local Media** workbench; select a file in **Files** to work on it. Source facts and output settings sit alongside the visual timeline; Media Details remains expandable.
+- Use **Process Selected File** to apply committed cuts and output settings directly to the original working source. H.264 controls offer quality, average bitrate, or a maximum complete output size, with aspect-preserving fit and optional frame-rate reduction. Applicable outputs include MP4, MOV, MKV, M4A/AAC, and MP3.
 - Use **Edit Source Video** after an eligible single, non-live URL Preview. URL Edit respects the selected source, Compatible/Maximum profile, resolution, and Manual source choice, then acquires that source once into temporary workspace storage.
+- Use **Add Selected to Local Media (N)** after playlist Preview to import selected video items in Preview order. Video + Audio / Video Only, Compatible / Maximum, and resolution choices apply to acquisition. Review the imported files, then explicitly process them; import never starts final processing or adds Download History.
 - Visually trim the overall Start/End, remove and restore multiple middle sections, and navigate with a zoomable/pannable timeline, draggable handles, keyboard controls, and exact time fields.
 - Create and download a real edited result while leaving the workspace source unchanged.
+
+Defaults keep codec, container, picture, cadence, and audio unchanged. A complete no-op downloads the existing owned bytes. Cuts or encoding settings can require re-encoding even when the codec stays H.264; other source codecs require an explicit supported choice. Pending cuts remain pending until applied. Each file keeps its own requested settings, cuts, pending cut, playhead, and zoom in a temporary profile; changing them marks an existing result as an older revision and never processes automatically.
+
+Selecting a video in the **Files** list automatically prepares seekable playback from that original workspace source. Compatible media plays directly; a local proxy is prepared only when required. **Retry Preview** is available after a failure, and final processing always reads the original. **Reset File** resets cuts/settings while keeping that source and any correctly labelled prior result. **Remove File** invalidates only the selected workspace, cancels its queued/running work, and attempts owned-file cleanup. Cancellation retains the editing session and previous successful output. Open downloads and referenced no-op bytes remain owned until safe retirement; failed cleanup blocks further file creation until retry succeeds.
+
+**Process Selected File** queues the selected reviewed draft. **Review All Files** first lists each file and its warnings; choose the eligible drafts to queue. Already queued/running files and drafts with a successful download are excluded from that batch review. Complete unchanged files use their original bytes without an encode. The queue runs one processing job at a time; **Cancel All** cancels waiting work and requests termination of the active job. Later edits do not change an already queued snapshot, and a failed file does not discard other results. Each file retains its own Download. **Queue And Process** submits the reviewed selection and brings the single **Processing results** area into view. Compact rows lead with the actual output filename and a format-labelled download action; **Result details** and **Edit source** stay available without a duplicate selected-file download card. **Download All (N)** requests the existing files separately once all listed latest attempts have succeeded. It does not replace failed or cancelled attempts with their previous results. Removing or replacing a captured result stops remaining requests; requests already handed to the browser are not recalled. Your browser may ask for multiple-download permission, and LVOVD reports downloads requested rather than claiming files were saved. After reloading, **Previous local workbenches** lets you reopen retained files/downloads or explicitly remove an unused workbench. Draft cuts/settings reset; existing downloads and queued work keep their original settings. Removal cancels owned work; failed cleanup stays reachable and reserves capacity until deletion succeeds.
+
+**Apply output settings to all** is one checkbox, enabled by default for a fresh workbench. Checking it copies every output setting, including the filename suffix, to all files; while checked, further setting changes and newly added files use those settings. Uncheck to edit one file independently. Cuts and view state stay individual, queued work and previous downloads stay unchanged, and nothing starts automatically. Every destination is reviewed against its own media; incompatible settings stay visible for correction. **Reset File** turns sharing off and resets only the selected file.
+
+**Cancel Import** stops the active playlist acquisition and leaves later items unstarted; completed imports and unrelated files/downloads remain. Removing a pending or acquiring file also stops the remaining import. Any acquisition or intake-inspection failure stops the batch without retrying or fetching later items. Playback preparation is separate and runs only for the selected file. Flat Preview cannot prove each item's capabilities; unresolved, known live/protected, or unavailable entries cannot be imported. Remote audio-only intake and Manual format IDs for playlists are not supported.
+
+A workbench accepts up to **20 files**, uploaded or acquired one at a time. A playlist selection must fit in full, including existing files and pending cleanup. Waiting items reserve slots; the active acquisition reserves a fixed allowance from the remaining source budget, including separate streams and merge intermediates, until adoption and cleanup settle. The server allows two workbenches, at most 20 queued/running processing jobs, and **100 GiB of aggregate original-source reservations** across them. Removed sources with pending cleanup still consume that budget. This is not a total disk-space guarantee: proxies, retained/results, attempts, and pass logs consume additional temporary storage under existing per-workspace limits. Queued jobs expire after one hour without starting; sources and previous downloads remain available for another review under normal workspace expiry. Draft profiles reset on page reload. While the same server is running, retained sources, admitted jobs, results, and cleanup can be reopened explicitly. Profiles and queue state are not persisted across server restarts.
+
+Video bitrate, audio bitrate, and file size stay visible together. Enter a video bitrate to estimate size, or a maximum size to calculate the video budget; cuts and audio settings update that calculation. The summary distinguishes exact original bytes, approximate bitrate/remux estimates, and variable quality-based size. Scale includes ordinary dimension presets, width/height-only choices, and 50%/25%; actual dimensions are labelled as adjusted to fit aspect. No AI upscaling is included.
+
+The **?** controls explain quality, bitrate, audio, file size, encoding speed, and two passes, with suggested trial values. Hover or focus for help; click/tap to keep it open, and Escape or click outside to dismiss. Bitrate is an average target and can undershoot, especially in one pass. Review and completed-result sizes use decimal MB consistently; the result also shows exact bytes and the measured video bitrate when available. The selected Control identifies which value drives the linked calculation; CRF quality cannot independently guarantee bitrate and size.
+
+**Add a suffix**, beside **Process Selected File**, controls the reviewed download name (default `-processed`; uncheck for no suffix). It also names byte-identical no-op downloads without changing or copying source bytes. A new suffix creates a new draft and never renames an earlier completed result.
+
+Maximum size uses decimal MB (1 MB = 1,000,000 bytes) per complete output, retained duration, an audio budget, and container reserve. H.264 runs two passes directly from the original, with at most one bitrate correction; an oversized result is rejected. It never silently lowers resolution, removes audio, or downmixes to meet the limit. Temporary storage includes input, optional preview, previous/new results, pass logs, and cleanup-pending files. Local uploads and explicitly imported playlist sources use the same sequential processing queue.
+
+Default video encoding uses H.264, CRF 18, medium, yuv420p, and minimal padding for odd dimensions; explicit quality/rate settings override those defaults. AAC defaults to 128/256/512 kbps for mono/stereo/supported 5.1; MP3 defaults to quality 0 for mono/stereo. Encoding retains 44.1/48 kHz, otherwise resamples to 48 kHz with a notice. Copying retains source parameters. Known HDR, alpha, unsupported transforms, and unsupported channel changes are refused for the affected target. Some native AAC builds cannot produce a verifiable `5.1(side)` layout; such results fail validation and are not downloadable. See the [workspace contract](docs/local-media-workspace.md) for timing, omission, and temporary-storage limits.
 
 ## Source compatibility
 
@@ -142,7 +168,7 @@ LVOVD does **not** bypass DRM, region restrictions, logins, or access controls.
 
 Video-only mode follows the same idea but produces no audio track.
 
-For **Edit Source Video**, Compatible/Maximum, the selected resolution, and any Manual source override control which source is acquired into the temporary editor workspace. They do not change the edited-output codec policy: edited results are currently H.264 MP4 with AAC when the acquired source has audio.
+For **Edit Source Video**, Compatible/Maximum, the selected resolution, and any Manual source override control which source is acquired into the temporary editor workspace. Local output settings are selected separately in the workbench and do not cause another acquisition.
 
 ### Audio
 
@@ -152,11 +178,11 @@ Choosing MP3, M4A/AAC, Opus, FLAC, or WAV still downloads source audio first, th
 
 ### Local video editing
 
-The editor accepts one chosen/dropped local video, or an eligible single, non-live URL Preview through **Edit Source Video**. URL editing acquires the selected source once; it does not apply the Download-only Time Range, Extras, or SponsorBlock controls.
+Select a local video from the workbench to edit it, or open an eligible single, non-live URL Preview through **Edit Source Video**. URL editing acquires the selected source once; it does not apply the Download-only Time Range, Extras, or SponsorBlock controls.
 
 The browser player and timeline let you set reversible outer Start/End bounds, remove and restore middle sections, seek, zoom, pan, drag handles, use exact time fields, and adjust focused handles with the keyboard. The final retained ranges stay in their original chronological order.
 
-**Create Edited File** produces a high-quality H.264 MP4 locally, with AAC when the source has audio. LVOVD re-encodes edited output to closely honor arbitrary authored cut times. This is not lossless, and it does not preserve arbitrary source codecs. The workspace source remains unchanged.
+Choose H.264, MP4, and AAC (when audio exists) with Automatic rate for the existing high-quality H.264 MP4 policy, with AAC when the source has audio. **Process Selected File** applies the committed cuts and these settings together. LVOVD re-encodes cuts to closely honor arbitrary authored boundaries; this is not lossless and does not imply frame-perfect output. The workspace source remains unchanged. Other source codecs need an explicit supported choice when cuts require encoding; the planner never silently substitutes H.264.
 
 ### Extras, ranges, chapters, and subtitles
 

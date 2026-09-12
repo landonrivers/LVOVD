@@ -11,20 +11,28 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('release metadata consistently prepares the 2.5.0 feature release', () => {
+test('release metadata consistently prepares the 2.6.0 feature release', () => {
   const packageJson = JSON.parse(read('package.json'));
   const packageLock = JSON.parse(read('package-lock.json'));
 
-  assert.equal(packageJson.version, '2.5.0');
-  assert.equal(packageLock.version, '2.5.0');
-  assert.equal(packageLock.packages[''].version, '2.5.0');
+  assert.equal(packageJson.version, '2.6.0');
+  assert.equal(packageLock.version, '2.6.0');
+  assert.equal(packageLock.packages[''].version, '2.6.0');
+  assert.match(read('docs/releases/v2.6.0.md'), /^# LVOVD v2\.6\.0/);
+  assert.match(read('README.md'), /docs\/releases\/v2\.6\.0\.md/);
+  assert.match(read('README.md'), /Download All \(N\)/);
+  assert.match(read('README.md'), /not persisted across server restarts/);
 });
 
 test('README ships truthful editing, privacy, temporary-file, and Download History behavior', () => {
   const readme = read('README.md');
 
   assert.ok(readme.indexOf('## Quick Start') < readme.indexOf('## What it can do'));
-  assert.match(readme, /choose or drop one local video/i);
+  assert.match(readme, /choose or drop multiple video\/audio files into the unified \*\*Local Media\*\* workbench/i);
+  assert.match(readme, /\*\*Process Selected File\*\*.*committed cuts.*directly to the original working source/);
+  assert.match(readme, /at most one bitrate correction; an oversized result is rejected/);
+  assert.match(readme, /Local uploads and explicitly imported playlist sources use the same sequential processing queue/);
+  assert.match(readme, /Any acquisition or intake-inspection failure stops the batch without retrying or fetching later items/);
   assert.match(readme, /Edit Source Video[\s\S]*selected source[\s\S]*Compatible\/Maximum[\s\S]*resolution[\s\S]*Manual source choice/i);
   assert.match(readme, /remove and restore multiple middle sections/i);
   assert.match(readme, /high-quality H\.264 MP4[\s\S]*AAC when the source has audio/i);

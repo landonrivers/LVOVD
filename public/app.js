@@ -1158,12 +1158,23 @@ function updateDownloadLabel() {
   } else {
     downloadButton.textContent = labels[content];
   }
+  updateEditorAction();
 }
 
 function editorEligibility() {
   if (!currentInfo) return { eligible: false, reason: '' };
+  if (currentInfo.kind === 'playlist') {
+    if (editorWorkspaceState.importActive) return { eligible: false, reason: 'An import is already active. Use Cancel Import in Local Media to stop it.' };
+    if (!['av', 'video'].includes(selectedValue('content') || 'av')) return { eligible: false, reason: 'Choose Video + Audio or Video Only for Local Media intake.' };
+    const selected = new Set(selectedPlaylistUrls());
+    if (!selected.size) return { eligible: false, reason: 'Select playlist items to add to Local Media.' };
+    if (!currentInfo.playlistImportId || currentInfo.entries.some(entry => selected.has(entry.url) && entry.intakeEligible === false)) {
+      return { eligible: false, reason: 'Preview again or deselect entries unavailable for Local Media.' };
+    }
+    return { eligible: true, reason: '' };
+  }
   if (editorWorkspaceState.active) {
-    return { eligible: false, reason: 'Discard the current editor workspace before opening another video.' };
+    return { eligible: false, reason: 'Discard the current local workspace before opening another video.' };
   }
   if (currentInfo.kind !== 'media') {
     return { eligible: false, reason: 'Collections and playlists cannot be opened in the editor.' };
@@ -1185,7 +1196,8 @@ function updateEditorAction() {
   if (!openEditorButton || !openEditorNote) return;
   const state = editorEligibility();
   openEditorButton.disabled = !state.eligible || editorWorkspaceState.status === 'starting';
-  openEditorNote.textContent = state.eligible ? EDITOR_ELIGIBLE_NOTE : state.reason;
+  openEditorButton.textContent = currentInfo?.kind === 'playlist' ? 'Add Selected to Local Media (' + new Set(selectedPlaylistUrls()).size + ')' : 'Edit Source Video';
+  openEditorNote.textContent = state.eligible ? (currentInfo?.kind === 'playlist' ? 'Acquire selected source videos one at a time, then review them in Local Media.' : EDITOR_ELIGIBLE_NOTE) : state.reason;
   openEditorNote.hidden = !openEditorNote.textContent;
 }
 
@@ -1452,6 +1464,13 @@ function openPreviewInEditor() {
     acquisition = buildEditorAcquisition();
   } catch (error) {
     setStatus(error.message, 'error');
+    return;
+  }
+  if (currentInfo.kind === 'playlist') {
+    editorWorkspaceState = { ...editorWorkspaceState, importActive: true }; updateEditorAction();
+    document.dispatchEvent(new CustomEvent('lvovd:workspace-import-playlist', { detail: {
+      previewId: currentInfo.playlistImportId, entryUrls: selectedPlaylistUrls(), acquisition
+    } }));
     return;
   }
   editorWorkspaceState = { active: false, status: 'starting', origin: 'url' };

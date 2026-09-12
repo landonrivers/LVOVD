@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
 const styleSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
 
 test('browser download queue tracks jobs independently from the focused progress panel', () => {

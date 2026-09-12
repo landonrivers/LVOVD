@@ -275,59 +275,148 @@
 
       <section id="media-workspace-panel" class="media-workspace-panel" aria-labelledby="media-workspace-title">
         <div class="workspace-heading">
-          <h2 id="media-workspace-title" class="workflow-heading">Edit Local Media File</h2>
+          <h2 id="media-workspace-title" class="workflow-heading">Local Media</h2>
+          <p class="help">Edit videos or convert video/audio files</p>
         </div>
-
-        <div id="workspace-storage-note" class="workspace-storage-note" hidden>
-          <strong>Temporary disk use</strong>
-          <span>Large files can temporarily require roughly another copy's worth of disk space. If the source is not browser-compatible, a local playback proxy uses additional temporary space. Nothing is sent to cloud storage.</span>
-        </div>
-
         <div id="media-drop-zone" class="media-drop-zone">
-          <input id="media-file-input" type="file" hidden />
+          <input id="media-file-input" type="file" multiple hidden />
           <div class="drop-glyph" aria-hidden="true">＋</div>
-          <div>
-            <strong>Drop one local video here</strong>
-            <span>or choose a file up to 100 GiB</span>
-          </div>
-          <button id="media-choose-button" class="button secondary" type="button">Choose File</button>
+          <div><strong>Drop local video or audio files here</strong><span>Up to 20 files, copied one at a time · 100 GiB combined sources</span></div>
+          <button id="media-choose-button" class="button secondary" type="button">Choose Media Files</button>
         </div>
-
         <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
-
-        <section id="workspace-progress" class="workspace-progress" aria-live="polite" hidden>
-          <div class="progress-head">
-            <strong id="workspace-progress-label">Copying local media…</strong>
-            <button id="workspace-cancel" class="text-button" type="button">Cancel</button>
-          </div>
+        <section id="workspace-recovery" class="workspace-progress" aria-label="Previous local workbenches" hidden>
+          <div class="progress-head"><strong>Previous local workbenches</strong><button id="workspace-recovery-refresh" class="text-button" type="button">Refresh list</button></div>
+          <p class="help">Reopen retained files and downloads, or remove them to free temporary storage. Draft cuts and output settings reset after reloading; existing downloads and queued work keep their settings.</p>
+          <div id="workspace-recovery-list"></div>
+          <p id="workspace-recovery-status" class="help" role="status"></p>
+        </section>
+        <section id="processing-import" class="workspace-progress" aria-label="Playlist import" hidden>
+          <div class="progress-head"><strong id="processing-import-status" role="status"></strong><button id="processing-import-cancel" class="text-button" type="button">Cancel Import</button></div>
+          <ul id="processing-import-items" class="help"></ul>
+        </section>
+        <ul id="workspace-removed-cleanup" class="help" aria-label="Removed file cleanup" hidden></ul>
+        <button id="workspace-retry-cleanup" class="text-button" type="button" hidden>Retry Removed File Cleanup</button>
+        <section id="workspace-progress" class="workspace-progress" hidden>
+          <div class="progress-head"><strong id="workspace-progress-label">Copying local media…</strong><button id="workspace-cancel" class="text-button" type="button">Cancel / Discard</button></div>
           <div class="progress-track" aria-hidden="true"><div id="workspace-progress-bar" class="progress-bar"></div></div>
         </section>
-
-        <section id="workspace-failure" class="preview-error workspace-failure" hidden>
-          <div>
-            <p class="eyebrow">LOCAL MEDIA RESULT</p>
-            <h3 id="workspace-failure-title">Local media preparation failed</h3>
-            <p id="workspace-failure-explanation" class="error-message"></p>
-            <p id="workspace-failure-help" class="help"></p>
-            <button id="workspace-failure-discard" class="button secondary mini workspace-failure-action" type="button" hidden>Discard failed workspace</button>
-          </div>
+        <section id="workspace-failure" class="preview-error workspace-failure" role="alert" hidden>
+          <div><h3 id="workspace-failure-title">Local media preparation failed</h3><p id="workspace-failure-explanation"></p><p id="workspace-failure-help" class="help"></p>
+          <button id="workspace-failure-discard" class="button secondary mini" type="button">Discard</button></div>
         </section>
-
+        <section id="local-media-ready" hidden>
+          <div class="local-workbench">
+            <aside class="processing-sidebar" aria-label="File and processing settings">
+              <section class="processing-files" aria-labelledby="local-files-title">
+                <div class="processing-files-head"><h3 id="local-files-title">Files</h3><span id="processing-file-count" class="help">0 files</span></div>
+                <select id="processing-file-list" size="6" aria-label="Files"></select>
+                <button id="processing-add-files" class="text-button" type="button">Add Files</button>
+                <p id="processing-collection-status" class="help" role="status"></p>
+              </section>
+              <section class="processing-file" aria-labelledby="local-file-title">
+                <p class="sr-only" id="local-file-title">Selected file</p>
+                <h3 id="local-media-name"></h3><p id="local-media-summary" class="help"></p>
+                <div class="local-media-actions">
+                  <button id="processing-reset" class="button secondary mini" type="button">Reset File</button>
+                  <button id="workspace-discard" class="text-button" type="button">Remove File</button>
+                </div>
+              </section>
+              <details id="local-media-details"><summary>Media Details</summary><dl id="conversion-facts" class="conversion-facts"></dl>
+                <p class="help">Processing stays on this computer. Combined sources are limited to 100 GiB across up to 20 files. Temporary disk use also includes previews, previous results, new attempts, and cleanup-pending files; each output is limited to 100 GiB. Free space is not guaranteed. Remove File or expiry invalidates that file and attempts cleanup.</p>
+              </details>
+              <form id="processing-settings" aria-labelledby="processing-settings-title">
+                <h3 id="processing-settings-title">Convert File</h3>
+                <p id="processing-capability-note" class="help" role="status"></p>
+                <button id="processing-clear-video-settings" class="text-button" type="button" hidden>Clear video changes for audio-only output</button>
+                <div class="processing-pair processing-codecs">
+                <div id="processing-video-settings">
+                  <label class="field" for="processing-video-codec"><span>Codec</span><select id="processing-video-codec"><option value="unchanged">Unchanged</option></select></label>
+                </div>
+                <label class="field" for="processing-container"><span>Output</span><select id="processing-container"><option value="source">Keep source</option></select></label>
+                </div>
+                <fieldset id="processing-transform-settings">
+                  <legend class="sr-only">Picture</legend>
+                  <div class="processing-pair">
+                  <label class="field" for="processing-scale"><span>Scale</span><select id="processing-scale" aria-describedby="processing-scale-help">
+                    <option value="unchanged">Source / unchanged</option>
+                    <optgroup label="Fit within dimensions">
+                      <option value="4096x2160">4096 × 2160</option><option value="3840x2160">3840 × 2160</option><option value="2560x1440">2560 × 1440</option>
+                      <option value="1920x1080">1920 × 1080</option><option value="1440x1080">1440 × 1080</option><option value="1280x720">1280 × 720</option>
+                      <option value="1024x768">1024 × 768</option><option value="1024x576">1024 × 576</option><option value="854x480">854 × 480</option>
+                      <option value="720x576">720 × 576</option><option value="640x360">640 × 360</option><option value="320x180">320 × 180</option>
+                    </optgroup>
+                    <optgroup label="One dimension / automatic aspect">
+                      <option value="width:3840">3840 × auto</option><option value="width:1920">1920 × auto</option>
+                      <option value="height:2160">auto × 2160</option><option value="height:1080">auto × 1080</option><option value="height:720">auto × 720</option>
+                    </optgroup>
+                    <optgroup label="Percentage"><option value="percent:50">50%</option><option value="percent:25">25%</option></optgroup>
+                    <option value="fit">Custom fit…</option>
+                  </select></label>
+                  <label class="field" for="processing-frame-rate"><span>Frame rate</span><select id="processing-frame-rate"><option value="">Unchanged</option></select></label>
+                  </div>
+                  <div id="processing-scale-fields" hidden>
+                    <div class="processing-pair">
+                      <label class="field" for="processing-width"><span>Max width</span><input id="processing-width" type="number" min="2" max="16384" step="1" value="854" /></label>
+                      <label class="field" for="processing-height"><span>Max height</span><input id="processing-height" type="number" min="2" max="16384" step="1" value="480" /></label>
+                    </div>
+                  </div>
+                  <label class="processing-check"><input id="processing-no-upscale" type="checkbox" checked />Do not upscale lower resolutions</label>
+                  <p id="processing-scale-help" class="help">Dimensions are adjusted to fit aspect ratio and encoder alignment; no cropping. See the actual dimensions below.</p>
+                </fieldset>
+                <fieldset id="processing-rate-settings">
+                  <legend>Compression <span class="help">(this file)</span> <button class="processing-help-button" type="button" data-processing-help="relationship" aria-label="Help: how quality, bitrate and size relate">?</button></legend>
+                  <div id="processing-rate-mode" class="processing-rate-choice" role="group" aria-label="Compression mode">
+                    <span class="help">Control:</span>
+                    <label><input type="radio" name="processing-rate" value="automatic" checked />Auto</label>
+                    <label><input type="radio" name="processing-rate" value="quality" />Quality</label>
+                    <label><input type="radio" name="processing-rate" value="bitrate" />Bitrate</label>
+                    <label><input type="radio" name="processing-rate" value="size" />File size</label>
+                  </div>
+                  <p id="processing-rate-help" class="help" hidden></p>
+                  <div id="processing-quality-fields" hidden>
+                    <label class="field processing-value-row" for="processing-crf"><span>H.264 quality <button class="processing-help-button" type="button" data-processing-help="quality" aria-label="Help: H.264 quality">?</button></span><input id="processing-crf" type="number" min="0" max="51" step="1" value="18" /><small>CRF</small></label>
+                  </div>
+                  <div id="processing-bitrate-fields">
+                    <label class="field processing-value-row" for="processing-video-bitrate"><span><span id="processing-video-rate-label">Video bitrate</span> <button class="processing-help-button" type="button" data-processing-help="video" aria-label="Help: video bitrate">?</button></span><input id="processing-video-bitrate" type="number" min="1" max="1000000" step="any" /><small>kbps</small></label>
+                    <label id="processing-two-pass-field" class="processing-check" hidden><input id="processing-two-pass" type="checkbox" />2-pass encoding <button class="processing-help-button" type="button" data-processing-help="passes" aria-label="Help: two-pass encoding">?</button></label>
+                  </div>
+                <fieldset id="processing-audio-settings">
+                  <legend class="sr-only">Audio</legend>
+                  <label class="field processing-value-row" for="processing-audio-codec"><span>Audio codec</span><select id="processing-audio-codec"><option value="unchanged">Unchanged</option></select></label>
+                  <label class="field processing-value-row" for="processing-audio-bitrate"><span>Audio bitrate <button class="processing-help-button" type="button" data-processing-help="audio" aria-label="Help: audio bitrate">?</button></span><input id="processing-audio-bitrate" type="number" min="8" max="1536" step="1" placeholder="Auto" /><small>kbps</small></label>
+                  <p id="processing-audio-rate-help" class="help">Auto keeps copied audio or uses the codec default. No automatic downmix.</p>
+                </fieldset>
+                  <div id="processing-size-fields">
+                    <label class="field processing-value-row" for="processing-maximum-mb"><span><span id="processing-size-label">Estimated file size</span> <button class="processing-help-button" type="button" data-processing-help="size" aria-label="Help: file size">?</button></span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" /><small>MB</small></label>
+                    <p id="processing-size-policy" class="help" hidden>Maximum per output, using two passes and at most one size correction. Actual bytes are checked before publication.</p>
+                  </div>
+                  <label id="processing-preset-field" class="field processing-value-row" for="processing-preset" hidden><span>Encoding speed <button class="processing-help-button" type="button" data-processing-help="speed" aria-label="Help: encoding speed">?</button></span><select id="processing-preset"><option value="medium">Medium</option></select></label>
+                </fieldset>
+              </form>
+              <div id="processing-apply-settings" class="processing-shared-settings">
+                <label class="processing-check"><input id="processing-apply-all" type="checkbox" checked aria-describedby="processing-apply-help" />Apply output settings to all</label>
+                <p id="processing-apply-help" class="help">Cuts and playback view stay individual. Incompatible files require review; queued work and existing downloads stay unchanged.</p>
+              </div>
+            </aside>
+            <div class="processing-preview">
+              <div class="preview-actions"><p id="processing-preview-note" class="help" role="status"></p><button id="processing-prepare-preview" class="button secondary mini" type="button" hidden>Retry Preview</button></div>
         <section id="media-editor" class="media-editor" hidden>
           <div class="editor-head">
             <div>
+              <span class="editor-label">Local editor</span>
               <h3 id="editor-media-name">Local video</h3>
               <p id="editor-media-facts" class="help"></p>
               <p id="editor-proxy-note" class="editor-proxy-note"></p>
-              <p id="editor-track-warning" class="editor-track-warning" hidden>This edited output uses the primary video/audio track. Additional audio or subtitle tracks are not included yet.</p>
+              <p id="editor-track-warning" class="editor-track-warning" hidden>Processing uses the selected video/audio tracks. Any known omissions are shown in the processing review.</p>
             </div>
-            <button id="workspace-discard" class="button secondary mini" type="button">Discard</button>
+
           </div>
 
+          <p id="editor-status" class="status" role="status"></p>
           <div class="editor-layout">
             <div class="editor-player">
               <video id="editor-video" controls preload="metadata" playsinline tabindex="0"></video>
-              <div id="editor-clock" class="editor-clock">00:00:00.000 / 00:00:00.000</div>
             </div>
 
             <div class="timeline-editor">
@@ -336,17 +425,20 @@
                   <strong>Timeline</strong>
                   <span id="timeline-visible-label">Showing full timeline</span>
                 </div>
+                <div id="editor-clock" class="editor-clock">00:00:00.000 / 00:00:00.000</div>
                 <div class="inline-actions">
-                  <button id="timeline-zoom-in" class="text-button" type="button">Zoom In</button>
-                  <button id="timeline-zoom-out" class="text-button" type="button">Zoom Out</button>
+                  <button id="timeline-zoom-in" class="text-button" type="button"><span class="timeline-zoom-glyph" aria-hidden="true">⊕</span>Zoom In</button>
+                  <button id="timeline-zoom-out" class="text-button" type="button"><span class="timeline-zoom-glyph" aria-hidden="true">⊖</span>Zoom Out</button>
                   <button id="timeline-fit" class="text-button" type="button">Full Timeline</button>
                 </div>
               </div>
 
               <p class="timeline-interaction-hint">Click or drag the timeline to seek · Drag the time ruler to pan when zoomed</p>
 
-              <div id="timeline-ruler" class="timeline-ruler" title="Drag to pan while zoomed">
+              <div id="timeline-ruler" class="timeline-ruler">
                 <div id="timeline-ruler-ticks" class="timeline-ruler-ticks"></div>
+                <button id="timeline-pan-left" class="timeline-pan-arrow left" type="button" aria-label="Pan timeline left" hidden><span aria-hidden="true">◀</span></button>
+                <button id="timeline-pan-right" class="timeline-pan-arrow right" type="button" aria-label="Pan timeline right" hidden><span aria-hidden="true">▶</span></button>
               </div>
 
               <div id="timeline-track" class="timeline-track" role="group" tabindex="0" aria-label="Timeline seek control. Space plays or pauses; Left and Right Arrow seek five seconds." title="Click or drag to seek; use the handles to change the retained range">
@@ -366,8 +458,8 @@
                 <span><i class="legend-playhead"></i>Playhead</span>
               </div>
 
-              <section class="editor-crop-panel" aria-labelledby="crop-video-title">
-                <h4 id="crop-video-title" class="editor-section-title">Crop Video Length</h4>
+              <section class="editor-trim-panel" aria-labelledby="trim-video-title">
+                <h4 id="trim-video-title" class="editor-section-title">Trim Video Length</h4>
                 <div class="editor-exact-grid">
                   <div class="editor-exact-control">
                     <label class="field" for="editor-start-time">
@@ -425,46 +517,66 @@
                 <div id="removed-sections-list" class="removed-sections-list"></div>
               </section>
 
-              <section class="editor-render-panel" aria-label="Create edited output">
-                <div class="editor-render-head">
-                  <button id="create-edited-file" class="button secondary mini" type="button" disabled>Create Edited File</button>
-                  <p class="editor-foundation-note">Creates a high-quality H.264 MP4 locally, with AAC audio when the source has audio. LVOVD re-encodes edits to closely match arbitrary cut times. Your workspace source is unchanged.</p>
-                </div>
-
-                <p id="editor-render-noop" class="editor-render-noop">Change the retained range or remove a section before creating an edited file.</p>
-
-                <div id="editor-render-progress" class="workspace-progress editor-render-progress" aria-live="polite" hidden>
-                  <div class="progress-head">
-                    <div>
-                      <strong id="editor-render-progress-label">Creating edited file…</strong>
-                      <span>Re-encoding locally for the selected boundaries.</span>
-                    </div>
-                    <button id="cancel-edited-render" class="text-button" type="button">Cancel Render</button>
-                  </div>
-                  <div class="progress-track" aria-hidden="true"><div id="editor-render-progress-bar" class="progress-bar"></div></div>
-                </div>
-
-                <section id="editor-render-failure" class="preview-error editor-render-failure" aria-live="polite" hidden>
-                  <div>
-                    <p class="eyebrow">EDITED FILE RESULT</p>
-                    <h4 id="editor-render-failure-title">Edited-file creation failed</h4>
-                    <p id="editor-render-failure-explanation" class="error-message"></p>
-                    <p id="editor-render-failure-help" class="help"></p>
-                  </div>
-                </section>
-
-                <section id="editor-edited-output" class="editor-edited-output" aria-live="polite" hidden>
-                  <div>
-                    <p class="eyebrow">DOWNLOAD EDITED FILE</p>
-                    <h4 id="editor-output-filename">Edited video.mp4</h4>
-                    <p id="editor-output-facts" class="help"></p>
-                    <p id="editor-output-stale" class="editor-output-stale" hidden>Range changed — create the edited file again to update it. This download was created from the previous range.</p>
-                  </div>
-                  <a id="download-edited-file" class="button secondary mini" href="#">Download</a>
-                </section>
-              </section>
             </div>
           </div>
+        </section>
+            </div>
+          </div>
+          <section id="processing-finish" class="processing-finish" aria-labelledby="processing-review-title">
+            <h3 id="processing-review-title">Ready to process selected file</h3>
+            <p id="processing-draft-status" class="help" role="status"></p>
+            <dl id="processing-plan-facts" class="processing-plan-facts"></dl>
+            <div id="conversion-plan" aria-live="polite"><h4 id="conversion-plan-title"></h4><details class="processing-review-details"><summary>Processing details</summary><ul id="conversion-changes"></ul></details></div>
+            <div id="conversion-warnings"></div>
+            <p class="help">Cuts and output settings apply together to your original source. Re-encoding is not lossless. Metadata preservation is not guaranteed.</p>
+            <div class="local-media-actions">
+              <div class="processing-suffix">
+                <label class="processing-check"><input id="processing-suffix-enabled" type="checkbox" form="processing-settings" checked />Add a suffix</label>
+                <input id="processing-filename-suffix" type="text" form="processing-settings" aria-label="Filename suffix" maxlength="60" value="-processed" autocomplete="off" spellcheck="false" aria-describedby="processing-filename-preview" />
+                <p id="processing-filename-preview" class="help"></p>
+              </div>
+              <button id="conversion-start" class="button primary processing-primary" type="button" disabled>Process Selected File</button>
+              <button id="processing-process-all" class="button primary processing-primary processing-all" type="button" hidden>Review All Files</button>
+              <button id="conversion-retry" class="text-button" type="button" hidden>Retry Capability Check</button>
+              <button id="conversion-cancel" class="text-button" type="button" hidden>Cancel Processing</button>
+              <button id="processing-cancel-all" class="text-button" type="button" hidden>Cancel All</button>
+            </div>
+            <section id="processing-batch-review" class="processing-batch-review" aria-labelledby="processing-batch-title" hidden>
+              <h4 id="processing-batch-title">Review files to process</h4>
+              <p class="help">Files run one at a time in list order. Select the reviewed files and acknowledge their warnings. Unchanged files download original bytes. Queued files and successful current drafts are excluded; Process Selected File can run a completed draft again. A failure does not stop the remaining files.</p>
+              <div id="processing-batch-files"></div>
+              <button id="processing-batch-submit" class="button primary processing-primary processing-queue-action" type="button" disabled>Queue And Process</button>
+              <button id="processing-batch-close" class="text-button" type="button">Close review</button>
+            </section>
+            <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
+            <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
+            <p id="output-cleanup-status" class="help" role="status"></p>
+            <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
+          </section>
+          <section id="processing-results" class="processing-results" aria-labelledby="processing-results-title" hidden>
+            <div class="progress-head">
+              <div><h3 id="processing-results-title" tabindex="-1">Processing results</h3><span id="processing-results-summary" class="help" role="status"></span></div>
+              <button id="processing-download-all" class="button primary" type="button" hidden>Download All</button>
+            </div>
+            <p id="processing-download-note" class="help" role="status" hidden></p>
+            <div id="processing-results-list" tabindex="0" role="region" aria-label="Processed files"></div>
+            <template id="processing-result-template">
+              <article class="processing-result">
+                <div class="processing-result-main">
+                  <div class="processing-result-title"><span data-result="format" class="processing-result-format"></span><h4 data-result="name"></h4></div>
+                  <div class="processing-result-meta"><span data-result="status" class="processing-result-status"></span><span data-result="brief"></span></div>
+                  <details data-result="details"><summary>Result details</summary>
+                    <p data-result="source" class="help processing-result-source"></p><p data-result="summary" class="help"></p>
+                    <p data-result="facts" class="help"></p><p data-result="target" class="help"></p><p data-result="settings" class="help"></p>
+                  </details>
+                </div>
+                <div class="processing-result-actions">
+                  <a data-result="download" class="button primary processing-result-download" hidden></a>
+                  <button data-result="edit" class="text-button" type="button">Edit source</button>
+                </div>
+              </article>
+            </template>
+          </section>
         </section>
       </section>
 
@@ -503,5 +615,8 @@
   <script src="/history-ui.js" defer></script>
   <script src="/edit-plan.js" defer></script>
   <script src="/media-editor.js" defer></script>
+  <script src="/conversion-inspector.js" defer></script>
+  <script src="/processing-profile.js" defer></script>
+  <script src="/local-workspace.js" defer></script>
 </body>
 </html>

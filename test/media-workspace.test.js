@@ -387,6 +387,13 @@ test('inspection rejects non-video media and missing duration clearly', () => {
     (error) => error?.workspaceFailure?.category === 'local_media_invalid'
       && /duration/i.test(error.workspaceFailure.title)
   );
+  assert.equal(normalizeInspection({
+      format: {},
+      streams: [
+        { index: 0, codec_type: 'video', codec_name: 'h264', width: 640, height: 360 },
+        { index: 1, codec_type: 'audio', codec_name: 'aac', duration: '5' }
+      ]
+    }).durationSeconds, 5, 'the accepted common-clock policy can use the selected audio endpoint');
 });
 
 test('a missing ffprobe executable becomes a path-safe required-local-tool failure', async (t) => {

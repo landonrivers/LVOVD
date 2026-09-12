@@ -11,6 +11,17 @@ const { pipeline } = require('node:stream/promises');
 const { classifyFailure } = require('./failure-classification');
 const { localMediaInputArgs } = require('./local-media-input');
 const {
+  parseFrameRate,
+  normalizeMediaInspection
+} = require('./media-inspection');
+const { getFfmpegCapabilities } = require('./ffmpeg-capabilities');
+const { assessBroadCompatibilityMp4 } = require('./conversion-compatibility');
+const { ConversionOperations } = require('./conversion-workspace');
+const { runConversionProcess } = require('./conversion-process');
+const { OutputRetirement } = require('./output-retirement');
+const { ProcessingOperations } = require('./processing-workspace');
+const { LocalProcessingQueue } = require('./local-processing-queue');
+const {
   MAX_KEEP_RANGES,
   roundMilliseconds,
   normalizeEditPlan: normalizeCanonicalEditPlan,
@@ -27,6 +38,7 @@ const {
 const MAX_LOCAL_MEDIA_BYTES = 100 * 1024 * 1024 * 1024;
 const MEDIA_WORKSPACE_TTL_MS = 60 * 60 * 1000;
 const WORKSPACE_CANCELLED_CODE = 'LVOVD_WORKSPACE_CANCELLED';
+const WORKSPACE_PURPOSES = new Set(['edit', 'convert', 'local']);
 const CLEANUP_RETRY_DELAYS_MS = Object.freeze([100, 500]);
 const TRANSIENT_CLEANUP_CODES = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY', 'EMFILE', 'ENFILE']);
 
@@ -82,6 +94,26 @@ function isWorkspaceCancellation(error) {
   return error?.code === WORKSPACE_CANCELLED_CODE;
 }
 
+function awaitWorkspaceStep(workspace, promise) {
+  const signal = workspace.abortController.signal;
+  if (workspace.cancelRequested || signal.aborted) return Promise.reject(workspaceCancelledError());
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      callback();
+    };
+    const onAbort = () => finish(() => reject(workspaceCancelledError()));
+    signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve(promise).then(
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(error))
+    );
+  });
+}
+
 function normalizeDisplayFilename(value, maxLength = 255) {
   const text = String(value || '')
     .replace(/[\u0000-\u001f\u007f]/g, '')
@@ -117,53 +149,8 @@ function editedOutputFilename(sourceDisplayName) {
   return `${stem}${suffix}`;
 }
 
-function parseFrameRate(value) {
-  const text = String(value || '').trim();
-  if (!text || text === '0/0') return null;
-  const rational = text.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
-  const rate = rational ? Number(rational[1]) / Number(rational[2]) : Number(text);
-  return Number.isFinite(rate) && rate > 0 ? roundMilliseconds(rate) : null;
-}
-
-const MP4_BRANDS = new Set([
-  'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6', 'iso7', 'iso8', 'iso9',
-  'mp41', 'mp42', 'avc1', 'dash', 'mmp4', 'm4v', 'm4a', 'f4v', 'f4a',
-  '3gp4', '3gp5', '3gp6'
-]);
-
-function normalizedBrandEvidence(format = {}) {
-  const major = String(format.tags?.major_brand || '').trim().toLowerCase();
-  const compatible = String(format.tags?.compatible_brands || '').toLowerCase();
-  const brands = new Set(major ? [major] : []);
-  for (let index = 0; index < compatible.length; index += 4) {
-    const brand = compatible.slice(index, index + 4).trim();
-    if (brand) brands.add(brand);
-  }
-  for (const brand of compatible.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean)) {
-    brands.add(brand);
-  }
-  return brands;
-}
-
-function normalizedContainerLabel(format, formatNames) {
-  const brands = normalizedBrandEvidence(format);
-  const isoBaseMediaFamily = formatNames.some((name) => (
-    ['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2'].includes(name)
-  ));
-  if (isoBaseMediaFamily && brands.has('qt')) return 'MOV / QuickTime';
-  if (isoBaseMediaFamily && [...brands].some((brand) => MP4_BRANDS.has(brand))) return 'MP4';
-  return String(format.format_long_name || format.format_name || 'Unknown container')
-    .trim().slice(0, 120);
-}
-
-function normalizeInspection(raw = {}) {
-  const streams = Array.isArray(raw.streams) ? raw.streams : [];
-  const video = streams.find((stream) => stream?.codec_type === 'video'
-    && Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
-    && Number(stream.width) > 0 && Number(stream.height) > 0
-    && Number(stream.disposition?.attached_pic) !== 1
-    && Number(stream.disposition?.timed_thumbnails) !== 1);
-  if (!video) {
+function validateEditorInspection(inspection) {
+  if (!inspection?.video) {
     throw workspaceUserError(
       'The staged file does not contain a usable video stream.',
       normalizedFailure(
@@ -175,34 +162,7 @@ function normalizeInspection(raw = {}) {
     );
   }
 
-  const formatName = String(raw.format?.format_name || '').trim().toLowerCase();
-  const formatNames = formatName.split(',').map((name) => name.trim()).filter(Boolean).slice(0, 20);
-  const audioStreams = streams.filter((stream) => stream?.codec_type === 'audio');
-  const audio = audioStreams.find((stream) => (
-    Number.isInteger(Number(stream.index)) && Number(stream.index) >= 0
-  )) || null;
-  // FFmpeg's start_at_zero subtracts the demuxer's format start_time from BOTH
-  // streams. Keep that same origin for the editor's zero-based presentation.
-  const rawStart = Number(raw.format?.start_time);
-  const timeOriginSeconds = Number.isFinite(rawStart) ? rawStart : 0;
-  // Stream.duration is elapsed: include each selected stream's start offset
-  // before measuring its endpoint from the common origin. MOV/MP4 format.duration
-  // can instead report either elapsed time or an absolute endpoint, so it must
-  // not override usable stream evidence. Never reset video and audio separately.
-  const streamEndpoints = [video, audio].filter(Boolean).map(stream => {
-    const elapsed = Number(stream.duration);
-    if (!Number.isFinite(elapsed) || elapsed <= 0) return NaN;
-    const start = String(stream.start_time ?? '').trim();
-    const streamStart = start && Number.isFinite(Number(start)) ? Number(start) : timeOriginSeconds;
-    return streamStart + elapsed - timeOriginSeconds;
-  }).filter(endpoint => Number.isFinite(endpoint) && endpoint > 0);
-  // Without usable stream durations, retain the Matroska/WebM presentation-end
-  // fallback; other demuxers' format duration is used as elapsed time. This
-  // bounded metadata fallback cannot resolve every ambiguous/missing timestamp.
-  const durationIncludesOrigin = formatNames.some(name => ['matroska', 'webm'].includes(name));
-  const duration = streamEndpoints.length ? Math.max(...streamEndpoints)
-    : Number(raw.format?.duration) - (durationIncludesOrigin ? timeOriginSeconds : 0);
-  if (!Number.isFinite(duration) || duration <= 0) {
+  if (!Number.isFinite(inspection.durationSeconds) || inspection.durationSeconds <= 0) {
     throw workspaceUserError(
       'The staged video does not have a usable duration.',
       normalizedFailure(
@@ -214,30 +174,50 @@ function normalizeInspection(raw = {}) {
     );
   }
 
-  const subtitleTrackCount = streams.filter((stream) => stream?.codec_type === 'subtitle').length;
-  const displayFormat = normalizedContainerLabel(raw.format || {}, formatNames);
+  const mediaKind = inspection.mediaKind || (inspection.video ? 'video' : inspection.audio ? 'audio' : 'unsupported');
+  if (mediaKind !== 'video') {
+    throw workspaceUserError(
+      'The staged file is not a supported timed video.',
+      normalizedFailure(
+        'local_media_invalid',
+        'Choose a video file',
+        'The staged local file is not a supported timed video.',
+        'Choose one local video file with a normal seekable timeline.'
+      )
+    );
+  }
+  return inspection;
+}
 
+function editorInspectionShape(inspection) {
+  validateEditorInspection(inspection);
+  const audioCount = inspection.trackCounts?.audio;
+  const subtitleCount = inspection.trackCounts?.subtitle;
   return {
-    durationSeconds: roundMilliseconds(duration),
-    timeOriginSeconds,
-    format: displayFormat,
-    formatNames,
+    durationSeconds: roundMilliseconds(inspection.durationSeconds),
+    timeOriginSeconds: Number.isFinite(inspection.timeOriginSeconds) ? inspection.timeOriginSeconds : 0,
+    format: inspection.format,
+    formatNames: Array.isArray(inspection.formatNames) ? [...inspection.formatNames] : [],
     video: {
-      streamIndex: Number(video.index),
-      codec: String(video.codec_name || 'unknown').trim().toLowerCase().slice(0, 80),
-      width: Math.floor(Number(video.width)),
-      height: Math.floor(Number(video.height)),
-      frameRate: parseFrameRate(video.avg_frame_rate || video.r_frame_rate)
+      streamIndex: inspection.video.streamIndex,
+      codec: String(inspection.video.codec || 'unknown').trim().toLowerCase().slice(0, 80),
+      width: inspection.video.width,
+      height: inspection.video.height,
+      frameRate: inspection.video.frameRate
     },
-    audio: audio ? {
-      streamIndex: Number(audio.index),
-      codec: String(audio.codec_name || 'unknown').trim().toLowerCase().slice(0, 80)
+    audio: inspection.audio ? {
+      streamIndex: inspection.audio.streamIndex,
+      codec: String(inspection.audio.codec || 'unknown').trim().toLowerCase().slice(0, 80)
     } : null,
     trackCounts: {
-      audio: audioStreams.length,
-      subtitle: subtitleTrackCount
+      audio: Number.isInteger(audioCount) ? audioCount : inspection.audio ? 1 : 0,
+      subtitle: Number.isInteger(subtitleCount) ? subtitleCount : 0
     }
   };
+}
+
+function normalizeInspection(raw = {}) {
+  return editorInspectionShape(normalizeMediaInspection(raw));
 }
 
 function isDirectPlaybackCompatible(inspection) {
@@ -445,7 +425,12 @@ class MediaWorkspaceManager {
     createProxyAsset = null,
     inspectOutputAsset = null,
     createEditedAsset = null,
-    cleanupRetryDelaysMs = CLEANUP_RETRY_DELAYS_MS
+    discoverCapabilities = getFfmpegCapabilities,
+    assessConversion = assessBroadCompatibilityMp4,
+    maxConvertedBytes = MAX_LOCAL_MEDIA_BYTES,
+    conversionTerminationGraceMs = 250,
+    cleanupRetryDelaysMs = CLEANUP_RETRY_DELAYS_MS,
+    localProcessingLimits = {}
   } = {}) {
     this.tempDir = tempDir;
     this.maxBytes = maxBytes;
@@ -459,11 +444,19 @@ class MediaWorkspaceManager {
     this.createProxyAsset = createProxyAsset || this.defaultCreateProxyAsset.bind(this);
     this.inspectOutputAsset = inspectOutputAsset || this.defaultInspectOutputAsset.bind(this);
     this.createEditedAsset = createEditedAsset || this.defaultCreateEditedAsset.bind(this);
+    this.discoverCapabilities = discoverCapabilities;
+    this.assessConversion = assessConversion;
+    this.maxConvertedBytes = Math.min(MAX_LOCAL_MEDIA_BYTES, maxConvertedBytes);
+    this.conversionTerminationGraceMs = Math.max(10, Math.min(2000, conversionTerminationGraceMs));
+    this.conversions = new ConversionOperations(this);
+    this.processing = new ProcessingOperations(this);
+    this.outputRetirement = new OutputRetirement(this);
     this.workspaces = new Map();
     this.discards = new Map();
     this.cleanupPending = new Map();
     this.cleanupRetryDelaysMs = [...cleanupRetryDelaysMs];
     this.rootPromise = null;
+    this.localProcessing = new LocalProcessingQueue(this, localProcessingLimits);
   }
 
   async workRoot() {
@@ -486,14 +479,23 @@ class MediaWorkspaceManager {
     declaredLength = null,
     origin = 'local',
     sourceName = null,
-    waiting = false
+    waiting = false,
+    purpose = 'edit',
+    id = crypto.randomUUID()
   } = {}) {
+    if (!WORKSPACE_PURPOSES.has(purpose)) {
+      throw workspaceRequestError('Unsupported local workspace purpose.', 400);
+    }
+    if (origin === 'url' && !['edit', 'local'].includes(purpose)) {
+      throw workspaceRequestError('URL media acquisition is available only for editing.', 400);
+    }
     const root = await this.workRoot();
     const tempDir = await this.fs.mkdtemp(path.join(root, 'workspace-'));
     const now = this.now();
     const urlOrigin = origin === 'url';
     const workspace = {
-      id: crypto.randomUUID(),
+      id,
+      purpose,
       status: waiting ? 'waiting' : urlOrigin ? 'acquiring' : 'receiving',
       phase: waiting ? 'waiting' : urlOrigin ? 'acquiring' : 'receiving',
       message: waiting
@@ -519,6 +521,13 @@ class MediaWorkspaceManager {
       sourceAssetId: null,
       playbackAssetId: null,
       inspection: null,
+      editor: { status: 'idle', message: null, failure: null },
+      conversion: { status: 'idle', percent: null, message: null, failure: null, output: null, targetId: null,
+        terminationPending: false, cleanupPaths: new Set(), cleanupDirectories: new Set(), attemptPath: null, activeInputAssetId: null },
+      processingReview: null,
+      queuedProcessingJobId: null,
+      retiredOutputs: new Map(),
+      compatibility: null,
       playbackProxy: false,
       failure: null,
       listeners: new Set(),
@@ -529,6 +538,7 @@ class MediaWorkspaceManager {
       cancelRequested: false,
       activeOperation: urlOrigin ? 'acquiring' : 'receiving',
       activePromise: null,
+      receivingPromise: null,
       render: {
         status: 'idle',
         percent: null,
@@ -560,6 +570,7 @@ class MediaWorkspaceManager {
       : null;
     return {
       id: workspace.id,
+      purpose: workspace.purpose,
       status: workspace.status,
       phase: workspace.phase,
       message: workspace.message,
@@ -576,6 +587,14 @@ class MediaWorkspaceManager {
         sourceName: workspace.source.sourceName
       },
       inspection: workspace.inspection,
+      sourceAssetId: workspace.sourceAssetId,
+      activeOperation: workspace.activeOperation,
+      queuedProcessingJobId: workspace.queuedProcessingJobId,
+      processingRevision: workspace.processingReview?.revision ?? null,
+      editor: { ...workspace.editor, eligible: Boolean(workspace.inspection?.video && workspace.inspection.durationSeconds > 0) },
+      conversion: this.conversions.publicState(workspace),
+      outputCleanup: this.outputRetirement.state(workspace),
+      compatibility: workspace.compatibility,
       assets: [...workspace.assets.values()].map((asset) => ({
         id: asset.id,
         role: asset.role,
@@ -590,7 +609,7 @@ class MediaWorkspaceManager {
         proxy: workspace.playbackProxy,
         url: `/api/workspace/media?workspace=${encodeURIComponent(workspace.id)}&asset=${encodeURIComponent(playback.id)}`
       } : null,
-      render: {
+      render: workspace.editor.status === 'ready' ? {
         status: workspace.render.status,
         percent: Number.isFinite(workspace.render.percent) ? workspace.render.percent : null,
         message: workspace.render.message,
@@ -598,7 +617,7 @@ class MediaWorkspaceManager {
         requestedPlan: workspace.render.requestedPlan
           ? structuredClone(workspace.render.requestedPlan)
           : null
-      },
+      } : null,
       editedOutput: editedOutput ? {
         assetId: editedOutput.id,
         role: editedOutput.role,
@@ -619,6 +638,7 @@ class MediaWorkspaceManager {
     for (const response of workspace.listeners) {
       try { response.write(payload); } catch {}
     }
+    this.localProcessing.workspaceChanged(workspace);
   }
 
   update(workspace, patch) {
@@ -636,7 +656,7 @@ class MediaWorkspaceManager {
     return error?.workspaceFailure || classifyFailure(withLocalFailure(error), { scope: 'local' });
   }
 
-  assertSizeAllowed(declaredLength) {
+  assertSizeAllowed(declaredLength, purpose = 'edit') {
     if (declaredLength == null) return;
     if (!Number.isSafeInteger(declaredLength) || declaredLength < 0) {
       throw workspaceUserError(
@@ -650,17 +670,18 @@ class MediaWorkspaceManager {
         400
       );
     }
-    if (declaredLength > this.maxBytes) throw this.tooLargeError();
+    if (declaredLength > this.maxBytes) throw this.tooLargeError(purpose);
   }
 
-  tooLargeError() {
+  tooLargeError(purpose = 'edit') {
+    const noun = purpose === 'convert' ? 'local media file' : 'local video';
     return workspaceUserError(
       'Local media exceeds the 100 GiB workspace limit.',
       normalizedFailure(
         'local_media_too_large',
         'This local file is too large',
-        'LVOVD accepts one local video up to 100 GiB.',
-        'Choose a local video no larger than 100 GiB.'
+        `LVOVD accepts one ${noun} up to 100 GiB.`,
+        `Choose a ${noun} no larger than 100 GiB.`
       ),
       413
     );
@@ -679,26 +700,29 @@ class MediaWorkspaceManager {
       playable: rawAsset.playable === true,
       filename: rawAsset.filename ? normalizeDisplayFilename(rawAsset.filename) : null,
       inspection: rawAsset.inspection ? structuredClone(rawAsset.inspection) : null,
-      editPlan: rawAsset.editPlan ? structuredClone(rawAsset.editPlan) : null
+      editPlan: rawAsset.editPlan ? structuredClone(rawAsset.editPlan) : null,
+      validated: rawAsset.validated === true
     };
     workspace.assets.set(asset.id, asset);
     return asset;
   }
 
-  async createUrlWorkspace({ displayName, sourceName = null, waiting = false } = {}) {
+  async createUrlWorkspace({ displayName, sourceName = null, waiting = false, purpose = 'edit', id } = {}) {
     try {
       return await this.createWorkspace({
         displayName,
         origin: 'url',
         sourceName,
-        waiting
+        waiting,
+        purpose,
+        id
       });
     } catch (error) {
       throw withLocalFailure(error, { operation: 'workspace_creation' });
     }
   }
 
-  async adoptAcquiredFile(workspaceId, filePath, { displayName = null } = {}) {
+  async adoptAcquiredFile(workspaceId, filePath, { displayName = null, maximumBytes = this.maxBytes } = {}) {
     const workspace = this.get(workspaceId, { touch: false });
     if (!workspace || workspace.cancelRequested) throw workspaceCancelledError();
     if (!filePath || !isPathInside(workspace.tempDir, filePath)) {
@@ -720,7 +744,8 @@ class MediaWorkspaceManager {
         { operation: 'output_collection', reason: 'output_inconsistent' }
       );
     }
-    if (stat.size > this.maxBytes) throw this.tooLargeError();
+    if (stat.size > Math.min(this.maxBytes, maximumBytes)) throw this.tooLargeError();
+    if (this.workspaces.get(workspaceId) !== workspace || workspace.cancelRequested || workspace.abortController.signal.aborted) throw workspaceCancelledError();
 
     const sourceAsset = this.registerAsset(workspace, {
       role: 'source',
@@ -763,12 +788,18 @@ class MediaWorkspaceManager {
   async receiveLocalStream(readable, {
     displayName,
     claimedType = null,
-    declaredLength = null
+    declaredLength = null,
+    purpose = 'edit',
+    maximumReceivedBytes = this.maxBytes,
+    onWorkspace = null
   } = {}) {
-    this.assertSizeAllowed(declaredLength);
+    if (!WORKSPACE_PURPOSES.has(purpose)) {
+      throw workspaceRequestError('Unsupported local workspace purpose.', 400);
+    }
+    this.assertSizeAllowed(declaredLength, purpose);
     let workspace;
     try {
-      workspace = await this.createWorkspace({ displayName, claimedType, declaredLength });
+      workspace = await this.createWorkspace({ displayName, claimedType, declaredLength, purpose });
     } catch (error) {
       throw withLocalFailure(error, { operation: 'workspace_creation' });
     }
@@ -776,20 +807,43 @@ class MediaWorkspaceManager {
     const partialPath = path.join(workspace.tempDir, 'source.partial');
     const sourcePath = path.join(workspace.tempDir, 'source.bin');
     let received = 0;
-    const maxBytes = this.maxBytes;
+    const maxBytes = Math.min(this.maxBytes, maximumReceivedBytes);
     const counter = new Transform({
       transform: (chunk, _encoding, callback) => {
         received += chunk.length;
-        if (received > maxBytes) return callback(this.tooLargeError());
+        if (received > maxBytes) return callback(this.tooLargeError(purpose));
         workspace.bytesReceived = received;
         workspace.percent = declaredLength > 0 ? Math.min(100, received / declaredLength * 100) : null;
         callback(null, chunk);
       }
     });
 
+    // Install ownership before the collection can expose this receiving entry.
+    // This promise owns copying/rename only: it never waits for Discard cleanup,
+    // which in turn must await this promise before deleting or releasing bytes.
+    const receiving = Promise.resolve().then(async () => {
+      let output, closed;
+      try {
+        output = this.createWriteStream(partialPath, { flags: 'wx' });
+        closed = output.closed ? Promise.resolve() : new Promise(resolve => output.once('close', resolve));
+        await pipeline(readable, counter, output, { signal: workspace.abortController.signal });
+        if (workspace.cancelRequested || workspace.abortController.signal.aborted) throw workspaceCancelledError();
+        await this.fs.rename(partialPath, sourcePath);
+      } finally {
+        // A pipeline rejection is not itself proof that an asynchronous file
+        // close has finished. Keep ownership until the actual writer closes.
+        if (output) { if (!output.closed) output.destroy(); await closed; }
+        else { readable.destroy(); counter.destroy(); }
+      }
+    });
+    workspace.receivingPromise = receiving;
+    workspace.activePromise = receiving;
+    receiving.finally(() => { workspace.receivingPromise = null; }).catch(() => {});
+
     try {
-      await pipeline(readable, counter, this.createWriteStream(partialPath, { flags: 'wx' }));
-      if (workspace.cancelRequested) throw workspaceCancelledError();
+      if (onWorkspace) onWorkspace(workspace);
+      await receiving;
+      if (workspace.cancelRequested || workspace.abortController.signal.aborted || !this.workspaces.has(workspace.id)) throw workspaceCancelledError();
       if (!received) {
         throw workspaceUserError(
           'The selected local file is empty.',
@@ -797,12 +851,13 @@ class MediaWorkspaceManager {
             'local_media_invalid',
             'The selected file is empty',
             'LVOVD did not receive any media bytes from the selected local file.',
-            'Choose a non-empty local video file.'
+            purpose === 'convert'
+              ? 'Choose one non-empty local video or audio file.'
+              : 'Choose a non-empty local video file.'
           ),
           400
         );
       }
-      await this.fs.rename(partialPath, sourcePath);
       const sourceAsset = this.registerAsset(workspace, {
         role: 'source',
         filePath: sourcePath,
@@ -816,7 +871,9 @@ class MediaWorkspaceManager {
       this.update(workspace, {
         status: 'inspecting',
         phase: 'inspecting',
-        message: 'Inspecting the staged video locally…',
+        message: purpose === 'convert'
+          ? 'Inspecting the staged media locally…'
+          : 'Inspecting the staged video locally…',
         percent: null,
         bytesReceived: received,
         bytesTotal: received
@@ -825,9 +882,11 @@ class MediaWorkspaceManager {
       workspace.activePromise.catch(() => {});
       return workspace;
     } catch (error) {
-      await this.removeWorkspaceFiles(workspace);
-      this.workspaces.delete(workspace.id);
-      if (readable.aborted || isWorkspaceCancellation(error)) {
+      const cancelled = workspace.cancelRequested || workspace.abortController.signal.aborted || readable.aborted || isWorkspaceCancellation(error);
+      // Intake failures use the same invalidation/resource/cleanup owner as a
+      // concurrent DELETE. Its wait covers receiving, not this caller's catch.
+      await this.discard(workspace.id);
+      if (cancelled) {
         throw Object.assign(workspaceCancelledError(), { cleanup: this.cleanupStatus(workspace) });
       }
       error.cleanup = this.cleanupStatus(workspace);
@@ -841,9 +900,73 @@ class MediaWorkspaceManager {
       const sourceAsset = workspace.assets.get(workspace.sourceAssetId);
       const inspection = await this.inspectAsset(workspace, sourceAsset);
       if (workspace.cancelRequested) throw workspaceCancelledError();
+      // One immutable source-fact object; editor projections are derived.
       workspace.inspection = inspection;
+      if (workspace.purpose === 'edit') validateEditorInspection(inspection);
 
-      if (isDirectPlaybackCompatible(inspection)) {
+      if (workspace.purpose === 'convert') {
+        const capabilities = await awaitWorkspaceStep(workspace, this.discoverCapabilities());
+        if (workspace.cancelRequested) throw workspaceCancelledError();
+        workspace.compatibility = this.assessConversion(workspace.inspection, capabilities);
+        workspace.activeOperation = null;
+        workspace.activePromise = null;
+        this.update(workspace, {
+          status: 'ready',
+          phase: 'ready',
+          message: 'Local media inspection ready.',
+          percent: 100,
+          failure: null
+        });
+        return;
+      }
+
+      if (workspace.purpose === 'local') {
+        workspace.activeOperation = null;
+        workspace.activePromise = null;
+        this.update(workspace, { status: 'ready', phase: 'ready', message: 'Local media ready. Choose Edit Video or Convert Media.', percent: 100, failure: null });
+        return;
+      }
+
+      await this.performEditorPreparation(workspace, sourceAsset);
+    } catch (error) {
+      workspace.child = null;
+      const cancelled = workspace.cancelRequested || isWorkspaceCancellation(error);
+      const failure = cancelled ? null : this.failureFor(error);
+      await this.removeWorkspaceFiles(workspace);
+      workspace.activeOperation = null;
+      workspace.activePromise = null;
+      this.update(workspace, { status: cancelled ? 'cancelled' : 'error', phase: cancelled ? 'cancelled' : 'error',
+        message: cancelled ? 'Local media preparation cancelled.' : failure.title, percent: null, failure });
+    }
+  }
+
+  originalSource(workspaceId, sourceAssetId) {
+    const workspace = this.get(workspaceId);
+    if (!workspace) throw workspaceRequestError('Local media workspace not found or expired.', 404);
+    const asset = workspace.assets.get(sourceAssetId);
+    if (!asset || asset.id !== workspace.sourceAssetId || asset.role !== 'source') throw workspaceRequestError('This operation requires the workspace’s current original source asset.', 409);
+    if (workspace.status !== 'ready' || !workspace.inspection || workspace.cleanupRecord) throw workspaceRequestError('The original source is not ready.', 409);
+    return { workspace, asset };
+  }
+
+  prepareEditor(workspaceId, sourceAssetId) {
+    const { workspace, asset } = this.originalSource(workspaceId, sourceAssetId);
+    validateEditorInspection(workspace.inspection);
+    if (workspace.activeOperation) throw workspaceRequestError('A local workspace operation is already running.', 409);
+    if (workspace.editor.status === 'ready' && workspace.playbackAssetId) return workspace;
+    if (workspace.queuedProcessingJobId) throw workspaceRequestError('This file is queued for processing. Preview can prepare after it finishes or is cancelled.', 409);
+    workspace.cancelRequested = false;
+    workspace.abortController = new AbortController();
+    workspace.activeOperation = 'editor';
+    workspace.activePromise = this.performEditorPreparation(workspace, asset);
+    workspace.activePromise.catch(() => {});
+    return workspace;
+  }
+
+  async performEditorPreparation(workspace, sourceAsset) {
+    workspace.editor = { status: 'preparing', message: 'Preparing editor playback…', failure: null };
+    try {
+      if (isDirectPlaybackCompatible(editorInspectionShape(workspace.inspection))) {
         sourceAsset.mime = 'video/mp4';
         sourceAsset.playable = true;
         workspace.playbackAssetId = sourceAsset.id;
@@ -856,7 +979,7 @@ class MediaWorkspaceManager {
           message: 'Preparing a temporary browser-compatible playback proxy…',
           percent: 0
         });
-        const proxyData = await this.createProxyAsset(workspace, sourceAsset, inspection);
+        const proxyData = await this.createProxyAsset(workspace, sourceAsset, editorInspectionShape(workspace.inspection));
         if (workspace.cancelRequested) throw workspaceCancelledError();
         const proxyAsset = this.registerAsset(workspace, {
           ...proxyData,
@@ -870,6 +993,7 @@ class MediaWorkspaceManager {
 
       workspace.activeOperation = null;
       workspace.activePromise = null;
+      workspace.editor = { status: 'ready', message: 'Editor playback ready.', failure: null };
       this.update(workspace, {
         status: 'ready',
         phase: 'ready',
@@ -882,12 +1006,12 @@ class MediaWorkspaceManager {
     } catch (error) {
       workspace.child = null;
       if (workspace.cancelRequested || isWorkspaceCancellation(error)) {
-        await this.removeWorkspaceFiles(workspace);
         workspace.activeOperation = null;
         workspace.activePromise = null;
+        workspace.editor = { status: 'failed', message: 'Editor preparation cancelled.', failure: null };
         this.update(workspace, {
-          status: 'cancelled',
-          phase: 'cancelled',
+          status: 'ready',
+          phase: 'ready',
           message: 'Local media preparation cancelled.',
           percent: null,
           failure: null
@@ -896,12 +1020,12 @@ class MediaWorkspaceManager {
       }
 
       const failure = this.failureFor(error);
-      await this.removeWorkspaceFiles(workspace);
       workspace.activeOperation = null;
       workspace.activePromise = null;
+      workspace.editor = { status: 'failed', message: failure.title, failure };
       this.update(workspace, {
-        status: 'error',
-        phase: 'error',
+        status: 'ready',
+        phase: 'ready',
         message: failure.title,
         percent: null,
         failure
@@ -916,6 +1040,9 @@ class MediaWorkspaceManager {
     captureStdout = true,
     onStdout = null
   }) {
+    if (workspace.activeOperation === 'converting') {
+      return runConversionProcess(this, workspace, command, args, { operation, tool, maxStdoutBytes, captureStdout, onStdout });
+    }
     return new Promise((resolve, reject) => {
       if (workspace.cancelRequested || workspace.abortController.signal.aborted) {
         reject(workspaceCancelledError());
@@ -1008,12 +1135,24 @@ class MediaWorkspaceManager {
         ...localMediaInputArgs(),
         '-show_format',
         '-show_streams',
+        '-show_chapters',
         '-print_format', 'json',
         sourceAsset.filePath
       ], { operation: 'local_processing', tool: 'ffprobe' });
     } catch (error) {
       if (isWorkspaceCancellation(error) || error?.localFailure?.operation === 'process_start') throw error;
       if (/Format not on whitelist|Skipped opening external track/i.test(error.diagnostic || '')) throw unsupportedLocalInputError();
+      if (workspace.purpose === 'convert') {
+        throw workspaceUserError(
+          'ffprobe could not inspect the staged file as local media.',
+          normalizedFailure(
+            'local_media_invalid',
+            'This file could not be inspected',
+            'Local media inspection could not read usable media information from the staged file.',
+            'Choose another local video or audio file. The original file outside LVOVD is unchanged.'
+          )
+        );
+      }
       throw workspaceUserError(
         'ffprobe could not inspect the staged file as media.',
         normalizedFailure(
@@ -1039,11 +1178,13 @@ class MediaWorkspaceManager {
           'local_media_invalid',
           'This file could not be inspected',
           'Local media inspection did not return usable normalized metadata.',
-          'Choose another local video file or check the FFmpeg installation.'
+          workspace.purpose === 'convert'
+            ? 'Choose another local video or audio file, or check the FFmpeg installation.'
+            : 'Choose another local video file or check the FFmpeg installation.'
         )
       );
     }
-    return normalizeInspection(raw);
+    return normalizeMediaInspection(raw, { sourceSize: sourceAsset.size });
   }
 
   async defaultCreateProxyAsset(workspace, sourceAsset, inspection) {
@@ -1107,11 +1248,17 @@ class MediaWorkspaceManager {
     const workspace = this.get(workspaceId);
     if (!workspace) throw workspaceRequestError('Local media workspace not found or expired.', 404);
     const sourceAsset = workspace.assets.get(workspace.sourceAssetId);
+    if (workspace.editor.status !== 'ready') {
+      throw workspaceRequestError('Prepare Edit for this owned source before rendering.', 409);
+    }
     if (workspace.status !== 'ready' || !sourceAsset || !workspace.inspection) {
       throw workspaceRequestError('The local media workspace is not ready to create an edited file.', 409);
     }
-    if (workspace.activeOperation) {
+    if (workspace.activeOperation || workspace.queuedProcessingJobId) {
       throw workspaceRequestError('A local workspace operation is already running.', 409);
+    }
+    if (this.outputRetirement.state(workspace).blocked || workspace.conversion.cleanupPaths.size) {
+      throw workspaceRequestError('Retry temporary output cleanup before creating another file.', 409);
     }
 
     const editPlan = normalizeEditPlan(rawEditPlan, workspace.inspection.durationSeconds);
@@ -1178,13 +1325,12 @@ class MediaWorkspaceManager {
         playable: false,
         filename: editedOutputFilename(workspace.source.displayName),
         inspection: outputInspection,
-        editPlan
+        editPlan,
+        validated: true
       });
       workspace.render.outputAssetId = outputAsset.id;
       if (previousOutputId && previousOutputId !== outputAsset.id) {
-        const previous = workspace.assets.get(previousOutputId);
-        workspace.assets.delete(previousOutputId);
-        if (previous?.filePath) await this.fs.rm(previous.filePath, { force: true }).catch(() => {});
+        await this.outputRetirement.retire(workspace, previousOutputId);
       }
       this.updateRender(workspace, {
         status: 'ready',
@@ -1194,8 +1340,8 @@ class MediaWorkspaceManager {
         requestedPlan: structuredClone(editPlan)
       });
     } catch (error) {
-      await this.fs.rm(attempt.partialPath, { force: true }).catch(() => {});
-      await this.fs.rm(attempt.finalPath, { force: true }).catch(() => {});
+      await this.conversions.removeFile(workspace, attempt.partialPath);
+      await this.conversions.removeFile(workspace, attempt.finalPath);
       if (workspace.cancelRequested || isWorkspaceCancellation(error)) {
         this.updateRender(workspace, {
           status: 'cancelled',
@@ -1216,6 +1362,7 @@ class MediaWorkspaceManager {
       workspace.child = null;
       workspace.activeOperation = null;
       workspace.activePromise = null;
+      this.emit(workspace);
     }
   }
 
@@ -1242,7 +1389,8 @@ class MediaWorkspaceManager {
 
   resolveOutputAsset(workspaceId, assetId) {
     const workspace = this.get(workspaceId);
-    if (!workspace || !assetId || assetId !== workspace.render.outputAssetId) return null;
+    if (!workspace
+      || !assetId || assetId !== workspace.render.outputAssetId) return null;
     const asset = workspace.assets.get(assetId) || null;
     if (!asset || asset.role !== 'edited-output' || !asset.filePath || !asset.filename) return null;
     return { workspace, asset };
@@ -1250,7 +1398,7 @@ class MediaWorkspaceManager {
 
   resolvePlaybackAsset(workspaceId, assetId) {
     const workspace = this.get(workspaceId);
-    if (!workspace || workspace.status !== 'ready') return null;
+    if (!workspace || workspace.editor.status !== 'ready' || workspace.status !== 'ready') return null;
     const asset = workspace.assets.get(assetId) || null;
     if (!asset || !asset.playable || asset.id !== workspace.playbackAssetId) return null;
     return { workspace, asset };
@@ -1326,7 +1474,7 @@ class MediaWorkspaceManager {
     await new Promise((resolve) => {
       let settled = false;
       const stream = this.createReadStream(asset.filePath, range ? { start: range.start, end: range.end } : undefined);
-      this.ownReadStream(workspace, stream, res);
+      this.ownReadStream(workspace, stream, res, asset.id);
       const finish = () => {
         if (settled) return;
         settled = true;
@@ -1346,13 +1494,16 @@ class MediaWorkspaceManager {
     });
   }
 
-  ownReadStream(workspace, stream, response) {
-    workspace.readStreams.set(stream, response);
-    stream.once('close', () => workspace.readStreams.delete(stream));
+  ownReadStream(workspace, stream, response, assetId = null) {
+    workspace.readStreams.set(stream, { response, assetId });
+    stream.once('close', () => {
+      workspace.readStreams.delete(stream);
+      if (workspace.retiredOutputs.has(assetId)) this.outputRetirement.retire(workspace, assetId).catch(() => {});
+    });
   }
 
   async releaseReadStreams(workspace) {
-    await Promise.all([...workspace.readStreams].map(([stream, response]) => {
+    await Promise.all([...workspace.readStreams].map(([stream, { response }]) => {
       if (stream.closed) return;
       const closed = new Promise(resolve => stream.once('close', resolve));
       stream.destroy();
@@ -1362,6 +1513,12 @@ class MediaWorkspaceManager {
   }
 
   cleanupStatus(workspaceOrId) {
+    if (workspaceOrId?.receivingPromise || (typeof workspaceOrId === 'string' && this.discards.has(workspaceOrId) && !this.cleanupPending.has(workspaceOrId))) {
+      return { status: 'pending', message: 'Owned resources must close before temporary files can be removed.' };
+    }
+    if (typeof workspaceOrId !== 'string' && workspaceOrId?.activeOperation === 'converting' && !workspaceOrId.cleanupRecord) {
+      return { status: 'pending', message: 'Conversion termination is pending. Temporary files remain owned until the process exits.' };
+    }
     const record = typeof workspaceOrId === 'string'
       ? this.cleanupPending.get(workspaceOrId)
       : workspaceOrId?.cleanupRecord;
@@ -1380,6 +1537,7 @@ class MediaWorkspaceManager {
     if (record.promise) return record.promise;
     if (record.status === 'complete') return;
     record.status = 'pending';
+    if (!this.workspaces.has(record.workspace.id)) this.localProcessing.cleanupChanged(record.workspace.id);
     record.promise = (async () => {
       await this.releaseReadStreams(record.workspace);
       record.attempts += 1;
@@ -1411,11 +1569,13 @@ class MediaWorkspaceManager {
     finally {
       record.promise = null;
       if (this.workspaces.has(record.workspace.id)) this.emit(record.workspace);
+      else this.localProcessing.cleanupChanged(record.workspace.id);
     }
   }
 
   async removeWorkspaceFiles(workspace) {
     if (!workspace) return;
+    await Promise.all([...workspace.retiredOutputs.values()].map(record => record.promise).filter(Boolean));
     let record = workspace.cleanupRecord;
     if (!record && workspace.tempDir) {
       record = {
@@ -1437,6 +1597,11 @@ class MediaWorkspaceManager {
       workspace.sourceAssetId = null;
       workspace.playbackAssetId = null;
       workspace.render.outputAssetId = null;
+      workspace.conversion.output = null;
+      workspace.conversion.cleanupPaths.clear();
+      workspace.conversion.cleanupDirectories.clear();
+      workspace.processingReview = null;
+      workspace.retiredOutputs.clear();
     }
     if (!record) return;
     if (record.promise) await record.promise;
@@ -1466,10 +1631,11 @@ class MediaWorkspaceManager {
     if (!workspace) return Promise.resolve(false);
     // Invalidate first, independently of process shutdown or physical deletion.
     this.workspaces.delete(workspaceId);
+    this.localProcessing.workspaceRemoved(workspace);
     this.closeListeners(workspace);
     const task = this.discardOwnedWorkspace(workspace, expired);
     this.discards.set(workspaceId, task);
-    task.finally(() => this.discards.delete(workspaceId)).catch(() => {});
+    task.finally(() => { this.discards.delete(workspaceId); this.localProcessing.cleanupChanged(workspaceId); }).catch(() => {});
     return task;
   }
 
@@ -1482,7 +1648,7 @@ class MediaWorkspaceManager {
         && !workspace.child;
       workspace.cancelRequested = true;
       if (!workspace.abortController.signal.aborted) workspace.abortController.abort();
-      if (workspace.child) {
+      if (workspace.child && !workspace.stopAcquisition) {
         try { workspace.child.kill(); } catch {}
       }
       if (operation === 'rendering') {
@@ -1516,9 +1682,10 @@ class MediaWorkspaceManager {
   }
 
   async cleanupExpired(now = this.now()) {
+    this.localProcessing.sweep(now);
     const removed = [];
     for (const workspace of this.workspaces.values()) {
-      if (workspace.activeOperation || ['waiting', 'acquiring', 'receiving', 'inspecting', 'proxying', 'cancelling'].includes(workspace.status)) continue;
+      if (workspace.activeOperation || workspace.queuedProcessingJobId || ['waiting', 'acquiring', 'receiving', 'inspecting', 'proxying', 'cancelling'].includes(workspace.status)) continue;
       if (now - workspace.lastAccessAt < this.ttlMs) continue;
       await this.discard(workspace.id, { expired: true });
       removed.push(workspace.id);
@@ -1527,6 +1694,7 @@ class MediaWorkspaceManager {
   }
 
   async clearAll() {
+    this.localProcessing.clear();
     for (const id of [...this.workspaces.keys()]) await this.discard(id);
   }
 }
@@ -1552,6 +1720,8 @@ module.exports = {
   isFullDurationEditPlan,
   editedOutputFilename,
   parseFrameRate,
+  normalizeMediaInspection,
+  validateEditorInspection,
   normalizeInspection,
   isDirectPlaybackCompatible,
   playbackProxyArgs,

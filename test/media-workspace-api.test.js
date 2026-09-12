@@ -17,6 +17,7 @@ const {
   totalRetainedDuration
 } = require('../media-workspace');
 const { mediaWorkspaces, historyStore, jobs } = require('../app-server');
+const { normalizeMediaInspection } = require('../media-inspection');
 const { server } = require('../server');
 
 const PORT = Number(process.env.PORT);
@@ -49,12 +50,16 @@ let originalInspectAsset;
 let originalCreateProxyAsset;
 let originalInspectOutputAsset;
 let originalCreateEditedAsset;
+let originalDiscoverCapabilities;
+let originalAssessConversion;
 
 test.before(async () => {
   originalInspectAsset = mediaWorkspaces.inspectAsset;
   originalCreateProxyAsset = mediaWorkspaces.createProxyAsset;
   originalInspectOutputAsset = mediaWorkspaces.inspectOutputAsset;
   originalCreateEditedAsset = mediaWorkspaces.createEditedAsset;
+  originalDiscoverCapabilities = mediaWorkspaces.discoverCapabilities;
+  originalAssessConversion = mediaWorkspaces.assessConversion;
   await listen();
 });
 
@@ -62,6 +67,13 @@ test.beforeEach(async () => {
   await mediaWorkspaces.clearAll();
   mediaWorkspaces.inspectAsset = async () => directInspection;
   mediaWorkspaces.createProxyAsset = originalCreateProxyAsset;
+  mediaWorkspaces.discoverCapabilities = async () => ({
+    available: true,
+    encoders: new Set(['libx264', 'aac']),
+    decoders: new Set(['h264', 'aac', 'flac']),
+    muxers: new Set(['mp4'])
+  });
+  mediaWorkspaces.assessConversion = originalAssessConversion;
   mediaWorkspaces.inspectOutputAsset = async (workspace) => ({
     ...editedInspection,
     durationSeconds: totalRetainedDuration(workspace.render.requestedPlan)
@@ -79,6 +91,8 @@ test.after(async () => {
   mediaWorkspaces.createProxyAsset = originalCreateProxyAsset;
   mediaWorkspaces.inspectOutputAsset = originalInspectOutputAsset;
   mediaWorkspaces.createEditedAsset = originalCreateEditedAsset;
+  mediaWorkspaces.discoverCapabilities = originalDiscoverCapabilities;
+  mediaWorkspaces.assessConversion = originalAssessConversion;
   await closeServer();
 });
 
@@ -130,6 +144,19 @@ function request(pathname, { method = 'GET', headers = {}, body = null } = {}) {
 
 async function upload(body, name = 'local.mp4', contentType = 'video/mp4') {
   const response = await request('/api/workspace/local', {
+    method: 'POST',
+    headers: {
+      'Content-Type': contentType,
+      'Content-Length': body.length,
+      'X-LVOVD-Filename': encodeURIComponent(name)
+    },
+    body
+  });
+  return { response, data: JSON.parse(response.body.toString('utf8')) };
+}
+
+async function inspectUpload(body, name = 'local-media.bin', contentType = 'application/octet-stream') {
+  const response = await request('/api/conversion/local', {
     method: 'POST',
     headers: {
       'Content-Type': contentType,
@@ -394,6 +421,91 @@ test('raw local intake returns an opaque workspace and direct media supports GET
     assert.equal(invalid.status, 416, range);
     assert.equal(invalid.headers['content-range'], `bytes */${bytes.length}`);
     assert.equal(invalid.body.length, 0);
+  }
+});
+
+test('Convert API accepts video and audio inspection without playback, jobs, History, or exposed paths', async () => {
+  const historyBefore = await historyStore.list();
+  const jobsBefore = jobs.size;
+  let proxyCalls = 0;
+  mediaWorkspaces.createProxyAsset = async () => {
+    proxyCalls += 1;
+    throw new Error('Convert inspection must not make a playback proxy.');
+  };
+  mediaWorkspaces.inspectAsset = async (workspace) => {
+    if (workspace.source.displayName.endsWith('.flac')) {
+      return {
+        mediaKind: 'audio',
+        durationSeconds: 4,
+        sourceSize: workspace.source.size,
+        format: 'FLAC',
+        formatNames: ['flac'],
+        video: null,
+        audio: {
+          streamIndex: 0, codec: 'flac', sampleRate: 44100, channels: 2,
+          channelLayout: 'stereo', bitRate: null
+        },
+        trackCounts: { video: 0, audio: 1, subtitle: 0 }
+      };
+    }
+    return {
+      mediaKind: 'video',
+      durationSeconds: 6,
+      sourceSize: workspace.source.size,
+      format: 'MP4',
+      container: { kind: 'mp4', evidence: 'brand' },
+      formatNames: ['mov', 'mp4'],
+      video: {
+        streamIndex: 0, codec: 'h264', profile: 'High', width: 640, height: 360,
+        frameRate: 30, pixelFormat: 'yuv420p'
+      },
+      audio: {
+        streamIndex: 1, codec: 'aac', sampleRate: 48000, channels: 2,
+        channelLayout: 'stereo', bitRate: 192000
+      },
+      trackCounts: { video: 1, audio: 1, subtitle: 0 }
+    };
+  };
+
+  const video = await inspectUpload(
+    Buffer.from('synthetic conversion video'),
+    '..\\private\\camera.mp4',
+    'user/claimed-video'
+  );
+  assert.equal(video.response.status, 202);
+  assert.equal(video.data.workspace.purpose, 'convert');
+  const videoWorkspace = await waitForWorkspace(video.data.workspaceId);
+  const videoSnapshot = mediaWorkspaces.publicWorkspace(videoWorkspace);
+  assert.equal(videoSnapshot.status, 'ready');
+  assert.equal(videoSnapshot.compatibility.status, 'already-compatible');
+  assert.equal(videoSnapshot.playback, null);
+  assert.equal(videoSnapshot.render, null);
+  assert.equal(videoSnapshot.editedOutput, null);
+  assert.deepEqual(videoSnapshot.assets.map((asset) => asset.role), ['source']);
+  assert.doesNotMatch(JSON.stringify(videoSnapshot), /private|source\.bin|workspace-|filePath|tempDir/i);
+
+  const event = await readOneSseEvent(`/api/workspace/progress?workspace=${videoWorkspace.id}`);
+  assert.equal(event.status, 200);
+  assert.equal(event.data.purpose, 'convert');
+  assert.equal(event.data.status, 'ready');
+
+  const audio = await inspectUpload(Buffer.from('synthetic audio media'), 'track.flac', 'audio/flac');
+  assert.equal(audio.response.status, 202);
+  const audioWorkspace = await waitForWorkspace(audio.data.workspaceId);
+  const audioSnapshot = mediaWorkspaces.publicWorkspace(audioWorkspace);
+  assert.equal(audioSnapshot.inspection.mediaKind, 'audio');
+  assert.equal(audioSnapshot.compatibility.status, 'not-applicable');
+  assert.equal(audioSnapshot.playback, null);
+  assert.equal(proxyCalls, 0);
+  assert.equal(jobs.size, jobsBefore);
+  assert.deepEqual(await historyStore.list(), historyBefore);
+
+  for (const workspace of [videoWorkspace, audioWorkspace]) {
+    const response = await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+    assert.equal(response.status, 200);
+    assert.equal(mediaWorkspaces.get(workspace.id, { touch: false }), null);
+    const oldProgress = await request(`/api/workspace/progress?workspace=${workspace.id}`);
+    assert.equal(oldProgress.status, 404);
   }
 });
 
@@ -873,4 +985,144 @@ test('DELETE cancels active preparation, discards assets, and invalidates media 
   assert.equal(media.status, 404);
   const secondDelete = await request(`/api/workspace?workspace=${data.workspaceId}`, { method: 'DELETE' });
   assert.equal(secondDelete.status, 404);
+});
+
+test('neutral conversion API enforces reviewed identity and secure no-op GET/HEAD without Download or History work', async () => {
+  mediaWorkspaces.inspectAsset = async () => normalizeMediaInspection({
+    format: { format_name: 'mov,mp4,m4a', start_time: '0', duration: '5', tags: { major_brand: 'isom' } }, chapters: [],
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p', width: 96, height: 64, start_time: '0', duration: '5', avg_frame_rate: '20/1' }]
+  });
+  mediaWorkspaces.discoverCapabilities = async () => { throw new Error('A no-op must not discover capabilities'); };
+  const bytes = Buffer.from('owned synthetic no-op bytes');
+  const uploaded = await request('/api/media/local', { method: 'POST', body: bytes,
+    headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'X-LVOVD-Filename': encodeURIComponent('../unsafe<>.mp4') } });
+  assert.equal(uploaded.status, 202);
+  const workspace = await waitForWorkspace(JSON.parse(uploaded.body).workspaceId);
+  assert.equal(workspace.playbackAssetId, null);
+  const body = { workspaceId: workspace.id, inputAssetId: workspace.sourceAssetId, targetId: 'broad-compatibility-mp4' };
+  const post = (route, value) => request(route, { method: 'POST', body: JSON.stringify(value), headers: { 'Content-Type': 'application/json' } });
+  const url = `/api/conversion/file?workspace=${workspace.id}&asset=${workspace.sourceAssetId}`;
+  assert.equal((await request(url)).status, 404);
+  const jobIds = [...jobs.keys()];
+  const historyBeforeConversion = await historyStore.list();
+  for (const field of ['path', 'args', 'filters', 'codec', 'map']) {
+    assert.equal((await post('/api/conversion/plan', { ...body, [field]: 'injected' })).status, 400);
+  }
+  assert.equal((await post('/api/conversion/plan', { ...body, targetId: 'mp3 -y' })).status, 400);
+  assert.equal((await post('/api/workspace/editor', { workspaceId: workspace.id, sourceAssetId: 'wrong' })).status, 409);
+  const planned = await post('/api/conversion/plan', body);
+  assert.equal(planned.status, 200);
+  const plan = JSON.parse(planned.body).plan;
+  assert.equal(plan.status, 'no-op');
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: 'stale' })).status, 409);
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: plan.key })).status, 202);
+  const download = await request(url);
+  assert.equal(download.status, 200); assert.deepEqual(download.body, bytes);
+  assert.equal(download.headers['content-type'], 'video/mp4');
+  assert.equal(download.headers['cache-control'], 'no-store'); assert.equal(download.headers['x-content-type-options'], 'nosniff');
+  assert.match(download.headers['content-disposition'], /^attachment;/); assert.doesNotMatch(download.headers['content-disposition'], /unsafe<>|\.\.\//);
+  const head = await request(url, { method: 'HEAD' });
+  assert.equal(head.status, 200); assert.equal(head.body.length, 0); assert.equal(Number(head.headers['content-length']), bytes.length);
+  assert.equal((await request(url.replace(workspace.id, 'different-workspace'))).status, 404);
+  assert.deepEqual([...jobs.keys()], jobIds);
+  assert.deepEqual(await historyStore.list(), historyBeforeConversion);
+  assert.equal(workspace.assets.size, 1);
+  await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+  assert.equal((await request(url)).status, 404);
+});
+
+test('edited-input API accepts original-coordinate freshness, preserves no-op download across rerender, and rejects retired planning', async () => {
+  const inspected = duration => normalizeMediaInspection({
+    format: { format_name: 'mov,mp4,m4a', start_time: '0', duration: String(duration), tags: { major_brand: 'isom' } }, chapters: [],
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p', width: 96, height: 64, start_time: '0', duration: String(duration), avg_frame_rate: '20/1' }]
+  });
+  mediaWorkspaces.inspectAsset = async () => inspected(9);
+  mediaWorkspaces.inspectOutputAsset = async workspace => inspected(totalRetainedDuration(workspace.render.requestedPlan));
+  mediaWorkspaces.createEditedAsset = async (_workspace, _source, _inspection, plan, attempt) => {
+    await fsp.writeFile(attempt.finalPath, JSON.stringify(plan)); return { filePath: attempt.finalPath };
+  };
+  mediaWorkspaces.discoverCapabilities = async () => { throw new Error('no-op must not execute discovery'); };
+  const { data } = await upload(Buffer.from('synthetic original'), 'nine-seconds.mp4');
+  const workspace = await waitForWorkspace(data.workspaceId);
+  const historyBefore = await historyStore.list(), jobIds = [...jobs.keys()];
+  const post = (route, value) => request(route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  const editPlan = { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 3 }, { startSeconds: 6, endSeconds: 9 }] };
+  assert.equal((await post('/api/workspace/render', { workspaceId: workspace.id, editPlan })).status, 202);
+  await waitForRender(workspace.id);
+  const first = mediaWorkspaces.publicWorkspace(workspace).editedOutput;
+  const body = { workspaceId: workspace.id, inputAssetId: first.assetId, editPlan, targetId: 'broad-compatibility-mp4' };
+  for (const extra of [{ sourceAssetId: first.assetId }, { inputRole: 'source' }, { filePath: '/arbitrary' }, { args: ['-y'] }]) {
+    assert.equal((await post('/api/conversion/plan', { ...body, ...extra })).status, 400);
+  }
+  assert.equal((await post('/api/workspace/editor', { workspaceId: workspace.id, sourceAssetId: first.assetId })).status, 409);
+  const planned = await post('/api/conversion/plan', body);
+  assert.equal(planned.status, 200);
+  const plan = JSON.parse(planned.body).plan;
+  assert.equal(plan.inputAssetId, first.assetId); assert.equal(plan.inputRole, 'edited-output'); assert.equal(plan.inputDurationSeconds, 6);
+  assert.equal(plan.status, 'no-op'); assert.equal(Object.hasOwn(plan, 'sourceAssetId'), false);
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: plan.key })).status, 202);
+  const alias = mediaWorkspaces.publicWorkspace(workspace).conversion.output;
+  const oldBytes = (await request(alias.downloadUrl)).body;
+  assert.deepEqual(oldBytes, (await request(first.downloadUrl)).body);
+  assert.equal((await request(alias.downloadUrl, { method: 'HEAD' })).status, 200);
+  const changed = { version: 1, keepRanges: [{ startSeconds: 1, endSeconds: 5 }] };
+  assert.equal((await post('/api/conversion/plan', { ...body, editPlan: changed })).status, 409);
+  assert.equal((await post('/api/workspace/render', { workspaceId: workspace.id, editPlan: changed })).status, 202);
+  await waitForRender(workspace.id);
+  assert.equal((await request(first.downloadUrl)).status, 404);
+  assert.deepEqual((await request(alias.downloadUrl)).body, oldBytes);
+  assert.equal((await post('/api/conversion/plan', body)).status, 409);
+  assert.equal((await post('/api/conversion/start', { ...body, planKey: plan.key })).status, 409);
+  assert.deepEqual(await historyStore.list(), historyBefore); assert.deepEqual([...jobs.keys()], jobIds);
+  await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+  assert.equal((await request(alias.downloadUrl)).status, 404);
+});
+
+test('unified processing API binds canonical cuts/settings/revisions to the original and publishes secure complete no-op bytes', async () => {
+  mediaWorkspaces.discoverCapabilities = async () => ({ available: true, encoders: new Set(['libx264', 'aac']),
+    decoders: new Set(['h264', 'aac']), muxers: new Set(['mp4', 'null']) });
+  mediaWorkspaces.inspectAsset = async () => normalizeMediaInspection({
+    format: { format_name: 'mov,mp4,m4a', start_time: '0', duration: '9', tags: { major_brand: 'isom' } }, chapters: [],
+    streams: [{ index: 0, codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p', width: 96, height: 64,
+      sample_aspect_ratio: '1:1', start_time: '0', duration: '9', avg_frame_rate: '20/1' }]
+  });
+  const bytes = Buffer.from('synthetic original processing input');
+  const uploaded = await request('/api/media/local', { method: 'POST', body: bytes,
+    headers: { 'Content-Type': 'video/mp4', 'Content-Length': bytes.length, 'X-LVOVD-Filename': 'source.mp4' } });
+  const workspace = await waitForWorkspace(JSON.parse(uploaded.body).workspaceId);
+  const history = await historyStore.list(), jobIds = [...jobs.keys()];
+  const post = (route, value) => request(route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  const body = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId, draftRevision: 0, settings: {} };
+  for (const extra of [{ inputAssetId: workspace.sourceAssetId }, { path: '/arbitrary' }, { codec: 'libx264' }, { args: ['-y'] }, { role: 'source' }]) {
+    assert.equal((await post('/api/processing/plan', { ...body, ...extra })).status, 400);
+  }
+  for (const settings of [{ videoCodec: 'hevc' }, { rate: { mode: 'size', maximumMB: 0 } }, { scale: { mode: 'fit', width: -2, height: 480 } }, { audio: { filters: 'anything' } }]) {
+    assert.equal((await post('/api/processing/plan', { ...body, settings })).status, 400);
+  }
+  assert.equal((await post('/api/processing/plan', { ...body, sourceAssetId: 'wrong-role' })).status, 409);
+  const blocked = await request('/api/processing/plan', { method: 'POST', body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json', Origin: 'https://untrusted.invalid', 'Sec-Fetch-Site': 'cross-site' } });
+  assert.equal(blocked.status, 403);
+  const plan = JSON.parse((await post('/api/processing/plan', body)).body).plan;
+  assert.equal(plan.status, 'no-op'); assert.equal(plan.inputAssetId, workspace.sourceAssetId);
+  assert.equal((await post('/api/processing/start', { ...body, planKey: 'stale' })).status, 409);
+  const started = await post('/api/processing/start', { ...body, planKey: plan.key }); assert.equal(started.status, 202);
+  const output = JSON.parse(started.body).workspace.conversion.output;
+  assert.equal(output.draftRevision, 0); assert.equal(output.processingSnapshot.settings.videoCodec, 'unchanged');
+  assert.deepEqual((await request(output.downloadUrl)).body, bytes);
+  const head = await request(output.downloadUrl, { method: 'HEAD' }); assert.equal(head.status, 200); assert.equal(Number(head.headers['content-length']), bytes.length);
+  const edited = { ...body, draftRevision: 1, editPlan: { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: 3 }, { startSeconds: 6, endSeconds: 9 }] },
+    settings: { videoCodec: 'h264', container: 'mp4', rate: { mode: 'bitrate', videoKbps: 100, twoPass: true } } };
+  const reviewed = JSON.parse((await post('/api/processing/plan', edited)).body).plan;
+  assert.equal(reviewed.status, 'executable'); assert.equal(reviewed.timing.durationSeconds, 6); assert.equal(reviewed.passes, 2);
+  assert.equal(reviewed.streams[0].index, 0); assert.equal(reviewed.streams[0].action, 'encode');
+  assert.equal(Object.hasOwn(reviewed.streams[0], 'encoder'), false); assert.equal(Object.hasOwn(reviewed.streams[0], 'decoder'), false);
+  assert.equal((await post('/api/processing/start', { ...body, planKey: plan.key })).status, 409);
+  assert.equal((await post('/api/processing/plan', { ...edited, settings: {} })).status, 409);
+  assert.equal(workspace.playbackAssetId, null); assert.equal(workspace.assets.size, 1);
+  assert.deepEqual((await request(output.downloadUrl)).body, bytes);
+  assert.deepEqual(await historyStore.list(), history); assert.deepEqual([...jobs.keys()], jobIds);
+  await request(`/api/workspace?workspace=${workspace.id}`, { method: 'DELETE' });
+  assert.equal((await request(output.downloadUrl)).status, 404);
+  assert.equal((await post('/api/processing/start', { ...edited, planKey: reviewed.key })).status, 404);
 });

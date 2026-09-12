@@ -12,6 +12,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const { Readable } = require('node:stream');
 const { localMediaInputArgs } = require('../../local-media-input');
 const { createMediaWorkspaceManager } = require('../../media-workspace');
+const { getFfmpegCapabilities, hasSoftwareDecoder } = require('../../ffmpeg-capabilities');
 
 let root;
 let source;
@@ -62,8 +63,8 @@ async function waitFor(predicate) {
   }
 }
 
-async function receive(manager, file, displayName = 'fixture.bin') {
-  const workspace = await manager.receiveLocalStream(fs.createReadStream(file), { displayName, claimedType: 'application/octet-stream' });
+async function receive(manager, file, displayName = 'fixture.bin', purpose = 'edit') {
+  const workspace = await manager.receiveLocalStream(fs.createReadStream(file), { displayName, purpose, claimedType: 'application/octet-stream' });
   await waitFor(() => ['ready', 'error'].includes(workspace.status));
   return workspace;
 }
@@ -85,6 +86,56 @@ test.before(async () => {
 
 test.after(async () => {
   if (root) await fsp.rm(root, { recursive: true, force: true });
+});
+
+for (const [extension, kind, status] of [['mp4', 'mp4', 'already-compatible'], ['mov', 'mov', 'remux'], ['mkv', 'matroska', 'remux']]) {
+  test(`real Convert ${extension} container identity and assessment without a proxy or output`, async t => {
+    const manager = await managerFor(t);
+    const file = path.join(root, `convert.${extension}`);
+    ffmpeg([...localMediaInputArgs(), '-i', source, '-c', 'copy', file]);
+    const raw = JSON.parse(execFileSync('ffprobe', ['-v', 'error', ...localMediaInputArgs(), '-show_format', '-show_streams', '-of', 'json', file], { encoding: 'utf8', windowsHide: true }));
+    if (extension === 'mov') assert.equal(raw.format.tags.major_brand.trim(), 'qt');
+    if (extension === 'mp4') assert.equal(raw.format.tags.major_brand.trim(), 'isom');
+    const start = calls.length;
+    const workspace = await receive(manager, file, 'misleading-name.data', 'convert');
+    assert.equal(workspace.status, 'ready', JSON.stringify(workspace.failure));
+    assert.equal(workspace.inspection.container.kind, kind);
+    assert.equal(workspace.compatibility.status, status);
+    assert.equal(workspace.inspection.sourceSize, (await fsp.stat(file)).size);
+    assert.deepEqual(calls.slice(start).map(call => call.command), ['ffprobe']);
+    assert.ok(calls[start].args.includes('-format_whitelist'));
+    assert.ok(calls[start].args.includes('-enable_drefs'));
+    const state = manager.publicWorkspace(workspace);
+    assert.equal(state.playback, null);
+    assert.equal(state.editedOutput, null);
+    assert.deepEqual(state.assets.map(asset => asset.role), ['source']);
+    console.log(JSON.stringify({ conversionFixture: extension, container: state.inspection.container, assessment: status }));
+  });
+}
+
+test('real Convert audio-only intake succeeds without loosening Edit eligibility', async t => {
+  const manager = await managerFor(t);
+  const file = path.join(root, 'convert-audio.flac');
+  ffmpeg([...localMediaInputArgs(), '-i', source, '-vn', '-c:a', 'flac', file]);
+  const workspace = await receive(manager, file, 'audio.bin', 'convert');
+  assert.equal(workspace.status, 'ready');
+  assert.equal(workspace.inspection.mediaKind, 'audio');
+  assert.equal(workspace.compatibility.status, 'not-applicable');
+  assert.equal(workspace.playbackAssetId, null);
+  assert.equal((await receive(manager, file)).status, 'error');
+});
+
+test('real installed FFmpeg listings produce codec-to-software-decoder evidence', async () => {
+  const capabilities = await getFfmpegCapabilities();
+  assert.equal(capabilities.available, true);
+  assert.ok(capabilities.version);
+  assert.ok(capabilities.encoders.has('libx264'));
+  assert.ok(capabilities.encoders.has('aac'));
+  assert.ok(capabilities.muxers.has('mp4'));
+  assert.ok(hasSoftwareDecoder(capabilities, 'h264'));
+  assert.ok(hasSoftwareDecoder(capabilities, 'aac'));
+  assert.ok(hasSoftwareDecoder(capabilities, 'mp3'));
+  assert.ok(capabilities.decoderCodecs.get('mp3').some(decoder => decoder.name === 'mp3float' && decoder.software));
 });
 
 for (const extension of ['mp4', 'mov', 'mkv', 'webm', 'avi', 'ts']) {
@@ -133,7 +184,7 @@ test('real ordinary audio containers still probe under the policy, while audio/c
 });
 
 test('generated reference input is rejected before dependency reads through upload and URL-file adoption despite its name', async t => {
-  for (const origin of ['local', 'url']) {
+  for (const origin of ['local', 'url', 'convert']) {
     const manager = await managerFor(t);
     const workspace = await manager.createUrlWorkspace({ displayName: 'looks-like-video.mp4' });
     const ownedDirectory = workspace.tempDir;
@@ -141,10 +192,11 @@ test('generated reference input is rejected before dependency reads through uplo
     const bytes = Buffer.from(reference.replace('<Period ', `<BaseURL>${relative}</BaseURL><Period `));
     const start = calls.length;
     let target = workspace;
-    if (origin === 'local') {
+    if (origin !== 'url') {
       await manager.discard(workspace.id);
       // Both intake workspaces have the same depth under their owned root.
-      target = await manager.receiveLocalStream(Readable.from(bytes), { displayName: 'looks-like-video.mp4', claimedType: 'video/mp4' });
+      target = await manager.receiveLocalStream(Readable.from(bytes), { displayName: 'looks-like-video.mp4', claimedType: 'video/mp4',
+        purpose: origin === 'convert' ? 'convert' : 'edit' });
       await waitFor(() => target.status === 'error' || target.status === 'ready');
     } else {
       const file = path.join(workspace.tempDir, 'source.mp4');
