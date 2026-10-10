@@ -29,9 +29,9 @@ LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to downlo
 
 ## Quick Start
 
-### 1. Install Node.js 22+ and FFmpeg
+### 1. Install Node.js 22+ and FFmpeg with FFprobe
 
-If you already have both, skip this step.
+If all three commands below already work, skip installation. Local Media uses FFprobe to inspect sources and validate processed results; make sure both FFmpeg and FFprobe are available on PATH.
 
 **Windows 10/11**
 
@@ -70,7 +70,10 @@ In a terminal, see that these return without errors:
 ```bash
 node --version
 ffmpeg -version
+ffprobe -version
 ```
+
+The launcher warns when FFprobe is unavailable and keeps ordinary URL Download available. **Runtime status** reports FFprobe separately; after fixing the installation or PATH, choose **Recheck**. Restart the launcher if your PATH changed outside its terminal.
 
 ### 2. Get LVOVD
 
@@ -106,7 +109,7 @@ http://localhost:3000
 
 ## What it can do
 
-**v2.6.0 — Local Media Workbench & Batch Processing.** See the [release notes](docs/releases/v2.6.0.md) for the changes, update instructions, and supported scope.
+**v2.6.1 maintenance update.** See the [patch release notes](docs/releases/v2.6.1.md) for runtime checks, delayed-removal status fixes, and shorter playlist pauses. The [v2.6.0 release notes](docs/releases/v2.6.0.md) describe the Local Media Workbench & Batch Processing baseline.
 
 - Download **Video + Audio**, **Video Only**, **Audio Only**, or **Extras Only**.
 - Prefer editor-friendly **H.264/AAC MP4** when the source provides it, or choose **Maximum Quality** to preserve the best available source streams.
@@ -212,7 +215,7 @@ There is no hosted LVOVD backend, account system, analytics service, advertising
 
 The source website still sees normal network requests from your connection, including information such as your public IP address. Your browser may also keep normal local history/download information depending on its own settings and extensions.
 
-**Preview also contacts the source:** it is LVOVD's compatibility/capability probe, not a local-only lookup. Download jobs are serialized so LVOVD does not run multiple remote acquisitions at once, and selected playlist items get a short randomized pause between them. If a source reports a request limit or rejects a download, LVOVD stops instead of automatically retrying through the batch. These safeguards reduce unnecessary request bursts, but they cannot guarantee that a source service will never throttle or reject your connection.
+**Preview also contacts the source:** it is LVOVD's compatibility/capability probe, not a local-only lookup. Download jobs are serialized so LVOVD does not run multiple remote acquisitions at once. Selected playlist downloads and imports into Local Media get a randomized 0.5–1 second pause between items. If a source reports a request limit or rejects a download, LVOVD stops instead of automatically retrying through the batch. These safeguards reduce unnecessary request bursts, but they cannot guarantee that a source service will never throttle or reject your connection.
 
 **URL editing also contacts the source:** choosing **Edit Source Video** acquires the selected source once into temporary storage on this computer. The source service sees those acquisition requests. Playback, timeline editing, and rendering happen locally after acquisition, and LVOVD does not upload the workspace media to cloud storage.
 

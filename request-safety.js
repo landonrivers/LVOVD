@@ -1,7 +1,7 @@
 'use strict';
 
-const BATCH_DELAY_MIN_MS = 5000;
-const BATCH_DELAY_MAX_MS = 10000;
+const BATCH_DELAY_MIN_MS = 500;
+const BATCH_DELAY_MAX_MS = 1000;
 
 function createSerialTaskQueue() {
   let tail = Promise.resolve();

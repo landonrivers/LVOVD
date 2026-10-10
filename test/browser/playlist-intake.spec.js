@@ -114,7 +114,7 @@ test('playlist selection appends inspected files, inherits shared settings and r
   let saves = 0; page.on('download', () => saves++);
   await page.locator('#open-editor-button').click();
   await expect(page.locator('#processing-file-list option')).toHaveCount(3);
-  // Two real yt-dlp starts plus the required 5–10 second courtesy pause.
+  // Two real yt-dlp starts plus the 0.5–1 second courtesy pause.
   await expect.poll(async () => (await state(page)).intake?.status, { timeout: 30000 }).toBe('ready');
   await expect.poll(async () => (await state(page)).intake?.active).toBe(false);
   const imported = await state(page);

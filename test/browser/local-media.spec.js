@@ -109,6 +109,32 @@ async function processFile(page) {
   await expect(page.locator('#conversion-output-target')).not.toContainText('Previous draft');
 }
 
+test('runtime status reports FFprobe and explains unavailable Local Media tooling at desktop and narrow widths', async ({ page }, testInfo) => {
+  await expect(page.locator('#ffprobe-check')).toHaveClass('check good');
+  await expect(page.locator('#ffprobe-help')).toBeHidden();
+  await page.locator('.requirements').screenshot({ path: testInfo.outputPath('runtime-ready-desktop.png') });
+  let failure = 'not found on PATH.';
+  await page.route('**/api/health', async route => {
+    const response = await route.fetch(), data = await response.json();
+    data.ffprobe = { installed: false, error: `FFprobe: ${failure}` };
+    await route.fulfill({ response, json: data });
+  });
+  for (const reason of ['not found on PATH.', 'version check failed.', 'version check timed out.']) {
+    failure = reason; await page.locator('#recheck').click();
+    await expect(page.locator('#ffprobe-check')).toHaveText(`FFprobe: ${reason}`);
+    await expect(page.locator('#ffprobe-check')).toHaveClass('check bad');
+    await expect(page.locator('#ffprobe-help')).toContainText('Ordinary URL Download remains available');
+    await expect(page.locator('#ffmpeg-check')).toHaveClass('check good');
+    await expect(page.locator('#preview-button')).toBeEnabled();
+  }
+  await page.locator('.requirements').screenshot({ path: testInfo.outputPath('runtime-warning-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('.requirements').screenshot({ path: testInfo.outputPath('runtime-warning-narrow.png') });
+  await page.unroute('**/api/health'); await page.locator('#recheck').click();
+  await expect(page.locator('#ffprobe-check')).toHaveClass('check good'); await expect(page.locator('#ffprobe-help')).toBeHidden();
+});
+
 test('refreshed populated workbenches remain reachable when the collection limit is full', async ({ page, request }, testInfo) => {
   const owned = [];
   page.on('dialog', dialog => dialog.accept());

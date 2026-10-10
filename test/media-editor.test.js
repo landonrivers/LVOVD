@@ -623,7 +623,8 @@ test('coordinator invalidates old updates and releases playback before Discard',
   assert.match(discard, /removedIds\.add\(id\)/);
   assert.match(discard, /entries\.delete\(id\)/);
   assert.match(discard, /if \(entries\.size\) selectEntry/);
-  assert.match(discard, /data.cleanup\?.message/);
+  // Cleanup/status ordering is exercised through held DELETE responses in the
+  // browser suite; an old acknowledgement must not supply current UI copy.
   assert.match(source, /generation !== token/);
   assert.doesNotMatch(source, /partial temporary data was removed/);
 });

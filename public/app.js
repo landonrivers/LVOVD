@@ -71,6 +71,7 @@ const recheck = $('#recheck');
 const nodeCheck = $('#node-check');
 const ytCheck = $('#yt-check');
 const ffmpegCheck = $('#ffmpeg-check');
+const ffprobeCheck = $('#ffprobe-check');
 
 let currentUrl = '';
 let currentInfo = null;
@@ -527,27 +528,31 @@ function setCheck(element, label, result) {
   element.className = `check ${result?.installed ? 'good' : 'bad'}`;
   element.textContent = result?.installed
     ? `${label}: ${result.version || 'ready'}`
-    : `${label}: ${result?.error || 'not available'}`;
+    : result?.error?.startsWith(`${label}:`) ? result.error : `${label}: ${result?.error || 'not available'}`;
 }
 
 async function checkHealth() {
-  [nodeCheck, ytCheck, ffmpegCheck].forEach((element) => {
+  [nodeCheck, ytCheck, ffmpegCheck, ffprobeCheck].forEach((element) => {
     element.className = 'check pending';
   });
   nodeCheck.textContent = 'Node: checking…';
   ytCheck.textContent = 'yt-dlp (project): checking…';
   ffmpegCheck.textContent = 'FFmpeg: checking…';
+  ffprobeCheck.textContent = 'FFprobe: checking…';
   try {
     const response = await fetch('/api/health', { cache: 'no-store' });
     const data = await response.json();
     setCheck(nodeCheck, 'Node', data.node);
     setCheck(ytCheck, 'yt-dlp (project)', data.ytdlp);
     setCheck(ffmpegCheck, 'FFmpeg', data.ffmpeg);
+    setCheck(ffprobeCheck, 'FFprobe', data.ffprobe);
+    $('#ffprobe-help').hidden = data.ffprobe?.installed === true;
   } catch (error) {
-    [nodeCheck, ytCheck, ffmpegCheck].forEach((element) => {
+    [nodeCheck, ytCheck, ffmpegCheck, ffprobeCheck].forEach((element) => {
       element.className = 'check bad';
       element.textContent = 'Runtime check failed';
     });
+    $('#ffprobe-help').hidden = false;
   }
 }
 

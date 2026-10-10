@@ -2,7 +2,8 @@
 
 const http = require('node:http');
 const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
+const { probeVersion } = require('../runtime-version');
 
 const ROOT = path.join(__dirname, '..');
 const MIN_NODE_MAJOR = 22;
@@ -30,14 +31,15 @@ function readyMessage(url) {
   ].join('\n');
 }
 
-function commandWorks(command, args) {
-  const result = spawnSync(command, args, {
-    cwd: ROOT,
-    stdio: 'ignore',
-    windowsHide: true,
-    shell: false
-  });
-  return !result.error && result.status === 0;
+async function checkLocalTools(probe = probeVersion) {
+  const [ffmpeg, ffprobe] = await Promise.all([
+    probe('ffmpeg', ['-version'], 'FFmpeg'),
+    probe('ffprobe', ['-version'], 'FFprobe')
+  ]);
+  return {
+    error: ffmpeg.installed ? null : `${ffmpeg.error} Install FFmpeg and make it available on PATH.`,
+    warning: ffprobe.installed ? null : `${ffprobe.error} Local Media requires FFprobe. Install it with FFmpeg and make it available on PATH, then use Recheck in Runtime status. Ordinary URL Download remains available.`
+  };
 }
 
 function announceWhenReady(url, serverChild) {
@@ -68,7 +70,7 @@ function fail(message) {
   console.error('See the Quick Start section in README.md for setup help.');
 }
 
-function main() {
+async function main() {
   process.chdir(ROOT);
 
   if (nodeMajor() < MIN_NODE_MAJOR) {
@@ -76,10 +78,12 @@ function main() {
     return 1;
   }
 
-  if (!commandWorks('ffmpeg', ['-version'])) {
-    fail('FFmpeg is not installed or is not available on PATH.');
+  const tools = await checkLocalTools();
+  if (tools.error) {
+    fail(tools.error);
     return 1;
   }
+  if (tools.warning) console.warn(`LVOVD setup warning: ${tools.warning}`);
 
   const url = localUrl();
   console.log('Starting LVOVD...');
@@ -110,13 +114,14 @@ function main() {
 }
 
 if (require.main === module) {
-  const result = main();
-  if (result) process.exitCode = result;
+  main().then(result => { if (result) process.exitCode = result; })
+    .catch(error => { fail(error.message); process.exitCode = 1; });
 }
 
 module.exports = {
   MIN_NODE_MAJOR,
   STARTUP_TIMEOUT_MS,
+  checkLocalTools,
   localUrl,
   localhostUrl,
   nodeMajor,

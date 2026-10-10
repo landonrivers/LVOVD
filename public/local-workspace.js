@@ -13,6 +13,8 @@
   let plan = null, planVersion = 0, planBusy = false, reviewInFlight = false, reviewQueued = false, reviewTimer = null, retryTimer = null;
   let operationRequest = false, discarding = false, resetting = false;
   const entries = new Map(), cleanupIds = new Set(), removedIds = new Set(), removedDuringUpload = new Set();
+  const removals = new Map();
+  let messageVersion = 0;
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let allDownloads = null;
@@ -81,7 +83,7 @@
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
-  function message(text, error = false) { status.textContent = text || ''; status.className = `status${error ? ' error' : ''}`; }
+  function message(text, error = false) { messageVersion++; status.textContent = text || ''; status.className = `status${error ? ' error' : ''}`; }
   function closeSource() { source?.close(); source = null; }
   async function post(url, body) {
     const response = await root.fetch(url, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -331,6 +333,10 @@
         activeOperation: null, editor: { eligible: false }, playback: null, intakePending: true });
     }
     const live = new Set(), authoritativeIds = new Set(workspaces.map(item => item.id));
+    for (const [id, removal] of removals) {
+      if (removal.collectionId === collectionId && removal.connectionEpoch === connectionEpoch
+        && collectionRevision > removal.revision && !authoritativeIds.has(id)) removal.confirmedRemoved = true;
+    }
     for (const id of removedIds) if (!authoritativeIds.has(id) && !removedDuringUpload.has(id)) removedIds.delete(id);
     for (const dataWorkspace of workspaces) {
       if (removedIds.has(dataWorkspace.id)) continue;
@@ -661,7 +667,7 @@
     || entry?.snapshot.activeOperation || entry?.snapshot.playback || entry?.snapshot.conversion?.output || entry?.snapshot.editedOutput || jobActive(entry?.snapshot.id)); }
   function hasTemporaryWork() { saveSelected(); return Boolean([...entries.values()].some(entryHasWork) || upload || pendingUploads.length || starting || importStarting || intakeBatch?.active || removedCleanup.size || cleanupIds.size); }
   async function discard() {
-    if (discarding) return;
+    if (discarding || removals.has(workspaceId)) return;
     saveSelected();
     if (entryHasWork(entries.get(workspaceId)) && !root.confirm('Remove this file and discard its cuts, output settings, and temporary results? Any queued or running work for this file will be cancelled.')) return;
     if (!workspaceId) { reset('Local copy cancelled. Cleanup of any partial copy will be attempted.'); return; }
@@ -670,18 +676,32 @@
     discarding = true; planVersion++; clearTimeout(reviewTimer); reviewQueued = false;
     editor.reset(); removedIds.add(id); if (upload) removedDuringUpload.add(id); invalidateBatch();
     message('Removing local file…'); processingControls();
+    const removal = { collectionId, connectionEpoch, revision: collectionRevision, generation,
+      messageVersion, confirmedRemoved: false };
+    removals.set(id, removal);
+    const current = () => removals.get(id) === removal && collectionId === removal.collectionId
+      && connectionEpoch === removal.connectionEpoch;
+    const ownsView = () => workspaceId === id && generation === removal.generation;
     try {
       const data = await removeOwned(id);
+      // Progress may already have removed this file, completed cleanup, or
+      // switched the selected view. The DELETE reply is an acknowledgement,
+      // not a newer collection snapshot or a source of current cleanup copy.
+      if (!current() || removal.confirmedRemoved) return;
+      const showMessage = ownsView() && messageVersion === removal.messageVersion;
       if (!entry?.seenInCollection && data.cleanup && data.cleanup.status !== 'complete') cleanupIds.add(id);
-      entries.delete(id);
+      if (entries.get(id) === entry) entries.delete(id);
       if (workspaceId === id) { workspaceId = null; profile = null; snapshot = null; discarding = false; if (entries.size) selectEntry(entries.keys().next().value); else reset(); }
       renderCleanup();
-      renderFiles(); message(`Local file removed. ${data.cleanup?.message || ''}`); publish();
+      renderFiles(); if (showMessage) message('Local file removed.'); publish();
     } catch (error) {
+      if (!current() || removal.confirmedRemoved) return;
+      const restoreView = ownsView(), showMessage = restoreView && messageVersion === removal.messageVersion;
       removedIds.delete(id); if (!entries.has(id)) entries.set(id, entry);
-      discarding = false; operationRequest = false;
-      if (!workspaceId || workspaceId === id) { workspaceId = null; selectEntry(id); }
-      renderFiles(); message(error.message, true); processingControls();
+      if (restoreView) { discarding = false; operationRequest = false; workspaceId = null; selectEntry(id); }
+      renderFiles(); if (showMessage) message(error.message, true); processingControls(); publish();
+    } finally {
+      if (removals.get(id) === removal) removals.delete(id);
     }
   }
   async function beginUpload(file) {

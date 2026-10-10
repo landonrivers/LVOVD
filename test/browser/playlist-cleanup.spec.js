@@ -215,6 +215,113 @@ test('previous-workbench removal survives refresh and failed deletion without af
   expect(manager.get(current.selectedId)).toBeTruthy();
 });
 
+for (const outcome of ['success', 'error']) {
+  test(`late Remove File ${outcome} cannot restore completed cleanup or disturb another file`, async ({ page }, testInfo) => {
+    await page.locator('#media-file-input').setInputFiles([fixture.files[0].file, fixture.files[1].file]);
+    await expect.poll(async () => (await state(page)).entries.filter(entry => entry.inspection).length).toBe(2);
+    const initial = await state(page), [removedId, retainedId] = initial.entries.map(entry => entry.workspaceId);
+    await page.locator('#processing-file-list').selectOption(retainedId);
+    await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').click();
+    await expect(page.locator('#conversion-download')).toBeVisible(); const bytes = await download(page);
+    await exact(page, 'editor-start-time', '1'); await exact(page, 'editor-end-time', '4');
+    await page.locator('#timeline-zoom-in').click(); await exact(page, 'cut-start-time', '2');
+    const authored = await profile(page);
+    await page.locator('#processing-file-list').selectOption(removedId);
+    const accepted = gate(), release = gate(), settled = gate(), manager = app.mediaWorkspaces;
+    const directory = manager.get(removedId).tempDir;
+    blocked.add(path.resolve(directory));
+    await page.route('**/api/workspace?*', async route => {
+      if (route.request().method() !== 'DELETE') return route.continue();
+      const response = await route.fetch(); accepted.resolve(); await release.promise;
+      if (outcome === 'success') await route.fulfill({ response });
+      else await route.fulfill({ status: 503, json: { error: 'Synthetic delayed removal error' } });
+      settled.resolve();
+    });
+    try {
+      page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click(); await accepted.promise;
+      await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+      await expect(page.locator('#workspace-removed-cleanup')).toContainText('cleanup failed');
+      expect((await state(page)).selectedId).toBe(retainedId);
+      const queue = manager.localProcessing, collection = queue.get(initial.collectionId);
+      expect(queue.snapshot(collection.id).sourceBytesReserved).toBe(fixture.files[0].bytes.length + fixture.files[1].bytes.length);
+      blocked.delete(path.resolve(directory));
+      await page.locator('#workspace-retry-cleanup').click();
+      await expect(page.locator('#workspace-retry-cleanup')).toBeHidden();
+      await expect(page.locator('#workspace-removed-cleanup')).toBeHidden();
+      await expect(page.locator('#workspace-status')).toBeEmpty();
+      const jobs = JSON.stringify([...collection.jobs.values()]);
+      release.resolve(); await settled.promise;
+      // Await the browser's completion of the held fetch and its continuation.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await expect(page.locator('#workspace-status')).toBeEmpty();
+      await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+      await expect(page.locator('#workspace-retry-cleanup')).toBeHidden();
+      expect((await state(page)).selectedId).toBe(retainedId);
+      const restored = await profile(page);
+      expect(restored.editPlan).toEqual(authored.editPlan); expect(restored.editorState.pendingCut).toEqual(authored.editorState.pendingCut);
+      expect(restored.editorState.visibleWindow).toEqual(authored.editorState.visibleWindow);
+      expect(await download(page)).toEqual(bytes);
+      expect(JSON.stringify([...collection.jobs.values()])).toBe(jobs);
+      expect(queue.snapshot(collection.id).sourceBytesReserved).toBe(fixture.files[1].bytes.length);
+      expect(manager.get(removedId)).toBeNull(); await expect(fs.stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(sourceSpawns).toBe(0); expect(fixture.requests.length).toBe(0);
+      if (outcome === 'success') {
+        await page.locator('#media-workspace-panel').screenshot({ path: testInfo.outputPath('removal-status-desktop.png') });
+        await page.setViewportSize({ width: 390, height: 844 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.locator('#media-workspace-panel').screenshot({ path: testInfo.outputPath('removal-status-narrow.png') });
+      }
+    } finally { release.resolve(); }
+  });
+}
+
+test('late Remove File error from a disconnected empty workbench cannot enter a new collection', async ({ page }) => {
+  await page.locator('#media-file-input').setInputFiles(fixture.files[0].file);
+  await expect(page.locator('#conversion-start')).toBeEnabled(); const old = await state(page);
+  const accepted = gate(), release = gate(), settled = gate();
+  await page.route('**/api/workspace?*', async route => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    await route.fetch(); accepted.resolve(); await release.promise;
+    await route.fulfill({ status: 503, json: { error: 'Synthetic old-workbench error' } }); settled.resolve();
+  });
+  try {
+    page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click(); await accepted.promise;
+    await expect(page.locator('#processing-file-list option')).toHaveCount(0);
+    const queue = app.mediaWorkspaces.localProcessing;
+    queue.closeListener(queue.get(old.collectionId));
+    await expect.poll(async () => (await state(page)).collectionId).toBeNull();
+    await page.locator('#media-file-input').setInputFiles(fixture.files[1].file);
+    await expect(page.locator('#conversion-start')).toBeEnabled(); const current = await state(page);
+    expect(current.collectionId).not.toBe(old.collectionId);
+    release.resolve(); await settled.promise;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect((await state(page)).collectionId).toBe(current.collectionId);
+    expect((await state(page)).selectedId).toBe(current.selectedId);
+    await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+    await expect(page.locator('#workspace-status')).not.toContainText('old-workbench');
+    await expect(page.locator('#workspace-retry-cleanup')).toBeHidden();
+    expect(queue.snapshot(current.collectionId).sourceBytesReserved).toBe(fixture.files[1].bytes.length);
+  } finally { release.resolve(); }
+});
+
+test('a rejected Remove File request leaves its existing source usable for retry', async ({ page }) => {
+  await page.locator('#media-file-input').setInputFiles(fixture.files[0].file);
+  await expect(page.locator('#conversion-start')).toBeEnabled(); const original = await state(page);
+  await page.route('**/api/workspace?*', async route => {
+    if (route.request().method() === 'DELETE') return route.fulfill({ status: 503, json: { error: 'Synthetic retryable removal failure' } });
+    await route.continue();
+  });
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#workspace-status')).toContainText('Synthetic retryable removal failure');
+  await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+  expect((await state(page)).selectedId).toBe(original.selectedId);
+  expect(app.mediaWorkspaces.get(original.selectedId)).toBeTruthy();
+  await page.unroute('**/api/workspace?*');
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#processing-file-list option')).toHaveCount(0);
+  expect(app.mediaWorkspaces.get(original.selectedId)).toBeNull();
+});
+
 for (const action of ['removed', 'reopened elsewhere']) {
   test(`a delayed reopen acknowledgement cannot revive a workbench ${action}`, async ({ page }) => {
     await page.locator('#media-file-input').setInputFiles(fixture.files[0].file);
