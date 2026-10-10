@@ -16,9 +16,12 @@ const {
   courtesyDelayMs
 } = require('../request-safety');
 
-test('playlist courtesy delay stays between five and ten seconds', () => {
-  assert.equal(courtesyDelayMs(() => 0), BATCH_DELAY_MIN_MS);
-  assert.equal(courtesyDelayMs(() => 0.999999999), BATCH_DELAY_MAX_MS);
+test('playlist courtesy delay stays between half a second and one second', () => {
+  assert.equal(BATCH_DELAY_MIN_MS, 500);
+  assert.equal(BATCH_DELAY_MAX_MS, 1000);
+  assert.equal(courtesyDelayMs(() => 0), 500);
+  assert.equal(courtesyDelayMs(() => 0.5), 750);
+  assert.equal(courtesyDelayMs(() => 0.999999999), 1000);
 });
 
 test('serial task queue never overlaps work and continues after a failed task', async () => {

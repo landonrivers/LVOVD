@@ -12,7 +12,7 @@ The long-term product can grow beyond downloading into a small local media compa
 
 ## Current baseline
 
-**v2.6.1 maintenance checkpoint:** adds explicit FFprobe setup/runtime status with bounded version checks and prevents delayed Remove File acknowledgements from restoring stale status or files after newer collection updates. This patch preserves the v2.6.0 feature scope; Roadmap #7 remains incomplete.
+**v2.6.1 maintenance checkpoint:** adds explicit FFprobe setup/runtime status with bounded version checks, prevents delayed Remove File acknowledgements from restoring stale status or files after newer collection updates, and shortens randomized playlist pauses to 0.5–1 second while retaining serialized acquisition and stop-on-failure behavior. This patch preserves the v2.6.0 feature scope; Roadmap #7 remains incomplete.
 
 **v2.6.0 release checkpoint:** the accepted Roadmap 7A–7D3 work now forms the public Local Media workbench baseline: inspection, original-source cuts plus conversion/compression, independent local files, sequential batch processing, selected playlist intake, compact processed results, Download All, and session-local reopening/cleanup recovery. Landon completed manual acceptance of the final results workflow. This release does not mark all of Roadmap #7 complete; the later codec, image, hardware, track/metadata, and packaging work below remains deferred. See [v2.6.0 release notes](docs/releases/v2.6.0.md).
 
