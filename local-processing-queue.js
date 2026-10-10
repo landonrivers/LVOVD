@@ -130,6 +130,7 @@ class LocalProcessingQueue {
       clearInterval(heartbeat);
       if (collection.listener === response) {
         collection.listener = null; collection.disconnected = true;
+        for (const id of collection.members) this.manager.waveforms.cancel(id).catch(() => {});
         this.dropEmptyDisconnected(collection);
       }
     });

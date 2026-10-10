@@ -11,15 +11,15 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('release metadata consistently prepares the 2.6.1 maintenance release', () => {
+test('release metadata consistently prepares the 2.7.0 local audio release', () => {
   const packageJson = JSON.parse(read('package.json'));
   const packageLock = JSON.parse(read('package-lock.json'));
 
-  assert.equal(packageJson.version, '2.6.1');
-  assert.equal(packageLock.version, '2.6.1');
-  assert.equal(packageLock.packages[''].version, '2.6.1');
-  assert.match(read('docs/releases/v2.6.1.md'), /^# LVOVD v2\.6\.1/);
-  assert.match(read('README.md'), /docs\/releases\/v2\.6\.1\.md/);
+  assert.equal(packageJson.version, '2.7.0');
+  assert.equal(packageLock.version, '2.7.0');
+  assert.equal(packageLock.packages[''].version, '2.7.0');
+  assert.match(read('docs/releases/v2.7.0.md'), /^# LVOVD v2\.7\.0/);
+  assert.match(read('README.md'), /docs\/releases\/v2\.7\.0\.md/);
   assert.match(read('README.md'), /ffprobe -version/);
   assert.match(read('docs/releases/v2.6.0.md'), /^# LVOVD v2\.6\.0/);
   assert.match(read('README.md'), /docs\/releases\/v2\.6\.0\.md/);

@@ -294,6 +294,10 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .timeline-tick.edge-end::after { left: 100%; }
 .timeline-track { position: relative; height: 76px; margin: 10px 8px 0; overflow: visible; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: #16151d; cursor: ew-resize; touch-action: none; user-select: none; transition: border-color .15s ease, box-shadow .15s ease; }
 .timeline-track:hover { border-color: rgba(198,184,255,.36); }
+.audio-waveform { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#editor-audio { display: block; width: 100%; max-width: 100%; margin: 16px 0; }
+#editor-audio[hidden], #editor-video[hidden], .audio-waveform[hidden] { display: none; }
+#audio-waveform-retry { margin-top: 6px; }
 .timeline-track.seeking { cursor: grabbing; }
 .timeline-track:focus-visible { outline: 2px solid #ff4775; outline-offset: 4px; box-shadow: 0 0 0 5px rgba(255,71,117,.1); }
 .timeline-regions { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }

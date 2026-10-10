@@ -47,6 +47,36 @@ function request(path, { method = 'GET', body = null, headers = {} } = {}) {
   });
 }
 function post(path, value, headers) { const body = Buffer.from(JSON.stringify(value)); return request(path, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Content-Length': body.length, ...headers } }); }
+
+test('waveform API validates owned audio identities, bounded windows, cancellation and origins', async t => {
+  const oldInspect = mediaWorkspaces.inspectAsset;
+  mediaWorkspaces.inspectAsset = async () => normalizeMediaInspection({ format: { format_name: 'wav', duration: '1' }, chapters: [], streams: [
+    { index: 0, codec_type: 'audio', codec_name: 'pcm_s16le', sample_fmt: 's16', bits_per_sample: 16, sample_rate: '48000', channels: 1, duration: '1' }
+  ] });
+  t.after(() => { mediaWorkspaces.inspectAsset = oldInspect; });
+  const list = await collection(), first = await upload(list.id, 'audio.wav'), second = await upload(list.id, 'second.wav');
+  const identity = { workspaceId: first.id, sourceAssetId: first.sourceAssetId };
+  const start = await post('/api/workspace/waveform', identity); assert.equal(start.status, 202);
+  assert.equal(start.data.workspace.waveform.sourceAssetId, first.sourceAssetId);
+  assert.equal(start.data.workspace.waveform.peaks, undefined);
+  assert.equal((await post('/api/workspace/waveform', { ...identity, sourceAssetId: second.sourceAssetId })).status, 409);
+  assert.equal((await post('/api/workspace/waveform', { ...identity, path: '/arbitrary/file' })).status, 400);
+  assert.equal((await post('/api/workspace/waveform', identity, { Origin: 'https://untrusted.example' })).status, 403);
+  const query = new URLSearchParams(identity);
+  for (const window of ['startSeconds=0&endSeconds=1&points=4097', 'startSeconds=0&endSeconds=1&points=0', 'startSeconds=0&endSeconds=2&points=1', 'startSeconds=0&endSeconds=1&points=1.5']) {
+    assert.equal((await request(`/api/workspace/waveform?${query}&${window}`)).status, 400);
+  }
+  const view = await request(`/api/workspace/waveform?${query}&startSeconds=0&endSeconds=1&points=10`);
+  assert.equal(view.status, 200); assert.deepEqual(view.data.peaks, []);
+  assert.equal(JSON.stringify(view.data).includes(first.tempDir), false);
+  const body = Buffer.from(JSON.stringify(identity));
+  assert.equal((await request('/api/workspace/waveform', { method: 'DELETE', body, headers: { 'Content-Type': 'application/json', 'Content-Length': body.length } })).status, 202);
+  first.status = 'proxying'; first.activeOperation = 'proxying';
+  assert.equal((await request('/api/workspace/waveform', { method: 'DELETE', body, headers: { 'Content-Type': 'application/json', 'Content-Length': body.length } })).status, 202);
+  first.status = 'ready'; first.activeOperation = null;
+  await mediaWorkspaces.discard(first.id);
+  assert.equal((await post('/api/workspace/waveform', identity)).status, 404);
+});
 async function collection() {
   const response = await post('/api/processing/collection', {}); assert.equal(response.status, 201); return response.data.collection;
 }

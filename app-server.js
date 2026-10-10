@@ -1878,6 +1878,7 @@ function serveStatic(reqPath, res) {
     '/history-ui.js': ['history-ui.js', 'text/javascript; charset=utf-8'],
     '/edit-plan.js': ['edit-plan.js', 'text/javascript; charset=utf-8'],
     '/media-editor.js': ['media-editor.js', 'text/javascript; charset=utf-8'],
+    '/audio-waveform.js': ['audio-waveform.js', 'text/javascript; charset=utf-8'],
     '/conversion-inspector.js': ['conversion-inspector.js', 'text/javascript; charset=utf-8'],
     '/local-workspace.js': ['local-workspace.js', 'text/javascript; charset=utf-8'],
     '/processing-profile.js': ['processing-profile.js', 'text/javascript; charset=utf-8'],
@@ -2136,6 +2137,32 @@ async function handleRequest(req, res) {
       return json(res, 202, { workspace: mediaWorkspaces.publicWorkspace(workspace) });
     } catch (error) {
       return json(res, error.statusCode || 500, { error: error.statusCode ? error.message : 'The local processing operation could not complete.' });
+    }
+  }
+
+  if (requestUrl.pathname === '/api/workspace/waveform' && ['POST', 'GET', 'DELETE'].includes(req.method)) {
+    try {
+      const body = req.method === 'GET' ? Object.fromEntries(requestUrl.searchParams) : await readJsonBody(req);
+      const allowed = req.method === 'GET' ? ['workspaceId', 'sourceAssetId', 'startSeconds', 'endSeconds', 'points']
+        : req.method === 'DELETE' ? ['workspaceId', 'sourceAssetId', 'operationId'] : ['workspaceId', 'sourceAssetId'];
+      if (!body || Array.isArray(body) || Object.keys(body).some(key => !allowed.includes(key))
+        || !['workspaceId', 'sourceAssetId'].every(key => typeof body[key] === 'string' && body[key].length > 0 && body[key].length <= 80)) return json(res, 400, { error: 'Invalid waveform request.' });
+      if (req.method === 'GET') {
+        if (!['startSeconds', 'endSeconds', 'points'].every(key => typeof body[key] === 'string' && /^\d+(?:\.\d+)?$/.test(body[key]))) return json(res, 400, { error: 'Invalid waveform window.' });
+        return json(res, 200, await mediaWorkspaces.waveforms.window(body.workspaceId, body.sourceAssetId, Number(body.startSeconds), Number(body.endSeconds), Number(body.points)));
+      }
+      let workspace;
+      if (req.method === 'DELETE') {
+        if (body.operationId != null && (typeof body.operationId !== 'string' || body.operationId.length < 1 || body.operationId.length > 80)) return json(res, 400, { error: 'Invalid waveform operation.' });
+        workspace = mediaWorkspaces.get(body.workspaceId);
+        if (!workspace) return json(res, 404, { error: 'Local media workspace not found or expired.' });
+        if (workspace.sourceAssetId !== body.sourceAssetId || workspace.assets.get(body.sourceAssetId)?.role !== 'source') return json(res, 409, { error: 'Waveform cancellation requires the current original source.' });
+        await mediaWorkspaces.waveforms.cancel(workspace.id, body.operationId);
+      }
+      else { workspace = mediaWorkspaces.originalSource(body.workspaceId, body.sourceAssetId).workspace; mediaWorkspaces.waveforms.start(workspace.id, body.sourceAssetId); }
+      return json(res, 202, { workspace: mediaWorkspaces.publicWorkspace(workspace) });
+    } catch (error) {
+      return json(res, error.statusCode || 500, { error: error.statusCode ? error.message : 'Waveform preparation could not complete. Trimming and processing remain available.' });
     }
   }
 

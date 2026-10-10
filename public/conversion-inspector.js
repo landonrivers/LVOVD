@@ -16,7 +16,12 @@
     opus: 'Opus',
     mp3: 'MP3',
     flac: 'FLAC',
-    pcm_s16le: 'PCM 16-bit'
+    pcm_u8: 'PCM 8-bit',
+    pcm_s16le: 'PCM 16-bit',
+    pcm_s24le: 'PCM 24-bit',
+    pcm_s32le: 'PCM 32-bit',
+    pcm_f32le: 'PCM 32-bit float',
+    pcm_f64le: 'PCM 64-bit float'
   });
 
   function clamp(value, minimum, maximum) {
@@ -67,6 +72,18 @@
     return Number.isInteger(value) && value >= 0 ? String(value) : 'Unknown';
   }
 
+  function audioPrecisionLabel(audio = {}) {
+    const format = /^(u8|s16|s32|s64|flt|dbl)p?$/.exec(audio.sampleFormat || '')?.[1];
+    if (!format) return 'Precision unknown';
+    const floating = ['flt', 'dbl'].includes(format);
+    const bits = floating ? format === 'dbl' ? 64 : 32 : audio.bitsPerRawSample || audio.bitsPerSample
+      || Number(/^pcm_[su](8|16|24|32|64)(?:le|be)?$/.exec(audio.codec || '')?.[1]);
+    const stored = ({ u8: 8, s16: 16, s32: 32, s64: 64, flt: 32, dbl: 64 })[format];
+    if (!bits) return `Meaningful precision unknown · ${stored}-bit stored integer`;
+    if (bits > stored) return 'Precision unknown (conflicting metadata)';
+    return `${bits}-bit ${floating ? 'floating point' : 'integer'}`;
+  }
+
   function inspectionFacts(snapshot) {
     const inspection = snapshot?.inspection || {};
     const video = inspection.video;
@@ -99,6 +116,7 @@
           : 'Unknown'],
         ['Channels', Number.isFinite(audio.channels) ? String(audio.channels) : 'Unknown'],
         ['Channel layout', audio.channelLayout || 'Unknown'],
+        ['Decoded audio precision', audioPrecisionLabel(audio)],
         ['Audio bitrate', Number.isFinite(audio.bitRate)
           ? `${Math.round(audio.bitRate / 1000)} kbps` : 'Unknown']
       );
@@ -115,6 +133,6 @@
     formatBytes,
     formatDuration,
     mediaKindLabel,
-    inspectionFacts
+    inspectionFacts, audioPrecisionLabel
   };
 });

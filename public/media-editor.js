@@ -471,7 +471,10 @@
 
     const workspaceStatus = document.querySelector('#editor-status');
     const editor = document.querySelector('#media-editor');
-    const video = document.querySelector('#editor-video');
+    const videoElement = document.querySelector('#editor-video');
+    const audioElement = document.querySelector('#editor-audio');
+    let video = videoElement;
+    const waveform = root.LVOVDAudioWaveform?.create({ canvas: document.querySelector('#audio-waveform'), note: document.querySelector('#audio-waveform-note'), retry: document.querySelector('#audio-waveform-retry') });
     const mediaName = document.querySelector('#editor-media-name');
     const mediaFacts = document.querySelector('#editor-media-facts');
     const proxyNote = document.querySelector('#editor-proxy-note');
@@ -550,6 +553,7 @@
       track.classList.remove('seeking');
       ruler.classList.remove('panning');
       panLeft.hidden = true; panRight.hidden = true;
+      waveform?.reset();
       video.pause();
       video.removeAttribute('src');
       video.load();
@@ -679,6 +683,7 @@
       pendingCutError.textContent = hasBothBoundaries && !removal.valid ? removal.reason : '';
       clearPendingCutButton.disabled = !Number.isFinite(pendingCut.startSeconds)
         && !Number.isFinite(pendingCut.endSeconds);
+      waveform?.render(workspaceSnapshot, visibleWindow);
       document.dispatchEvent(new root.CustomEvent('lvovd:editor-state-changed'));
     }
 
@@ -949,6 +954,9 @@
     function renderWorkspace(data) {
       if (!data || data.id !== activeWorkspaceId) return;
       workspaceSnapshot = data;
+      const nextPlayer = data.inspection?.video ? videoElement : audioElement;
+      if (video !== nextPlayer) { video.pause(); video = nextPlayer; }
+      videoElement.hidden = video !== videoElement; audioElement.hidden = video !== audioElement;
       if (data.editor?.eligible && !editPlan) initializeEditor(data);
       if (!editPlan) return;
       if (data.playback?.url && video.getAttribute('src') !== data.playback.url) {
@@ -963,12 +971,13 @@
         ? (data.playback.proxy ? 'Playback uses a temporary local proxy. Processing uses your original source.' : '')
         : '';
       proxyNote.classList.toggle('proxy', Boolean(data.playback?.proxy));
+      waveform?.render(data, visibleWindow);
       setStatus(data.editor?.status === 'failed' ? `${data.editor.message} Processing settings and authored cuts remain available.` : '');
     }
 
     function initializeEditor(data) {
       const inspection = data.inspection || {};
-      durationSeconds = Number(inspection.durationSeconds);
+      durationSeconds = Number(data.editor?.durationSeconds ?? inspection.durationSeconds);
       if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return;
       authoringState = fullAuthoringState(durationSeconds);
       editPlan = authoringState?.editPlan || null;
@@ -977,7 +986,8 @@
       for (const handle of [startHandle, endHandle, cutStartHandle, cutEndHandle]) {
         handle.setAttribute('aria-valuemax', String(durationSeconds));
       }
-      mediaName.textContent = data.source?.name || 'Local video';
+      document.querySelector('#trim-video-title').textContent = inspection.video ? 'Trim Video Length' : 'Trim Audio Length';
+      mediaName.textContent = data.source?.name || 'Local media';
       mediaName.title = mediaName.textContent;
       mediaFacts.textContent = '';
       const trackCounts = inspection.trackCounts || {};
@@ -1137,13 +1147,15 @@
       renderTimeline();
     });
     track.addEventListener('keydown', handlePlaybackKey);
-    video.addEventListener('keydown', handlePlaybackKey);
-    video.addEventListener('play', beginPlaybackFrames);
-    video.addEventListener('timeupdate', renderPlayhead);
-    video.addEventListener('seeked', renderPlayhead);
-    video.addEventListener('loadedmetadata', renderPlayhead);
+    for (const player of [videoElement, audioElement]) {
+      player.addEventListener('keydown', handlePlaybackKey);
+      player.addEventListener('play', beginPlaybackFrames);
+      player.addEventListener('timeupdate', renderPlayhead);
+      player.addEventListener('seeked', renderPlayhead);
+      player.addEventListener('loadedmetadata', renderPlayhead);
+    }
     root.addEventListener('resize', () => {
-      if (editPlan) renderRuler();
+      if (editPlan) { renderRuler(); waveform?.render(workspaceSnapshot, visibleWindow); }
     });
     function conversionState() {
       const output = workspaceSnapshot?.editedOutput;

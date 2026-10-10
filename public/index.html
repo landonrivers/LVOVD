@@ -386,6 +386,7 @@
                   <label class="field processing-value-row" for="processing-audio-codec"><span>Audio codec</span><select id="processing-audio-codec"><option value="unchanged">Unchanged</option></select></label>
                   <label class="field processing-value-row" for="processing-audio-bitrate"><span>Audio bitrate <button class="processing-help-button" type="button" data-processing-help="audio" aria-label="Help: audio bitrate">?</button></span><input id="processing-audio-bitrate" type="number" min="8" max="1536" step="1" placeholder="Auto" /><small>kbps</small></label>
                   <p id="processing-audio-rate-help" class="help">Auto keeps copied audio or uses the codec default. No automatic downmix.</p>
+                  <p class="help">FLAC preserves integer audio up to 24 bits. Choose WAV for floating-point or 32-bit integer audio; precision and channels are preserved automatically.</p>
                 </fieldset>
                   <div id="processing-size-fields">
                     <label class="field processing-value-row" for="processing-maximum-mb"><span><span id="processing-size-label">Estimated file size</span> <button class="processing-help-button" type="button" data-processing-help="size" aria-label="Help: file size">?</button></span><input id="processing-maximum-mb" type="number" min="0.001" max="107374.1824" step="any" /><small>MB</small></label>
@@ -417,6 +418,7 @@
           <div class="editor-layout">
             <div class="editor-player">
               <video id="editor-video" controls preload="metadata" playsinline tabindex="0"></video>
+              <audio id="editor-audio" controls preload="metadata" tabindex="0" hidden></audio>
             </div>
 
             <div class="timeline-editor">
@@ -442,6 +444,7 @@
               </div>
 
               <div id="timeline-track" class="timeline-track" role="group" tabindex="0" aria-label="Timeline seek control. Space plays or pauses; Left and Right Arrow seek five seconds." title="Click or drag to seek; use the handles to change the retained range">
+                <canvas id="audio-waveform" class="audio-waveform" aria-hidden="true" hidden></canvas>
                 <div id="timeline-regions" class="timeline-regions" aria-hidden="true"></div>
                 <div id="timeline-pending-cut" class="timeline-region pending-cut" aria-hidden="true" hidden></div>
                 <div id="timeline-playhead" class="timeline-playhead" aria-hidden="true"></div>
@@ -451,6 +454,8 @@
                 <button id="timeline-cut-end-handle" class="timeline-handle cut end" type="button" role="slider" aria-orientation="horizontal" aria-label="Pending cut end" aria-valuemin="0" hidden></button>
               </div>
 
+              <p id="audio-waveform-note" class="timeline-interaction-hint" role="status" hidden></p>
+              <button id="audio-waveform-retry" class="text-button" type="button" hidden>Retry waveform</button>
               <div class="timeline-legend" aria-hidden="true">
                 <span><i class="legend-retained"></i>Retained</span>
                 <span><i class="legend-removed"></i>Removed</span>
@@ -528,7 +533,7 @@
             <dl id="processing-plan-facts" class="processing-plan-facts"></dl>
             <div id="conversion-plan" aria-live="polite"><h4 id="conversion-plan-title"></h4><details class="processing-review-details"><summary>Processing details</summary><ul id="conversion-changes"></ul></details></div>
             <div id="conversion-warnings"></div>
-            <p class="help">Cuts and output settings apply together to your original source. Re-encoding is not lossless. Metadata preservation is not guaranteed.</p>
+            <p class="help">Cuts and output settings apply together to your original source. Lossy codecs may alter quality; eligible FLAC/WAV output preserves decoded precision. Metadata preservation is not guaranteed.</p>
             <div class="local-media-actions">
               <div class="processing-suffix">
                 <label class="processing-check"><input id="processing-suffix-enabled" type="checkbox" form="processing-settings" checked />Add a suffix</label>
@@ -616,6 +621,7 @@
   <script src="/app.js" defer></script>
   <script src="/history-ui.js" defer></script>
   <script src="/edit-plan.js" defer></script>
+  <script src="/audio-waveform.js" defer></script>
   <script src="/media-editor.js" defer></script>
   <script src="/conversion-inspector.js" defer></script>
   <script src="/processing-profile.js" defer></script>

@@ -226,7 +226,7 @@
     const processed = output.processingSnapshot, settings = processed?.settings, effective = processed?.output || {};
     const kind = inspection.container?.kind;
     const format = kind === 'mp4' && effective.extension === 'm4a' && !video ? 'M4A'
-      : ({ mp3: 'MP3', mp4: 'MP4', mov: 'MOV', matroska: 'MKV', webm: 'WebM', wav: 'WAV', flac: 'FLAC', ogg: 'Ogg', avi: 'AVI' })[kind] || inspection.format || 'file';
+      : ({ mp3: 'MP3', mp4: 'MP4', mov: 'MOV', matroska: 'MKV', webm: 'WebM', wav: 'WAV', flac: 'FLAC', ogg: audio?.codec === 'opus' ? 'Opus' : 'Ogg', avi: 'AVI' })[kind] || inspection.format || 'file';
     const revision = output.draftRevision ?? processed?.draftRevision ?? output.provenance?.draftRevision;
     const older = Number.isInteger(revision) && revision !== currentRevision;
     const treatment = role => {
@@ -240,7 +240,7 @@
       facts: [`${sizeInMB(output.size)} (${output.size.toLocaleString()} bytes)`, facts.formatDuration(inspection.durationSeconds), inspection.format,
         video && `${facts.familiarCodecName(video.codec)} · ${video.width} × ${video.height}`,
         video?.sampleAspectRatio && !['1:1', '1/1'].includes(video.sampleAspectRatio) && `Pixel aspect ${video.sampleAspectRatio} preserves display proportions`,
-        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels`].filter(Boolean).join(' · '),
+        audio && `${facts.familiarCodecName(audio.codec)} · ${audio.sampleRate} Hz · ${audio.channels} channels · ${audio.channelLayout || 'layout unknown'} · ${facts.audioPrecisionLabel(audio)}`].filter(Boolean).join(' · '),
       target: `${output.noOp ? 'Existing original bytes; no processing required' : 'Processed from the original source'}`
         + (Number.isInteger(revision) ? ` · Draft ${revision}` : '') + (older ? ' · Previous draft; this download has not changed.' : ''),
       settings: settings ? [video && rateDescription(settings.rate), `Container: ${effective.container || kind || inspection.format}`,
@@ -304,7 +304,7 @@
     resetting = true;
     if (profile) {
       const settings = profile.state().settings;
-      restoreSettings(entry.videoDraft && ['m4a', 'mp3'].includes(settings.container) ? { ...settings, ...entry.videoDraft } : settings, entry.scaleChoice);
+      restoreSettings(entry.videoDraft && profiles.audioContainers.includes(settings.container) ? { ...settings, ...entry.videoDraft } : settings, entry.scaleChoice);
     } else settingsForm.reset();
     editor.restore(snapshot, profile?.state().editorState); $('#local-media-details').open = Boolean(entry.detailsOpen);
     resetting = false;
@@ -427,7 +427,7 @@
   $('#workspace-recovery-refresh').addEventListener('click', refreshRecovery);
   function rateMode() { return settingsForm.querySelector('input[name="processing-rate"]:checked').value; }
   function readSettings() {
-    const settings = profile?.state().settings || profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
+    const settings = profile?.state().settings || profiles.defaults(), hasVideo = Boolean(snapshot?.inspection?.video) && !profiles.audioContainers.includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
     settings.container = $('#processing-container').value;
     settings.filenameSuffix = $('#processing-suffix-enabled').checked ? $('#processing-filename-suffix').value : '';
     if (hasVideo) {
@@ -455,14 +455,24 @@
       const defaults = profiles.defaults();
       for (const key of ['videoCodec', 'scale', 'frameRate', 'rate']) settings[key] = defaults[key];
     }
-    if (hasAudio) settings.audio = { codec: $('#processing-audio-codec').value, bitrateKbps: number('#processing-audio-bitrate') };
+    if (hasAudio) {
+      const codec = $('#processing-audio-codec').value;
+      const lossless = ['flac', 'wav'].includes(settings.container) || ['flac', 'pcm'].includes(codec) || codec === 'unchanged' && ['flac', 'wav'].includes(snapshot.inspection.container?.kind);
+      settings.audio = { codec, bitrateKbps: lossless ? null : number('#processing-audio-bitrate') };
+    }
     return settings;
   }
   function renderSettings() {
-    const hasVideo = Boolean(snapshot?.inspection?.video) && !['m4a', 'mp3'].includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
+    const hasVideo = Boolean(snapshot?.inspection?.video) && !profiles.audioContainers.includes($('#processing-container').value), hasAudio = Boolean(snapshot?.inspection?.audio);
     for (const id of ['processing-video-settings', 'processing-transform-settings', 'processing-rate-mode', 'processing-rate-help', 'processing-bitrate-fields', 'processing-size-fields']) $(`#${id}`).hidden = !hasVideo;
     $('#processing-rate-settings').hidden = !hasVideo && !hasAudio;
     $('#processing-audio-settings').hidden = !hasAudio;
+    const lossless = ['flac', 'wav'].includes($('#processing-container').value) || ['flac', 'pcm'].includes($('#processing-audio-codec').value)
+      || $('#processing-audio-codec').value === 'unchanged' && ['flac', 'wav'].includes(snapshot?.inspection?.container?.kind);
+    $('#processing-audio-bitrate').closest('label').hidden = lossless;
+    $('#processing-audio-rate-help').hidden = lossless;
+    const opus = $('#processing-container').value === 'opus' || $('#processing-audio-codec').value === 'opus';
+    $('#processing-audio-bitrate').max = String(opus ? Math.min(1536, 256 * (snapshot?.inspection?.audio?.channels || 1)) : 1536);
     const requested = profile?.state().settings;
     $('#processing-clear-video-settings').hidden = hasVideo || !requested || (requested.videoCodec === 'unchanged' && requested.scale.mode === 'unchanged' && requested.frameRate == null && requested.rate.mode === 'automatic');
     $('#processing-scale-fields').hidden = $('#processing-scale').value !== 'fit';
@@ -580,7 +590,7 @@
     const preview = $('#processing-prepare-preview');
     preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url) || (!previewError && snapshot?.editor?.status !== 'failed');
     preview.disabled = busy || processingElsewhere();
-    $('#processing-preview-note').textContent = !snapshot?.inspection ? 'Source preparation must finish before preview or processing.' : !snapshot.inspection.video ? 'Audio file — choose output settings, then Process Selected File.'
+    $('#processing-preview-note').textContent = !snapshot?.inspection ? 'Source preparation must finish before preview or processing.' : !snapshot.inspection.video && !snapshot.editor?.eligible ? 'Audio timing is unavailable; review supported output settings.'
       : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings.'
         : previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing playback from the selected original file…'
           : !snapshot?.playback?.url && processingElsewhere() ? 'Playback will prepare after the current processing finishes.'
@@ -812,6 +822,7 @@
     if (plan.rateBudget?.audioBitsPerSecond != null) appendFact(list, 'Audio budget', `${(plan.rateBudget.audioBitsPerSecond / 1000).toFixed(1)} kbps · ${sizeInMB(plan.rateBudget.audioBytes)}`);
     if (plan.rateBudget?.overheadBytes != null) appendFact(list, 'Container reserve', sizeInMB(plan.rateBudget.overheadBytes));
     appendFact(list, 'Audio', output.audioCodec ? `${facts.familiarCodecName(output.audioCodec)}${settings.audio?.bitrateKbps ? ` · ${settings.audio.bitrateKbps} kbps` : ''} · ${plan.streams?.find(stream => stream.role === 'audio')?.action || 'unchanged'}` : 'No audio output');
+    if (output.sampleRate) appendFact(list, 'Audio format', `${output.sampleRate} Hz · ${output.channelLayout || output.channels + ' channels'} · ${output.bitDepth ? output.bitDepth + '-bit ' + output.representation : ['aac', 'mp3', 'opus'].includes(output.audioCodec) ? 'lossy; decoded precision measured after processing' : 'precision unknown'}`);
     $('#conversion-changes').replaceChildren(); $('#conversion-warnings').replaceChildren();
     for (const change of plan.changes || []) { const item = document.createElement('li'); item.textContent = change; $('#conversion-changes').append(item); }
     for (const warning of plan.warnings || []) {
@@ -887,12 +898,18 @@
       const entry = entries.get(workspaceId);
       if (entry) {
         entry.copiedInactiveVideo = false;
-        if (snapshot?.inspection?.video && ['m4a', 'mp3'].includes(event.target.value) && !['m4a', 'mp3'].includes(profile.state().settings.container)) {
+        if (snapshot?.inspection?.video && profiles.audioContainers.includes(event.target.value) && !profiles.audioContainers.includes(profile.state().settings.container)) {
           const previous = profile.state().settings; entry.videoDraft = {};
           for (const key of ['videoCodec', 'scale', 'frameRate', 'rate']) entry.videoDraft[key] = structuredClone(previous[key]);
         }
       }
     }
+    if (event.target.id === 'processing-container' && profiles.audioContainers.includes(event.target.value)) {
+      const codec = ({ m4a: 'aac', mp3: 'mp3', opus: 'opus', flac: 'flac', wav: 'pcm' })[event.target.value];
+      setSelectValue('#processing-audio-codec', codec);
+    }
+    if (['processing-container', 'processing-audio-codec'].includes(event.target.id)
+      && (['flac', 'wav'].includes($('#processing-container').value) || ['flac', 'pcm'].includes($('#processing-audio-codec').value))) $('#processing-audio-bitrate').value = '';
     if (event.target.id === 'processing-video-bitrate') settingsForm.querySelector('[name="processing-rate"][value="bitrate"]').checked = true;
     if (event.target.id === 'processing-maximum-mb') settingsForm.querySelector('[name="processing-rate"][value="size"]').checked = true;
     if (event.target.name === 'processing-rate') {

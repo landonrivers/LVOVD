@@ -103,6 +103,8 @@ class ProcessingOperations {
   }
 
   async startPrepared(prepared, { queueJobId = null, isCancelled = () => false } = {}) {
+    const resumeWaveforms = await this.manager.waveforms.preempt();
+    try {
     const { workspace, asset, plan, intent, reviewKey } = prepared;
     const assertCurrent = () => {
       if (isCancelled()) throw requestError('Queued processing was cancelled.', 409);
@@ -159,6 +161,7 @@ class ProcessingOperations {
     workspace.activePromise = this.perform(workspace, freeze({ ...asset }), freeze(structuredClone(workspace.inspection)), frozenPlan, snapshot, provenance);
     workspace.activePromise.catch(() => {});
     return workspace;
+    } finally { resumeWaveforms(); }
   }
 
   checkAdmission(workspace, plan, { ignoreSlot = false, queueJobId = null } = {}) {

@@ -6,13 +6,16 @@ const { planConversion, requestError } = require('./conversion-plan');
 const { normalizeEditPlan, isFullDurationEditPlan, totalRetainedDuration, roundMilliseconds } = require('./public/edit-plan');
 
 const PRESETS = Object.freeze(['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']);
-const MP3_BITRATES = Object.freeze([32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]);
+const { AUDIO_CONTAINERS, MP3_BITRATES, audioEncodingPolicy, audioPrecision, editorTimeline } = require('./audio-policy');
 const CONTAINERS = Object.freeze({
   mp4: { extension: 'mp4', mime: 'video/mp4', label: 'MP4', muxer: 'mp4' },
   mov: { extension: 'mov', mime: 'video/quicktime', label: 'MOV / QuickTime', muxer: 'mov' },
   matroska: { extension: 'mkv', mime: 'video/x-matroska', label: 'Matroska / MKV', muxer: 'matroska' },
   m4a: { extension: 'm4a', mime: 'audio/mp4', label: 'M4A / AAC', muxer: 'mp4' },
-  mp3: { extension: 'mp3', mime: 'audio/mpeg', label: 'MP3', muxer: 'mp3' }
+  mp3: { extension: 'mp3', mime: 'audio/mpeg', label: 'MP3', muxer: 'mp3' },
+  opus: { extension: 'opus', mime: 'audio/ogg', label: 'Opus', muxer: 'ogg' },
+  flac: { extension: 'flac', mime: 'audio/flac', label: 'FLAC', muxer: 'flac' },
+  wav: { extension: 'wav', mime: 'audio/wav', label: 'WAV / PCM', muxer: 'wav' }
 });
 // Conservative muxing policy, not a catalog of every codec FFmpeg can mux.
 const COPY_CODECS = Object.freeze({
@@ -74,7 +77,7 @@ function normalizeProcessingSettings(raw = {}) {
       videoKbps: rateMode === 'bitrate' ? number(rate.videoKbps, 1, 1000000, 'Video bitrate') : null,
       maximumMB: rateMode === 'size' ? number(rate.maximumMB, 0.001, 100 * 1024 ** 3 / 1e6, 'Maximum MB') : null,
       twoPass: rateMode === 'size' || (rateMode === 'bitrate' && (rate.twoPass ?? false)) },
-    audio: { codec: choice(audio.codec === undefined ? 'unchanged' : audio.codec, ['unchanged', 'aac', 'mp3'], 'audio codec'),
+    audio: { codec: choice(audio.codec === undefined ? 'unchanged' : audio.codec, ['unchanged', 'aac', 'mp3', 'opus', 'flac', 'pcm'], 'audio codec'),
       bitrateKbps: audio.bitrateKbps == null ? null : number(audio.bitrateKbps, 8, 1536, 'Audio bitrate') }
   };
   if (normalized.audio.codec === 'mp3' && normalized.audio.bitrateKbps != null && !MP3_BITRATES.includes(normalized.audio.bitrateKbps)) {
@@ -94,22 +97,22 @@ function processingOptions(source = {}, capabilities) {
   const videoSafe = source.video && source.video.hdr !== true && source.video.alpha !== true && source.video.orientationSupported !== false;
   const h264 = checked && videoSafe && capabilities.encoders?.has('libx264') && hasSoftwareDecoder(capabilities, source.video.codec);
   const audio = source.audio;
-  const layout = audio?.channelLayout || ({ 1: 'mono', 2: 'stereo' }[audio?.channels]);
-  const audioSafe = audio && ({ mono: 1, stereo: 2, '5.1': 6, '5.1(side)': 6 })[layout] === audio.channels;
-  const audioCodecAvailable = codec => audio && (audio.codec === codec || (checked && audioSafe
-    && (codec !== 'mp3' || audio.channels <= 2) && capabilities.encoders?.has(codec === 'mp3' ? 'libmp3lame' : 'aac') && hasSoftwareDecoder(capabilities, audio.codec)));
+  const audioCodecAvailable = codec => audio && (audio.codec === codec || (checked
+    && !audioEncodingPolicy(audio, codec).error && hasSoftwareDecoder(capabilities, audio.codec)
+    && capabilities.encoders?.has(audioEncodingPolicy(audio, codec).stream.encoder)));
   const containers = [{ value: 'source', label: 'Keep source' }];
   if (source.video && checked) for (const value of ['mp4', 'mov', 'matroska']) {
     if (capabilities.muxers?.has(value) && (h264 || COPY_CODECS[value].video.includes(source.video.codec))
-      && (!audio || COPY_CODECS[value].audio.includes(audio.codec) || audioCodecAvailable('aac'))) containers.push({ value, label: CONTAINERS[value].label });
+      && (!audio || COPY_CODECS[value].audio.includes(audio.codec)
+        || (value === 'matroska' ? ['aac', 'mp3', 'opus', 'flac'] : ['aac', 'mp3']).some(audioCodecAvailable))) containers.push({ value, label: CONTAINERS[value].label });
   }
-  if (checked) for (const [value, codec] of [['m4a', 'aac'], ['mp3', 'mp3']]) {
+  if (checked) for (const [value, codec] of [['m4a', 'aac'], ['mp3', 'mp3'], ['opus', 'opus'], ['flac', 'flac'], ['wav', 'pcm']]) {
     if (capabilities.muxers?.has(CONTAINERS[value].muxer) && audioCodecAvailable(codec)) containers.push({ value, label: CONTAINERS[value].label });
   }
   return {
     checked,
     videoCodecs: [{ value: 'unchanged', label: 'Unchanged' }, ...(h264 ? [{ value: 'h264', label: 'H.264' }] : [])], containers,
-    audioCodecs: [{ value: 'unchanged', label: 'Unchanged' }, ...['aac', 'mp3'].filter(audioCodecAvailable).map(value => ({ value, label: value.toUpperCase() }))],
+    audioCodecs: [{ value: 'unchanged', label: 'Unchanged' }, ...['aac', 'mp3', 'opus', 'flac', 'pcm'].filter(audioCodecAvailable).map(value => ({ value, label: value === 'pcm' ? 'PCM (automatic precision)' : value.toUpperCase() }))],
     frameRates: h264 ? [1, 5, 10, 12, 15, 20, 23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60].filter(value => value < (source.video?.frameRate || 0)) : [],
     presets: [...PRESETS], mp3Bitrates: [...MP3_BITRATES]
   };
@@ -186,27 +189,29 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
   const settings = normalizeProcessingSettings(rawSettings);
   number(draftRevision, 0, Number.MAX_SAFE_INTEGER, 'Draft revision', true);
   const source = inspection || {};
+  const timeline = editorTimeline(source);
+  const editDuration = source.video ? source.durationSeconds : timeline.durationSeconds;
   let editPlan = null;
-  if (source.durationSeconds > 0) {
+  if (editDuration > 0) {
     if (rawEditPlan != null) {
       object(rawEditPlan, ['version', 'keepRanges'], 'Edit plan');
       if (Array.isArray(rawEditPlan.keepRanges)) for (const range of rawEditPlan.keepRanges) object(range, ['startSeconds', 'endSeconds'], 'Retained range');
     }
-    try { editPlan = normalizeEditPlan(rawEditPlan ?? { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: roundMilliseconds(source.durationSeconds) }] }, roundMilliseconds(source.durationSeconds)); }
+    try { editPlan = normalizeEditPlan(rawEditPlan ?? { version: 1, keepRanges: [{ startSeconds: 0, endSeconds: roundMilliseconds(editDuration) }] }, roundMilliseconds(editDuration)); }
     catch (error) { throw requestError(error.message); }
   } else if (rawEditPlan != null) throw requestError('A known source duration is required for cuts.');
-  const cuts = editPlan && !isFullDurationEditPlan(editPlan, source.durationSeconds);
+  const cuts = editPlan && !isFullDurationEditPlan(editPlan, editDuration);
   const defaultRequest = settings.videoCodec === 'unchanged' && settings.container === 'source'
     && settings.scale.mode === 'unchanged' && settings.frameRate == null && settings.rate.mode === 'automatic'
     && settings.audio.codec === 'unchanged' && settings.audio.bitrateKbps == null && !cuts;
   const plan = {
     version: 1, workspaceId, sourceAssetId, inputAssetId: sourceAssetId, inputRole: 'source', inputFilename, draftRevision,
     inspectionKey: crypto.createHash('sha256').update(JSON.stringify(source)).digest('hex'),
-    inputDurationSeconds: source.durationSeconds, settings, editPlan, cuts: Boolean(cuts),
+    inputDurationSeconds: editDuration, settings, editPlan, cuts: Boolean(cuts),
     status: 'unknown', reason: 'incomplete', message: 'More source metadata is needed.',
     streams: [], changes: [], warnings: [], missing: [], output: {}, passes: 1, rateBudget: null,
     options: processingOptions(source, capabilities),
-    timing: { originSeconds: source.timeOriginSeconds, audioOnly: false, durationSeconds: editPlan ? totalRetainedDuration(editPlan) : source.durationSeconds }
+    timing: { originSeconds: source.timeOriginSeconds, audioOnly: false, durationSeconds: editPlan ? totalRetainedDuration(editPlan) : editDuration }
   };
   const finish = (status, reason, message) => {
     Object.assign(plan, { status, reason, message });
@@ -228,6 +233,8 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
       pixelFormat: source.video?.pixelFormat, rotationDegrees: source.video?.rotationDegrees || 0,
       sampleAspectRatio: source.video?.sampleAspectRatio, frameRate: source.video?.frameRate,
       audioCodec: source.audio?.codec, sampleRate: source.audio?.sampleRate, channels: source.audio?.channels, channelLayout: source.audio?.channelLayout });
+    const precision = audioPrecision(source.audio || {});
+    if (precision.bitDepth) Object.assign(plan.output, precision);
     for (const role of ['video', 'audio']) if (source[role]) plan.streams.push({ role, index: source[role].streamIndex, action: 'copy', codec: source[role].codec });
     plan.timing.audioOnly = !source.video;
     plan.preserveSourceInventory = true;
@@ -235,7 +242,7 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
     return finish('no-op', null, 'No processing needed; download the original file.');
   }
   if (!editPlan) return incomplete('A known positive source duration is required for processing.');
-  const audioOnly = ['m4a', 'mp3'].includes(settings.container) || (!source.video && settings.container === 'source');
+  const audioOnly = AUDIO_CONTAINERS.includes(settings.container) || (!source.video && settings.container === 'source');
   plan.timing.audioOnly = audioOnly;
   const video = audioOnly ? null : source.video;
   const audio = source.audio;
@@ -244,41 +251,51 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
     if (settings.videoCodec !== 'unchanged' || settings.scale.mode !== 'unchanged' || settings.frameRate != null || settings.rate.mode !== 'automatic') {
       return unsupported('Choose Automatic and unchanged video settings for audio-only output.');
     }
-    if (cuts && !source.video) return unsupported('Editing audio-only sources is not supported in this slice. Use the complete selected audio timeline.');
     if (!audio) return unsupported('This source has no selected audio to convert.');
-    if (settings.container === 'source' && !['mp4', 'mp3'].includes(container)) return unsupported('Keep source cannot encode this audio container. Choose M4A / AAC or MP3 explicitly.');
-    if (settings.container === 'source' && container === 'mp4' && (settings.audio.codec === 'unchanged' ? audio.codec : settings.audio.codec) !== 'aac') {
-      return unsupported('Choose AAC explicitly for audio in the source MP4 container, or choose an MP3 container explicitly.');
+    if (settings.container === 'source') {
+      container = ({ mp4: 'm4a', mp3: 'mp3', flac: 'flac', wav: 'wav' })[container]
+        || (container === 'ogg' && audio.codec === 'opus' ? 'opus' : null);
+      if (!container) return unsupported('Keep source cannot encode this audio container. Choose an explicit audio output format.');
     }
-    const codec = container === 'm4a' ? 'aac' : container === 'mp3' ? 'mp3' : settings.audio.codec === 'unchanged' ? audio.codec : settings.audio.codec;
-    if (!['aac', 'mp3'].includes(codec)) return unsupported('Choose M4A / AAC or MP3 for this audio conversion.');
-    if (codec === 'mp3' && settings.audio.bitrateKbps != null && !MP3_BITRATES.includes(settings.audio.bitrateKbps)) return unsupported(`Choose a supported MP3 bitrate: ${MP3_BITRATES.join(', ')} kbps.`);
+    const codec = ({ m4a: 'aac', mp3: 'mp3', opus: 'opus', flac: 'flac', wav: 'pcm' })[container];
+    if (!codec) return unsupported('Choose a supported audio output format.');
     if (settings.audio.codec !== 'unchanged' && settings.audio.codec !== codec) return unsupported('The chosen audio codec does not match this audio container.');
-    const targetId = codec === 'aac' ? 'm4a-aac' : 'mp3';
-    const delegated = planConversion({ workspaceId, inputAssetId: sourceAssetId, inputFilename, inspection: source, targetId, capabilities });
-    Object.assign(plan, { output: delegated.output, streams: delegated.streams, timing: delegated.timing,
-      changes: delegated.changes, warnings: delegated.warnings, missing: delegated.missing, omitted: delegated.omitted, audioDelegate: targetId });
-    // Preserve the accepted AAC/MP3 conversion policy; an explicit bitrate
-    // requires encoding even if source codec and container already match.
-    if (settings.audio.bitrateKbps == null && !cuts) return finish(delegated.status, delegated.reason, delegated.message);
-    if (!['executable', 'no-op'].includes(delegated.status)) return finish(delegated.status, delegated.reason, delegated.message);
-    const stream = plan.streams[0];
-    const encoded = planConversion({ workspaceId, inputAssetId: sourceAssetId, inspection: { ...source, audio: { ...audio, codec: '__force_encode' } }, targetId, capabilities: { ...capabilities, available: true } });
-    if (encoded.reason === 'unsupported' || encoded.reason === 'incomplete') return finish(encoded.status, encoded.reason, encoded.message);
-    const policy = encoded.streams.find(item => item.role === 'audio');
-    if (!policy) return unsupported('This audio layout cannot be encoded safely.');
-    Object.assign(stream, policy, { codec: audio.codec });
-    if (settings.audio.bitrateKbps != null) { stream.bitRate = settings.audio.bitrateKbps * 1000; delete stream.quality; }
-    Object.assign(plan.output, encoded.output);
-    plan.changes = plan.changes.filter(message => !message.startsWith('Copy the selected audio'));
-    plan.changes.push(`Encode ${codec.toUpperCase()} ${stream.bitRate ? `at ${stream.bitRate / 1000} kbps` : 'at quality 0'}; preserve ${stream.channelLayout}.`);
-    if (cuts) {
-      plan.timing = { originSeconds: source.timeOriginSeconds, audioOnly: true, durationSeconds: totalRetainedDuration(editPlan),
-        audioStartSeconds: 0, audioEndSeconds: totalRetainedDuration(editPlan) };
-      plan.changes = plan.changes.filter(message => !message.startsWith('Use a zero-based selected-audio timeline'));
-      plan.changes.push(`Apply the committed video cuts directly to original audio on the shared presentation clock, retaining ${plan.timing.durationSeconds} seconds including silence.`);
+    // Keep the established full-file AAC/MP3 conversion behavior compatible.
+    if (['aac', 'mp3'].includes(codec) && !cuts && settings.audio.bitrateKbps == null) {
+      const delegated = planConversion({ workspaceId, inputAssetId: sourceAssetId, inputFilename, inspection: source,
+        targetId: codec === 'aac' ? 'm4a-aac' : 'mp3', capabilities });
+      Object.assign(plan, { output: delegated.output, streams: delegated.streams, timing: delegated.timing,
+        changes: delegated.changes, warnings: delegated.warnings, missing: delegated.missing, omitted: delegated.omitted });
+      return finish(delegated.status, delegated.reason, delegated.message);
     }
-    plan.missing = [];
+    const descriptor = CONTAINERS[container];
+    const copy = !cuts && settings.audio.bitrateKbps == null && source.container?.kind === descriptor.muxer
+      && (audio.codec === codec || (codec === 'pcm' && /^pcm_(?:[su](?:8|16|24|32)|f(?:32|64))(?:le)?$/.test(audio.codec)));
+    const policy = copy ? { stream: { role: 'audio', index: audio.streamIndex, codec: audio.codec, action: 'copy' }, outputCodec: audio.codec }
+      : audioEncodingPolicy(audio, codec, settings.audio.bitrateKbps);
+    if (policy.error) return policy.reason === 'incomplete' ? incomplete(policy.error) : unsupported(policy.error);
+    plan.streams = [policy.stream];
+    const precision = copy ? audioPrecision(audio) : policy.stream;
+    plan.output = { ...descriptor, container: descriptor.muxer, audioCodec: policy.outputCodec,
+      sampleRate: policy.stream.sampleRate ?? audio.sampleRate, channels: audio.channels,
+      channelLayout: policy.stream.channelLayout ?? audio.channelLayout, bitDepth: precision.bitDepth, representation: precision.representation };
+    const offset = !source.video || !cuts ? audio.startSeconds : 0;
+    const duration = cuts ? totalRetainedDuration(editPlan) : audio.durationSeconds ?? (!source.video ? editDuration : null);
+    if (!(duration > 0) || !Number.isFinite(offset)) return incomplete('Selected-stream timing is incomplete; the audio endpoint cannot be inferred from an unrelated video tail.');
+    plan.timing = { originSeconds: source.timeOriginSeconds, audioOnly: true, sourceAudioStartSeconds: offset,
+      durationSeconds: duration, audioStartSeconds: 0, audioEndSeconds: duration };
+    if (policy.stream.sampleRate && policy.stream.sampleRate !== audio.sampleRate) plan.changes.push(`Resample audio from ${audio.sampleRate} Hz to ${policy.stream.sampleRate} Hz.`);
+    plan.changes.push(copy ? 'Copy the selected audio with its existing sample rate, channels, and precision.'
+      : `Encode ${codec.toUpperCase()}${policy.stream.bitRate && codec !== 'pcm' ? ' at ' + policy.stream.bitRate / 1000 + ' kbps' : ''}; preserve ${plan.output.channelLayout}${plan.output.bitDepth ? ', ' + plan.output.bitDepth + '-bit ' + plan.output.representation : ''}.`);
+    if (codec === 'opus' && !copy) plan.changes.push('Opus is lossy; use 48 kHz playback with variable bitrate.');
+    plan.changes.push(cuts ? `Apply ${editPlan.keepRanges.length} retained range(s) directly to original audio, retaining ${duration} seconds including timestamped silence.`
+      : 'Use a zero-based selected-audio timeline; do not append any video-only tail.');
+    if (!source.extraStreams || !Number.isInteger(source.extraStreams.total) || source.extraStreams.chapters == null) return incomplete('Stream and chapter inventory is incomplete.');
+    plan.omitted = { video: source.trackCounts?.video || 0, audio: Math.max(0, (source.trackCounts?.audio || 0) - 1),
+      subtitles: source.trackCounts?.subtitle || 0, artwork: source.extraStreams.artwork || 0, other: source.extraStreams.other || 0, chapters: source.extraStreams.chapters };
+    const omissions = Object.entries(plan.omitted).filter(([role, count]) => role !== 'video' && count > 0);
+    if (omissions.length) plan.warnings.push({ id: 'omitted-content', required: true, message: `Omit ${omissions.map(([role, count]) => count + ' ' + role).join(', ')}. Only the selected audio is included.` });
+    if (copy && source.extraStreams.total === 1 && !source.extraStreams.chapters) return finish('no-op', null, 'No processing needed; download the original file.');
     container = plan.output.container;
   } else {
     if (!video || source.mediaKind !== 'video') return incomplete('The selected timed video is incomplete.');
@@ -316,26 +333,24 @@ function planProcessing({ workspaceId = null, sourceAssetId, inputFilename = nul
       if (!audio.codec || !Number.isSafeInteger(audio.streamIndex) || !audio.channels || !audio.sampleRate) return incomplete('Audio codec, stream identity, channels, or sample rate is incomplete.');
       const outputAudioCodec = settings.audio.codec === 'unchanged' ? audio.codec : settings.audio.codec;
       const encode = Boolean(cuts || outputAudioCodec !== audio.codec || settings.audio.bitrateKbps != null);
-      if (encode && !['aac', 'mp3'].includes(outputAudioCodec)) return unsupported('These cuts or audio changes require an audio encoder. Choose AAC or MP3 explicitly.');
-      if (!COPY_CODECS[container].audio.includes(outputAudioCodec)) return unsupported('This audio codec cannot be copied into the selected container. Choose AAC explicitly; audio will not be removed.');
-      const stream = { role: 'audio', index: audio.streamIndex, action: encode ? 'encode' : 'copy', codec: audio.codec };
+      const encodable = container === 'matroska' ? ['aac', 'mp3', 'opus', 'flac'] : ['aac', 'mp3'];
+      if (encode && !encodable.includes(outputAudioCodec)) return unsupported('These cuts or audio changes require a compatible audio encoder. Choose AAC, MP3, or an MKV audio encoder explicitly.');
+      if (!COPY_CODECS[container].audio.includes(outputAudioCodec)) return unsupported('This audio codec is incompatible with the selected container. Choose a compatible codec explicitly; audio will not be removed.');
+      const policy = encode ? audioEncodingPolicy(audio, outputAudioCodec, settings.audio.bitrateKbps) : null;
+      if (policy?.error) return policy.reason === 'incomplete' ? incomplete(policy.error) : unsupported(policy.error);
+      const stream = encode ? policy.stream : { role: 'audio', index: audio.streamIndex, action: 'copy', codec: audio.codec };
       if (encode) {
-        const layout = audio.channelLayout || ({ 1: 'mono', 2: 'stereo' }[audio.channels]);
-        if (!layout) return incomplete('An audio channel layout is required before encoding.');
-        if (({ mono: 1, stereo: 2, '5.1': 6, '5.1(side)': 6 })[layout] !== audio.channels
-          || (outputAudioCodec === 'mp3' && audio.channels > 2)) return unsupported('This audio layout cannot be encoded here without a channel change. No downmix is performed.');
-        if (outputAudioCodec === 'mp3' && settings.audio.bitrateKbps != null && !MP3_BITRATES.includes(settings.audio.bitrateKbps)) return unsupported(`Choose a supported MP3 bitrate: ${MP3_BITRATES.join(', ')} kbps.`);
-        const sampleRate = [44100, 48000].includes(audio.sampleRate) ? audio.sampleRate : 48000;
-        Object.assign(stream, { encoder: outputAudioCodec === 'aac' ? 'aac' : 'libmp3lame', sampleRate,
-          channels: audio.channels, channelLayout: layout,
-          ...(settings.audio.bitrateKbps != null ? { bitRate: settings.audio.bitrateKbps * 1000 }
-            : outputAudioCodec === 'aac' ? { bitRate: { 1: 128000, 2: 256000, 6: 512000 }[audio.channels] } : { quality: 0 }) });
-        if (sampleRate !== audio.sampleRate) plan.changes.push(`Resample audio from ${audio.sampleRate} Hz to ${sampleRate} Hz.`);
-        plan.changes.push(`Encode ${outputAudioCodec.toUpperCase()} ${stream.bitRate ? `at ${stream.bitRate / 1000} kbps` : 'at quality 0'}; preserve ${layout}.`);
+        if (stream.sampleRate !== audio.sampleRate) plan.changes.push(`Resample audio from ${audio.sampleRate} Hz to ${stream.sampleRate} Hz.`);
+        plan.changes.push(`Encode ${outputAudioCodec.toUpperCase()}${stream.bitRate ? ' at ' + stream.bitRate / 1000 + ' kbps' : stream.quality != null ? ' at quality ' + stream.quality : ''}; preserve ${stream.channelLayout}.`);
       } else plan.changes.push('Copy the selected audio with its existing bitrate, channels, and sample rate.');
       plan.streams.push(stream);
       Object.assign(plan.output, { audioCodec: outputAudioCodec, sampleRate: stream.sampleRate ?? audio.sampleRate,
-        channels: audio.channels, channelLayout: stream.channelLayout ?? audio.channelLayout });
+        channels: audio.channels, channelLayout: stream.channelLayout ?? audio.channelLayout,
+        ...(encode && stream.bitDepth ? { bitDepth: stream.bitDepth, representation: stream.representation } : {}) });
+      if (!encode) {
+        const precision = audioPrecision(audio);
+        if (precision.bitDepth) Object.assign(plan.output, precision);
+      }
       plan.timing.audioStartSeconds = cuts ? 0 : audio.startSeconds;
       plan.timing.audioEndSeconds = cuts ? plan.timing.durationSeconds : audio.startSeconds != null && audio.durationSeconds != null ? audio.startSeconds + audio.durationSeconds : null;
     } else if (settings.audio.codec !== 'unchanged' || settings.audio.bitrateKbps != null) return unsupported('This source has no audio; choose unchanged audio settings.');

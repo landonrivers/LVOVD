@@ -21,6 +21,8 @@ const { runConversionProcess } = require('./conversion-process');
 const { OutputRetirement } = require('./output-retirement');
 const { ProcessingOperations } = require('./processing-workspace');
 const { LocalProcessingQueue } = require('./local-processing-queue');
+const { AudioWaveforms } = require('./audio-waveform');
+const { editorTimeline } = require('./audio-policy');
 const {
   MAX_KEEP_RANGES,
   roundMilliseconds,
@@ -232,6 +234,16 @@ function isDirectPlaybackCompatible(inspection) {
     && (!inspection.audio || inspection.audio.codec === 'aac'));
 }
 
+function audioPlaybackProxyArgs(inputPath, outputPath, inspection) {
+  const { durationSeconds, offsetSeconds } = editorTimeline(inspection);
+  if (!(durationSeconds > 0) || !Number.isFinite(offsetSeconds) || !inspection.audio) throw workspaceRequestError('Audio preview timing is incomplete.');
+  return ['-y', '-hide_banner', '-nostdin', '-loglevel', 'error', '-copyts', '-start_at_zero', '-itsoffset', String(-offsetSeconds),
+    ...localMediaInputArgs(inspection), '-i', inputPath, '-map', `0:${inspection.audio.streamIndex}`, '-vn', '-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1',
+    '-af', `aresample=async=1:first_pts=0:min_hard_comp=0.001,apad=whole_dur=${durationSeconds},atrim=end=${durationSeconds}`,
+    '-c:a', 'aac', '-b:a', String(128000 * Math.min(inspection.audio.channels, 2)), '-movflags', '+faststart', '-f', 'mp4',
+    '-progress', 'pipe:1', '-nostats', outputPath];
+}
+
 function playbackProxyArgs(inputPath, outputPath, inspection) {
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error', '-copyts', '-start_at_zero',
@@ -430,6 +442,7 @@ class MediaWorkspaceManager {
     maxConvertedBytes = MAX_LOCAL_MEDIA_BYTES,
     conversionTerminationGraceMs = 250,
     cleanupRetryDelaysMs = CLEANUP_RETRY_DELAYS_MS,
+    waveformOptions = {},
     localProcessingLimits = {}
   } = {}) {
     this.tempDir = tempDir;
@@ -457,6 +470,7 @@ class MediaWorkspaceManager {
     this.cleanupRetryDelaysMs = [...cleanupRetryDelaysMs];
     this.rootPromise = null;
     this.localProcessing = new LocalProcessingQueue(this, localProcessingLimits);
+    this.waveforms = new AudioWaveforms(this, waveformOptions);
   }
 
   async workRoot() {
@@ -591,7 +605,9 @@ class MediaWorkspaceManager {
       activeOperation: workspace.activeOperation,
       queuedProcessingJobId: workspace.queuedProcessingJobId,
       processingRevision: workspace.processingReview?.revision ?? null,
-      editor: { ...workspace.editor, eligible: Boolean(workspace.inspection?.video && workspace.inspection.durationSeconds > 0) },
+      editor: { ...workspace.editor, ...editorTimeline(workspace.inspection), eligible: Boolean(workspace.inspection?.video && workspace.inspection.durationSeconds > 0
+        || workspace.purpose === 'local' && workspace.inspection?.audio && editorTimeline(workspace.inspection).durationSeconds > 0 && Number.isFinite(editorTimeline(workspace.inspection).offsetSeconds)) },
+      waveform: this.waveforms.state(workspace),
       conversion: this.conversions.publicState(workspace),
       outputCleanup: this.outputRetirement.state(workspace),
       compatibility: workspace.compatibility,
@@ -639,6 +655,7 @@ class MediaWorkspaceManager {
       try { response.write(payload); } catch {}
     }
     this.localProcessing.workspaceChanged(workspace);
+    this.waveforms.changed();
   }
 
   update(workspace, patch) {
@@ -951,7 +968,11 @@ class MediaWorkspaceManager {
 
   prepareEditor(workspaceId, sourceAssetId) {
     const { workspace, asset } = this.originalSource(workspaceId, sourceAssetId);
-    validateEditorInspection(workspace.inspection);
+    const audioOnly = workspace.purpose === 'local' && !workspace.inspection?.video;
+    if (audioOnly) {
+      const timeline = editorTimeline(workspace.inspection);
+      if (!(timeline.durationSeconds > 0) || !Number.isFinite(timeline.offsetSeconds)) throw workspaceRequestError('The selected audio needs usable timing before preview preparation.');
+    } else validateEditorInspection(workspace.inspection);
     if (workspace.activeOperation) throw workspaceRequestError('A local workspace operation is already running.', 409);
     if (workspace.editor.status === 'ready' && workspace.playbackAssetId) return workspace;
     if (workspace.queuedProcessingJobId) throw workspaceRequestError('This file is queued for processing. Preview can prepare after it finishes or is cancelled.', 409);
@@ -965,26 +986,34 @@ class MediaWorkspaceManager {
 
   async performEditorPreparation(workspace, sourceAsset) {
     workspace.editor = { status: 'preparing', message: 'Preparing editor playback…', failure: null };
+    const audioOnly = !workspace.inspection.video;
+    const timeline = editorTimeline(workspace.inspection);
+    const shape = audioOnly ? workspace.inspection : editorInspectionShape(workspace.inspection);
+    const directAudio = audioOnly && workspace.inspection.container?.kind === 'mp4'
+      && workspace.inspection.audio.codec === 'aac' && !workspace.inspection.timeOriginSeconds && timeline.offsetSeconds === 0;
+    const directPlayback = audioOnly ? directAudio : isDirectPlaybackCompatible(shape);
+    if (!directPlayback) {
+      workspace.activeOperation = 'proxying';
+      this.update(workspace, {
+        status: 'proxying', phase: 'proxying',
+        message: 'Preparing a temporary browser-compatible playback proxy…', percent: 0
+      });
+    }
+    const resume = await this.waveforms.preempt();
     try {
-      if (isDirectPlaybackCompatible(editorInspectionShape(workspace.inspection))) {
-        sourceAsset.mime = 'video/mp4';
+      if (workspace.cancelRequested) throw workspaceCancelledError();
+      if (directPlayback) {
+        sourceAsset.mime = audioOnly ? 'audio/mp4' : 'video/mp4';
         sourceAsset.playable = true;
         workspace.playbackAssetId = sourceAsset.id;
         workspace.playbackProxy = false;
       } else {
-        workspace.activeOperation = 'proxying';
-        this.update(workspace, {
-          status: 'proxying',
-          phase: 'proxying',
-          message: 'Preparing a temporary browser-compatible playback proxy…',
-          percent: 0
-        });
-        const proxyData = await this.createProxyAsset(workspace, sourceAsset, editorInspectionShape(workspace.inspection));
+        const proxyData = await this.createProxyAsset(workspace, sourceAsset, shape);
         if (workspace.cancelRequested) throw workspaceCancelledError();
         const proxyAsset = this.registerAsset(workspace, {
           ...proxyData,
           role: 'playback-proxy',
-          mime: 'video/mp4',
+          mime: audioOnly ? 'audio/mp4' : 'video/mp4',
           playable: true
         });
         workspace.playbackAssetId = proxyAsset.id;
@@ -1030,7 +1059,7 @@ class MediaWorkspaceManager {
         percent: null,
         failure
       });
-    }
+    } finally { resume(); }
   }
 
   async runOwnedProcess(workspace, command, args, {
@@ -1188,8 +1217,10 @@ class MediaWorkspaceManager {
   }
 
   async defaultCreateProxyAsset(workspace, sourceAsset, inspection) {
-    const partialPath = path.join(workspace.tempDir, 'playback-proxy.partial.mp4');
-    const finalPath = path.join(workspace.tempDir, 'playback-proxy.mp4');
+    const audioOnly = !inspection.video;
+    const extension = audioOnly ? 'm4a' : 'mp4';
+    const partialPath = path.join(workspace.tempDir, `playback-proxy.partial.${extension}`);
+    const finalPath = path.join(workspace.tempDir, `playback-proxy.${extension}`);
     const onStdout = createFfmpegProgressHandler(inspection.durationSeconds, (percent) => {
       this.update(workspace, { percent });
     });
@@ -1198,7 +1229,7 @@ class MediaWorkspaceManager {
       await this.runOwnedProcess(
         workspace,
         'ffmpeg',
-        playbackProxyArgs(sourceAsset.filePath, partialPath, inspection),
+        audioOnly ? audioPlaybackProxyArgs(sourceAsset.filePath, partialPath, inspection) : playbackProxyArgs(sourceAsset.filePath, partialPath, inspection),
         { operation: 'ffmpeg_processing', tool: 'ffmpeg', captureStdout: false, onStdout }
       );
       await this.fs.rename(partialPath, finalPath);
@@ -1254,6 +1285,7 @@ class MediaWorkspaceManager {
     if (workspace.status !== 'ready' || !sourceAsset || !workspace.inspection) {
       throw workspaceRequestError('The local media workspace is not ready to create an edited file.', 409);
     }
+    validateEditorInspection(workspace.inspection);
     if (workspace.activeOperation || workspace.queuedProcessingJobId) {
       throw workspaceRequestError('A local workspace operation is already running.', 409);
     }
@@ -1285,7 +1317,10 @@ class MediaWorkspaceManager {
 
   async performRender(workspace, sourceAsset, editPlan, attempt) {
     const previousOutputId = workspace.render.outputAssetId;
+    let resumeWaveforms;
     try {
+      resumeWaveforms = await this.waveforms.preempt();
+      if (workspace.cancelRequested || !this.workspaces.has(workspace.id)) throw workspaceCancelledError();
       const created = await this.createEditedAsset(
         workspace,
         sourceAsset,
@@ -1363,6 +1398,7 @@ class MediaWorkspaceManager {
       workspace.activeOperation = null;
       workspace.activePromise = null;
       this.emit(workspace);
+      resumeWaveforms?.();
     }
   }
 
@@ -1641,6 +1677,7 @@ class MediaWorkspaceManager {
 
   async discardOwnedWorkspace(workspace, expired) {
     const releasingStreams = this.releaseReadStreams(workspace);
+    await this.waveforms.remove(workspace.id);
     if (workspace.activeOperation) {
       const operation = workspace.activeOperation;
       const queuedAcquisition = operation === 'acquiring'
@@ -1695,6 +1732,7 @@ class MediaWorkspaceManager {
 
   async clearAll() {
     this.localProcessing.clear();
+    await this.waveforms.clear();
     for (const id of [...this.workspaces.keys()]) await this.discard(id);
   }
 }

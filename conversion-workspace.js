@@ -79,6 +79,8 @@ class ConversionOperations {
   }
 
   async start({ workspaceId, inputAssetId, editPlan, targetId, planKey, acknowledgedWarnings = [] }) {
+    const resumeWaveforms = await this.manager.waveforms.preempt();
+    try {
     const plan = await this.plan(workspaceId, inputAssetId, targetId, editPlan);
     if (typeof planKey !== 'string' || plan.key !== planKey) throw requestError('The conversion plan changed. Review it again before starting.', 409);
     if (!['executable', 'no-op'].includes(plan.status)) throw requestError(plan.message, 422);
@@ -126,6 +128,7 @@ class ConversionOperations {
     workspace.activePromise = this.perform(workspace, asset, structuredClone(input.inspection), provenance, plan, attempt);
     workspace.activePromise.catch(() => {});
     return workspace;
+    } finally { resumeWaveforms(); }
   }
 
   async removeFile(workspace, filePath) {

@@ -19,7 +19,7 @@
   function copySettings(selected) { return clone(selected); }
   function create(workspace) {
     const identity = { workspaceId: workspace.id, sourceAssetId: workspace.sourceAssetId };
-    const inspection = clone(workspace.inspection), initialPlan = fullPlan(inspection.durationSeconds);
+    const inspection = clone(workspace.inspection), initialPlan = fullPlan(workspace.editor?.durationSeconds ?? inspection.durationSeconds);
     let editPlan = clone(initialPlan), settings = defaults(), editorState = null,
       draftRevision = Number.isSafeInteger(workspace.processingRevision) ? workspace.processingRevision + 1 : 0, submitted = null, result = null;
     return {
@@ -49,5 +49,5 @@
         submitted: clone(submitted), result: clone(result) }; }
     };
   }
-  return { defaults, fullPlan, copySettings, create };
+  return { audioContainers: Object.freeze(['m4a', 'mp3', 'opus', 'flac', 'wav']), defaults, fullPlan, copySettings, create };
 });
