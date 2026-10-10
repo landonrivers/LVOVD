@@ -4,6 +4,18 @@ This document captures the approved product direction connecting Roadmap #6 **Lo
 
 It is a product and architecture contract, not an implementation specification. Detailed mechanics may evolve during implementation, but changes should preserve the user-facing model and boundaries below unless a later product decision explicitly revises them.
 
+## v2.7.0 audio behavior
+
+Local Media accepts audio-only files for the same reversible trim/middle-cut authoring as video. Their timeline starts at the first selected audio sample and excludes unrelated track endpoints; video extraction retains the existing common presentation clock. Browser playback uses an audio element and, when necessary, an audio-only AAC proxy. All processing reads the original source.
+
+Standalone Opus/FLAC/WAV outputs and MKV Opus/FLAC encoding use one audio policy. Lossless outputs preserve sample rate, known channel layout, and proven decoded precision. FLAC is restricted to integer precision through 24 bits, with WAV suggested for float/32-bit sources. WAV uses explicit integer or float encoders and automatic RF64; Opus uses 48 kHz VBR with no speaker remapping. Ordinary Download and legacy conversion contracts remain compatible.
+
+A combined waveform is streamed from the original selected audio into at most 200,000 min/max pairs, with bins no finer than 10 ms. The cache is a non-playable owned workspace asset, never an output, History entry, or processing input. Bounded window responses carry at most 4,096 pairs; aggregate progress carries metadata only. Analysis has a 120-second deadline, a decoded-byte bound derived from source timing, one process at a time, and lower priority than processing. Cancellation retains ownership until child exit is confirmed. Failed/late analysis cannot change cuts, membership, selection, cleanup, or successful downloads.
+
+`POST /api/workspace/waveform` accepts `{ workspaceId, sourceAssetId }` and starts or deduplicates preparation. GET uses those identities plus `startSeconds`, `endSeconds`, and `points` (1–4,096). DELETE accepts the same identities and an optional `operationId`, so an obsolete cancellation cannot stop a newer task. Owned cancellation remains available during preview or processing. Responses and progress contain operation identity/status; only GET window responses contain peaks.
+
+FLAC/WAV support mono, stereo, `3.0`, `quad`, `5.0`, `5.1`, `5.1(side)`, `6.1`, and `7.1`; Opus excludes `5.1(side)`. Opus defaults to 64 kbps per channel and accepts 8–min(1536, 256 × channels) kbps. Meaningful integer precision remains unknown when metadata does not prove it. FLAC refuses that input; WAV can preserve a known integer decoder storage width without claiming a measured source bit depth.
+
 ## Core idea
 
 LVOVD treats URL-acquired media and user-supplied local media as two ways to enter the same temporary **local media workspace**.

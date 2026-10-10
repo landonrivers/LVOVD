@@ -219,6 +219,9 @@ function normalizeMediaInspection(raw = {}, { sourceSize = null } = {}) {
       channelLayout: boundedText(audioCandidate.channel_layout, 80),
       bitRate: finiteInteger(audioCandidate.bit_rate),
       profile: boundedText(audioCandidate.profile, 80),
+      sampleFormat: /^(u8|s16|s32|s64|flt|dbl)p?$/.test(audioCandidate.sample_fmt || '') ? audioCandidate.sample_fmt : null,
+      bitsPerSample: positiveInteger(audioCandidate.bits_per_sample) <= 64 ? positiveInteger(audioCandidate.bits_per_sample) : null,
+      bitsPerRawSample: positiveInteger(audioCandidate.bits_per_raw_sample) <= 64 ? positiveInteger(audioCandidate.bits_per_raw_sample) : null,
       ...streamTiming(audioCandidate, timeOriginSeconds, formatNames)
     } : null,
     trackCounts: {

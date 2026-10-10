@@ -2,6 +2,7 @@
 
 const { localMediaInputArgs } = require('./local-media-input');
 const { roundMilliseconds } = require('./public/edit-plan');
+const { audioPrecision } = require('./audio-policy');
 
 function processingVideoFilter(inspection, plan) {
   const video = plan.streams.find(stream => stream.role === 'video');
@@ -51,7 +52,8 @@ function processingArgs(inputPath, outputPath, inspection, plan, { pass = null, 
   const video = plan.streams.find(stream => stream.role === 'video');
   const audio = firstPass ? null : plan.streams.find(stream => stream.role === 'audio');
   const args = ['-hide_banner', '-nostdin', '-y', '-copyts', '-start_at_zero'];
-  if (plan.timing.audioOnly && !plan.cuts) args.push('-itsoffset', String(-plan.timing.sourceAudioStartSeconds));
+  if (plan.timing.audioOnly && Number.isFinite(plan.timing.sourceAudioStartSeconds)
+    && (!plan.cuts || plan.timing.sourceAudioStartSeconds !== 0)) args.push('-itsoffset', String(-plan.timing.sourceAudioStartSeconds));
   for (const stream of plan.streams.filter(item => item.action === 'encode' && (!firstPass || item.role === 'video'))) {
     if (!/^[a-z0-9_][a-z0-9_.-]{0,79}$/.test(stream.decoder || '')) throw new Error('The admitted software decoder is missing.');
     args.push(`-c:${stream.index}`, stream.decoder);
@@ -84,10 +86,14 @@ function processingArgs(inputPath, outputPath, inspection, plan, { pass = null, 
   if (audio?.action === 'copy') args.push('-c:a', 'copy');
   else if (audio) {
     args.push('-c:a', audio.encoder, '-ar', String(audio.sampleRate), '-ac', String(audio.channels), '-channel_layout', audio.channelLayout);
-    if (audio.bitRate) args.push('-b:a', String(audio.bitRate));
-    else args.push('-q:a', String(audio.quality));
+    if (audio.sampleFormat) args.push('-sample_fmt:a', audio.sampleFormat);
+    if (audio.encoder === 'flac') args.push('-compression_level:a', '5', '-bits_per_raw_sample:a', String(audio.bitDepth));
+    else if (audio.bitRate && !audio.encoder.startsWith('pcm_')) args.push('-b:a', String(audio.bitRate));
+    else if (audio.quality != null) args.push('-q:a', String(audio.quality));
+    if (audio.encoder === 'libopus') args.push('-vbr:a', 'on', '-application:a', 'audio', '-mapping_family:a', audio.channels > 2 ? '1' : '0');
   } else args.push('-an');
   if (!firstPass && ['mp4', 'mov'].includes(plan.output.container)) args.push('-movflags', '+faststart');
+  if (!firstPass && plan.output.container === 'wav') args.push('-rf64', 'auto');
   // A file-size switch can truncate media, so no -fs is emitted here. The
   // process owner enforces its independent disk cap and validates actual bytes.
   args.push('-avoid_negative_ts', 'disabled', '-f', firstPass ? 'null' : plan.output.container,
@@ -125,7 +131,12 @@ function validateProcessingOutput(output, plan) {
   if (audio) {
     if (output.audio?.codec !== plan.output.audioCodec || output.audio.sampleRate !== plan.output.sampleRate
       || output.audio.channels !== plan.output.channels) fail('audio codec, sample rate, or channels');
-    if (plan.output.channelLayout && output.audio.channelLayout !== plan.output.channelLayout) fail('audio channel layout changed');
+    const layout = output.audio.channelLayout || (plan.output.container === 'wav' ? ({ 1: 'mono', 2: 'stereo' }[output.audio.channels]) : null);
+    if (plan.output.channelLayout && layout !== plan.output.channelLayout) fail('audio channel layout changed');
+    if (plan.output.bitDepth) {
+      const precision = audioPrecision(output.audio);
+      if (precision.bitDepth !== plan.output.bitDepth || precision.representation !== plan.output.representation) fail('audio precision changed');
+    }
     const start = audio.action === 'encode' ? 0 : plan.timing.audioStartSeconds;
     if (start != null && output.audio.startSeconds != null && Math.abs(output.audio.startSeconds - start) > 0.06) fail('audio start changed');
     if (plan.timing.audioEndSeconds != null && output.audio.durationSeconds != null

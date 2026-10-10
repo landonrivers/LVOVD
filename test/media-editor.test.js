@@ -515,7 +515,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
 
   assert.doesNotMatch(html, /Edit locally · Creates MP4/i);
   assert.match(html, /Cuts and output settings apply together to your original source/);
-  assert.match(html, /Re-encoding is not lossless/);
+  assert.match(html, /eligible FLAC\/WAV output preserves decoded precision/);
   assert.doesNotMatch(html, /id="(?:local-open-editor|local-open-converter|media-converter|create-edited-file|convert-edited-file)"/);
   assert.match(html, /id="conversion-start"[^>]*>Process Selected File<\/button>/);
   assert.match(html, /data-result="download"/);
@@ -564,7 +564,7 @@ test('editor markup keeps the downloader primary and makes local timeline intera
   assert.match(source, /playhead\.addEventListener\('pointerdown', beginPlayheadDrag\)/);
   assert.match(source, /playheadSeekFrame = root\.requestAnimationFrame/);
   assert.match(source, /track\.addEventListener\('keydown', handlePlaybackKey\)/);
-  assert.match(source, /video\.addEventListener\('keydown', handlePlaybackKey\)/);
+  assert.match(source, /player\.addEventListener\('keydown', handlePlaybackKey\)/);
   assert.match(source, /startHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'start'\)/);
   assert.match(source, /endHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'end'\)/);
   assert.match(source, /cutStartHandle\.addEventListener\('keydown',[\s\S]*handleTimelineSliderKey\(event, 'start', 'cut'\)/);

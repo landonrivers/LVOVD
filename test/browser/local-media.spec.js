@@ -65,7 +65,7 @@ async function intakeFiles(page, filenames, { waitForReview = true, independentS
 }
 async function selectFile(page, workspaceId) {
   await page.locator('#processing-file-list').selectOption(workspaceId);
-  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.profileState().workspaceId)).toBe(workspaceId);
+  await expect.poll(() => page.evaluate(() => window.LVOVDLocalWorkspace.profileState()?.workspaceId)).toBe(workspaceId);
 }
 async function submitAll(page) {
   await page.locator('#processing-process-all').click();
@@ -409,9 +409,10 @@ test('a late automatic preview response cannot resurrect a removed entry or repl
   await expect(page.locator('#media-drop-zone')).toBeVisible();
   const id = await intake(page, 'generated.wav'); release();
   await expect(page.locator('#processing-file-list option')).toHaveText('generated.wav');
-  await expect(page.locator('#media-editor')).toBeHidden();
+  await expect(page.locator('#editor-audio')).toBeVisible();
+  await expect(page.locator('#editor-video')).toBeHidden();
   expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).workspaceId).toBe(id);
-  expect((await snapshot(id)).playback).toBeNull();
+  expect((await snapshot(id)).playback.mime).toBe('audio/mp4');
 });
 
 test('container-only MOV to MP4 remux keeps automatic original playback separate from processing', async ({ page }) => {
@@ -483,14 +484,18 @@ test('late real review responses cannot revive an obsolete draft or removed file
   await expect(page.locator('#processing-container')).toHaveValue('source');
 });
 
-test('audio-only conversion remains useful without video preparation and fits a narrow keyboard workflow', async ({ page }) => {
+test('audio-only playback and trimming fit a narrow keyboard workflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 }); const id = await intake(page, 'generated.wav');
-  await expect(page.locator('#media-editor')).toBeHidden(); await expect(page.locator('#processing-prepare-preview')).toBeHidden();
+  await expect(page.locator('#media-editor')).toBeVisible(); await expect(page.locator('#editor-audio')).toBeVisible();
+  await expect(page.locator('#audio-waveform-note')).toContainText('Combined waveform overview');
+  await page.locator('#timeline-start-handle').focus(); await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#editor-start-time')).toHaveValue('00:00:00.100');
   await page.getByText('Media Details', { exact: true }).click(); await expect(page.locator('#conversion-facts')).toBeVisible();
   await page.locator('#processing-container').selectOption('m4a'); await page.locator('#processing-audio-codec').selectOption('aac');
   await expect(page.locator('#conversion-start')).toBeEnabled(); await page.locator('#conversion-start').focus(); await page.keyboard.press('Enter');
   await expect(page.locator('#conversion-download')).toBeVisible(); const output = await downloaded(page, 'audio.m4a');
-  expect(probe(output.file).streams.map(stream => stream.codec_type)).toEqual(['audio']); expect((await snapshot(id)).playback).toBeNull();
+  expect(probe(output.file).streams.map(stream => stream.codec_type)).toEqual(['audio']); expect((await snapshot(id)).playback.mime).toBe('audio/mp4');
+  await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-audio-narrow.png') });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -505,6 +510,94 @@ test('narrow video workflow exposes keyboard timeline, scale and maximum-size re
   const output = await downloaded(page, 'small.mp4'); expect(output.bytes.length).toBeLessThanOrEqual(150000);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-unified-narrow.png') });
+});
+
+for (const [container, codec] of [['opus', 'opus'], ['flac', 'flac'], ['wav', 'pcm_s16le']]) test(`audio waveform trimming produces ${container} with actual format details`, async ({ page }) => {
+  const id = await intake(page, 'generated.wav');
+  await expect(page.locator('#editor-audio')).toBeVisible(); await expect(page.locator('#editor-video')).toBeHidden();
+  await expect(page.locator('#audio-waveform-note')).toContainText('Combined waveform overview');
+  await page.locator('#processing-container').selectOption('opus'); await exact(page, 'processing-audio-bitrate', '128');
+  await page.locator('#processing-container').selectOption(container);
+  if (container !== 'opus') { await expect(page.locator('#processing-audio-bitrate')).toBeHidden(); await expect(page.locator('#processing-audio-bitrate')).toHaveValue(''); }
+  await exact(page, 'editor-start-time', '0.25'); await exact(page, 'editor-end-time', '2.5');
+  await processFile(page);
+  const output = await downloaded(page, `trimmed.${container}`), inspected = probe(output.file);
+  expect(inspected.streams.map(stream => stream.codec_type)).toEqual(['audio']); expect(inspected.streams[0].codec_name).toBe(codec);
+  expect(Number(inspected.format.duration)).toBeCloseTo(2.25, 1);
+  await expect(page.locator('#conversion-output-facts')).toContainText(container === 'opus' ? '48000 Hz' : '16-bit integer');
+  expect((await snapshot(id)).conversion.output.provenance.inputRole).toBe('source');
+  if (container === 'flac') await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-audio-desktop.png') });
+});
+
+test('waveform preparation failure leaves exact audio trimming and original-source processing available', async ({ page }) => {
+  await page.route('**/api/workspace/waveform', route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Waveform unavailable.' }) }) : route.continue());
+  const id = await intake(page, 'generated.wav');
+  await expect(page.locator('#audio-waveform-retry')).toBeVisible();
+  await expect(page.locator('#audio-waveform-note')).toContainText('Trimming and processing remain available');
+  await exact(page, 'editor-start-time', '0.2'); await exact(page, 'editor-end-time', '1.8');
+  await page.locator('#processing-container').selectOption('flac'); await processFile(page);
+  const output = await downloaded(page, 'overview-failed.flac'); expect(Number(probe(output.file).format.duration)).toBeCloseTo(1.6, 2);
+  expect((await snapshot(id)).conversion.output.provenance.inputRole).toBe('source');
+});
+
+test('a delayed overview window cannot replace newer zoomed waveform peaks', async ({ page }) => {
+  let heldResponse, release, delivered, windows = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  const finished = new Promise(resolve => { delivered = resolve; });
+  await page.route('**/api/workspace/waveform?*', async route => {
+    windows++;
+    if (windows > 1) return route.continue();
+    heldResponse = await route.fetch(); await gate; await route.fulfill({ response: heldResponse }).catch(() => {}); delivered();
+  });
+  await intake(page, 'generated.wav'); await expect.poll(() => Boolean(heldResponse)).toBe(true);
+  await page.locator('#timeline-zoom-in').click();
+  await expect.poll(() => windows).toBeGreaterThan(1);
+  await expect(page.locator('#audio-waveform-note')).toContainText('Combined waveform overview');
+  const pixels = await page.locator('#audio-waveform').evaluate(canvas => canvas.toDataURL());
+  release(); await finished; await expect(page.locator('#audio-waveform')).toBeVisible();
+  expect(await page.locator('#audio-waveform').evaluate(canvas => canvas.toDataURL())).toBe(pixels);
+});
+
+test('a waveform window from a removed workbench cannot replace a new workbench', async ({ page }) => {
+  let heldResponse, release, delivered, windows = 0;
+  const gate = new Promise(resolve => { release = resolve; }), finished = new Promise(resolve => { delivered = resolve; });
+  await page.route('**/api/workspace/waveform?*', async route => {
+    windows++; if (windows > 1) return route.continue();
+    heldResponse = await route.fetch(); await gate; await route.fulfill({ response: heldResponse }).catch(() => {}); delivered();
+  });
+  const first = await intake(page, 'generated.wav'); await expect.poll(() => Boolean(heldResponse)).toBe(true);
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click(); await expect(page.locator('#media-drop-zone')).toBeVisible();
+  const next = await intake(page, 'generated.wav'); expect(next).not.toBe(first);
+  await expect(page.locator('#audio-waveform-note')).toContainText('Combined waveform overview');
+  const pixels = await page.locator('#audio-waveform').evaluate(canvas => canvas.toDataURL());
+  release(); await finished;
+  expect(await page.locator('#audio-waveform').evaluate(canvas => canvas.toDataURL())).toBe(pixels);
+  expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).workspaceId).toBe(next);
+  await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+});
+
+test('a delayed waveform window cannot replace a different selected file or restore removed audio', async ({ page }) => {
+  let held, heldResponse, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/workspace/waveform?*', async route => {
+    if (held) return route.continue();
+    held = route; heldResponse = await route.fetch(); await gate;
+    await route.fulfill({ response: heldResponse }).catch(() => {});
+  });
+  const first = await intake(page, 'generated.wav');
+  await expect.poll(() => Boolean(heldResponse)).toBe(true);
+  await page.locator('#media-file-input').setInputFiles(path.join(root, 'generated.mp4'));
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  const second = await page.evaluate(firstId => window.LVOVDLocalWorkspace.collectionState().entries.find(entry => entry.workspace.id !== firstId).workspace.id, first);
+  await selectFile(page, second);
+  await expect(page.locator('#editor-video')).toBeVisible(); await expect(page.locator('#audio-waveform')).toBeHidden();
+  release(); await expect(page.locator('#local-media-name')).toHaveText('generated.mp4');
+  await expect(page.locator('#audio-waveform')).toBeHidden();
+  await selectFile(page, first); await expect(page.locator('#editor-audio')).toBeVisible();
+  page.once('dialog', dialog => dialog.accept()); await page.locator('#workspace-discard').click();
+  await expect(page.locator('#local-media-name')).toHaveText('generated.mp4');
+  await expect(page.locator('#audio-waveform')).toBeHidden();
 });
 
 test('additional local files are accepted and Remove File confirmation invalidates only its selected entry', async ({ page, request }) => {
@@ -589,7 +682,8 @@ test('multiple local entries restore independent authoring and settings through 
   await page.locator('#timeline-zoom-in').click();
   const secondView = await page.evaluate(() => window.LVOVDEditorView.authoringState());
   await selectFile(page, audio.workspaceId);
-  await expect(page.locator('#media-editor')).toBeHidden();
+  await expect(page.locator('#editor-audio')).toBeVisible();
+  await expect(page.locator('#editor-video')).toBeHidden();
   await page.locator('#processing-container').selectOption('m4a'); await page.locator('#processing-audio-codec').selectOption('aac');
   await page.locator('#processing-filename-suffix').fill('_audio');
   await selectFile(page, first.workspaceId);
@@ -608,7 +702,7 @@ test('multiple local entries restore independent authoring and settings through 
   expect((await page.evaluate(() => window.LVOVDLocalWorkspace.profileState())).editPlan).toEqual(firstProfile.editPlan);
   expect(uploads).toHaveLength(3); expect(connections).toHaveLength(1);
   expect(connections[0]).toContain('/api/processing/queue/progress?collection=');
-  expect(previews.map(request => request.workspaceId)).toEqual([first.workspaceId, second.workspaceId]);
+  expect(previews.map(request => request.workspaceId)).toEqual([first.workspaceId, second.workspaceId, audio.workspaceId]);
   await expect(page.locator('#conversion-start')).toBeEnabled();
   await expect.poll(() => page.locator('#editor-video').evaluate(video => video.readyState)).toBe(4);
   await page.locator('#media-workspace-panel').screenshot({ path: path.join(os.tmpdir(), 'lvovd-multiple-files-desktop.png') });

@@ -66,7 +66,7 @@ test('generic timed video normalization retains bounded product media facts', ()
       sampleRate: 48000,
       channels: 2,
       channelLayout: 'stereo',
-      bitRate: 256000, profile: null, startSeconds: null, durationSeconds: null
+      bitRate: 256000, profile: null, sampleFormat: null, bitsPerSample: null, bitsPerRawSample: null, startSeconds: null, durationSeconds: null
     },
     trackCounts: { video: 1, audio: 1, subtitle: 1 },
     extraStreams: { total: 3, artwork: 0, other: 0, chapters: null }
