@@ -4,6 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+const { probeVersion } = require('./runtime-version');
 const { URL } = require('node:url');
 const {
   createSourceRequestCoordinator,
@@ -354,15 +355,6 @@ async function readJsonBody(req) {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
     throw new Error('Request body must be valid JSON.');
-  }
-}
-
-async function commandVersion(command, args) {
-  try {
-    const result = await run(command, args, { maxBytes: 256 * 1024 });
-    return { installed: true, version: result.stdout.split(/\r?\n/)[0] || 'installed' };
-  } catch (error) {
-    return { installed: false, error: error.message };
   }
 }
 
@@ -1990,14 +1982,16 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && serveStatic(requestUrl.pathname, res)) return;
 
   if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-    const [ytdlp, ffmpeg] = await Promise.all([
-      commandVersion(YTDLP_PATH, [...YTDLP_COMMON_ARGS, '--version']),
-      commandVersion('ffmpeg', ['-version'])
+    const [ytdlp, ffmpeg, ffprobe] = await Promise.all([
+      probeVersion(YTDLP_PATH, [...YTDLP_COMMON_ARGS, '--version'], 'yt-dlp'),
+      probeVersion('ffmpeg', ['-version'], 'FFmpeg'),
+      probeVersion('ffprobe', ['-version'], 'FFprobe')
     ]);
     return json(res, 200, {
       node: { installed: true, version: process.version },
       ytdlp,
       ffmpeg,
+      ffprobe,
       localOnly: HOST === '127.0.0.1' || HOST === 'localhost'
     });
   }

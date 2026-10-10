@@ -29,9 +29,9 @@ LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to downlo
 
 ## Quick Start
 
-### 1. Install Node.js 22+ and FFmpeg
+### 1. Install Node.js 22+ and FFmpeg with FFprobe
 
-If you already have both, skip this step.
+If all three commands below already work, skip installation. Local Media uses FFprobe to inspect sources and validate processed results; make sure both FFmpeg and FFprobe are available on PATH.
 
 **Windows 10/11**
 
@@ -70,7 +70,10 @@ In a terminal, see that these return without errors:
 ```bash
 node --version
 ffmpeg -version
+ffprobe -version
 ```
+
+The launcher warns when FFprobe is unavailable and keeps ordinary URL Download available. **Runtime status** reports FFprobe separately; after fixing the installation or PATH, choose **Recheck**. Restart the launcher if your PATH changed outside its terminal.
 
 ### 2. Get LVOVD
 
@@ -106,7 +109,7 @@ http://localhost:3000
 
 ## What it can do
 
-**v2.6.0 — Local Media Workbench & Batch Processing.** See the [release notes](docs/releases/v2.6.0.md) for the changes, update instructions, and supported scope.
+**v2.6.1 maintenance update.** See the [patch release notes](docs/releases/v2.6.1.md) for runtime checks and delayed-removal status fixes. The [v2.6.0 release notes](docs/releases/v2.6.0.md) describe the Local Media Workbench & Batch Processing baseline.
 
 - Download **Video + Audio**, **Video Only**, **Audio Only**, or **Extras Only**.
 - Prefer editor-friendly **H.264/AAC MP4** when the source provides it, or choose **Maximum Quality** to preserve the best available source streams.
