@@ -1,0 +1,43 @@
+:root{color-scheme:dark;font-family:system-ui,sans-serif;font-size:12px;color:#e7e2d7;background:#111313}
+*{box-sizing:border-box}
+body{margin:0;padding:18px;max-width:1600px;height:100vh;display:flex;flex-direction:column;gap:12px}
+header,.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:Georgia,serif;font-size:30px;margin:2px 0;color:#e7d9bb}
+h1 small{font:12px system-ui;color:#aaa}
+h2{font-size:13px;margin:0}
+.notice{padding:10px 12px;border:1px solid #53452c;background:#241f17;color:#e2cfaa;margin:0;line-height:1.5}
+main{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;min-height:0;flex:1}
+aside,.workbench,footer{background:#1a1e1c;border:1px solid #343e36;border-radius:6px;padding:14px}
+aside{overflow:auto;display:flex;flex-direction:column;gap:10px}
+.help{color:#aaa;font-size:11px;line-height:1.5;margin:0}
+button{border:1px solid #788c5a;border-radius:4px;background:#30442f;color:#edf1e6;padding:7px 12px;font:inherit;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible,video:focus-visible,summary:focus-visible{outline:2px solid #deb75f;outline-offset:3px}
+#remove-file{background:#48272b;border-color:#90505c}
+select{width:100%;min-height:100px;background:#121613;border:1px solid #475b42;color:inherit;padding:5px}
+option{padding:6px}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:7px;font-size:11px}
+dt{color:#aaa}
+dd{margin:0;overflow-wrap:anywhere}
+.workbench{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto}
+#media-name{overflow-wrap:anywhere}
+video{width:100%;min-height:100px;flex:1;background:#090b0a;object-fit:contain;max-height:100%}
+#status{min-height:20px;margin:0;overflow-wrap:anywhere}
+.error{color:#ffb3b3}
+#runtime{display:flex;gap:8px 20px;flex-wrap:wrap;margin:8px 0}
+.ok{color:#b8dca4}
+.missing{color:#edc18b}
+footer{flex-shrink:0}
+summary{cursor:pointer}
+details[open] summary{margin-bottom:8px}
+#cleanup button{display:block;margin:6px 0}
+@media(max-width:800px){body{padding:10px}
+main{grid-template-columns:220px minmax(0,1fr)}
+h1{font-size:23px}
+.notice{font-size:11px}
+aside,.workbench{padding:10px}
+}
+@media(max-width:600px){body{height:auto;min-height:100vh}
+main{grid-template-columns:1fr}
+.workbench{min-height:300px}
+}

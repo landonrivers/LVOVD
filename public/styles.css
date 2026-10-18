@@ -17,7 +17,7 @@ button, input, select { font: inherit; }
 button, label, summary, select { -webkit-tap-highlight-color: transparent; }
 .shell { width: min(1180px, calc(100% - 28px)); margin: 0 auto; padding: 46px 0 60px; }
 .card { padding: clamp(22px, 4vw, 42px); border: 1px solid rgba(255,255,255,.085); border-radius: 24px; background: rgba(15,14,20,.96); box-shadow: 0 24px 90px rgba(0,0,0,.42); }
-.brand-row { display: flex; align-items: center; gap: 15px; }
+.brand-row { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
 .logo { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(135deg, rgba(255,0,61,.18), rgba(216,31,255,.18)); border: 1px solid rgba(255,255,255,.08); }
 .logo svg { width: 30px; }
 .logo .logo-ring { fill: #ff164e; opacity: .95; }
@@ -25,7 +25,6 @@ button, label, summary, select { -webkit-tap-highlight-color: transparent; }
 .eyebrow { margin: 0 0 3px; color: #8e8a9a; font-size: 10px; font-weight: 900; letter-spacing: .14em; }
 h1 { margin: 0; font-size: clamp(25px, 4vw, 38px); letter-spacing: -.035em; }
 .brand-subtitle { margin: 3px 0 0; color: #aaa7b4; font-size: 12px; font-weight: 700; letter-spacing: .01em; }
-.intro { max-width: 760px; margin: 20px 0 26px; color: #aaa7b4; line-height: 1.65; font-size: 14px; }
 .lookup-form { padding: clamp(14px, 2vw, 18px); border: 1px solid rgba(169,148,255,.22); border-radius: 16px; background: linear-gradient(145deg, rgba(123,87,239,.075), rgba(216,31,255,.025) 68%, rgba(255,255,255,.015)); transition: border-color .15s ease, background .15s ease; }
 .lookup-form:focus-within { border-color: rgba(184,159,255,.42); background: linear-gradient(145deg, rgba(123,87,239,.095), rgba(216,31,255,.035) 68%, rgba(255,255,255,.02)); }
 .field > span { display: block; margin-bottom: 8px; color: #b5b2bf; font-size: 11px; font-weight: 800; letter-spacing: .03em; }

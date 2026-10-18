@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LVOVD Desktop Preview</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="native.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header><h1>LVOVD <small>Desktop preview</small></h1><span id="connection" role="status">Connecting…</span></header>
+  <p class="notice">Playback preview. Downloading and editing are not available yet.</p>
+  <main>
+    <aside>
+      <div class="section-title"><h2>Local Media</h2><button id="add-file" disabled>Choose file</button></div>
+      <p class="help">Choose a file or drop it here. Your original file is not changed.</p>
+      <label for="files">Files</label><select id="files" size="7" aria-label="Local files"></select>
+      <button id="remove-file" disabled>Remove file</button>
+      <div id="cleanup" aria-live="polite"></div>
+      <h2>Source details</h2><dl id="details"><dt>No file selected</dt></dl>
+    </aside>
+    <section class="workbench" aria-label="Media playback">
+      <div class="section-title"><h2 id="media-name">Choose local media to begin</h2><span id="duration"></span></div>
+      <video id="player" controls preload="metadata" playsinline></video>
+      <p id="status" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <footer><details><summary>Runtime details</summary><div class="section-title"><div id="runtime"></div><button id="recheck">Recheck</button></div><p id="runtime-detail" class="help"></p></details></footer>
+</body>
+</html>

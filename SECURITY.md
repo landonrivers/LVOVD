@@ -1,6 +1,6 @@
 # Security Policy
 
-LVOVD is a local-first application. Its normal security boundary assumes the Node server is running only on the user's own computer and is bound to `127.0.0.1` unless the user deliberately changes that configuration.
+LVOVD processes media locally. The released v2.7 browser application uses a Node server bound to `127.0.0.1` unless the user deliberately changes that configuration. The v3.0 desktop preview uses restricted native commands and owned media access without a localhost application server; see [Desktop preview and maintenance](#desktop-preview-and-maintenance). The [development contract](docs/development-contract.md) keeps these execution paths distinct during migration.
 
 ## Reporting a vulnerability
 
@@ -22,7 +22,7 @@ Examples include:
 - unsafe behavior caused by exposing LVOVD beyond localhost;
 - dependency or supply-chain vulnerabilities that materially affect LVOVD users.
 
-## Local security model
+## Browser reference security model
 
 By default LVOVD listens on `127.0.0.1`. The public-facing browser UI and the Node server are on the same computer.
 
@@ -82,3 +82,21 @@ Do not commit `.env` files, npm credentials, exported browser cookies, HAR captu
 ## Responsible use
 
 Security reports should focus on LVOVD itself. LVOVD is not intended to bypass DRM, authentication, paywalls, or other access controls, and reports requesting such bypasses are outside the project's intended scope.
+
+## Desktop preview and maintenance
+
+Report suspected vulnerabilities privately through the repository's GitHub security reporting facility when enabled; otherwise contact the maintainer privately before sharing exploit details. Do not include private media, cookies, credentials or source-provider URLs in public reports.
+
+The v2.7 browser release and the v3.0 desktop development preview are different execution paths. Desktop Rust code runs with the user's OS privileges; Tauri permissions constrain the interface, not a compromised native tool. External media and provider metadata are untrusted. No administrator privileges are required for normal application use.
+
+The desktop preview loads packaged scripts, denies external navigation, exposes only declared native operations, and reads media through opaque owned identities. It does not listen on a localhost application port. Test drivers are opt-in debug-only dependencies and must never be distributed. Native commands must validate ownership, limits, revisions and all fields independently of UI validation.
+
+On Linux, an application-owned GStreamer source reads through a private Unix socket. Requests contain authenticated asset identities and bounded byte ranges, never paths. Rust enforces ownership, revocation, eight connection slots and 1 MiB read limits, and retains leases until reads finish. The decoder validates reply lengths before allocating. Three-second transaction deadlines and a 30-second idle deadline bound stalled peers; removal and shutdown cancel active sessions. FFmpeg, FFprobe and provider helpers do not inherit the IPC secret.
+
+The Linux host establishes an explicit helper/system-codec search path and a fresh private registry before starting GTK threads. It clears ambient GStreamer discovery overrides and permits only `lvovd-media` as an additional WebKit media scheme, replacing any ambient extra-scheme list. WebKit's GStreamer sandbox mounts provide access to the private socket directory, which contains no imported media. This does not make GStreamer or its codec libraries immune to decoder vulnerabilities. The helper and every playback library included in final Linux packages require version, license/source, checksum and advisory tracking in stage 8F.
+
+Before stable v3.0, delivery must include dependency-update PRs, weekly advisory scans, Cargo advisory/license checks, shipped-component inventories, current/upcoming Evergreen compatibility tests and a documented release-maintenance checklist. These scheduled workflows are not yet enabled by the 8A foundation. Relevant critical/high advisories block stable release until resolved or documented as non-applicable. Security fixes can ship independently of feature milestones.
+
+Evergreen WebView2 normally updates through Microsoft and requires application restart to adopt a new runtime. Respect administrator policy and never interrupt work to force a restart. macOS system-webview updates are an OS responsibility. Every WebKit/GStreamer component actually bundled on Linux, and every bundled tool or compiled Rust/Tauri dependency, is a project maintenance responsibility. Rust does not make FFmpeg or provider helpers immune to vulnerabilities.
+
+Release/update keys belong only in protected release secrets, never this repository. Updates require signature verification and safe shutdown. OS publisher signing and update-artifact signing are separate; free distribution does not remove the update-signature requirement.
