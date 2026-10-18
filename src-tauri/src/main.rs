@@ -234,7 +234,22 @@ fn main() {
             let label = context.webview_label().to_owned();
             tauri::async_runtime::spawn_blocking(move || {
                 let _permit = permit;
-                responder.respond(lvovd_core::media::respond(&assets, request, &label));
+                #[cfg(feature = "test-driver")]
+                let diagnostic = format!(
+                    "{} range={:?} origin={:?}",
+                    request.method(),
+                    request.headers().get("range"),
+                    request.headers().get("origin")
+                );
+                let response = lvovd_core::media::respond(&assets, request, &label);
+                #[cfg(feature = "test-driver")]
+                eprintln!(
+                    "Media protocol: {diagnostic} -> {} bytes={} content-range={:?}",
+                    response.status(),
+                    response.body().len(),
+                    response.headers().get("content-range")
+                );
+                responder.respond(response);
             });
         })
         .on_page_load(|webview, _| {

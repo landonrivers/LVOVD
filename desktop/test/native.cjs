@@ -42,7 +42,11 @@ async function scenario(file, index) {
     await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Rust'), { timeout: 15000 });
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
     await browser.$('#add-file').click();
-    await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 2), { timeout: 25000, timeoutMsg: 'Native media did not reach playable state' });
+    await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 1), { timeout: 25000, timeoutMsg: 'Native media did not load metadata' });
+    // WebKit honors preload=metadata strictly; decoded frames require playback.
+    await browser.execute(() => { const p = document.getElementById('player'); p.muted = true; p.play(); });
+    await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 2), { timeout: 15000, timeoutMsg: 'Native media did not decode for playback' });
+    await browser.execute(() => document.getElementById('player').pause());
     const metadata = await browser.execute(() => ({ duration: document.getElementById('player').duration, url: document.getElementById('player').currentSrc }));
     assert.ok(metadata.duration > 0); assert.match(metadata.url, /lvovd-media/);
     for (const target of [metadata.duration - 0.5, 0.25, metadata.duration / 2]) {
@@ -61,10 +65,10 @@ async function scenario(file, index) {
     await browser.$('#remove-file').click();
     await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
     assert.equal(fs.existsSync(file), true, 'removal must not delete the selected original');
-    const denied = await browser.execute(async () => {
-      try { await window.__TAURI__.core.invoke('plugin:fs|read_text_file', { path: 'anything' }); return false; } catch { return true; }
-    });
-    assert.equal(denied, true, 'arbitrary file access must not be exposed');
+    const denied = await browser.execute(async path => {
+      try { await window.__TAURI__.core.invoke('plugin:fs|read_file', { path }); return ''; } catch (error) { return String(error); }
+    }, file);
+    assert.match(denied, /not allowed|not found|denied/i, 'existing files must be protected by command permissions');
     const shape = await browser.execute(async () => {
       try { await window.__TAURI__.core.invoke('remove_source', { request: { assetId: '00000000-0000-4000-8000-000000000000', path: '/not-allowed' } }); return false; } catch { return true; }
     });
@@ -78,7 +82,10 @@ async function scenario(file, index) {
     } finally { timeout.abort(); }
   } catch (error) {
     if (browser) {
-      console.error('Native page diagnostics:', await browser.execute(() => ({ url: location.href, text: document.body?.innerText?.slice(0, 2000), media: document.getElementById('player')?.error?.message })).catch(() => 'unavailable'));
+      console.error('Native page diagnostics:', await browser.execute(() => {
+        const player = document.getElementById('player');
+        return { url: location.href, text: document.body?.innerText?.slice(0, 2000), media: { error: player?.error?.code, message: player?.error?.message, readyState: player?.readyState, networkState: player?.networkState } };
+      }).catch(() => 'unavailable'));
       await browser.saveScreenshot(path.join(resultDir, `failure-${process.platform}-${index}.png`)).catch(() => {});
     }
     console.error('Native process diagnostics:', fs.readFileSync(path.join(resultDir, `native-${index}.log`), 'utf8').slice(-8192));
