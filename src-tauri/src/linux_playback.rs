@@ -59,6 +59,10 @@ impl Environment {
                 std::env::remove_var(key);
             }
             std::env::set_var("GST_PLUGIN_PATH_1_0", &plugins);
+            // WebKit 2.50 restricts media schemes before consulting GStreamer.
+            // Extend its built-in list only with our authenticated source; do
+            // not inherit an ambient list of additional protocols.
+            std::env::set_var("WEBKIT_GST_ALLOWED_URI_PROTOCOLS", "lvovd-media");
             std::env::set_var(
                 "GST_PLUGIN_SYSTEM_PATH_1_0",
                 env!("LVOVD_SYSTEM_GST_PLUGINS"),
