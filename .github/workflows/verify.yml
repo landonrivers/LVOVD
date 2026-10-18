@@ -4,17 +4,20 @@ on:
   push:
     branches:
       - master
+      - staging/v3-desktop
       - roadmap/7-local-convert-staging
   workflow_dispatch:
   pull_request:
     branches:
       - master
+      - staging/v3-desktop
       - roadmap/7-local-convert-staging
     types:
       - opened
       - reopened
       - synchronize
       - ready_for_review
+      - edited
 
 permissions:
   contents: read

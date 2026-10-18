@@ -55,6 +55,8 @@ Follow [SECURITY.md](../SECURITY.md). In particular:
 
 Deliver separate reviewable stages: 8A foundation/playback, 8B policy/tool parity, 8C Local Media, 8D Download/history/saving, 8E desktop experience/cutover, and 8F distribution/maintenance.
 
+Integrate the desktop migration on `staging/v3-desktop`, starting from released `master`. Every migration stage PR targets that staging branch; subsequent stage branches start from its latest accepted commit. Keep `master` on the working released application while desktop functionality is incomplete. Passing a stage's checks authorizes neither promotion to `master` nor a release. Promotion requires complete migration acceptance and separate user authorization. Run the existing reference and native platform gates on staging PRs and pushes as well as on `master`.
+
 8A must prove media playback in actual Windows, macOS, and Linux webviews before the larger backend port. A failing platform requires an explicit finding and design revision, not an HTTP fallback or a skipped test. Record current results and their limits in the stage document, and keep every platform gate required during later stages.
 
 Stable v3.0 requires released v2.7 workflow parity and all launch targets: Windows 10/11 x64 installer/portable ZIP; macOS 13.5+ Intel and Apple Silicon DMGs; Linux x64 AppImage validated on Ubuntu 22.04/24.04 and Debian 12. Packaging, bundled tools/licenses, optional signed updates, native saving, persistence, quit handling, and security maintenance remain required. Paid OS signing is not a prerequisite; describe trust prompts without recommending disabled protections.

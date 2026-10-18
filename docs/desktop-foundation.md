@@ -58,6 +58,8 @@ The optional WebdriverIO driver embeds a control server **only in explicitly ena
 
 ## Accepted delivery sequence
 
+The migration integrates on `staging/v3-desktop`. PR #52 and later stage PRs target that branch; `master` remains the released v2.7 application. A successful stage is an intermediate development milestone. Promotion to `master`, tagging and publication require complete migration acceptance and separate authorization.
+
 ### Playback gate and Linux transport
 
 The original Ubuntu 22.04/WebKitGTK 2.50.4 build imported and inspected MP4s but reported `MEDIA_ERR_SRC_NOT_SUPPORTED` (code 4) before playback metadata. The Rust protocol returned the requested byte range correctly. The failure was in the native media transport, not the inspection or range-size policy; see [the original evidence](https://github.com/landonrivers/LVOVD/actions/runs/39090640086).

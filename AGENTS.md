@@ -10,6 +10,7 @@
 ## Implementation
 
 - Preserve released behavior while migrating one reviewable stage at a time. Keep policy separate from execution and interface code.
+- Follow the staging policy in the development contract: desktop migration PRs target `staging/v3-desktop`. Do not merge incomplete migration stages into `master` or interpret a staging merge as release authorization.
 - The desktop application uses a Rust backend, Tauri native commands/channels, and the JavaScript interface. It must open as an application window and must not fall back to a localhost application server.
 - The v2.7 browser application is a temporary development reference. Keep its launch path clearly separate from the desktop preview.
 - The Windows application is `lvovd.exe` and starts directly. Do not require a batch file, Node, npm, or Cargo to launch a built app; those are development/build tools. Do not present `index.html`, a browser preview, or a screenshot as the runnable desktop application. Deliver the executable and state what was actually tested.

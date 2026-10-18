@@ -190,6 +190,8 @@ The accepted v3.0 direction replaces the Node application backend with Rust, ret
 
 Deliver through separate gates: **8A native foundation/playback**, **8B media policy and worker parity**, **8C Local Media operations**, **8D Download/history/native saving**, **8E compact desktop UX and backend cutover**, and **8F packages/updates/security maintenance**. Follow [the development contract](docs/development-contract.md); see [the current desktop stage](docs/desktop-foundation.md) for setup, boundaries and acceptance evidence.
 
+Each stage targets `staging/v3-desktop`. Keep incomplete desktop work off `master`; promotion of the completed migration requires acceptance of all stages and separate authorization. Staging retains the reference and native platform CI gates and does not publish releases.
+
 8A's native playback gate passes on Windows, Ubuntu 22.04, and both macOS architectures. Linux uses an application-owned GStreamer source and private, bounded reads from Rust; see the stage document for exact evidence and limits. This is a development preview, not a completed desktop release. 8B has not started. Bundled tools, native export handling, remembered settings/history, signed application updates and Windows portable rollback remain required before v3.0 publication. Node remains only as yt-dlp's provider-script helper. The existing browser application remains the working reference during migration. Roadmap #7 stays incomplete.
 
 ### Mobile / phone use — exploratory

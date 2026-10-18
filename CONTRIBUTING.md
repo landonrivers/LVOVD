@@ -8,6 +8,8 @@ Read [the development contract](docs/development-contract.md) before making chan
 
 ### Rust desktop preview
 
+Desktop migration PRs target `staging/v3-desktop`, not `master`. Branch each stage from the latest accepted staging commit and keep one reviewable PR per stage. The released application stays on `master` until the complete migration is accepted and promotion is separately authorized. Both reference and native CI gates run on staging.
+
 Follow [desktop setup and current limitations](docs/desktop-foundation.md). Run `npm ci` and `npm run build:desktop` to compile, then open `target/debug/lvovd.exe` on Windows. The built app starts directly without a batch file or Node wrapper. `npm run dev:desktop` is an optional compile-and-run command for development. Do not open `desktop/index.html` or `desktop/dist/index.html` as the application: those are internal interface assets and cannot provide native operations in Chrome.
 
 Normal builds omit the test driver. Debug builds resolve installed tools themselves; release builds use packaged tools only. This preview is not the finished installer or portable distribution.
