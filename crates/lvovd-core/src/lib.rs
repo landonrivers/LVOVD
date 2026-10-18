@@ -1,5 +1,7 @@
 //! Platform-independent application operations. Tauri is only a transport.
 pub mod assets;
+pub mod audio_policy;
+pub mod edit_plan;
 pub mod inspection;
 pub mod media;
 #[cfg(unix)]

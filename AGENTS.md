@@ -3,7 +3,7 @@
 ## Read before changing the project
 
 - Read [the development contract](docs/development-contract.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the relevant section of [ROADMAP.md](ROADMAP.md).
-- Read [SECURITY.md](SECURITY.md) for trust boundaries. For desktop work, also read [the current desktop stage and evidence](docs/desktop-foundation.md).
+- Read [SECURITY.md](SECURITY.md) for trust boundaries. For desktop work, also read [the foundation evidence](docs/desktop-foundation.md) and [the in-progress 8B policy stage](docs/desktop-media-policies.md).
 - Treat these files as shared project guidance. Follow the user's current instructions and existing authorization; do not invent approval requirements.
 - If code, documentation, and the accepted plan disagree, identify the discrepancy and correct it within the authorized scope. Do not silently change product commitments.
 
