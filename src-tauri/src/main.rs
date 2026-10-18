@@ -250,6 +250,7 @@ fn main() {
                 return;
             };
             let label = context.webview_label().to_owned();
+            let app = context.app_handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let _permit = permit;
                 #[cfg(feature = "test-driver")]
@@ -268,6 +269,12 @@ fn main() {
                     response.headers().get("content-range")
                 );
                 responder.respond(response);
+                // Removal can arrive while the bounded read holds a lease.
+                // respond has now released it, so finish eligible cleanup and
+                // publish the authoritative result without another user click.
+                if assets.retry_pending_cleanup() {
+                    app.state::<AppState>().publish();
+                }
             });
         })
         .on_page_load(|webview, _| {

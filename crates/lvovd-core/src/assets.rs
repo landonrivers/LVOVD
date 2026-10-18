@@ -152,6 +152,18 @@ impl Assets {
         self.registry.lock().unwrap().pending
     }
 
+    /// Call after a reader releases its lease. Failed deletion stays registered
+    /// for explicit retry; active readers still prevent retirement.
+    pub fn retry_pending_cleanup(&self) -> bool {
+        let mut changed = false;
+        for id in self.pending_cleanup() {
+            if self.remove(id).is_ok_and(|result| result.cleanup_complete) {
+                changed = true;
+            }
+        }
+        changed
+    }
+
     /// Only the trusted native picker/drop handler may supply this path, never a frontend command argument.
     pub async fn import(&self, selected: &Path, ffprobe: &Path) -> Result<Source> {
         let _admission = self.intake.try_lock().map_err(|_| {

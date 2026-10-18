@@ -160,9 +160,14 @@ async fn owned_media_ranges_revocation_and_cleanup_preserve_original() {
     }
     let lease = assets.lease(source.asset_id).unwrap();
     assert!(!assets.remove(source.asset_id).unwrap().cleanup_complete);
+    assert!(!assets.retry_pending_cleanup());
+    assert_eq!(assets.pending_cleanup(), [source.asset_id]);
     assert!(assets.lease(source.asset_id).is_err());
     assert!(lease.read(0, 4).is_err());
     drop(lease);
+    assert!(assets.retry_pending_cleanup());
+    assert!(assets.pending_cleanup().is_empty());
+    assert!(!assets.retry_pending_cleanup());
     assert!(assets.remove(source.asset_id).unwrap().cleanup_complete);
     assert!(assets.remove(source.asset_id).unwrap().cleanup_complete);
     assert_eq!(std::fs::read(input).unwrap(), original);
