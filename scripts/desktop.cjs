@@ -39,12 +39,20 @@ function main() {
     run: ['run', '--locked', '-p', 'lvovd-desktop'],
     build: ['build', '--locked', '-p', 'lvovd-desktop'],
     check: ['clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings'],
-    test: ['test', '--locked', '-p', 'lvovd-core'],
+    test: ['test', '--locked', '-p', 'lvovd-core', '-p', 'lvovd-media-ipc'],
     'test-host': ['test', '--locked', '-p', 'lvovd-desktop'],
     fmt: ['fmt', '--all', '--', '--check']
   }[action];
   if (!args) throw new Error('Unknown desktop action.');
   const { cargo, env } = environment();
+  if (process.platform === 'linux' && ['build', 'run'].includes(action)) {
+    const release = process.argv.includes('--release');
+    const helper = spawnSync(cargo, ['build', '--locked', '-p', 'lvovd-gstreamer', ...(release ? ['--release'] : [])], { cwd: root, env, stdio: 'inherit', shell: false });
+    if (helper.status !== 0) { process.exitCode = helper.status ?? 1; return; }
+    const target = path.join(root, 'target', release ? 'release' : 'debug');
+    fs.mkdirSync(path.join(target, 'gstreamer'), { recursive: true });
+    fs.copyFileSync(path.join(target, 'libgstlvovd.so'), path.join(target, 'gstreamer', 'libgstlvovd.so'));
+  }
   const result = spawnSync(cargo, [...args, ...process.argv.slice(3)], { cwd: root, env, stdio: 'inherit', windowsHide: true, shell: false });
   if (result.error) { console.error('Rust and the platform build tools are required. See docs/desktop-foundation.md.'); process.exitCode = 1; }
   else process.exitCode = result.status ?? 1;

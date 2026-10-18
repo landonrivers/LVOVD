@@ -1,0 +1,12 @@
+[package]
+name = "lvovd-media-ipc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+socket2 = "=0.6.5"

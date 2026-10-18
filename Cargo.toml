@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/lvovd-core", "src-tauri"]
+members = ["crates/lvovd-core", "crates/lvovd-media-ipc", "crates/lvovd-gstreamer", "src-tauri"]
 default-members = ["crates/lvovd-core"]
 resolver = "2"
 
@@ -12,7 +12,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
-tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs"] }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
 uuid = { version = "=1.28.0", features = ["v4", "serde"] }
 http = "=1.5.0"
 tempfile = "=3.27.0"

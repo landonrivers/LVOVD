@@ -32,12 +32,25 @@ pub struct Source {
 pub struct Asset {
     pub source: Source,
     pub(crate) revoked: AtomicBool,
+    cancelled: CancellationToken,
     file: Mutex<Option<File>>,
     path: PathBuf,
 }
 
 impl Asset {
+    pub fn cancellation(&self) -> CancellationToken {
+        self.cancelled.clone()
+    }
     pub fn read(&self, offset: u64, count: usize) -> Result<Vec<u8>> {
+        if count > crate::media::MAX_RESPONSE_BYTES as usize
+            || offset > self.source.size
+            || count as u64 > self.source.size - offset
+        {
+            return Err(AppError::new(
+                "MEDIA_RANGE",
+                "The requested media range is invalid.",
+            ));
+        }
         let mut file = self
             .file
             .lock()
@@ -202,7 +215,7 @@ impl Assets {
             let name = selected.file_name().unwrap_or_default().to_string_lossy().chars().filter(|c| !c.is_control()).take(240).collect();
             let source = Source { asset_id: id, name, size, inspection };
             let file = File::open(&owned).map_err(|_| AppError::new("SOURCE_READ", "Could not reopen owned media."))?;
-            let asset = Arc::new(Asset { source: source.clone(), revoked: AtomicBool::new(false), file: Mutex::new(Some(file)), path: owned.clone() });
+            let asset = Arc::new(Asset { source: source.clone(), revoked: AtomicBool::new(false), cancelled: CancellationToken::new(), file: Mutex::new(Some(file)), path: owned.clone() });
             let mut registry = self.registry.lock().unwrap();
             if registry.closing || self.cancel.is_cancelled() { return Err(AppError::new("CANCELLED", "Import cancelled.")); }
             registry.active.insert(id, asset);
@@ -228,6 +241,7 @@ impl Assets {
                 Arc::new(Asset {
                     source,
                     revoked: AtomicBool::new(true),
+                    cancelled: CancellationToken::new(),
                     file: Mutex::new(None),
                     path: owned,
                 }),
@@ -244,6 +258,7 @@ impl Assets {
         let mut registry = self.registry.lock().unwrap();
         if let Some(asset) = registry.active.remove(&id) {
             asset.revoked.store(true, Ordering::Release);
+            asset.cancelled.cancel();
             registry.retired.insert(id, asset);
         }
         let complete = if let Some(asset) = registry.retired.get(&id) {

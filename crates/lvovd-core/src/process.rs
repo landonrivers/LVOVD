@@ -64,6 +64,8 @@ pub async fn run(
         "PYTHONPATH",
         "PYTHONHOME",
         "FFREPORT",
+        "LVOVD_MEDIA_TOKEN",
+        "LVOVD_MEDIA_SOCKET",
     ] {
         command.env_remove(key);
     }

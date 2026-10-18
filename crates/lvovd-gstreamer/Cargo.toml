@@ -1,0 +1,17 @@
+[package]
+name = "lvovd-gstreamer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Authorized local media source for LVOVD's Linux webview"
+
+[lib]
+name = "gstlvovd"
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gstreamer = "=0.25.4"
+gstreamer-base = "=0.25.4"
+lvovd-media-ipc = { path = "../lvovd-media-ipc" }
+uuid.workspace = true

@@ -4,6 +4,8 @@ compile_error!("The test driver is forbidden in release builds.");
 
 #[cfg(debug_assertions)]
 mod development;
+#[cfg(target_os = "linux")]
+mod linux_playback;
 
 use lvovd_core::{
     AppError, Result,
@@ -34,6 +36,8 @@ struct Subscriptions {
     channel: Option<Channel<Snapshot>>,
 }
 struct AppState {
+    #[cfg(target_os = "linux")]
+    playback: lvovd_core::playback::Broker,
     assets: Arc<Assets>,
     tools: Tools,
     subscriptions: Mutex<Subscriptions>,
@@ -45,6 +49,8 @@ struct AppState {
 impl AppState {
     async fn shutdown(&self) -> Result<()> {
         self.assets.cancellation().cancel();
+        #[cfg(target_os = "linux")]
+        self.playback.shutdown().await;
         // Health probes share cancellation with intake. Keep the host alive until
         // their process guards have reaped the tools as well.
         let _health = self.health_admission.lock().await;
@@ -167,6 +173,9 @@ fn tools(app: &tauri::AppHandle) -> std::result::Result<Tools, Box<dyn std::erro
 }
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    let playback_environment =
+        linux_playback::Environment::prepare().expect("Could not prepare Linux playback");
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -178,9 +187,30 @@ fn main() {
     #[cfg(feature = "test-driver")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     builder
-        .setup(|app| {
+        .setup(move |app| {
             let assets = Arc::new(Assets::new(&app.path().app_cache_dir()?.join("sessions"))?);
+            #[cfg(target_os = "linux")]
+            let playback = {
+                let handle = app.handle().clone();
+                let listener = playback_environment.listener.try_clone()?;
+                let broker = tauri::async_runtime::block_on(async {
+                    lvovd_core::playback::Broker::start(
+                        listener,
+                        playback_environment.token,
+                        assets.clone(),
+                        Arc::new(move || {
+                            if let Some(state) = handle.try_state::<AppState>() {
+                                state.publish();
+                            }
+                        }),
+                    )
+                })?;
+                app.manage(playback_environment);
+                broker
+            };
             app.manage(AppState {
+                #[cfg(target_os = "linux")]
+                playback,
                 assets,
                 tools: tools(app.handle())?,
                 subscriptions: Mutex::new(Subscriptions {
