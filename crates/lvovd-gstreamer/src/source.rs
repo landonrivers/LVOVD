@@ -201,7 +201,13 @@ mod imp {
                     return Err(gst::FlowError::Flushing);
                 }
                 if open.client.is_none() {
-                    let client = self.connect(open.id).map_err(|_| gst::FlowError::Error)?;
+                    let client = self.connect(open.id).map_err(|_| {
+                        if self.flushing.load(Ordering::Acquire) {
+                            gst::FlowError::Flushing
+                        } else {
+                            gst::FlowError::Error
+                        }
+                    })?;
                     if client.size != open.size {
                         return Err(gst::FlowError::Error);
                     }

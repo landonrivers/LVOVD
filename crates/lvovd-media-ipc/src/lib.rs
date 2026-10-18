@@ -79,7 +79,39 @@ pub mod client {
         io::{Read, Write},
         os::unix::net::UnixStream,
         path::Path,
+        time::Instant,
     };
+
+    fn remaining(deadline: Instant) -> io::Result<Duration> {
+        deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+            .ok_or_else(|| io::ErrorKind::TimedOut.into())
+    }
+    fn receive(stream: &mut UnixStream, mut bytes: &mut [u8], deadline: Instant) -> io::Result<()> {
+        while !bytes.is_empty() {
+            stream.set_read_timeout(Some(remaining(deadline)?))?;
+            match stream.read(bytes) {
+                Ok(0) => return Err(io::ErrorKind::UnexpectedEof.into()),
+                Ok(count) => bytes = &mut bytes[count..],
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+    fn send(stream: &mut UnixStream, mut bytes: &[u8], deadline: Instant) -> io::Result<()> {
+        while !bytes.is_empty() {
+            stream.set_write_timeout(Some(remaining(deadline)?))?;
+            match stream.write(bytes) {
+                Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
+                Ok(count) => bytes = &bytes[count..],
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
 
     pub struct Client {
         pub size: u64,
@@ -91,13 +123,12 @@ pub mod client {
                 return Err(invalid());
             }
             let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
+            let deadline = Instant::now() + IO_TIMEOUT;
             socket.connect_timeout(&SockAddr::unix(path)?, IO_TIMEOUT)?;
             let mut stream: UnixStream = socket.into();
-            stream.set_read_timeout(Some(IO_TIMEOUT))?;
-            stream.set_write_timeout(Some(IO_TIMEOUT))?;
-            stream.write_all(&hello(token, id))?;
+            send(&mut stream, &hello(token, id), deadline)?;
             let mut response = [0; 9];
-            stream.read_exact(&mut response)?;
+            receive(&mut stream, &mut response, deadline)?;
             let size = u64::from_le_bytes(response[1..].try_into().unwrap());
             if response[0] != 0 || size == 0 || size > 100 * 1024 * 1024 * 1024 {
                 return Err(invalid());
@@ -110,16 +141,17 @@ pub mod client {
         pub fn read(&mut self, offset: u64, count: u32) -> io::Result<Vec<u8>> {
             let (_, expected) =
                 read_range(request(offset, count), self.size).ok_or_else(invalid)?;
-            self.stream.write_all(&request(offset, count))?;
+            let deadline = Instant::now() + IO_TIMEOUT;
+            send(&mut self.stream, &request(offset, count), deadline)?;
             let mut header = [0; 5];
-            self.stream.read_exact(&mut header)?;
+            receive(&mut self.stream, &mut header, deadline)?;
             let length = u32::from_le_bytes(header[1..].try_into().unwrap()) as usize;
             // Validate the length before allocating, including exact EOF semantics.
             if header[0] != 0 || length != expected {
                 return Err(invalid());
             }
             let mut bytes = vec![0; length];
-            self.stream.read_exact(&mut bytes)?;
+            receive(&mut self.stream, &mut bytes, deadline)?;
             Ok(bytes)
         }
     }
