@@ -190,7 +190,7 @@ The accepted v3.0 direction replaces the Node application backend with Rust, ret
 
 Deliver through separate gates: **8A native foundation/playback**, **8B media policy and worker parity**, **8C Local Media operations**, **8D Download/history/native saving**, **8E compact desktop UX and backend cutover**, and **8F packages/updates/security maintenance**. See [the desktop migration contract](docs/desktop-foundation.md) for setup, boundaries and acceptance.
 
-8A is a development preview, not a completed desktop release. Bundled tools, native export handling, remembered settings/history, signed application updates and Windows portable rollback remain required before v3.0 publication. Node remains only as yt-dlp's provider-script helper. The existing browser application remains the working reference during migration. Roadmap #7 stays incomplete.
+8A is a development preview, not a completed desktop release. Its Linux custom-protocol playback gate remains unresolved; the documented transport revision must be proven before 8B. Bundled tools, native export handling, remembered settings/history, signed application updates and Windows portable rollback remain required before v3.0 publication. Node remains only as yt-dlp's provider-script helper. The existing browser application remains the working reference during migration. Roadmap #7 stays incomplete.
 
 ### Mobile / phone use — exploratory
 

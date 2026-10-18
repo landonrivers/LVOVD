@@ -44,6 +44,23 @@ The optional WebdriverIO driver embeds a control server **only in explicitly ena
 
 ## Accepted delivery sequence
 
+### Playback gate finding and design revision
+
+The initial native proof is **not complete**. Windows WebView2 and both macOS architectures pass the generated video/audio playback and seeking scenarios. Ubuntu 22.04 with WebKitGTK 2.50.4 imports and inspects the MP4 successfully, but its media pipeline reports `MEDIA_ERR_SRC_NOT_SUPPORTED` (code 4), before metadata becomes available. The Rust protocol trace returns the requested `bytes=0-1445` as HTTP 206 with the correct length and total; changing the byte-range limit is not a demonstrated fix. Native CI deliberately keeps this failure visible. See [the evidence run](https://github.com/landonrivers/LVOVD/actions/runs/39090640086).
+
+This matches the upstream [Linux custom-protocol media issue](https://github.com/tauri-apps/tauri/issues/3725). Tauri now has a separate [GStreamer asset plugin](https://github.com/tauri-apps/tauri-gstreamer-plugin), but its source maps asset URLs to filesystem paths. It is not a drop-in implementation of LVOVD's opaque-identity, revocation and read-lease boundary. This branch does not install that plugin or open a localhost server to bypass the failed gate.
+
+Before 8B, revise the Linux transport as a narrowly scoped proof:
+
+1. Prototype a GStreamer URI source for `lvovd-media` that asks the Rust owner for an authorized read through private local IPC. The media element should keep using opaque asset identities. A Unix-domain socket is a candidate; it is not an HTTP/TCP listener.
+2. Require per-session authentication, bounded messages/reads and connection counts, deadlines, ownership validation, immediate revocation, and leases that survive until the decoder releases its stream. The helper must never translate frontend input into arbitrary paths. Verify WebKit's actual process/sandbox behavior before choosing the IPC mechanism.
+3. Package/load only the reviewed application-owned helper, with pinned dependencies and license inventory. Audit plugin discovery so unrelated user/system overrides cannot replace it in distribution builds. This adds a Linux component to the maintenance scope.
+4. Prove large-file playback, end-indexed MP4s, repeated seeks, audio, bounded memory, removal, decoder crashes, malicious identities and clean shutdown on the supported Linux baselines. Repeat the Windows/macOS gates unchanged.
+
+This is a proposed transport revision, **not an implemented or proven remedy**. Do not start the larger backend migration, declare 8A complete, or weaken the no-server/all-platform release constraints until it passes. Merge, tagging and publication remain outside this implementation step.
+
+### Remaining migration stages
+
 1. **8A:** native foundation and cross-platform playback proof (this slice).
 2. **8B:** v2.7 inspection/policy parity, plans, FFmpeg arguments, complete worker supervision, validation fixtures.
 3. **8C:** workspaces, preview proxies, waveform limits/preemption, reservations, collections and processing.

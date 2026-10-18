@@ -20,6 +20,14 @@ const video = generate('synthetic.mp4', ['-f', 'lavfi', '-i', 'testsrc2=size=640
 assert.ok(fs.statSync(video).size > 8 * 1024 * 1024, 'video must exercise bounded range responses');
 const audio = generate('synthetic.m4a', ['-f', 'lavfi', '-i', 'sine=frequency=700:duration=4', '-c:a', 'aac']);
 const tailIndex = generate('synthetic-tail-index.mp4', ['-i', video, '-c', 'copy']);
+if (process.platform === 'linux') {
+  // A direct decode distinguishes missing codecs from custom-URI transport errors.
+  const decode = spawnSync('gst-launch-1.0', ['-q', 'filesrc', `location=${video}`, '!', 'decodebin', 'name=decoded',
+    'decoded.', '!', 'queue', '!', 'video/x-raw', '!', 'fakesink',
+    'decoded.', '!', 'queue', '!', 'audio/x-raw', '!', 'fakesink'], { timeout: 30000, maxBuffer: 1024 * 1024, encoding: 'utf8' });
+  assert.equal(decode.status, 0, decode.error?.message || decode.stderr);
+  console.log('PASS linux: the generated MP4 decodes through installed GStreamer codecs using the file transport');
+}
 async function waitForDriver(port, child) {
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null || child.signalCode !== null) throw new Error('Desktop exited before the driver became ready');

@@ -72,7 +72,7 @@
   byId('player').addEventListener('loadedmetadata', () => { const seconds = byId('player').duration; byId('duration').textContent = Number.isFinite(seconds) ? `${seconds.toFixed(3)} s` : ''; });
   byId('player').addEventListener('error', () => {
     const player = byId('player');
-    if (selected && player.error && player.currentSrc === native.mediaUrl(selected)) message('This webview could not play the source directly. Proxy playback is part of the next Local Media stage.', true);
+    if (selected && player.error && player.currentSrc === native.mediaUrl(selected)) message('Native playback failed. This foundation build has not passed every platform playback gate; see the desktop documentation.', true);
   });
   async function health() {
     const current = ++healthGeneration; byId('recheck').disabled = true;
@@ -89,7 +89,7 @@
     const handshake = await native.call('desktop_handshake');
     if (handshake.protocolVersion !== 1) throw new Error('The desktop interface and backend versions do not match.');
     byId('connection').textContent = `Rust · ${handshake.appVersion}`;
-    byId('runtime-detail').textContent = `Webview ${handshake.webviewVersion} · Native commands · No localhost server`;
+    byId('runtime-detail').textContent = `Webview ${handshake.webviewVersion} · Native commands · No localhost application server`;
     await native.subscribe(snapshot); byId('add-file').disabled = false; await health();
   } catch (error) { byId('connection').textContent = 'Desktop unavailable'; message(error.message, true); }
 })();
