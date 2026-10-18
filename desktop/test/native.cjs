@@ -78,8 +78,23 @@ async function scenario(file, index) {
     await browser.setWindowSize(960, 640);
     assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'narrow workflow must fit without outer-page scrolling');
     await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
+    // A second owned copy exercises selection changes while the first decoder
+    // may still have queued reads. Removing it must preserve the other entry.
+    await browser.$('#add-file').click();
+    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 2, { timeout: 10000 });
+    await browser.waitUntil(async () => browser.execute(previous => {
+      const player = document.getElementById('player');
+      return player.currentSrc !== previous && player.readyState >= 1;
+    }, metadata.url), { timeout: 10000 });
+    await browser.$('#remove-file').click();
+    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 1, { timeout: 10000 });
+    await browser.waitUntil(async () => browser.execute(previous => {
+      const player = document.getElementById('player');
+      return player.currentSrc === previous && player.readyState >= 1;
+    }, metadata.url), { timeout: 10000 });
     await browser.$('#remove-file').click();
     await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
+    await browser.waitUntil(async () => (await browser.$$('#cleanup button')).length === 0, { timeout: 10000, timeoutMsg: 'The decoder did not release temporary media after removal' });
     assert.equal(fs.existsSync(file), true, 'removal must not delete the selected original');
     const denied = await browser.execute(async path => {
       try { await window.__TAURI__.core.invoke('plugin:fs|read_file', { path }); return ''; } catch (error) { return String(error); }

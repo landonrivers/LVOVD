@@ -58,20 +58,24 @@ The optional WebdriverIO driver embeds a control server **only in explicitly ena
 
 ## Accepted delivery sequence
 
-### Playback gate finding and design revision
+### Playback gate and Linux transport
 
 The initial native proof is **not complete**. Windows WebView2 and both macOS architectures pass the generated video/audio playback and seeking scenarios. Ubuntu 22.04 with WebKitGTK 2.50.4 imports and inspects the MP4 successfully, but its media pipeline reports `MEDIA_ERR_SRC_NOT_SUPPORTED` (code 4), before metadata becomes available. The Rust protocol trace returns the requested `bytes=0-1445` as HTTP 206 with the correct length and total; changing the byte-range limit is not a demonstrated fix. Native CI deliberately keeps this failure visible. See [the evidence run](https://github.com/landonrivers/LVOVD/actions/runs/39090640086).
 
-This matches the upstream [Linux custom-protocol media issue](https://github.com/tauri-apps/tauri/issues/3725). Tauri now has a separate [GStreamer asset plugin](https://github.com/tauri-apps/tauri-gstreamer-plugin), but its source maps asset URLs to filesystem paths. It is not a drop-in implementation of LVOVD's opaque-identity, revocation and read-lease boundary. This branch does not install that plugin or open a localhost server to bypass the failed gate.
+This matches the upstream [Linux custom-protocol media issue](https://github.com/tauri-apps/tauri/issues/3725). WebKit's GStreamer web source handles HTTP, HTTPS and blob URLs; a separate GStreamer source is needed for the application scheme. Tauri's separate asset plugin maps URLs to filesystem paths, so it is not used for LVOVD's owned media.
 
-Before 8B, revise the Linux transport as a narrowly scoped proof:
+The branch now implements a Linux transport proof, with native acceptance still in progress:
 
-1. Prototype a GStreamer URI source for `lvovd-media` that asks the Rust owner for an authorized read through private local IPC. The media element should keep using opaque asset identities. A Unix-domain socket is a candidate; it is not an HTTP/TCP listener.
-2. Require per-session authentication, bounded messages/reads and connection counts, deadlines, ownership validation, immediate revocation, and leases that survive until the decoder releases its stream. The helper must never translate frontend input into arbitrary paths. Verify WebKit's actual process/sandbox behavior before choosing the IPC mechanism.
-3. Package/load only the reviewed application-owned helper, with pinned dependencies and license inventory. Audit plugin discovery so unrelated user/system overrides cannot replace it in distribution builds. This adds a Linux component to the maintenance scope.
-4. Prove large-file playback, end-indexed MP4s, repeated seeks, audio, bounded memory, removal, decoder crashes, malicious identities and clean shutdown on the supported Linux baselines. Repeat the Windows/macOS gates unchanged.
+1. `crates/lvovd-gstreamer` implements a seekable GStreamer source for `lvovd-media://localhost/<asset-id>`. It accepts only canonical version-4 UUIDs. Its private binary protocol carries an asset identity, offsets and lengths; it has no filename or arbitrary filesystem operation.
+2. `crates/lvovd-core/src/playback.rs` owns the Unix socket broker. A private directory/socket, same-user peer credentials and a per-session secret protect admission. At most eight decoder connections each read at most 1 MiB per transaction. Greetings and transactions have three-second deadlines; idle connections expire after 30 seconds and must re-authorize to resume.
+3. Rust retains a source lease for each admitted decoder. Removal revokes new reads and interrupts idle clients. Decoder exit releases its lease; cleanup failure remains owned and retryable. Shutdown waits for broker tasks and any blocking reads before deleting owned data. External media tools do not inherit the IPC secret.
+4. Before starting GTK or worker threads, the host copies its adjacent, application-built helper into a private session, clears ambient GStreamer discovery overrides, selects that helper plus the build's system codec directory, and creates a fresh private registry. WebKit's existing sandbox bindings for GStreamer plugin/registry paths provide access to the socket; the session contains no imported media. No sandbox-disabling flag or HTTP/TCP media listener is introduced.
 
-This is a proposed transport revision, **not an implemented or proven remedy**. Do not start the larger backend migration, declare 8A complete, or weaken the no-server/all-platform release constraints until it passes. Merge, tagging and publication remain outside this implementation step.
+The Linux helper is built by `npm run build:desktop` / `npm run dev:desktop` and placed next to the executable under `gstreamer/libgstlvovd.so`. Running a Linux build directly requires that adjacent helper. Install GStreamer core/base development headers in addition to the normal Tauri prerequisites. The Rust bindings are locked at 0.25.4; the application-owned helper uses this repository's Apache-2.0 license. System GStreamer and codec plugins remain development prerequisites. Stage 8F must include the helper, required playback libraries, their license/source obligations, and exact build/checksum inventory in the distribution.
+
+Tests cover wrong credentials, invalid identities, malformed/oversized requests and replies, stalled peers, connection limits, revocation, crashed decoders, failed cleanup, and shutdown. Native tests exercise MP4/M4A playback, seeking near either end, selection changes, removal and layout. These are development-build tests; packaged AppImage acceptance on Ubuntu 22.04/24.04 and Debian 12 remains required before release.
+
+**The native gate remains open until the revised Linux transport passes alongside Windows and both Mac architectures.** Do not start 8B or mark 8A complete from a successful unit-test result. Merge, tagging and publication remain outside this implementation step.
 
 ### Remaining migration stages
 

@@ -170,3 +170,76 @@ fn decoder_rejects_oversized_responses_before_allocation() {
     );
     worker.join().unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn crashed_decoder_releases_lease_and_failed_cleanup_remains_retryable() {
+    use std::os::unix::fs::PermissionsExt;
+    let (root, assets, source, original) = fixture().await;
+    let path = root.path().join("media.sock");
+    let token = [12; 32];
+    let broker = Broker::start(
+        UnixListener::bind(&path).unwrap(),
+        token,
+        assets.clone(),
+        Arc::new(|| {}),
+    )
+    .unwrap();
+    let client =
+        tokio::task::spawn_blocking(move || Client::open(&path, &token, source.asset_id).unwrap())
+            .await
+            .unwrap();
+    let lease = assets.lease(source.asset_id).unwrap();
+    drop(client); // EOF is how a crashed decoder releases its connection.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while Arc::strong_count(&lease) > 2 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    drop(lease);
+    let session = std::fs::read_dir(root.path())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.is_dir())
+        .unwrap();
+    std::fs::set_permissions(&session, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let removal = assets.remove(source.asset_id).unwrap();
+    std::fs::set_permissions(&session, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(
+        !removal.cleanup_complete,
+        "failed deletion must remain owned"
+    );
+    assert_eq!(assets.pending_cleanup(), [source.asset_id]);
+    assert!(assets.lease(source.asset_id).is_err());
+    assert!(assets.remove(source.asset_id).unwrap().cleanup_complete);
+    assert_eq!(
+        std::fs::read(root.path().join("synthetic.wav")).unwrap(),
+        original
+    );
+    broker.shutdown().await;
+    assets.shutdown().await.unwrap();
+}
+
+#[test]
+fn stalled_decoder_response_has_a_transaction_deadline() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("stalled.sock");
+    let listener = UnixListener::bind(&path).unwrap();
+    let worker = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut hello = [0; wire::HELLO_BYTES];
+        stream.read_exact(&mut hello).unwrap();
+        // A peer that sends occasional bytes must not reset the whole deadline.
+        for _ in 0..9 {
+            if stream.write_all(&[0]).is_err() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(600));
+        }
+    });
+    let start = std::time::Instant::now();
+    assert!(Client::open(&path, &[0; 32], Uuid::new_v4()).is_err());
+    assert!(start.elapsed() < Duration::from_secs(4));
+    worker.join().unwrap();
+}

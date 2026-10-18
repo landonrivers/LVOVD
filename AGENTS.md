@@ -36,4 +36,4 @@
 
 ## User communication
 
-Explain the outcome and practical limitations plainly. For a recommended next step, say what to do, why it matters, and exactly what the user needs to do or approve. Respect authorization already given. Finish the recommendation with method/mode, model, and thinking level, clearly identified as recommended settings rather than observed settings.
+Explain the outcome and practical limitations plainly. Every completion response and returned follow-up prompt must recommend a concrete next action, explain why it matters, and state exactly what the user needs to do or approve; explicitly say when nothing is needed. Respect authorization already given and state any real stopping boundary. End with the recommended method/tool, model, thinking level and mode, clearly distinguished from observed settings. A recommendation is not authorization.

@@ -2,6 +2,8 @@
 pub mod assets;
 pub mod inspection;
 pub mod media;
+#[cfg(unix)]
+pub mod playback;
 pub mod process;
 pub mod tools;
 
@@ -37,5 +39,3 @@ impl std::fmt::Display for AppError {
 impl std::error::Error for AppError {}
 
 pub type Result<T> = std::result::Result<T, AppError>;
-#[cfg(unix)]
-pub mod playback;

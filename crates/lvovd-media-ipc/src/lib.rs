@@ -125,7 +125,8 @@ pub mod client {
             let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
             let deadline = Instant::now() + IO_TIMEOUT;
             socket.connect_timeout(&SockAddr::unix(path)?, IO_TIMEOUT)?;
-            let mut stream: UnixStream = socket.into();
+            let descriptor: std::os::fd::OwnedFd = socket.into();
+            let mut stream = UnixStream::from(descriptor);
             send(&mut stream, &hello(token, id), deadline)?;
             let mut response = [0; 9];
             receive(&mut stream, &mut response, deadline)?;
@@ -162,7 +163,7 @@ mod tests {
     use super::*;
     #[test]
     fn identities_authentication_and_ranges_fail_closed() {
-        let id = Uuid::new_v4();
+        let id = Uuid::parse_str("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa").unwrap();
         assert_eq!(
             asset_uri(&format!("lvovd-media://localhost/{id}")),
             Some(id)
