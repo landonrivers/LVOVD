@@ -2,6 +2,8 @@
 
 Stage 8B continues from the [8A staging merge](https://github.com/landonrivers/LVOVD/pull/52) on `staging/v3-desktop`. Its PR targets staging; `master` remains the released v2.7 application. This document records partial implementation, not stage acceptance or release readiness. Follow the [development contract](development-contract.md) and [8A setup and platform evidence](desktop-foundation.md).
 
+The [feature parity register](v3-feature-parity.md) now maps every audited v2.7 capability and accepted desktop addition to its native workflow and migration stage. Five policy/inspection entries are Ported; no completed user workflow is claimed Verified. CI validates register/test references, prevents silent inventory loss against prior revisions, and blocks stable-version acceptance while any required entry remains incomplete. This is migration tracking, not implementation of the missing Download or Local Media operations.
+
 ## Implemented first
 
 The Rust core now contains audio policy, retained-range normalization, media inspection and FFmpeg capability discovery. Policy and normalization remain separate from tool execution. Native intake uses the new inspection facts; capability discovery is ready for the processing planner and is not added to the short runtime-health probe. The desktop preview still exposes the 8A workflow; processing and Download operations are not yet connected.

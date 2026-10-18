@@ -1,0 +1,3266 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "version": "2.7.0",
+    "commit": "7e192ad7ddee6478b517a74174cedf6dccd85a19",
+    "acceptedFixes": []
+  },
+  "platforms": [
+    "windows-x64",
+    "linux-x64",
+    "macos-arm64",
+    "macos-x64"
+  ],
+  "accessException": {
+    "id": "standalone-access",
+    "behavior": "Native application launch replaces browser, localhost/LAN hosting and HOST/PORT configuration. All media capabilities remain required.",
+    "approval": "User selected standalone application during the complete v2.7 preservation plan."
+  },
+  "capabilities": [
+    {
+      "id": "download.preview",
+      "title": "URL Preview",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Inspect arbitrary supported HTTP/HTTPS media URLs; show bounded source title, duration and identity.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "preview_source"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Generic and named extractors, malformed metadata, unsupported URLs and failed Preview retain actionable results."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.capabilities",
+      "title": "Source capabilities",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve live/protected/audio-only/combined-stream eligibility; unknown evidence remains unknown.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "preview_source"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Capability-driven controls match v2.7 for missing codec fields, unavailable formats and protected sources."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.artwork",
+      "title": "Preview artwork",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Display available artwork in Preview and session queue; do not persist it in History.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / queue",
+        "stage": "8D",
+        "operations": [
+          "preview_source",
+          "subscribe_downloads"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/queue-ui.test.js",
+          "test/history-store.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Untrusted artwork has no native authority; failed artwork leaves Preview usable and its URL stays out of persistent history."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.content-av",
+      "title": "Video + Audio",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain the released Video + Audio content mode.",
+        "sources": [
+          "app-server.js",
+          "public/app.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Separate streams merge; combined-only fallback preserves both tracks."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.content-video",
+      "title": "Video Only",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain the released Video Only content mode.",
+        "sources": [
+          "app-server.js",
+          "public/app.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Only the selected video stream is returned; unavailable video-only choices remain unavailable."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.content-audio",
+      "title": "Audio Only",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain the released Audio Only content mode.",
+        "sources": [
+          "app-server.js",
+          "public/app.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Only audio is acquired/converted; format choice does not change automatic acquisition."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.content-extras",
+      "title": "Extras Only",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain the released Extras Only content mode.",
+        "sources": [
+          "app-server.js",
+          "public/app.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "No media is acquired; require an extra and clear inactive range/SponsorBlock/manual-selection semantics."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.compatible",
+      "title": "Compatible MP4",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Prefer source H.264/AAC with existing selectors and fallback rules.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test separate and combined formats; never promise a source offers H.264 when it does not."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.maximum",
+      "title": "Maximum Quality",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep best qualifying source streams/codecs with existing combined fallback.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Preserve VP9/AV1/Opus where source selection yields them; do not silently transcode to match editor defaults."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.resolution",
+      "title": "Resolution cap",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Choose the best qualifying source at or below selected height.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "review_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Current supported heights, absent formats and audio/extras mode normalization match the reference."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.format-inspection",
+      "title": "Source Formats details",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Expose bounded resolution/FPS/codec/track/container/bitrate/size evidence without transport URLs.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Source Formats",
+        "stage": "8D",
+        "operations": [
+          "preview_source"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/format-explorer.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Missing facts remain unknown; oversized or URL-like labels are bounded/scrubbed."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.manual-formats",
+      "title": "Manual source selection",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Use exact current combined, video+audio pair, video-only or audio-only IDs; exclude playlists and ambiguous formats.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Source Formats",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/manual-source-format.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject stale IDs, invalid roles and selector expressions; never substitute a different format."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.source-audio",
+      "title": "Source Audio",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Return chosen source audio without conversion.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Preserve source bytes where no merge/remux is needed and do not invoke an audio encoder."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.audio-conversion",
+      "title": "Download audio formats",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Convert acquired audio to M4A/AAC, MP3, Opus, FLAC or WAV with the released Download policy, distinct from strict Local Media FLAC.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download",
+        "stage": "8D",
+        "operations": [
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Compare acquisition arguments across outputs and decoded output properties; compressed-source Download FLAC must not inherit the Local Media rejection."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.custom-range",
+      "title": "Custom time range",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain full/custom range behavior and timecode normalization for single media only.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Time range & chapters",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject invalid bounds and playlist ranges; compare section arguments and output naming with v2.7."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.chapters",
+      "title": "Selected chapters",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Use current detected chapters to create separate outputs in reference order.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Time range & chapters",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject missing/stale chapters and playlist chapter selection; save each resulting file."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.thumbnail-extra",
+      "title": "Thumbnail extra",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Acquire available thumbnail and convert to JPG, including Extras Only.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Extras",
+        "stage": "8D",
+        "operations": [
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test absent artwork, thumbnail acquisition rejection and saving the companion file."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.metadata-extra",
+      "title": "Metadata JSON extra",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Acquire the selected source's .info.json companion output.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Extras",
+        "stage": "8D",
+        "operations": [
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Save JSON separately, classify it as metadata and preserve selected extras through queue/history."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.subtitles",
+      "title": "Subtitles and captions",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve manual/automatic/both selection, language input/suggestions and SRT conversion.",
+        "sources": [
+          "app-server.js",
+          "public/app.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Extras",
+        "stage": "8D",
+        "operations": [
+          "preview_source",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test all subtitle modes, unavailable languages, automatic fallback and multiple companion outputs."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.sponsorblock",
+      "title": "SponsorBlock",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain Off/Mark/Remove and sponsor, intro, outro, selfpromo, interaction and preview categories with source eligibility.",
+        "sources": [
+          "app-server.js",
+          "public/app.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Download / SponsorBlock",
+        "stage": "8D",
+        "operations": [
+          "review_download",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.playlists",
+      "title": "Playlist selection",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Flat Preview reports up to 100 entries; preserve All/None, deduplication, selection bounds and Preview order.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Playlist",
+        "stage": "8D",
+        "operations": [
+          "preview_source",
+          "start_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject invalid or oversized selections; do not probe every entry merely to display a flat Preview."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.coordination",
+      "title": "Source-request coordination",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Serialize Preview, downloads, URL Edit and playlist intake; prevent duplicate Preview bursts.",
+        "sources": [
+          "app-server.js",
+          "playlist-intake.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Local Media intake",
+        "stage": "8D",
+        "operations": [
+          "preview_source",
+          "start_download",
+          "import_url",
+          "import_playlist"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/request-safety.test.js",
+          "test/playlist-intake.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Run overlapping workflow requests and verify only one application-controlled acquisition owns the coordinator."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.pacing",
+      "title": "Playlist acquisition pauses",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep cancellable randomized 0.5–1-second pauses between playlist items.",
+        "sources": [
+          "app-server.js",
+          "playlist-intake.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Playlist import",
+        "stage": "8D",
+        "operations": [
+          "start_download",
+          "import_playlist"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/request-safety.test.js",
+          "test/playlist-intake.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Measure injected-clock pacing and cancel a wait without starting the next acquisition."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.rejection",
+      "title": "Stop on source rejection",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Stop on request limiting/rejection or intake failure without automatic retry or fetching later batch items.",
+        "sources": [
+          "app-server.js",
+          "playlist-intake.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Playlist import",
+        "stage": "8D",
+        "operations": [
+          "start_download",
+          "import_playlist"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/request-safety.test.js",
+          "test/playlist-intake.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Prior successes survive; later items remain unstarted; reported cause is no stronger than the evidence."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.failures",
+      "title": "Actionable failures",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve source and local-operation failure categories, titles, explanations and help without leaking raw diagnostics.",
+        "sources": [
+          "failure-classification.js",
+          "app-server.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / History / Local Media",
+        "stage": "8D",
+        "operations": [
+          "preview_source",
+          "subscribe_downloads",
+          "subscribe_collection"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/failure-classification.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Cover authentication, unavailable/protected/unsupported sources, missing formats/tools, disk/permission errors and unknown fallback."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.queue-admission",
+      "title": "Immutable Download queue",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep independent queued jobs with captured options and visible request summaries; acquire sequentially.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Queue",
+        "stage": "8D",
+        "operations": [
+          "start_download",
+          "subscribe_downloads"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/job-lifecycle.test.js",
+          "test/queue-ui.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Later form changes do not change admitted work; Preview remains coordinated with the queue."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.queue-cancel",
+      "title": "Download cancellation",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Remove queued work and cancel active yt-dlp/FFmpeg and courtesy waits authoritatively.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Queue",
+        "stage": "8D",
+        "operations": [
+          "cancel_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/job-lifecycle.test.js",
+          "test/queue-ui.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Accepted cancellation cannot later become Ready or ordinary Failed; unrelated jobs survive."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.progress",
+      "title": "Download progress",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Report actual stage, item, stream, percent, speed and ETA; track jobs independently of the focused panel.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Queue",
+        "stage": "8D",
+        "operations": [
+          "subscribe_downloads"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/job-lifecycle.test.js",
+          "test/queue-ui.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reconnect gets a fresh snapshot; stale channels cannot overwrite another job or duplicate completion delivery."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.outputs",
+      "title": "Prepared Download outputs",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain all named media/companion files and compact per-job output actions; deduplicate automatic delivery.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Queue",
+        "stage": "8D",
+        "operations": [
+          "subscribe_downloads",
+          "save_output"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/queue-ui.test.js",
+          "test/job-lifecycle.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Multiple chapters/extras remain individually accessible; native delivery is confirmed only after saving."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "download.cleanup",
+      "title": "Download expiry and cleanup",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep prepared outputs for the reference one-hour lifetime while active, with Clear prepared files now.",
+        "sources": [
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Queue",
+        "stage": "8D",
+        "operations": [
+          "clear_download"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/temp-workspace.test.js",
+          "test/job-lifecycle.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Expiry/revocation cannot delete exports or race open readers; cleanup errors remain recoverable."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "handoff.url-edit",
+      "title": "Edit Source Video",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Acquire eligible single non-live video once using profile, resolution and manual source choice; omit Download-only mutations/history.",
+        "sources": [
+          "app-server.js",
+          "media-workspace.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download → Local Media",
+        "stage": "8D",
+        "operations": [
+          "import_url"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/url-edit-acquisition.test.js",
+          "test/options.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Cuts/processes reuse the owned original; cancellation cleans owned intake without another download."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "handoff.playlist-intake",
+      "title": "Add Selected to Local Media",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Reserve capacity for the entire ordered selection and import supported video items without automatic processing/history.",
+        "sources": [
+          "playlist-intake.js",
+          "local-processing-queue.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Download → Local Media",
+        "stage": "8D",
+        "operations": [
+          "import_playlist",
+          "cancel_import"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/playlist-intake.test.js",
+          "test/playlist-intake-api.test.js",
+          "test/browser/playlist-intake.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Cancel/remove/failure stops later intake, preserves successful unrelated files, and retains pending-cleanup reservations."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.intake",
+      "title": "Multiple local files",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Choose/drop and copy files sequentially into owned storage; preserve originals and collection eligibility.",
+        "sources": [
+          "media-workspace.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Files",
+        "stage": "8C",
+        "operations": [
+          "pick_sources",
+          "import_sources"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-workspace.test.js",
+          "test/local-processing-api.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test multiple Unicode paths, interrupted intake, copy failures and rejection without original modification."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.inspection",
+      "title": "Normalized inspection",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve container evidence, selected tracks, precision, common-clock timing, orientation, HDR/alpha and bounded unknown metadata.",
+        "sources": [
+          "media-inspection.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Media Details",
+        "stage": "8B",
+        "operations": [
+          "inspect_source"
+        ]
+      },
+      "status": "Ported",
+      "implementation": {
+        "rust": [
+          "crates/lvovd-core/src/media_inspection.rs"
+        ],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-inspection.test.js"
+        ],
+        "rust": [
+          "crates/lvovd-core/tests/policy_parity.rs",
+          "crates/lvovd-core/tests/inspection_media.rs"
+        ],
+        "native": []
+      },
+      "acceptance": [
+        "Compare the shared corpus and generated inspected media; expose all applicable facts in the finished workbench."
+      ],
+      "evidence": [],
+      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+    },
+    {
+      "id": "media.capabilities",
+      "title": "Capability discovery",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Bound encoder/decoder/muxer discovery, software aliases, cache/cooldown and actionable retry.",
+        "sources": [
+          "ffmpeg-capabilities.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Review",
+        "stage": "8B",
+        "operations": [
+          "discover_capabilities"
+        ]
+      },
+      "status": "Ported",
+      "implementation": {
+        "rust": [
+          "crates/lvovd-core/src/capabilities.rs"
+        ],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/ffmpeg-capabilities.test.js"
+        ],
+        "rust": [
+          "crates/lvovd-core/src/capabilities_tests.rs",
+          "crates/lvovd-core/tests/inspection_media.rs"
+        ],
+        "native": []
+      },
+      "acceptance": [
+        "Missing/failing/timed-out tools cannot authorize encoding; retry and planner integration must remain reachable."
+      ],
+      "evidence": [],
+      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+    },
+    {
+      "id": "media.input-boundary",
+      "title": "Self-contained inputs",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve allowed demuxers, file-only protocol, disabled MOV external references and original-file protection.",
+        "sources": [
+          "local-media-input.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Intake and processing",
+        "stage": "8B",
+        "operations": [
+          "inspect_source",
+          "review_processing",
+          "start_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-media-input.test.js",
+          "test/real/local-media.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Adversarial playlists/references fail before following dependencies, including output-validation/proxy paths."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.direct-playback",
+      "title": "Direct media playback",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Play eligible video/audio originals with seeking while owned reads protect concurrent removal.",
+        "sources": [
+          "media-workspace.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Player",
+        "stage": "8C",
+        "operations": [
+          "prepare_editor",
+          "read_media"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-workspace.test.js",
+          "test/real/local-media.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Use actual webviews for large files, end/repeated seeks, selection changes and cleanup; 8A proof alone does not complete the workbench."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.proxy",
+      "title": "Playback proxies",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Prepare separate browser-compatible video/audio proxies only when required; render exclusively from the authoritative input.",
+        "sources": [
+          "media-workspace.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Player",
+        "stage": "8C",
+        "operations": [
+          "prepare_editor",
+          "cancel_editor"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-workspace.test.js",
+          "test/local-audio.test.js",
+          "test/real/local-audio.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Proxy failure/retry/cancellation leaves available cuts and final processing intact."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.audio-clock",
+      "title": "Audio timeline policy",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Audio-only time zero is the first selected sample; video extraction retains the shared clock and internal gaps.",
+        "sources": [
+          "audio-policy.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Timeline",
+        "stage": "8B",
+        "operations": [
+          "review_processing",
+          "prepare_editor"
+        ]
+      },
+      "status": "Ported",
+      "implementation": {
+        "rust": [
+          "crates/lvovd-core/src/audio_policy.rs"
+        ],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-audio.test.js",
+          "test/real/av-timing.test.js"
+        ],
+        "rust": [
+          "crates/lvovd-core/tests/policy_parity.rs"
+        ],
+        "native": []
+      },
+      "acceptance": [
+        "Compare timing policy plus generated shifted/gapped sources; encoded timing remains a separate acceptance gate."
+      ],
+      "evidence": [],
+      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+    },
+    {
+      "id": "media.waveform",
+      "title": "Combined waveform",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "One bounded channel-extrema overview with zoomed windows; no output downmix, millisecond cut semantics retained.",
+        "sources": [
+          "audio-waveform.js",
+          "public/audio-waveform.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Timeline",
+        "stage": "8C",
+        "operations": [
+          "prepare_waveform",
+          "waveform_window",
+          "cancel_waveform"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-audio.test.js",
+          "test/real/local-audio.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "One decode, 120-second deadline, duration byte ceiling, ≤200000 pairs, ≥10 ms bins and ≤4096 returned pairs; confirm exit before processing preemption."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.range-policy",
+      "title": "Retained-range normalization",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve version 1 raw bounds, ordering/overlap checks, millisecond rounding, adjacency merging, 50-range limit and no-op decisions.",
+        "sources": [
+          "public/edit-plan.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Cuts",
+        "stage": "8B",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Ported",
+      "implementation": {
+        "rust": [
+          "crates/lvovd-core/src/edit_plan.rs"
+        ],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/edit-plan.test.js"
+        ],
+        "rust": [
+          "crates/lvovd-core/tests/policy_parity.rs"
+        ],
+        "native": []
+      },
+      "acceptance": [
+        "Use shared fixtures and reject stale/invalid ranges without changing authoritative source timing."
+      ],
+      "evidence": [],
+      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+    },
+    {
+      "id": "media.trim-controls",
+      "title": "Trim and middle cuts",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Retain reversible outer bounds, pending cuts, middle-section removal/restoration and original chronological order.",
+        "sources": [
+          "public/media-editor.js",
+          "public/edit-plan.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Timeline",
+        "stage": "8C",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-editor.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Set boundaries with handles, exact fields and playhead actions; restore sections and retain individual cuts across selection."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.timeline-controls",
+      "title": "Timeline navigation and keyboard",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve seeking, playhead, zoom/pan, fit, keyboard playback/handle adjustments and focus behavior.",
+        "sources": [
+          "public/media-editor.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Timeline",
+        "stage": "8C",
+        "operations": [
+          "prepare_editor"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-editor.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Exercise keyboard-only editing, narrow layout, exact fields and zoomed handle positioning."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.drafts",
+      "title": "Per-file drafts and revisions",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep requested settings, cuts, pending cut, playhead and zoom per file; edits label older results and never process automatically.",
+        "sources": [
+          "public/processing-profile.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Files",
+        "stage": "8C",
+        "operations": [
+          "subscribe_collection"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-profile.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Selection changes preserve drafts; admitted jobs/prior output names remain immutable."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.audio-policy",
+      "title": "Local audio encoding policy",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve AAC/MP3 defaults, Opus limits/resampling, strict local FLAC precision, preserving PCM, sample rates and supported layouts.",
+        "sources": [
+          "audio-policy.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings",
+        "stage": "8B",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Ported",
+      "implementation": {
+        "rust": [
+          "crates/lvovd-core/src/audio_policy.rs"
+        ],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-audio.test.js"
+        ],
+        "rust": [
+          "crates/lvovd-core/tests/policy_parity.rs"
+        ],
+        "native": []
+      },
+      "acceptance": [
+        "Match policy fixtures; unknown precision stays unknown, incompatible layouts fail without downmix, and strict FLAC offers WAV guidance."
+      ],
+      "evidence": [],
+      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+    },
+    {
+      "id": "media.audio-outputs",
+      "title": "Local audio outputs",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Produce M4A/AAC, MP3, Opus, FLAC and WAV; support Opus/FLAC in MKV with actual codec/rate/precision/layout results.",
+        "sources": [
+          "processing-plan.js",
+          "processing-command.js",
+          "audio-policy.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings and results",
+        "stage": "8C",
+        "operations": [
+          "start_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/real/local-audio.test.js",
+          "test/processing-plan.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Compare decoded samples/channel identity/Opus delay and cuts; hide/clear inactive FLAC/PCM bitrate and keep encoded-FLAC size unknown."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.noop-remux",
+      "title": "Original no-op and remux",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve exact original bytes for untouched outputs, including sources unsafe to re-encode; remux only when supported.",
+        "sources": [
+          "processing-plan.js",
+          "conversion-plan.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Review and results",
+        "stage": "8B",
+        "operations": [
+          "review_processing",
+          "start_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-plan.test.js",
+          "test/real/processing.test.js",
+          "test/conversion-plan.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "No-op skips encoder discovery/execution and duplicate bytes; incompatible remux or cuts require explicit encoding choices."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.video-encoding",
+      "title": "Video quality and bitrate",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep H.264 defaults, quality/average-bitrate controls, speed presets, container policy and fidelity restrictions.",
+        "sources": [
+          "processing-plan.js",
+          "processing-command.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings",
+        "stage": "8B",
+        "operations": [
+          "review_processing",
+          "start_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-plan.test.js",
+          "test/real/processing.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Compare CRF/preset/pixel-format/padding arguments; refuse unsupported HDR/alpha/transforms instead of silently degrading them."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.size-budget",
+      "title": "Maximum output size",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve decimal MB budgeting, retained duration/audio/container reserve, two passes and at most one correction.",
+        "sources": [
+          "processing-plan.js",
+          "processing-command.js",
+          "processing-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings",
+        "stage": "8B",
+        "operations": [
+          "review_processing",
+          "start_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-plan.test.js",
+          "test/real/processing.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject oversized results; never silently lower resolution/remove audio/downmix; encoded-FLAC maximum-size mode remains unavailable."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.picture",
+      "title": "Scaling and frame rate",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve aspect fit, dimension/percentage presets, width/height-only choices, no-upscale default and frame-rate reduction.",
+        "sources": [
+          "processing-plan.js",
+          "public/processing-profile.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings",
+        "stage": "8B",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-plan.test.js",
+          "test/processing-profile.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reviewed actual dimensions match encoding, including odd sizes and constrained source geometry."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.estimates-help",
+      "title": "Linked estimates and help",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep quality/bitrate/audio/size links, controlling-value indication, truthful estimates and accessible contextual help.",
+        "sources": [
+          "public/processing-profile.js",
+          "public/local-workspace.js",
+          "public/index.html"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings and review",
+        "stage": "8C",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-profile.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Distinguish exact bytes/estimated/unknown sizes; keyboard help, dismissal and FLAC bitrate inactivity work."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.review-contract",
+      "title": "Reviewed plan validation",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep plan version, immutable keys, input identities, settings validation and rechecks before admission.",
+        "sources": [
+          "processing-plan.js",
+          "conversion-plan.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Review",
+        "stage": "8B",
+        "operations": [
+          "review_processing",
+          "start_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-plan.test.js",
+          "test/conversion-plan.test.js",
+          "test/edited-conversion.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.edited-input",
+      "title": "Edited-result conversion handoff",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve supported original/edited input roles, freshness/provenance, no-op aliases and legacy conversion targets.",
+        "sources": [
+          "conversion-workspace.js",
+          "conversion-plan.js",
+          "output-retirement.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Conversion review",
+        "stage": "8C",
+        "operations": [
+          "review_conversion",
+          "start_conversion"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/edited-conversion.test.js",
+          "test/real/edited-conversion.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Proxy/converted/retired inputs are rejected; rerenders and cancellation preserve valid previous results and active aliases."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.output-validation",
+      "title": "Validated processed outputs",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Only publish outputs whose inspected codecs, tracks, dimensions, timing/layout and size satisfy the reviewed plan.",
+        "sources": [
+          "processing-workspace.js",
+          "conversion-process.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Results",
+        "stage": "8B",
+        "operations": [
+          "validate_output"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-workspace.test.js",
+          "test/real/processing.test.js",
+          "test/real/conversion.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Malformed/wrong/oversized output remains unavailable; failures retain previous successful results."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.naming",
+      "title": "Reviewed names and suffix",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve default -processed suffix, optional no suffix and bounded custom suffix including byte-identical outputs.",
+        "sources": [
+          "processing-plan.js",
+          "public/processing-profile.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Process actions",
+        "stage": "8C",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-plan.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Queue captures reviewed names; later suffix changes neither rename prior results nor alter queued work."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.shared-settings",
+      "title": "Shared output settings",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Default sharing on; propagate all output settings/suffix to existing/new files while cuts/views remain individual.",
+        "sources": [
+          "public/processing-profile.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Output settings",
+        "stage": "8C",
+        "operations": [
+          "review_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-profile.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Independent mode and Reset File disable sharing as specified; incompatible per-file settings stay visible for correction."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.batch-review",
+      "title": "Review All Files",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Review warnings per draft; explicitly select eligible files and Queue And Process without automatic admission.",
+        "sources": [
+          "local-processing-queue.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Batch review",
+        "stage": "8C",
+        "operations": [
+          "review_collection",
+          "enqueue_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-processing-queue.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Exclude queued/running and already successful current drafts; unchanged eligible files retain no-op behavior."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.processing-queue",
+      "title": "Sequential processing queue",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Immutable reviewed snapshots, one active processing job, cancel selected/all and bounded queued-job expiry.",
+        "sources": [
+          "local-processing-queue.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Processing results",
+        "stage": "8C",
+        "operations": [
+          "enqueue_processing",
+          "cancel_processing",
+          "subscribe_collection"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-processing-queue.test.js",
+          "test/real/local-processing-queue.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.results",
+      "title": "Individual results and revisions",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep compact named rows, real format/size details, Edit source and correctly labelled older successful results.",
+        "sources": [
+          "public/local-workspace.js",
+          "processing-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Processing results",
+        "stage": "8C",
+        "operations": [
+          "subscribe_collection",
+          "save_output"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/browser/processing-progress.spec.js",
+          "test/processing-workspace.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.bulk-save",
+      "title": "Download All equivalent",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Save a captured set of distinct latest successful results individually; preserve result naming and stale-result guards.",
+        "sources": [
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Processing results",
+        "stage": "8D",
+        "operations": [
+          "save_outputs"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/browser/processing-progress.spec.js",
+          "test/browser/playlist-intake.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.reset",
+      "title": "Reset File",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Reset selected cuts/settings, disable sharing and retain source plus correctly labelled previous output.",
+        "sources": [
+          "public/local-workspace.js",
+          "public/processing-profile.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Files",
+        "stage": "8C",
+        "operations": [
+          "subscribe_collection"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/processing-profile.test.js",
+          "test/browser/local-media.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Other files, queued snapshots and successful outputs remain unchanged."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.remove",
+      "title": "Remove File and Discard",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Revoke selected owned media, cancel its work and retain cleanup ownership without affecting other selections.",
+        "sources": [
+          "media-workspace.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Files",
+        "stage": "8C",
+        "operations": [
+          "remove_source",
+          "discard_workspace"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/workspace-cleanup.test.js",
+          "test/browser/playlist-cleanup.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.cleanup",
+      "title": "Reachable cleanup recovery",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Bound transient retries; failed cleanup remains reachable and consumes reserved capacity until deletion succeeds.",
+        "sources": [
+          "media-workspace.js",
+          "output-retirement.js",
+          "local-processing-queue.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Cleanup recovery",
+        "stage": "8C",
+        "operations": [
+          "retry_cleanup"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/workspace-cleanup.test.js",
+          "test/browser/playlist-cleanup.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Locked/read-held/permission failures retain ownership; retries never delete originals or exports."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.expiry",
+      "title": "Workspace activity and expiry",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve one-hour inactivity expiry; an attached active editor counts as activity, with cancellation/revocation on expiry.",
+        "sources": [
+          "media-workspace.js",
+          "local-processing-queue.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media",
+        "stage": "8C",
+        "operations": [
+          "subscribe_collection"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/media-workspace.test.js",
+          "test/local-processing-queue.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Expiry cancels analysis/processing and waits for owned readers/workers before releasing capacity."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.reopen",
+      "title": "Previous local workbenches",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "List/reopen/remove retained same-session collections; reload resets drafts, not admitted jobs/results or cleanup.",
+        "sources": [
+          "local-processing-queue.js",
+          "public/local-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Previous workbenches",
+        "stage": "8C",
+        "operations": [
+          "list_collections",
+          "reopen_collection",
+          "remove_collection"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-processing-api.test.js",
+          "test/browser/playlist-cleanup.spec.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Stale reopen cannot revive a removed/reopened collection; no editing sessions or queue restoration across process restarts."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.reservations",
+      "title": "Capacity and storage reservations",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep two workbenches, 20 files each, 20 queued/running jobs, sequential intake and 100 GiB aggregate original-source reservations.",
+        "sources": [
+          "local-processing-queue.js",
+          "media-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Intake and queue",
+        "stage": "8C",
+        "operations": [
+          "import_sources",
+          "enqueue_processing"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/local-processing-queue.test.js",
+          "test/playlist-intake.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "media.leases",
+      "title": "Output leases and retirement",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Open results/no-op aliases survive replacement until last reader closes; invalidated identities cannot obtain new leases.",
+        "sources": [
+          "output-retirement.js",
+          "media-workspace.js"
+        ]
+      },
+      "desktop": {
+        "location": "Local Media / Playback and results",
+        "stage": "8C",
+        "operations": [
+          "read_media",
+          "save_output"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/edited-conversion.test.js",
+          "test/conversion-lifecycle.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Exercise active reads during rerender, removal, failed cleanup and shutdown; retire only unreferenced owned bytes."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "history.records",
+      "title": "Durable terminal history",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Record Ready/Failed/Cancelled jobs with bounded source/request/output/failure data and truthful timestamps.",
+        "sources": [
+          "history-store.js",
+          "download-history.js"
+        ]
+      },
+      "desktop": {
+        "location": "History",
+        "stage": "8D",
+        "operations": [
+          "list_history"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/history-store.test.js",
+          "test/history-api.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Exclude runtime paths/URLs, thumbnails and process state; editor/import activity must not become Download History."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "history.presentation",
+      "title": "History details and pagination",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Newest-first compact records, expandable details, Show More and persistence across restart.",
+        "sources": [
+          "public/history-ui.js",
+          "history-store.js"
+        ]
+      },
+      "desktop": {
+        "location": "History",
+        "stage": "8D",
+        "operations": [
+          "list_history"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/history-compact-ui.test.js",
+          "test/history-ui.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Terminal notifications match exact job identity; formatting remains useful without expanding the outer page."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "history.deletion",
+      "title": "Delete and Clear All",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Delete individual metadata or explicitly clear history without deleting exported media.",
+        "sources": [
+          "public/history-ui.js",
+          "history-store.js"
+        ]
+      },
+      "desktop": {
+        "location": "History",
+        "stage": "8D",
+        "operations": [
+          "delete_history",
+          "clear_history"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/history-ui.test.js",
+          "test/history-api.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test deletion, confirmation and storage failure; saved files remain intact."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "history.reuse",
+      "title": "Use Again",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Fresh Preview first, restore only compatible choices, never automatically download.",
+        "sources": [
+          "public/history-ui.js"
+        ]
+      },
+      "desktop": {
+        "location": "History → Download",
+        "stage": "8D",
+        "operations": [
+          "preview_source"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/history-ui.test.js",
+          "test/manual-source-format.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Intersect playlist URLs exactly; reselect manual format IDs and chapters; retain compatible ranges/extras with warnings."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "history.faults",
+      "title": "Nonfatal history faults",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "History read/write failure cannot break Preview/Download or turn a successful media operation into failure.",
+        "sources": [
+          "download-history.js",
+          "history-store.js"
+        ]
+      },
+      "desktop": {
+        "location": "History / Download",
+        "stage": "8D",
+        "operations": [
+          "retry_history"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/history-store.test.js",
+          "test/history-api.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Corrupt/missing/unwritable stores report recoverable history errors while media work continues."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "runtime.health",
+      "title": "Runtime status and Recheck",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Separate Node/yt-dlp/FFmpeg/FFprobe status with bounded present/missing/failing/timed-out probes and actionable guidance.",
+        "sources": [
+          "runtime-version.js",
+          "app-server.js",
+          "public/app.js"
+        ]
+      },
+      "desktop": {
+        "location": "Settings / Runtime",
+        "stage": "8E",
+        "operations": [
+          "runtime_health"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/runtime-health.test.js",
+          "test/runtime-version.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Desktop identifies Rust/webview and Node helper; unavailable FFprobe does not unnecessarily prevent ordinary Download."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "runtime.ytdlp-updates",
+      "title": "Managed yt-dlp lifecycle",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Verified baseline/cache, nightly/stable channel, 24-hour checks, manual updates, bounded HTTPS/redirects and offline reuse.",
+        "sources": [
+          "ytdlp-manager.js",
+          "scripts/update-ytdlp.js"
+        ]
+      },
+      "desktop": {
+        "location": "Settings / Runtime",
+        "stage": "8D",
+        "operations": [
+          "check_ytdlp_update",
+          "apply_ytdlp_update"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/ytdlp-manager.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject corrupt/wrong/oversized downloads; retain a usable baseline and wait for active tool users before replacement."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "runtime.custom-ytdlp",
+      "title": "Custom yt-dlp executable",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve YTDLP_PATH capability through deliberate native selection of a user-trusted custom binary.",
+        "sources": [
+          "ytdlp-manager.js"
+        ]
+      },
+      "desktop": {
+        "location": "Settings / Advanced tools",
+        "stage": "8D",
+        "operations": [
+          "pick_custom_ytdlp",
+          "approve_tool",
+          "reset_tool"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/ytdlp-manager.test.js",
+          "test/real/ytdlp-config.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Fingerprint/capture approved bytes, reapprove changes, reject general path/argument injection and report extra runtime requirements; do not call custom code official-verified."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "runtime.extractor-plugins",
+      "title": "Extractor plugins",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Preserve third-party extraction support with explicit import/enable/disable/remove/replacement instead of ambient discovery.",
+        "sources": [
+          "app-server.js"
+        ]
+      },
+      "desktop": {
+        "location": "Settings / Advanced tools",
+        "stage": "8D",
+        "operations": [
+          "import_plugins",
+          "approve_plugins",
+          "enable_plugins",
+          "remove_plugins"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/ytdlp-isolation.test.js",
+          "test/real/ytdlp-config.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Preserve supported package contents; reject unsafe paths/links and installation hooks, isolate ambient discovery, snapshot admitted versions and reapprove changed code."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "runtime.config-isolation",
+      "title": "Explicit yt-dlp configuration",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep --ignore-config and explicit options; bundled Node only executes provider scripts, with controlled tool environment.",
+        "sources": [
+          "app-server.js"
+        ]
+      },
+      "desktop": {
+        "location": "Settings / Runtime",
+        "stage": "8D",
+        "operations": [
+          "start_download",
+          "import_url",
+          "import_playlist"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/ytdlp-isolation.test.js",
+          "test/real/ytdlp-config.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Host/user config cannot add hidden options/plugins; selected trusted plugins still operate without inheriting other code."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "runtime.data-location",
+      "title": "Local data location",
+      "origin": "baseline",
+      "reference": {
+        "behavior": "Keep OS per-user data defaults and explicit LVOVD_DATA_DIR custom-location capability.",
+        "sources": [
+          "history-store.js"
+        ]
+      },
+      "desktop": {
+        "location": "Settings / Data and runtime details",
+        "stage": "8E",
+        "operations": [
+          "load_settings"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [
+          "test/history-store.test.js"
+        ],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Validate configured data-root failures without touching installation resources, originals or exports; disclose the actual location in diagnostics."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.destination",
+      "title": "Captured output destination",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Show and capture output folder plus reviewed filename for each admitted job.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Local Media",
+        "stage": "8D",
+        "operations": [
+          "pick_destination"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Later folder changes affect future jobs only; invalid/disconnected destinations fail before admission or expose save recovery."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.saving",
+      "title": "Atomic native saving",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Save all validated media and companion outputs via flushed temporary files and no-overwrite numbered collisions.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Local Media results",
+        "stage": "8D",
+        "operations": [
+          "save_output",
+          "retry_save"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test originals/no-ops, collisions, disk exhaustion, disconnected drives and interrupted writes; retry without reacquisition/re-encoding."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.export-actions",
+      "title": "Saved-file actions and catalog",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Offer Open, Show in Folder, Save Copy and bulk saving with a separate truthful export catalog.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Results / History",
+        "stage": "8D",
+        "operations": [
+          "open_export",
+          "reveal_export",
+          "save_copy",
+          "save_outputs"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Missing/moved exports remain honest; history/workspace deletion never deletes user files."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.history-import",
+      "title": "Legacy history import",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Import existing v2.7 terminal history once, preserving original/schema meaning and unknown saved paths.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "History",
+        "stage": "8E",
+        "operations": [
+          "import_legacy_history"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Test reruns, corrupt stores and migration interruption without duplicated records or invented export receipts."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.navigation",
+      "title": "Complete compact interface",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Download is initial view; all released controls remain reachable with keyboard and compact desktop/narrow layouts.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Download / Local Media / History / Settings",
+        "stage": "8E",
+        "operations": [
+          "desktop_handshake"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Verify 1280x720 and 960x640 plus display scaling in actual webviews; retain concise functional copy, not roadmap/marketing filler."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.settings",
+      "title": "Persistent settings",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Persist output folder/preferences separately from session drafts/queues and immutable job captures.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Settings",
+        "stage": "8E",
+        "operations": [
+          "get_settings",
+          "update_settings"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Restart retains settings/history/export catalog but does not restore editing projects or running queues."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.shutdown",
+      "title": "Single instance and coordinated quit",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "One instance per user; minimized work continues; quit handles active work and unsaved edits/results.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Application",
+        "stage": "8E",
+        "operations": [
+          "shutdown_desktop"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Confirm worker/read exit before owned cleanup; crash manifests allow only owned stale-session cleanup."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.packages",
+      "title": "Standalone distribution",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Ship Windows installer/ZIP, both macOS DMGs and Linux AppImage with required tools/frameworks and notices.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Application launch",
+        "stage": "8F",
+        "operations": [
+          "bootstrap_desktop"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Clean-machine/offline/Unicode/scaling checks on all supported OS baselines; Evergreen prerequisite behavior and no production Node backend/test driver."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    },
+    {
+      "id": "desktop.updates",
+      "title": "Application update lifecycle",
+      "origin": "desktop",
+      "reference": {
+        "behavior": "Separate optional app checks from webview updates; explicit signed installation and Windows portable rollback.",
+        "sources": [
+          "docs/development-contract.md"
+        ]
+      },
+      "desktop": {
+        "location": "Settings",
+        "stage": "8F",
+        "operations": [
+          "check_app_update",
+          "install_app_update"
+        ]
+      },
+      "status": "Missing",
+      "implementation": {
+        "rust": [],
+        "native": []
+      },
+      "tests": {
+        "reference": [],
+        "rust": [],
+        "native": []
+      },
+      "acceptance": [
+        "Reject tampering/wrong architecture/unsafe archives; wait for safe shutdown and retain working installation on failure."
+      ],
+      "evidence": [],
+      "remaining": "Rust operation and full native workflow are not implemented."
+    }
+  ]
+}

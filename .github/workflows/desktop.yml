@@ -15,8 +15,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  parity:
+    name: Feature preservation contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Validate inventory, released references and release readiness
+        run: node scripts/check-feature-parity.cjs --baseline-files
+      - name: Prevent silent loss against base and previous head
+        env:
+          PARITY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PARITY_PREVIOUS_SHA: ${{ github.event.before }}
+        run: |
+          for revision in "$PARITY_BASE_SHA" "$PARITY_PREVIOUS_SHA"; do
+            if [[ -n "$revision" && "$revision" != 0000000000000000000000000000000000000000 ]]; then
+              node scripts/check-feature-parity.cjs --base-ref "$revision"
+            fi
+          done
+      - name: Exercise invalid evidence and release-blocking cases
+        run: node --test test/feature-parity.test.js
+
   native:
     name: Native playback (${{ matrix.os }})
+    needs: parity
     strategy:
       fail-fast: false
       matrix:
