@@ -1,6 +1,7 @@
 use lvovd_core::{
     capabilities::{Capabilities, Decoder},
     media_inspection::MediaInspection,
+    processing_command::{self, Attempt},
     processing_plan::{self, ConversionInput, Input, ReviewedPlan},
     processing_settings::Settings,
 };
@@ -90,6 +91,55 @@ fn evaluate(case: &Value, data: &Value) -> Value {
             input["extension"].as_str(),
             input["suffix"].as_str().unwrap()
         ))),
+        "arguments" => {
+            let review = review(input, data, input["kind"] == "conversion").unwrap();
+            let inspection: MediaInspection =
+                serde_json::from_value(data["sources"][input["source"].as_str().unwrap()].clone())
+                    .unwrap();
+            let root = std::env::current_dir()
+                .unwrap()
+                .join("synthetic workspace ü");
+            let source = root.join("source.mp4");
+            let output = root.join("result.partial");
+            let log = root.join("pass");
+            processing_command::arguments(
+                &source,
+                &output,
+                &inspection,
+                &review,
+                Attempt {
+                    pass: input["attempt"]["pass"].as_u64().map(|p| p as u8),
+                    pass_log_prefix: Some(&log),
+                    video_bitrate: input["attempt"]["videoBitrate"].as_u64(),
+                    conversion_max_bytes: Some(100000000),
+                },
+            )
+            .map(|args| {
+                json!(
+                    args.into_iter()
+                        .map(|s| {
+                            if s == source.as_os_str() {
+                                "@INPUT@".into()
+                            } else if s == output.as_os_str() {
+                                "@OUTPUT@".into()
+                            } else if s == log.as_os_str() {
+                                "@PASSLOG@".into()
+                            } else {
+                                s.into_string().unwrap()
+                            }
+                        })
+                        .collect::<Vec<String>>()
+                )
+            })
+        }
+        "validation" => {
+            let review = review(input, data, input["kind"] == "conversion").unwrap();
+            let output: MediaInspection = serde_json::from_value(input["output"].clone()).unwrap();
+            return match processing_command::validate(&output, &review) {
+                Ok(()) => json!({"value":true}),
+                Err(e) => json!({"error":e}),
+            };
+        }
         operation => review(input, data, operation == "conversion").map(|review| {
             let mut value = review.document().clone();
             value.as_object_mut().unwrap().remove("key");
@@ -221,4 +271,84 @@ fn inactive_controls_do_not_change_review_and_non_finite_revision_is_rejected() 
             .is_err()
         );
     }
+}
+
+#[test]
+fn argument_boundaries_and_size_correction_fail_closed() {
+    use processing_command::{SizeControl, SizeDecision};
+    let data = corpus();
+    let input = json!({"source":"base","settings":{"rate":{"mode":"size","maximumMB":2}}});
+    let review = review(&input, &data, false).unwrap();
+    let mut inspection: MediaInspection =
+        serde_json::from_value(data["sources"]["base"].clone()).unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source.mp4");
+    let output = root.path().join("partial.mp4");
+    let log = root.path().join("pass");
+    let attempt = || Attempt {
+        pass: Some(1),
+        pass_log_prefix: Some(&log),
+        ..Default::default()
+    };
+    for (i, o) in [
+        (std::path::Path::new("relative.mp4"), output.as_path()),
+        (source.as_path(), source.as_path()),
+    ] {
+        assert!(processing_command::arguments(i, o, &inspection, &review, attempt()).is_err());
+    }
+    assert!(
+        processing_command::arguments(&source, &output, &inspection, &review, Attempt::default())
+            .is_err()
+    );
+    assert!(
+        processing_command::arguments(
+            &source,
+            &output,
+            &inspection,
+            &review,
+            Attempt {
+                video_bitrate: Some(1_000_000_001),
+                ..attempt()
+            }
+        )
+        .is_err()
+    );
+    inspection.video.as_mut().unwrap().frame_rate = Some(24.);
+    assert!(
+        processing_command::arguments(&source, &output, &inspection, &review, attempt()).is_err()
+    );
+    let file = std::fs::File::create(&output).unwrap();
+    let mut sizes = SizeControl::new(&review).unwrap();
+    assert!(sizes.assess(&file.metadata().unwrap(), 10_000_000).is_err());
+    file.set_len(2_100_000).unwrap();
+    let correction = sizes.assess(&file.metadata().unwrap(), 10_000_000).unwrap();
+    let SizeDecision::CorrectVideoBitrate(bitrate) = correction else {
+        panic!("oversized output needs one correction")
+    };
+    assert!(
+        bitrate > 16000
+            && (bitrate as f64)
+                < review.document()["rateBudget"]["videoBitrate"]
+                    .as_f64()
+                    .unwrap()
+    );
+    assert_eq!(
+        sizes
+            .assess(&file.metadata().unwrap(), 10_000_000)
+            .unwrap_err()
+            .failure
+            .category,
+        "local_processing_size"
+    );
+    file.set_len(2_000_000).unwrap();
+    assert_eq!(
+        sizes.assess(&file.metadata().unwrap(), 10_000_000).unwrap(),
+        SizeDecision::Accept
+    );
+    assert!(sizes.assess(&file.metadata().unwrap(), 2_000_000).is_err());
+    assert!(
+        sizes
+            .assess(&std::fs::metadata(root.path()).unwrap(), 10_000_000)
+            .is_err()
+    );
 }

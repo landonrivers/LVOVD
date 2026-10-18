@@ -5,6 +5,8 @@ const path = require('node:path');
 const processing = require('../processing-plan');
 const conversion = require('../conversion-plan');
 const { normalizeMediaInspection } = require('../media-inspection');
+const { processingArgs, validateProcessingOutput } = require('../processing-command');
+const { conversionArgs, validateConversionOutput } = require('../conversion-command');
 const fixturePath = path.join(__dirname, '..', 'test', 'fixtures', 'desktop-processing-v1.json');
 function capabilities(raw) {
   if (!raw) return null;
@@ -18,12 +20,21 @@ function evaluate(item, data) {
     const inspection = data.sources[input.source] ?? null;
     const caps = capabilities(data.capabilities[input.capabilities ?? 'full']);
     const request = { workspaceId: 'workbench', sourceAssetId: 'source', inputAssetId: 'source', inputFilename: 'Example.mp4', ...input, inspection, capabilities: caps };
-    const value = item.operation === 'conversion' ? conversion.planConversion(request) : processing.planProcessing(request);
+    const legacy = item.operation === 'conversion' || input.kind === 'conversion';
+    const value = legacy ? conversion.planConversion(request) : processing.planProcessing(request);
+    if (item.operation === 'arguments') return { value: legacy
+      ? conversionArgs('@INPUT@', '@OUTPUT@', inspection, value, 100000000)
+      : processingArgs('@INPUT@', '@OUTPUT@', inspection, value, { ...(input.attempt || {}), passLogPrefix: '@PASSLOG@' }) };
+    if (item.operation === 'validation') {
+      (legacy ? validateConversionOutput : validateProcessingOutput)(input.output, value);
+      return { value: true };
+    }
     // Review keys are opaque per-backend identities, not persisted media policy.
     // Compare every other field; Rust tests independently check key binding.
     delete value.key; delete value.inspectionKey;
     return { value: JSON.parse(JSON.stringify(value)) };
   } catch (e) {
+    if (e.workspaceFailure) return { error: { message: e.message, workspaceFailure: e.workspaceFailure } };
     if (e.statusCode !== 400) throw e;
     return { error: { code: 'PROCESSING_REQUEST', message: e.message } };
   }
@@ -104,6 +115,7 @@ function corpus() {
     ['null-edit',{}, {editPlan:null}],['full-edit',{}, {editPlan:{version:1,keepRanges:[{startSeconds:0,endSeconds:12}]}}],
   ]) process(id,'pcm',settings,extra);
   process('missing-inspection','absent');
+  process('frame-rate-encoding','base',{frameRate:23.976});
   for (const name of ['base','hevc','odd-rotated','hdr','alpha','transform','no-audio','audio','extras','mp3-in-mkv','audio-mp3','surround','bad-layout','unknown-layout','no-audio-end','no-audio-start','unknown-inventory']) {
     for (const targetId of ['broad-compatibility-mp4','m4a-aac','mp3']) add(`conversion/${name}/${targetId}`,'conversion',{source:name,targetId,inputRole:'edited',editPlanKey:'committed-cut'});
   }
@@ -111,6 +123,27 @@ function corpus() {
   add('conversion/invalid','conversion',{source:'base',targetId:'evil'});
   for (const name of ['C:\\media\\Example.MOV','/media/a.b.mkv','<>:"|?*.mp4','.mp4','   ','😀'.repeat(92)+'.mp4']) add(`filename/${name}`,'filename',{name,extension:'mkv',suffix:'-trimmed'});
   const data={schemaVersion:1,reference:{release:'v2.7.0',commit:'7e192ad7ddee6478b517a74174cedf6dccd85a19',modules:['processing-plan.js','conversion-plan.js','audio-policy.js','public/edit-plan.js']},sources,capabilities:caps,cases};
+  const planCases = cases.filter(c => ['processing','conversion'].includes(c.operation));
+  for (const c of planCases) {
+    const p=evaluate(c,data).value;
+    if (p?.status!=='executable') continue;
+    const input={...c.input,kind:c.operation};
+    for (const pass of p.passes===2 ? [1,2] : [null]) add(`arguments/${c.id}/${pass}`,'arguments',{...input,attempt:{pass}});
+    if (p.passes===2) add(`arguments/${c.id}/correction`,'arguments',{...input,attempt:{pass:2,videoBitrate:20000}});
+  }
+  for (const id of ['processing/base/cuts','processing/pcm/flac','processing/audio-f64/wav','processing/container/opus','processing/frame-rate-encoding','conversion/hevc/broad-compatibility-mp4','conversion/audio/mp3']) {
+    const c=cases.find(c=>c.id===id);const p=evaluate(c,data).value;if(p.status!=='executable')throw new Error(id);
+    const output=structuredClone(sources[c.input.source]);const v=p.streams.find(s=>s.role==='video'),a=p.streams.find(s=>s.role==='audio');
+    output.container.kind=p.output.container;output.durationSeconds=p.timing.durationSeconds;
+    output.trackCounts={video:v?1:0,audio:a?1:0,subtitle:0};output.extraStreams={total:p.streams.length,chapters:0,other:0,artwork:0};
+    output.video=v?{...output.video,codec:p.output.videoCodec,pixelFormat:p.output.pixelFormat,width:p.output.width,height:p.output.height,rotationDegrees:p.output.rotationDegrees,sampleAspectRatio:p.output.sampleAspectRatio,frameRate:p.output.frameRate??output.video.frameRate,startSeconds:p.timing.videoStartSeconds??0,durationSeconds:p.timing.videoEndSeconds-(p.timing.videoStartSeconds??0)}:null;
+    output.audio=a?{...output.audio,codec:p.output.audioCodec,sampleRate:p.output.sampleRate,channels:p.output.channels,channelLayout:p.output.channelLayout,startSeconds:a.action==='encode'?0:p.timing.audioStartSeconds,durationSeconds:p.timing.audioEndSeconds-(a.action==='encode'?0:p.timing.audioStartSeconds),...(p.output.bitDepth?{bitsPerSample:p.output.bitDepth,bitsPerRawSample:p.output.bitDepth,sampleFormat:p.output.representation==='float'?(p.output.bitDepth===64?'dbl':'flt'):(p.output.bitDepth<=16?'s16':'s32')}: {})}:null;
+    const mutations=[['valid',()=>{}],['container',o=>o.container.kind='unknown'],['extra-stream',o=>o.extraStreams.total++],['subtitle',o=>o.trackCounts.subtitle++],['chapters',o=>o.extraStreams.chapters++],['duration',o=>o.durationSeconds+=1],['missing-duration',o=>o.durationSeconds=null]];
+    if(v)mutations.push(['video-codec',o=>o.video.codec='hevc'],['width',o=>o.video.width+=2],['rotation',o=>o.video.rotationDegrees=90],['orientation',o=>o.video.orientationSupported=false],['start',o=>o.video.startSeconds+=1],['aspect',o=>o.video.sampleAspectRatio='2:1'],['video-end',o=>o.video.durationSeconds-=1],['frame-rate',o=>o.video.frameRate=5]);
+    if(a)mutations.push(['audio-codec',o=>o.audio.codec='unknown'],['rate',o=>o.audio.sampleRate=8000],['channels',o=>o.audio.channels=7],['layout',o=>o.audio.channelLayout='quad'],['unknown-layout',o=>o.audio.channelLayout=null],['precision',o=>{o.audio.sampleFormat='s16';o.audio.bitsPerSample=16;o.audio.bitsPerRawSample=16;}],['audio-start',o=>o.audio.startSeconds+=1],['audio-end',o=>o.audio.durationSeconds-=1]);
+    for (const [name,mutate] of mutations) {const changed=structuredClone(output);mutate(changed);add(`validation/${id}/${name}`,'validation',{...c.input,kind:c.operation,output:changed});}
+  }
+  data.reference.modules.push('processing-command.js','conversion-command.js','local-media-input.js');
   for (const item of cases) item.expected=evaluate(item,data);
   return data;
 }

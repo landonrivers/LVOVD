@@ -15,7 +15,7 @@ The only approved access-mode exception is **standalone access**: the applicatio
 
 Each receipt records platform, full commit, `native-workflow` kind, passed result, repository Actions run/job URL, mapped test files and a description of the actual scenario. A reviewer must inspect those receipts and determine whether tests cover the behavior. The validator checks completeness and references; it cannot prove that a linked test exercises the claim or that a remote run passed. Reopen a capability's status when relevant behavior changes; historical evidence is not permission to skip current CI or packaged acceptance.
 
-The five initial Ported entries describe the 8B inspection, capability, range, audio-clock and audio-policy libraries. They do not claim that downloading, editing or processing is available in the desktop preview. [8A's native playback evidence](desktop-foundation.md) and [8B's current work](desktop-media-policies.md) remain useful supporting evidence, not substitutes for complete workflows.
+Ported entries describe implemented core policies with linked Rust tests. They do not claim that downloading, editing or processing is available in the desktop preview. [8A's native playback evidence](desktop-foundation.md) and [8B's current work](desktop-media-policies.md) remain useful supporting evidence, not substitutes for complete workflows.
 
 ## Maintaining the register
 
@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 82 Missing, 5 Ported, 0 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 78 Missing, 9 Ported, 0 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -73,7 +73,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `media.intake` | Multiple local files | Local Media / Files | 8C | Missing |
 | `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Ported |
 | `media.capabilities` | Capability discovery | Local Media / Review | 8B | Ported |
-| `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Missing |
+| `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Ported |
 | `media.direct-playback` | Direct media playback | Local Media / Player | 8C | Missing |
 | `media.proxy` | Playback proxies | Local Media / Player | 8C | Missing |
 | `media.audio-clock` | Audio timeline policy | Local Media / Timeline | 8B | Ported |
@@ -85,13 +85,13 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `media.audio-policy` | Local audio encoding policy | Local Media / Output settings | 8B | Ported |
 | `media.audio-outputs` | Local audio outputs | Local Media / Output settings and results | 8C | Missing |
 | `media.noop-remux` | Original no-op and remux | Local Media / Review and results | 8B | Missing |
-| `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Missing |
+| `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Ported |
 | `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Missing |
-| `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Missing |
+| `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Ported |
 | `media.estimates-help` | Linked estimates and help | Local Media / Output settings and review | 8C | Missing |
 | `media.review-contract` | Reviewed plan validation | Local Media / Review | 8B | Missing |
 | `media.edited-input` | Edited-result conversion handoff | Local Media / Conversion review | 8C | Missing |
-| `media.output-validation` | Validated processed outputs | Local Media / Results | 8B | Missing |
+| `media.output-validation` | Validated processed outputs | Local Media / Results | 8B | Ported |
 | `media.naming` | Reviewed names and suffix | Local Media / Process actions | 8C | Missing |
 | `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Missing |
 | `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Missing |

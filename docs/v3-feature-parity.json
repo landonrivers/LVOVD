@@ -1350,9 +1350,12 @@
           "start_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Ported",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/inspection.rs",
+          "crates/lvovd-core/src/processing_command.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1360,14 +1363,18 @@
           "test/local-media-input.test.js",
           "test/real/local-media.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/inspection_media.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Adversarial playlists/references fail before following dependencies, including output-validation/proxy paths."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Inspection and processing preserve file-only demuxer restrictions, MOV external-reference blocking and explicit software decoders. Full proxy/operation wiring and native workflow acceptance remain outstanding."
     },
     {
       "id": "media.direct-playback",
@@ -1475,7 +1482,8 @@
       "status": "Ported",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/audio_policy.rs"
+          "crates/lvovd-core/src/audio_policy.rs",
+          "crates/lvovd-core/src/processing_command.rs"
         ],
         "native": []
       },
@@ -1485,7 +1493,9 @@
           "test/real/av-timing.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/policy_parity.rs"
+          "crates/lvovd-core/tests/policy_parity.rs",
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1493,7 +1503,7 @@
         "Compare timing policy plus generated shifted/gapped sources; encoded timing remains a separate acceptance gate."
       ],
       "evidence": [],
-      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Core policy, command fixtures and generated Rust media verify timing/ranges/precision/channel behavior. Full editor/processing workflow integration and its platform acceptance remain outstanding."
     },
     {
       "id": "media.waveform",
@@ -1555,7 +1565,8 @@
       "status": "Ported",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/edit_plan.rs"
+          "crates/lvovd-core/src/edit_plan.rs",
+          "crates/lvovd-core/src/processing_command.rs"
         ],
         "native": []
       },
@@ -1564,7 +1575,9 @@
           "test/edit-plan.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/policy_parity.rs"
+          "crates/lvovd-core/tests/policy_parity.rs",
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1572,7 +1585,7 @@
         "Use shared fixtures and reject stale/invalid ranges without changing authoritative source timing."
       ],
       "evidence": [],
-      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Core policy, command fixtures and generated Rust media verify timing/ranges/precision/channel behavior. Full editor/processing workflow integration and its platform acceptance remain outstanding."
     },
     {
       "id": "media.trim-controls",
@@ -1704,7 +1717,8 @@
       "status": "Ported",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/audio_policy.rs"
+          "crates/lvovd-core/src/audio_policy.rs",
+          "crates/lvovd-core/src/processing_command.rs"
         ],
         "native": []
       },
@@ -1713,7 +1727,9 @@
           "test/local-audio.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/policy_parity.rs"
+          "crates/lvovd-core/tests/policy_parity.rs",
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1721,7 +1737,7 @@
         "Match policy fixtures; unknown precision stays unknown, incompatible layouts fail without downmix, and strict FLAC offers WAV guidance."
       ],
       "evidence": [],
-      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Core policy, command fixtures and generated Rust media verify timing/ranges/precision/channel behavior. Full editor/processing workflow integration and its platform acceptance remain outstanding."
     },
     {
       "id": "media.audio-outputs",
@@ -1744,7 +1760,10 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/processing_command/validation.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1752,14 +1771,17 @@
           "test/real/local-audio.test.js",
           "test/processing-plan.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Compare decoded samples/channel identity/Opus delay and cuts; hide/clear inactive FLAC/PCM bitrate and keep encoded-FLAC size unknown."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust encoding and validation produce tested standalone/MKV audio outputs; native controls, queued operation ownership, result access and full workflow acceptance remain incomplete."
     },
     {
       "id": "media.noop-remux",
@@ -1786,7 +1808,9 @@
           "crates/lvovd-core/src/processing_settings.rs",
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
-          "crates/lvovd-core/src/processing_plan/legacy.rs"
+          "crates/lvovd-core/src/processing_plan/legacy.rs",
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/processing_command/validation.rs"
         ],
         "native": []
       },
@@ -1797,7 +1821,8 @@
           "test/conversion-plan.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/processing_parity.rs"
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1805,7 +1830,7 @@
         "No-op skips encoder discovery/execution and duplicate bytes; incompatible remux or cuts require explicit encoding choices."
       ],
       "evidence": [],
-      "remaining": "Rust review decisions now preserve original inventory and supported remux/no-op rules. Execution, exact original-byte delivery and native integration remain incomplete."
+      "remaining": "Owned no-op reviews cannot start an encoder; generated remux samples and unchanged originals are tested, including rejection of a remux that loses timestamp gaps. Exact original-byte delivery leases and native workflow integration remain incomplete."
     },
     {
       "id": "media.video-encoding",
@@ -1826,13 +1851,15 @@
           "start_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Ported",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
-          "crates/lvovd-core/src/processing_plan/legacy.rs"
+          "crates/lvovd-core/src/processing_plan/legacy.rs",
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/processing_command/validation.rs"
         ],
         "native": []
       },
@@ -1842,7 +1869,8 @@
           "test/real/processing.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/processing_parity.rs"
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1850,7 +1878,7 @@
         "Compare CRF/preset/pixel-format/padding arguments; refuse unsupported HDR/alpha/transforms instead of silently degrading them."
       ],
       "evidence": [],
-      "remaining": "Rust settings/reviews now preserve H.264 controls, defaults, presets, container and fidelity decisions. FFmpeg arguments, output validation, generated encoding and native controls remain incomplete."
+      "remaining": "Rust decisions, argument arrays and output validation match shared reference cases; generated outputs verify encoding/geometry. Native controls, operation integration and platform workflow acceptance remain outstanding."
     },
     {
       "id": "media.size-budget",
@@ -1878,7 +1906,10 @@
           "crates/lvovd-core/src/processing_settings.rs",
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
-          "crates/lvovd-core/src/processing_plan/legacy.rs"
+          "crates/lvovd-core/src/processing_plan/legacy.rs",
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/processing_command/validation.rs",
+          "crates/lvovd-core/src/processing_command/size.rs"
         ],
         "native": []
       },
@@ -1888,7 +1919,8 @@
           "test/real/processing.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/processing_parity.rs"
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1896,7 +1928,7 @@
         "Reject oversized results; never silently lower resolution/remove audio/downmix; encoded-FLAC maximum-size mode remains unavailable."
       ],
       "evidence": [],
-      "remaining": "Rust plans now preserve decimal MB, audio/container reserves, two-pass decisions and FLAC rejection. Execution, one corrective retry, final-byte enforcement and native integration remain incomplete."
+      "remaining": "Rust budgeting, two-pass arguments, final-byte assessment and one corrective bitrate decision are implemented. The 8C owner must perform correction cleanup, enforce publication and preserve prior results; end-to-end operation acceptance remains incomplete."
     },
     {
       "id": "media.picture",
@@ -1916,13 +1948,15 @@
           "review_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Ported",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
-          "crates/lvovd-core/src/processing_plan/legacy.rs"
+          "crates/lvovd-core/src/processing_plan/legacy.rs",
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/processing_command/validation.rs"
         ],
         "native": []
       },
@@ -1932,7 +1966,8 @@
           "test/processing-profile.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/processing_parity.rs"
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -1940,7 +1975,7 @@
         "Reviewed actual dimensions match encoding, including odd sizes and constrained source geometry."
       ],
       "evidence": [],
-      "remaining": "Rust reviews now preserve geometry, rotation, sample aspect, no-upscale and cadence decisions. Argument generation, actual encoded dimensions and native controls remain incomplete."
+      "remaining": "Rust decisions, argument arrays and output validation match shared reference cases; generated outputs verify encoding/geometry. Native controls, operation integration and platform workflow acceptance remain outstanding."
     },
     {
       "id": "media.estimates-help",
@@ -2012,7 +2047,8 @@
           "crates/lvovd-core/src/processing_settings.rs",
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
-          "crates/lvovd-core/src/processing_plan/legacy.rs"
+          "crates/lvovd-core/src/processing_plan/legacy.rs",
+          "crates/lvovd-core/src/processing_command.rs"
         ],
         "native": []
       },
@@ -2023,7 +2059,8 @@
           "test/edited-conversion.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/processing_parity.rs"
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
         ],
         "native": []
       },
@@ -2031,7 +2068,7 @@
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
       "evidence": [],
-      "remaining": "Rust owns normalized settings and reviewed documents; tests bind opaque keys to workbench/source/filename/revision/settings/inspection/capabilities. Native ownership lookup, pre-admission revalidation and queue integration remain incomplete."
+      "remaining": "Owned keys bind source/revision/settings/capability facts; arguments reject changed inspection and invalid paths/passes. Native ownership lookup, pre-admission revalidation and immutable queue integration remain incomplete."
     },
     {
       "id": "media.edited-input",
@@ -2090,9 +2127,12 @@
           "validate_output"
         ]
       },
-      "status": "Missing",
+      "status": "Ported",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_command/validation.rs",
+          "crates/lvovd-core/src/processing_command/size.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2101,14 +2141,17 @@
           "test/real/processing.test.js",
           "test/real/conversion.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/processing_media.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Malformed/wrong/oversized output remains unavailable; failures retain previous successful results."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Core stream/timing/precision and byte-size validation is implemented and tested against reference failures and generated media. Operation-owned publication, prior-result retention and native workflow acceptance remain outstanding."
     },
     {
       "id": "media.naming",
@@ -2243,7 +2286,9 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/process.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2251,14 +2296,16 @@
           "test/local-processing-queue.test.js",
           "test/real/local-processing-queue.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/worker_ownership.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "The worker supervisor retains supplied ownership guards through confirmed descendant exit even when a caller disappears; progress is streamed and bounded. The authoritative processing queue, reservations, immutable jobs and native controls are still missing."
     },
     {
       "id": "media.results",
@@ -3231,19 +3278,24 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/process.rs",
+          "src-tauri/src/main.rs"
+        ],
         "native": []
       },
       "tests": {
         "reference": [],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/worker_ownership.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Confirm worker/read exit before owned cleanup; crash manifests allow only owned stale-session cleanup."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Foundation shutdown drains readers and tracked tool workers before asset cleanup; incomplete exit retains ownership and reports a retryable close failure. Single-instance behavior, active jobs/unsaved edits/results and crash-session ownership manifests remain incomplete."
     },
     {
       "id": "desktop.packages",

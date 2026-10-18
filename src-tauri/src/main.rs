@@ -50,6 +50,7 @@ impl AppState {
     async fn shutdown(&self) -> Result<()> {
         self.assets.cancellation().cancel();
         self.media_admission.shutdown().await;
+        lvovd_core::process::shutdown().await?;
         #[cfg(target_os = "linux")]
         self.playback.shutdown().await;
         // Health probes share cancellation with intake. Keep the host alive until

@@ -17,6 +17,7 @@ pub mod media_inspection;
 #[cfg(unix)]
 pub mod playback;
 pub mod process;
+pub mod processing_command;
 pub mod processing_plan;
 pub mod processing_settings;
 pub mod tools;
