@@ -12,6 +12,7 @@ pub mod capabilities;
 pub mod edit_plan;
 pub mod inspection;
 pub mod media;
+pub mod media_admission;
 pub mod media_inspection;
 #[cfg(unix)]
 pub mod playback;

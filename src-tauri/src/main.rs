@@ -42,13 +42,14 @@ struct AppState {
     tools: Tools,
     subscriptions: Mutex<Subscriptions>,
     closing: AtomicBool,
-    media_slots: Arc<tokio::sync::Semaphore>,
+    media_admission: lvovd_core::media_admission::MediaAdmission,
     health_admission: tokio::sync::Mutex<()>,
     picker_admission: tokio::sync::Mutex<()>,
 }
 impl AppState {
     async fn shutdown(&self) -> Result<()> {
         self.assets.cancellation().cancel();
+        self.media_admission.shutdown().await;
         #[cfg(target_os = "linux")]
         self.playback.shutdown().await;
         // Health probes share cancellation with intake. Keep the host alive until
@@ -211,6 +212,9 @@ fn main() {
             app.manage(AppState {
                 #[cfg(target_os = "linux")]
                 playback,
+                media_admission: lvovd_core::media_admission::MediaAdmission::new(
+                    assets.cancellation(),
+                ),
                 assets,
                 tools: tools(app.handle())?,
                 subscriptions: Mutex::new(Subscriptions {
@@ -218,7 +222,6 @@ fn main() {
                     channel: None,
                 }),
                 closing: AtomicBool::new(false),
-                media_slots: Arc::new(tokio::sync::Semaphore::new(4)),
                 health_admission: tokio::sync::Mutex::new(()),
                 picker_admission: tokio::sync::Mutex::new(()),
             });
@@ -239,11 +242,14 @@ fn main() {
         .register_asynchronous_uri_scheme_protocol("lvovd-media", |context, request, responder| {
             let state = context.app_handle().state::<AppState>();
             let assets = state.assets.clone();
-            let permit = state.media_slots.clone().try_acquire_owned();
-            let Ok(permit) = permit else {
+            let ticket = state.media_admission.admit();
+            let Ok(ticket) = ticket else {
+                let error = ticket.err().unwrap();
+                #[cfg(feature = "test-driver")]
+                eprintln!("Media admission rejected: {}", error.code);
                 responder.respond(
                     tauri::http::Response::builder()
-                        .status(429)
+                        .status(if error.code == "MEDIA_BUSY" { 429 } else { 503 })
                         .body(Vec::<u8>::new())
                         .unwrap(),
                 );
@@ -251,30 +257,59 @@ fn main() {
             };
             let label = context.webview_label().to_owned();
             let app = context.app_handle().clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                let _permit = permit;
-                #[cfg(feature = "test-driver")]
-                let diagnostic = format!(
-                    "{} range={:?} origin={:?}",
-                    request.method(),
-                    request.headers().get("range"),
-                    request.headers().get("origin")
-                );
-                let response = lvovd_core::media::respond(&assets, request, &label);
-                #[cfg(feature = "test-driver")]
-                eprintln!(
-                    "Media protocol: {diagnostic} -> {} bytes={} content-range={:?}",
-                    response.status(),
-                    response.body().len(),
-                    response.headers().get("content-range")
-                );
-                responder.respond(response);
-                // Removal can arrive while the bounded read holds a lease.
-                // respond has now released it, so finish eligible cleanup and
-                // publish the authoritative result without another user click.
-                if assets.retry_pending_cleanup() {
-                    app.state::<AppState>().publish();
-                }
+            tauri::async_runtime::spawn(async move {
+                let active = match ticket.wait().await {
+                    Ok(active) => active,
+                    Err(error) => {
+                        #[cfg(feature = "test-driver")]
+                        eprintln!("Media admission stopped: {}", error.code);
+                        let _ = error;
+                        responder.respond(
+                            tauri::http::Response::builder()
+                                .status(503)
+                                .body(Vec::<u8>::new())
+                                .unwrap(),
+                        );
+                        return;
+                    }
+                };
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    let _active = active;
+                    // Test builds can hold a distinctive range long enough to
+                    // reproduce decoder contention during a second file selection.
+                    #[cfg(feature = "test-driver")]
+                    if request
+                        .headers()
+                        .get("range")
+                        .is_some_and(|range| range == "bytes=128-255")
+                        && std::env::var_os("LVOVD_DESKTOP_TEST_MEDIA_CONTENTION").is_some()
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(1500));
+                    }
+                    #[cfg(feature = "test-driver")]
+                    let diagnostic = format!(
+                        "{} range={:?} origin={:?}",
+                        request.method(),
+                        request.headers().get("range"),
+                        request.headers().get("origin")
+                    );
+                    let response = lvovd_core::media::respond(&assets, request, &label);
+                    #[cfg(feature = "test-driver")]
+                    eprintln!(
+                        "Media protocol: {diagnostic} -> {} bytes={} content-range={:?}",
+                        response.status(),
+                        response.body().len(),
+                        response.headers().get("content-range")
+                    );
+                    responder.respond(response);
+                    // Removal can arrive while the bounded read holds a lease.
+                    // respond has now released it, so finish eligible cleanup and
+                    // publish the authoritative result without another user click.
+                    if assets.retry_pending_cleanup() {
+                        app.state::<AppState>().publish();
+                    }
+                })
+                .await;
             });
         })
         .on_page_load(|webview, _| {

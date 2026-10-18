@@ -1390,7 +1390,10 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/media.rs",
+          "crates/lvovd-core/src/media_admission.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1398,14 +1401,19 @@
           "test/media-workspace.test.js",
           "test/real/local-media.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/media_admission.rs",
+          "crates/lvovd-core/tests/foundation.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Use actual webviews for large files, end/repeated seeks, selection changes and cleanup; 8A proof alone does not complete the workbench."
       ],
       "evidence": [],
-      "remaining": "The foundation player exists, but the full Local Media workflow is not integrated. Resolve the macOS ARM64 second-copy selection failure observed at 42b4b36 (see docs/desktop-media-policies.md), then verify complete workbench playback on all platforms."
+      "remaining": "Foundation playback now queues bounded range contention; its native regression forces old-file reads during second-file selection. Cross-platform fix acceptance and full Local Media workflow integration remain pending; see docs/desktop-media-policies.md."
     },
     {
       "id": "media.proxy",
