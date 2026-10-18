@@ -53,7 +53,7 @@ Choose additional checks by changed behavior:
 | Desktop launch, permissions, protocol, or playback | Build with `node scripts/desktop.cjs build --features test-driver`, run `npm run test:desktop:native`, then rebuild without the driver; verify the normal native launch |
 | Documentation or interface copy only | Check links/claims and inspect the affected presentation; do not add tests that merely freeze prose |
 
-Run `git diff --check`. Existing Linux/Windows gates remain required; native CI covers Windows, Linux, and both Mac architectures. Report the unresolved Linux playback failure rather than skipping it or calling Chromium a substitute. Full release acceptance remains broader than any individual change's checks.
+Run `git diff --check`. Existing Linux/Windows gates remain required; native CI covers Windows, Linux, and both Mac architectures. Report each failing native gate rather than skipping it or calling Chromium a substitute. Full release acceptance remains broader than any individual change's checks.
 
 Keep processing local. The browser reference must preserve its `127.0.0.1` boundary; the desktop production path must have no localhost application server. Do not apply the browser startup model to desktop work.
 

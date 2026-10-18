@@ -315,7 +315,7 @@ You do **not** need to install yt-dlp globally or run `npm install` for LVOVD it
 
 Read [the development contract](docs/development-contract.md) and [contributor setup and validation](CONTRIBUTING.md) before making changes. Agents also follow [AGENTS.md](AGENTS.md).
 
-The v3.0 Rust/Tauri desktop migration is being delivered in separate stages. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. Linux custom-protocol playback is an unresolved foundation gate. See [desktop foundation setup and gates](docs/desktop-foundation.md). Build with `npm run build:desktop`, then open `target/debug/lvovd.exe` on Windows. The executable starts directly; no batch file is required. The existing `npm start` and `Start-LVOVD-Windows.bat` browser workflow remains available during migration.
+The v3.0 Rust/Tauri desktop migration is being delivered in separate stages. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. Linux playback uses an application-owned GStreamer source with private, bounded reads from Rust. See [desktop foundation setup and native acceptance evidence](docs/desktop-foundation.md). Build with `npm run build:desktop`, then open `target/debug/lvovd.exe` on Windows. The executable starts directly; no batch file is required. The existing `npm start` and `Start-LVOVD-Windows.bat` browser workflow remains available during migration.
 
 ```bash
 git clone https://github.com/landonrivers/LVOVD.git
