@@ -1413,7 +1413,7 @@
         "Use actual webviews for large files, end/repeated seeks, selection changes and cleanup; 8A proof alone does not complete the workbench."
       ],
       "evidence": [],
-      "remaining": "Foundation playback now queues bounded range contention; its native regression forces old-file reads during second-file selection. Cross-platform fix acceptance and full Local Media workflow integration remain pending; see docs/desktop-media-policies.md."
+      "remaining": "The 8A owned-protocol playback regression is fixed: bounded queued reads pass forced old/new-file contention on Windows, Linux and both macOS architectures (8a7e181; Actions 39164673329). Complete selected-stream playback, proxies and editor integration remain 8C work; these foundation receipts do not establish the full capability."
     },
     {
       "id": "media.proxy",
@@ -1782,7 +1782,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_settings.rs",
+          "crates/lvovd-core/src/processing_plan.rs",
+          "crates/lvovd-core/src/processing_plan/processing.rs",
+          "crates/lvovd-core/src/processing_plan/legacy.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1791,14 +1796,16 @@
           "test/real/processing.test.js",
           "test/conversion-plan.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "No-op skips encoder discovery/execution and duplicate bytes; incompatible remux or cuts require explicit encoding choices."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust review decisions now preserve original inventory and supported remux/no-op rules. Execution, exact original-byte delivery and native integration remain incomplete."
     },
     {
       "id": "media.video-encoding",
@@ -1821,7 +1828,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_settings.rs",
+          "crates/lvovd-core/src/processing_plan.rs",
+          "crates/lvovd-core/src/processing_plan/processing.rs",
+          "crates/lvovd-core/src/processing_plan/legacy.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1829,14 +1841,16 @@
           "test/processing-plan.test.js",
           "test/real/processing.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Compare CRF/preset/pixel-format/padding arguments; refuse unsupported HDR/alpha/transforms instead of silently degrading them."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust settings/reviews now preserve H.264 controls, defaults, presets, container and fidelity decisions. FFmpeg arguments, output validation, generated encoding and native controls remain incomplete."
     },
     {
       "id": "media.size-budget",
@@ -1860,7 +1874,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_settings.rs",
+          "crates/lvovd-core/src/processing_plan.rs",
+          "crates/lvovd-core/src/processing_plan/processing.rs",
+          "crates/lvovd-core/src/processing_plan/legacy.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1868,14 +1887,16 @@
           "test/processing-plan.test.js",
           "test/real/processing.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reject oversized results; never silently lower resolution/remove audio/downmix; encoded-FLAC maximum-size mode remains unavailable."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust plans now preserve decimal MB, audio/container reserves, two-pass decisions and FLAC rejection. Execution, one corrective retry, final-byte enforcement and native integration remain incomplete."
     },
     {
       "id": "media.picture",
@@ -1897,7 +1918,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_settings.rs",
+          "crates/lvovd-core/src/processing_plan.rs",
+          "crates/lvovd-core/src/processing_plan/processing.rs",
+          "crates/lvovd-core/src/processing_plan/legacy.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1905,14 +1931,16 @@
           "test/processing-plan.test.js",
           "test/processing-profile.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reviewed actual dimensions match encoding, including odd sizes and constrained source geometry."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust reviews now preserve geometry, rotation, sample aspect, no-upscale and cadence decisions. Argument generation, actual encoded dimensions and native controls remain incomplete."
     },
     {
       "id": "media.estimates-help",
@@ -1935,7 +1963,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_settings.rs",
+          "crates/lvovd-core/src/processing_plan.rs",
+          "crates/lvovd-core/src/processing_plan/processing.rs",
+          "crates/lvovd-core/src/processing_plan/legacy.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1943,14 +1976,16 @@
           "test/processing-profile.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Distinguish exact bytes/estimated/unknown sizes; keyboard help, dismissal and FLAC bitrate inactivity work."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust review size estimates now distinguish original bytes, known bitrate estimates and unknown encoded sizes. Linked interface controls, controlling-value indication and accessible contextual help remain incomplete."
     },
     {
       "id": "media.review-contract",
@@ -1973,7 +2008,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_settings.rs",
+          "crates/lvovd-core/src/processing_plan.rs",
+          "crates/lvovd-core/src/processing_plan/processing.rs",
+          "crates/lvovd-core/src/processing_plan/legacy.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1982,14 +2022,16 @@
           "test/conversion-plan.test.js",
           "test/edited-conversion.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/tests/processing_parity.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Rust owns normalized settings and reviewed documents; tests bind opaque keys to workbench/source/filename/revision/settings/inspection/capabilities. Native ownership lookup, pre-admission revalidation and queue integration remain incomplete."
     },
     {
       "id": "media.edited-input",

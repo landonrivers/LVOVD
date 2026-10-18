@@ -12,6 +12,7 @@ tokio.workspace = true
 uuid.workspace = true
 http.workspace = true
 regex.workspace = true
+sha2 = "=0.10.9"
 tempfile.workspace = true
 lvovd-media-ipc = { path = "../lvovd-media-ipc" }
 tokio-util = { version = "0.7", features = ["rt"] }
