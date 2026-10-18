@@ -28,7 +28,7 @@ async fn run(args: Vec<OsString>) -> process::Output {
         &CancellationToken::new(),
     )
     .await
-    .unwrap()
+    .unwrap_or_else(|error| panic!("synthetic media command failed: {error:?}; args={args:?}"))
 }
 async fn inspect(path: &Path) -> MediaInspection {
     inspection::inspect(&tool("FFPROBE"), path, &CancellationToken::new())
@@ -131,6 +131,17 @@ async fn decode(path: &Path) -> Vec<u8> {
     .await
     .stdout
 }
+fn same_samples(actual: &[u8], expected: &[u8], label: &str) {
+    assert_eq!(actual.len(), expected.len(), "{label}: decoded byte count");
+    if let Some(index) = actual.iter().zip(expected).position(|(a, b)| a != b) {
+        panic!(
+            "{label}: first differing decoded byte {index}: {} != {} ({} bytes compared)",
+            actual[index],
+            expected[index],
+            actual.len()
+        );
+    }
+}
 fn cuts() -> Value {
     json!({"version":1,"keepRanges":[{"startSeconds":0.2,"endSeconds":0.7},{"startSeconds":1.1,"endSeconds":1.5}]})
 }
@@ -201,7 +212,11 @@ async fn lossless_audio_and_retained_samples_preserve_integer_and_float_precisio
                 actual.audio.as_ref().unwrap().sample_rate,
                 Some(u64::from(rate))
             );
-            assert_eq!(decode(&output).await, expected, "{codec} into {container}");
+            same_samples(
+                &decode(&output).await,
+                &expected,
+                &format!("{codec} into {container}"),
+            );
         }
         assert_eq!(std::fs::read(source).unwrap(), original);
     }
@@ -314,10 +329,10 @@ async fn supported_layouts_preserve_channels_and_reject_opus_side_surround() {
             process_file(&source, &output, &inspection, &review).await;
             let decoded = decode(&output).await;
             if container != "opus" {
-                assert_eq!(
-                    decoded,
+                same_samples(
+                    &decoded,
                     &original[2400 * channels * 8..16800 * channels * 8],
-                    "{layout} {container}"
+                    &format!("{layout} {container}"),
                 );
             } else {
                 let samples: Vec<_> = decoded
@@ -448,7 +463,7 @@ async fn video_cuts_mkv_audio_extraction_two_pass_and_original_noop_use_rust_pol
     let plain_plan = plan(&plain_inspection, &json!({"container":"mov"}), None, &caps);
     let plain_output = plain_root.path().join("remux.mov");
     process_file(&plain, &plain_output, &plain_inspection, &plain_plan).await;
-    assert_eq!(decode(&plain_output).await, decode(&plain).await);
+    same_samples(&decode(&plain_output).await, &decode(&plain).await, "remux");
     // Retain leading silence, internal gaps, and the video-only silent tail.
     let edit = json!({"version":1,"keepRanges":[{"startSeconds":0.1,"endSeconds":1.0},{"startSeconds":1.2,"endSeconds":1.9}]});
     for (index,settings) in [
