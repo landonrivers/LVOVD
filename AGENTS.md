@@ -12,7 +12,7 @@
 - Preserve released behavior while migrating one reviewable stage at a time. Keep policy separate from execution and interface code.
 - The desktop application uses a Rust backend, Tauri native commands/channels, and the JavaScript interface. It must open as an application window and must not fall back to a localhost application server.
 - The v2.7 browser application is a temporary development reference. Keep its launch path clearly separate from the desktop preview.
-- Do not present `index.html`, a browser preview, or a screenshot as the runnable desktop application. Deliver the native launcher or packaged executable and state what was actually tested.
+- The Windows application is `lvovd.exe` and starts directly. Do not require a batch file, Node, npm, or Cargo to launch a built app; those are development/build tools. Do not present `index.html`, a browser preview, or a screenshot as the runnable desktop application. Deliver the executable and state what was actually tested.
 - Keep the current 8A Linux playback failure visible. Do not advance the larger backend migration or mark 8A complete before the native playback gate passes.
 - Preserve original files and exported results. Keep cancellation, reservations, read leases, and failed cleanup under backend ownership.
 - Do not add features outside the accepted stage merely to make a preview look complete.

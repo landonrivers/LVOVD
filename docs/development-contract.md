@@ -21,8 +21,9 @@ LVOVD is a practical local media utility. Users should be able to identify the n
 - Rust owns jobs, collections, assets, reservations, policies, plans, and output leases. JavaScript owns presentation and uncommitted editing drafts. Validate requests in Rust independently of frontend validation.
 - FFmpeg, FFprobe, and yt-dlp remain supervised external tools. Bundled Node 24 is only a yt-dlp provider-script helper in the finished product, not the LVOVD backend.
 - During migration, the v2.7 Node/browser application remains a development reference. Label its instructions separately. At cutover, `npm start` becomes a development-only harness over the same Rust core; the old backend is excluded from production packaging.
-- A desktop handoff must identify a native launcher or executable. Do not link an `index.html` file or open a browser tab and call that desktop acceptance. Verify a native window/process and report missing functionality honestly.
-- End users of the finished distribution need no Node, Rust, FFmpeg, or Python setup. Development launchers may require build tools and must say so; they are not substitutes for installers and portable packages.
+- The Windows application is named `lvovd.exe` and launches directly without a batch file or a build step. The executable owns application startup and tool discovery. Build commands are for development, not normal use.
+- A desktop handoff must identify the executable. Do not link an `index.html` file or open a browser tab and call that desktop acceptance. Verify a native window/process and report missing functionality honestly.
+- End users of the finished distribution need no Node, Rust, FFmpeg, or Python setup. Supporting tools can be separate files in the application package; LVOVD launches them as needed. Development builds may use locally installed tools until packaging is implemented, and must say so.
 
 ## Behavior that must survive the rewrite
 

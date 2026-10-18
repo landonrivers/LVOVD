@@ -8,9 +8,9 @@ Read [the development contract](docs/development-contract.md) before making chan
 
 ### Rust desktop preview
 
-Follow [desktop setup and current limitations](docs/desktop-foundation.md). Run `npm ci` and `npm run dev:desktop`, or use `Start-LVOVD-Desktop-Windows.bat` on Windows after setup. This opens an application window. Do not open `desktop/index.html` or `desktop/dist/index.html` as the application: those are internal interface assets and cannot provide native operations in Chrome.
+Follow [desktop setup and current limitations](docs/desktop-foundation.md). Run `npm ci` and `npm run build:desktop` to compile, then open `target/debug/lvovd.exe` on Windows. The built app starts directly without a batch file or Node wrapper. `npm run dev:desktop` is an optional compile-and-run command for development. Do not open `desktop/index.html` or `desktop/dist/index.html` as the application: those are internal interface assets and cannot provide native operations in Chrome.
 
-The development launcher compiles a normal debug build without the test driver. The Windows launcher closes its terminal after opening the app. This is a development convenience, not the finished installer or portable distribution.
+Normal builds omit the test driver. Debug builds resolve installed tools themselves; release builds use packaged tools only. This preview is not the finished installer or portable distribution.
 
 ### v2.7 browser reference
 
@@ -49,7 +49,7 @@ Choose additional checks by changed behavior:
 |---|---|
 | Media policy, processing, ownership, or cancellation | `npm run test:media`; affected Rust tests; compare against released behavior |
 | Interface or native adapter | Affected browser tests; inspect the changed workflow at desktop/narrow sizes; native tests when desktop behavior changes |
-| Rust core or host | `npm run fmt:desktop`, `npm run check:desktop`, `npm run test:desktop:core` |
+| Rust core or host | `npm run fmt:desktop`, `npm run check:desktop`, `npm run test:desktop:core`, `npm run test:desktop:host` |
 | Desktop launch, permissions, protocol, or playback | Build with `node scripts/desktop.cjs build --features test-driver`, run `npm run test:desktop:native`, then rebuild without the driver; verify the normal native launch |
 | Documentation or interface copy only | Check links/claims and inspect the affected presentation; do not add tests that merely freeze prose |
 

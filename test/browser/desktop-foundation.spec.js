@@ -62,6 +62,6 @@ test('desktop adapter does not silently fall back to browser HTTP authority', as
   await expect(page.locator('#connection')).toHaveText('Desktop unavailable');
   await expect(page.locator('#add-file')).toBeDisabled();
   await expect(page.locator('#recheck')).toBeDisabled();
-  await expect(page.locator('#status')).toContainText('Start-LVOVD-Desktop-Windows.bat');
-  await expect(page.locator('#status')).toContainText('npm run dev:desktop');
+  await expect(page.locator('#status')).toContainText('lvovd.exe');
+  await expect(page.locator('#status')).toContainText('npm run build:desktop');
 });

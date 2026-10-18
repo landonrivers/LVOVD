@@ -42,8 +42,12 @@ async function waitForDriver(port, child) {
 }
 async function scenario(file, index) {
   const port = 4455 + index, log = fs.openSync(path.join(resultDir, `native-${index}.log`), 'w');
-  const child = spawn(path.join(root, 'target/debug/lvovd-desktop' + (process.platform === 'win32' ? '.exe' : '')), [], {
-    cwd: root, env: { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file }, windowsHide: true, stdio: ['ignore', log, log]
+  // Exercise the same tool discovery as a direct executable launch, without the
+  // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
+  const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file };
+  for (const key of ['FFPROBE', 'FFMPEG', 'NODE', 'YTDLP']) delete directEnv['LVOVD_DESKTOP_' + key];
+  const child = spawn(path.join(root, 'target/debug/lvovd' + (process.platform === 'win32' ? '.exe' : '')), [], {
+    cwd: resultDir, env: directEnv, windowsHide: true, stdio: ['ignore', log, log]
   });
   const closed = new Promise(resolve => child.once('close', resolve));
   let browser;

@@ -54,6 +54,8 @@ jobs:
         run: npm run check:desktop
       - name: Ownership, protocol and tool execution tests
         run: npm run test:desktop:core
+      - name: Direct-launch tool discovery
+        run: npm run test:desktop:host
       - name: Build native test application
         run: node scripts/desktop.cjs build --features test-driver
       - name: Native media gate

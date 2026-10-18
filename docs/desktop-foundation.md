@@ -10,20 +10,21 @@ Install Rust using rustup and the [Tauri platform prerequisites](https://v2.taur
 
 ```sh
 npm ci
-npm run dev:desktop
+npm run build:desktop
 ```
 
-On Windows, after that setup, double-click **`Start-LVOVD-Desktop-Windows.bat`**. It builds the native preview without test controls, opens its own window, and closes the launcher terminal. The developer command above keeps build/runtime output in the terminal for troubleshooting. Neither desktop launch path opens Chrome.
+On Windows, open **`target/debug/lvovd.exe`**. It starts directly in its own window without a batch file, terminal window, Node wrapper, or compilation step. Rebuild only when developing changes. `npm run dev:desktop` remains an optional compile-and-run command for developers.
 
 | Entry point | What opens |
 |---|---|
-| `Start-LVOVD-Desktop-Windows.bat` / `npm run dev:desktop` | Rust desktop preview in its own application window |
+| `target/debug/lvovd.exe` | Built Windows desktop preview in its own application window |
+| `npm run dev:desktop` | Rebuilds and runs the preview for development |
 | `Start-LVOVD-Windows.bat` / `npm start` | v2.7 browser reference, accessed through localhost |
 | `desktop/index.html` / `desktop/dist/index.html` | Interface assets only; not a runnable desktop app |
 
-This checkout's Windows development executable is built at `target/debug/lvovd-desktop.exe`. Prefer the launcher: it rebuilds the current UI and resolves development tool paths. A finished installer/portable package with bundled tools is still stage 8F. Do not hand off an HTML file as the application.
+The old desktop batch launcher has been removed. The application binary is `lvovd` (`lvovd.exe` on Windows); the internal Cargo package name remains `lvovd-desktop`. A finished installer/portable package with bundled supporting tools is still stage 8F. Do not hand off an HTML file as the application.
 
-The workspace pins its Rust toolchain and dependencies. Development resolves existing FFmpeg/FFprobe and Node into explicit absolute paths; a previously downloaded project yt-dlp is also recognized. `LVOVD_DESKTOP_FFPROBE`, `LVOVD_DESKTOP_FFMPEG`, `LVOVD_DESKTOP_YTDLP`, and `LVOVD_DESKTOP_NODE` can override development paths. Release builds ignore those overrides and use their resource-directory `tools` folder. Distribution of those tools is a later gate, not an implicit PATH fallback.
+The workspace pins its Rust toolchain and dependencies. In debug builds, Rust resolves tools at startup: explicit absolute `LVOVD_DESKTOP_FFPROBE`, `LVOVD_DESKTOP_FFMPEG`, `LVOVD_DESKTOP_YTDLP`, and `LVOVD_DESKTOP_NODE` overrides first, then bundled paths, the project-local yt-dlp cache, and installed tools on absolute PATH entries. Relative and empty PATH entries are ignored. Missing tools remain unavailable in Runtime details; the app does not silently download them. This development-only lookup lets the executable run without a wrapper or a particular working directory. Release builds exclude it and use only their resource-directory `tools` folder. Verified tool distribution remains a later gate.
 
 `npm start` continues to run the released browser workflow during migration. The native preview deliberately has only file intake, bounded inspection, direct playback, removal/cleanup, runtime health, and coordinated close. Processing, waveform generation, provider downloads, proxies, output saving and application updates are not implemented in this slice. Unsupported direct playback says so rather than claiming a proxy exists.
 
@@ -46,11 +47,12 @@ npm run test:browser
 npm run fmt:desktop
 npm run check:desktop
 npm run test:desktop:core
+npm run test:desktop:host
 node scripts/desktop.cjs build --features test-driver
 npm run test:desktop:native
 ```
 
-Native tests use generated media, real inspection, byte-range playback and repeated seeking in the actual platform webview, including large MP4s with their index at either end. They also check removal, original preservation, rejected privileged operations, and desktop/narrow layout. On headless Linux run under `xvfb-run -a dbus-run-session --` so desktop services inherit the virtual display; CI supplies software rendering because that display has no GPU. These are test-environment settings, not production defaults; packaged desktop/GPU acceptance remains required. CI includes Windows, Linux, and both macOS architectures. Do not advance the larger backend port until all native playback gates pass.
+Native tests launch the binary from another working directory without the Node wrapper's tool-path overrides. They use generated media, real inspection, byte-range playback and repeated seeking in the actual platform webview, including large MP4s with their index at either end. They also check removal, original preservation, rejected privileged operations, and desktop/narrow layout. On headless Linux run under `xvfb-run -a dbus-run-session --` so desktop services inherit the virtual display; CI supplies software rendering because that display has no GPU. These are test-environment settings, not production defaults; packaged desktop/GPU acceptance remains required. CI includes Windows, Linux, and both macOS architectures. Do not advance the larger backend port until all native playback gates pass.
 
 The optional WebdriverIO driver embeds a control server **only in explicitly enabled debug test builds**. Production rejects that feature at compile time. `LVOVD_DESKTOP_TEST_FILE` is accepted only in that test build to automate picker intake using generated fixtures; there is no frontend command accepting arbitrary paths. Normal builds have neither mechanism. Keep automation test binaries local/CI-only.
 

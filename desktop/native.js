@@ -5,7 +5,7 @@
   root.LVOVDNative = Object.freeze({
     async call(command, args = {}) {
       if (!allowed.has(command)) throw new Error('Unknown desktop operation.');
-      if (!root.__TAURI__?.core) throw new Error('Open the desktop app instead of this HTML file. On Windows, use Start-LVOVD-Desktop-Windows.bat in the project folder, or run npm run dev:desktop from a terminal.');
+      if (!root.__TAURI__?.core) throw new Error('Open lvovd.exe instead of this HTML file. The Windows development build is in target/debug. If it has not been built yet, run npm run build:desktop from the project folder.');
       try { return await root.__TAURI__.core.invoke(command, args); }
       catch (error) { throw Object.assign(new Error(error?.message || String(error)), { code: error?.code }); }
     },

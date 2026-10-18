@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-default-run = "lvovd-desktop"
+default-run = "lvovd"
+
+[[bin]]
+name = "lvovd"
+path = "src/main.rs"
 
 [features]
 default = ["custom-protocol"]

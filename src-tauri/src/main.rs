@@ -1,6 +1,9 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 #[cfg(all(feature = "test-driver", not(debug_assertions)))]
 compile_error!("The test driver is forbidden in release builds.");
+
+#[cfg(debug_assertions)]
+mod development;
 
 use lvovd_core::{
     AppError, Result,
@@ -157,24 +160,9 @@ async fn shutdown_desktop(app: tauri::AppHandle, state: State<'_, AppState>) -> 
 }
 
 fn tools(app: &tauri::AppHandle) -> std::result::Result<Tools, Box<dyn std::error::Error>> {
-    let mut tools = Tools::bundled(&app.path().resource_dir()?.join("tools"));
+    let tools = Tools::bundled(&app.path().resource_dir()?.join("tools"));
     #[cfg(debug_assertions)]
-    for (key, destination) in [
-        ("FFPROBE", &mut tools.ffprobe),
-        ("FFMPEG", &mut tools.ffmpeg),
-        ("YTDLP", &mut tools.ytdlp),
-        ("NODE", &mut tools.node),
-    ] {
-        if let Some(path) = std::env::var_os(format!("LVOVD_DESKTOP_{key}")) {
-            let path = PathBuf::from(path);
-            if !path.is_absolute() {
-                return Err(
-                    format!("Desktop development tool {key} requires an absolute path").into(),
-                );
-            }
-            *destination = path;
-        }
-    }
+    let tools = development::tools(tools)?;
     Ok(tools)
 }
 
