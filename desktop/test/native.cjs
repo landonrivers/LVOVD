@@ -31,7 +31,11 @@ if (process.platform === 'linux') {
 async function waitForDriver(port, child) {
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null || child.signalCode !== null) throw new Error('Desktop exited before the driver became ready');
-    try { if ((await fetch(`http://127.0.0.1:${port}/status`)).ok) return; } catch {}
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/status`, { signal: AbortSignal.timeout(1000) });
+      // The driver can listen before Tauri has created the application window.
+      if (response.ok && (await response.json()).value?.ready === true) return;
+    } catch {}
     await delay(200);
   }
   throw new Error('Native driver did not become ready');
@@ -47,7 +51,7 @@ async function scenario(file, index) {
     await waitForDriver(port, child);
     const { remote } = await import('webdriverio');
     browser = await remote({ hostname: '127.0.0.1', port, logLevel: 'error', connectionRetryCount: 0, capabilities: { browserName: 'wry' } });
-    await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Rust'), { timeout: 15000 });
+    await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Desktop ·'), { timeout: 15000 });
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
     await browser.$('#add-file').click();
     await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 1), { timeout: 25000, timeoutMsg: 'Native media did not load metadata' });

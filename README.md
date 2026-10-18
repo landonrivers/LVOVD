@@ -29,6 +29,8 @@ LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to downlo
 
 ## Quick Start
 
+These instructions start the released **v2.7 browser application**. For the **v3.0 desktop development preview**, use [the desktop launch instructions](docs/desktop-foundation.md#running-the-foundation); do not open its `index.html` file.
+
 ### 1. Install Node.js 22+ and FFmpeg with FFprobe
 
 If all three commands below already work, skip installation. Local Media uses FFprobe to inspect sources and validate processed results; make sure both FFmpeg and FFprobe are available on PATH.
@@ -311,7 +313,9 @@ You do **not** need to install yt-dlp globally or run `npm install` for LVOVD it
 
 ## Development
 
-The v3.0 Rust/Tauri desktop migration is being delivered in separate stages. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. Linux custom-protocol playback is an unresolved foundation gate. See [desktop foundation setup and gates](docs/desktop-foundation.md). The existing `npm start` browser workflow remains available during migration.
+Read [the development contract](docs/development-contract.md) and [contributor setup and validation](CONTRIBUTING.md) before making changes. Agents also follow [AGENTS.md](AGENTS.md).
+
+The v3.0 Rust/Tauri desktop migration is being delivered in separate stages. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. Linux custom-protocol playback is an unresolved foundation gate. See [desktop foundation setup and gates](docs/desktop-foundation.md). After development setup, Windows users can double-click `Start-LVOVD-Desktop-Windows.bat` to open the native window. The existing `npm start` and `Start-LVOVD-Windows.bat` browser workflow remains available during migration.
 
 ```bash
 git clone https://github.com/landonrivers/LVOVD.git

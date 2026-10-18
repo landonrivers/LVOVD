@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 
 function executable(name) {
@@ -32,8 +32,10 @@ function main() {
   prepare();
   const action = process.argv[2] || 'run';
   if (action === 'prepare') return;
+  if (action === 'launch' && process.argv.length > 3) throw new Error('The desktop launcher does not accept build flags. Use build:desktop for development builds.');
   const args = {
     run: ['run', '--locked', '-p', 'lvovd-desktop'],
+    launch: ['build', '--locked', '-p', 'lvovd-desktop', '--target-dir', path.join(root, 'target')],
     build: ['build', '--locked', '-p', 'lvovd-desktop'],
     check: ['clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings'],
     test: ['test', '--locked', '-p', 'lvovd-core'],
@@ -43,7 +45,16 @@ function main() {
   const { cargo, env } = environment();
   const result = spawnSync(cargo, [...args, ...process.argv.slice(3)], { cwd: root, env, stdio: 'inherit', windowsHide: true, shell: false });
   if (result.error) { console.error('Rust and the platform build tools are required. See docs/desktop-foundation.md.'); process.exitCode = 1; }
-  else process.exitCode = result.status ?? 1;
+  else {
+    process.exitCode = result.status ?? 1;
+    if (action === 'launch' && result.status === 0) {
+      // Build without test-driver before launching, even if a test binary was left here.
+      const binary = path.join(root, 'target', 'debug', 'lvovd-desktop' + (process.platform === 'win32' ? '.exe' : ''));
+      const child = spawn(binary, [], { cwd: root, env, detached: true, stdio: 'ignore', windowsHide: true, shell: false });
+      child.once('error', error => { console.error(`Could not open the desktop app: ${error.message}`); process.exitCode = 1; });
+      child.once('spawn', () => { console.log('Started LVOVD Desktop Preview.'); child.unref(); });
+    }
+  }
 }
 if (require.main === module) main();
 module.exports = { environment, prepare };

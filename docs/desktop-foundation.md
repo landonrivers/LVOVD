@@ -1,8 +1,10 @@
 # v3.0 desktop migration — 8A
 
-The released product remains v2.7.0. The desktop preview is `3.0.0-alpha.1`, an independently versioned development application. It uses the Rust core and Tauri native commands; it does not start or fall back to the Node HTTP server. Do not distribute this as the completed v3.0 product.
+The released product remains v2.7.0. The desktop preview is `3.0.0-alpha.1`, an independently versioned development application. It uses the Rust core and Tauri native commands; it does not start or fall back to the Node HTTP server. Do not distribute this as the completed v3.0 product. [The development contract](development-contract.md) governs product behavior and delivery; this document records the current stage and its evidence.
 
 ## Running the foundation
+
+**Open the application, not an HTML file.** The desktop executable loads HTML/CSS/JavaScript inside its own window using the platform webview (Evergreen WebView2 on Windows). Opening `desktop/index.html` or `desktop/dist/index.html` in Chrome only displays the interface source; it cannot run the native backend. An HTML preview card is not a desktop build.
 
 Install Rust using rustup and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/), then run:
 
@@ -10,6 +12,16 @@ Install Rust using rustup and the [Tauri platform prerequisites](https://v2.taur
 npm ci
 npm run dev:desktop
 ```
+
+On Windows, after that setup, double-click **`Start-LVOVD-Desktop-Windows.bat`**. It builds the native preview without test controls, opens its own window, and closes the launcher terminal. The developer command above keeps build/runtime output in the terminal for troubleshooting. Neither desktop launch path opens Chrome.
+
+| Entry point | What opens |
+|---|---|
+| `Start-LVOVD-Desktop-Windows.bat` / `npm run dev:desktop` | Rust desktop preview in its own application window |
+| `Start-LVOVD-Windows.bat` / `npm start` | v2.7 browser reference, accessed through localhost |
+| `desktop/index.html` / `desktop/dist/index.html` | Interface assets only; not a runnable desktop app |
+
+This checkout's Windows development executable is built at `target/debug/lvovd-desktop.exe`. Prefer the launcher: it rebuilds the current UI and resolves development tool paths. A finished installer/portable package with bundled tools is still stage 8F. Do not hand off an HTML file as the application.
 
 The workspace pins its Rust toolchain and dependencies. Development resolves existing FFmpeg/FFprobe and Node into explicit absolute paths; a previously downloaded project yt-dlp is also recognized. `LVOVD_DESKTOP_FFPROBE`, `LVOVD_DESKTOP_FFMPEG`, `LVOVD_DESKTOP_YTDLP`, and `LVOVD_DESKTOP_NODE` can override development paths. Release builds ignore those overrides and use their resource-directory `tools` folder. Distribution of those tools is a later gate, not an implicit PATH fallback.
 

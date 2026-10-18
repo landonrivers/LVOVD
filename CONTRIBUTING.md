@@ -4,13 +4,25 @@ LVOVD — **Landon's Very Own Video Downloader** — is intentionally open for e
 
 ## Development setup
 
+Read [the development contract](docs/development-contract.md) before making changes. Coding agents must also follow [AGENTS.md](AGENTS.md). The contract preserves the product decisions; the roadmap and stage documents track what is implemented.
+
+### Rust desktop preview
+
+Follow [desktop setup and current limitations](docs/desktop-foundation.md). Run `npm ci` and `npm run dev:desktop`, or use `Start-LVOVD-Desktop-Windows.bat` on Windows after setup. This opens an application window. Do not open `desktop/index.html` or `desktop/dist/index.html` as the application: those are internal interface assets and cannot provide native operations in Chrome.
+
+The development launcher compiles a normal debug build without the test driver. The Windows launcher closes its terminal after opening the app. This is a development convenience, not the finished installer or portable distribution.
+
+### v2.7 browser reference
+
 1. Install Node.js 22 or newer.
-2. Install FFmpeg and make sure `ffmpeg` is available on PATH.
+2. Install FFmpeg and FFprobe and make sure both are available on PATH.
 3. Run `npm start` or `node server.js`.
 4. On first use, LVOVD downloads and SHA-256 verifies its project-local official yt-dlp binary; later starts reuse that verified cached copy.
 5. Open `http://127.0.0.1:3000`.
 
 LVOVD has no third-party Node runtime dependencies. Normal startup does not require installing browser-test tooling.
+
+## Validation
 
 Before submitting a change, run:
 
@@ -31,7 +43,19 @@ git diff --check
 
 Only Chromium is required, with one worker. The suite starts a separate server on `127.0.0.1:3017`; leave that port free. It requires FFmpeg/FFprobe and makes no media-provider requests. Tool installation downloads are separate. Headless assertions do not replace Windows/browser visual and playback acceptance.
 
-Please keep the project local-first: media processing should happen on the user's machine, and the server should continue binding to `127.0.0.1` by default.
+Choose additional checks by changed behavior:
+
+| Change | Required checks |
+|---|---|
+| Media policy, processing, ownership, or cancellation | `npm run test:media`; affected Rust tests; compare against released behavior |
+| Interface or native adapter | Affected browser tests; inspect the changed workflow at desktop/narrow sizes; native tests when desktop behavior changes |
+| Rust core or host | `npm run fmt:desktop`, `npm run check:desktop`, `npm run test:desktop:core` |
+| Desktop launch, permissions, protocol, or playback | Build with `node scripts/desktop.cjs build --features test-driver`, run `npm run test:desktop:native`, then rebuild without the driver; verify the normal native launch |
+| Documentation or interface copy only | Check links/claims and inspect the affected presentation; do not add tests that merely freeze prose |
+
+Run `git diff --check`. Existing Linux/Windows gates remain required; native CI covers Windows, Linux, and both Mac architectures. Report the unresolved Linux playback failure rather than skipping it or calling Chromium a substitute. Full release acceptance remains broader than any individual change's checks.
+
+Keep processing local. The browser reference must preserve its `127.0.0.1` boundary; the desktop production path must have no localhost application server. Do not apply the browser startup model to desktop work.
 
 When adding yt-dlp features or support for additional source services, prefer exposing understandable concepts in the UI rather than raw yt-dlp format IDs or command-line flags.
 

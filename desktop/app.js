@@ -20,7 +20,7 @@
     }
     message('');
     if (source.inspection.mime) player.src = native.mediaUrl(id);
-    else message('Direct playback is unavailable for this container. This foundation build does not yet create playback proxies.');
+    else message('This preview cannot play this file type. Choose another file.');
   }
   function snapshot(value) {
     if (!Number.isSafeInteger(value.revision) || value.revision <= revision) return;
@@ -48,7 +48,7 @@
   byId('files').onchange = event => select(event.target.value);
   byId('add-file').onclick = async () => {
     const current = ++operation, generation = selectionGeneration; byId('add-file').disabled = true;
-    message('Choose a file; its temporary copy will be inspected locally.');
+    message('Opening file…');
     try {
       const source = await native.call('pick_source');
       if (current === operation && source && !removed.has(source.assetId) && generation === selectionGeneration) {
@@ -72,7 +72,7 @@
   byId('player').addEventListener('loadedmetadata', () => { const seconds = byId('player').duration; byId('duration').textContent = Number.isFinite(seconds) ? `${seconds.toFixed(3)} s` : ''; });
   byId('player').addEventListener('error', () => {
     const player = byId('player');
-    if (selected && player.error && player.currentSrc === native.mediaUrl(selected)) message('Native playback failed. This foundation build has not passed every platform playback gate; see the desktop documentation.', true);
+    if (selected && player.error && player.currentSrc === native.mediaUrl(selected)) message('Playback failed for this file. You can choose another file or check Runtime details.', true);
   });
   async function health() {
     const current = ++healthGeneration; byId('recheck').disabled = true;
@@ -88,8 +88,8 @@
   try {
     const handshake = await native.call('desktop_handshake');
     if (handshake.protocolVersion !== 1) throw new Error('The desktop interface and backend versions do not match.');
-    byId('connection').textContent = `Rust · ${handshake.appVersion}`;
-    byId('runtime-detail').textContent = `Webview ${handshake.webviewVersion} · Native commands · No localhost application server`;
+    byId('connection').textContent = `Desktop · ${handshake.appVersion}`;
+    byId('runtime-detail').textContent = `Backend: Rust ${handshake.appVersion} · Webview: ${handshake.webviewVersion}`;
     await native.subscribe(snapshot); byId('add-file').disabled = false; await health();
-  } catch (error) { byId('connection').textContent = 'Desktop unavailable'; message(error.message, true); }
+  } catch (error) { byId('connection').textContent = 'Desktop unavailable'; byId('recheck').disabled = true; message(error.message, true); }
 })();

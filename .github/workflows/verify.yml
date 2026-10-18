@@ -21,7 +21,6 @@ permissions:
 
 jobs:
   verify:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -59,7 +58,6 @@ jobs:
         run: npm run test:browser
 
   windows-launcher:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Windows launcher and yt-dlp manager
     runs-on: windows-latest
     timeout-minutes: 10
