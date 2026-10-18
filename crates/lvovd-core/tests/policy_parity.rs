@@ -1,6 +1,8 @@
 use lvovd_core::{
     audio_policy::{self, AudioSource},
+    capabilities,
     edit_plan::EditPlan,
+    media_inspection,
 };
 use serde_json::{Value, json};
 
@@ -9,6 +11,31 @@ use serde_json::{Value, json};
 fn evaluate(case: &Value) -> Value {
     let input = &case["input"];
     match case["operation"].as_str().unwrap() {
+        "inspection" => {
+            json!({ "value": media_inspection::normalize(&serde_json::to_vec(&input["raw"]).unwrap(), input["sourceSize"].as_u64()).unwrap() })
+        }
+        "frame-rate" => json!({ "value": media_inspection::frame_rate(input) }),
+        "capabilities" => {
+            match capabilities::from_listings(
+                input["version"].as_str().unwrap(),
+                input["encoders"].as_str().unwrap(),
+                input["decoders"].as_str().unwrap(),
+                input["muxers"].as_str().unwrap(),
+            ) {
+                Ok(c) => {
+                    let mut value = serde_json::to_value(&c).unwrap();
+                    value["summary"] = c.public_summary();
+                    value["software"] = Value::Object(
+                        ["h264", "aac", "av1", "mp3", "hevc", "vp9", "unknown"]
+                            .into_iter()
+                            .map(|codec| (codec.into(), json!(c.software_decoder(codec).is_some())))
+                            .collect(),
+                    );
+                    json!({ "value": value })
+                }
+                Err(e) => json!({ "error": { "code": e.code, "message": e.message } }),
+            }
+        }
         "precision" => {
             json!({ "value": audio_policy::precision(&serde_json::from_value(input.clone()).unwrap()) })
         }
@@ -74,6 +101,23 @@ fn policies_match_released_reference_fixtures() {
     let cases = fixtures["cases"].as_array().unwrap();
     assert!(!cases.is_empty());
     for case in cases {
+        let actual = evaluate(case);
+        assert!(
+            equal(&actual, &case["expected"]),
+            "{}\nactual: {actual}\nreference: {}",
+            case["id"],
+            case["expected"]
+        );
+    }
+}
+
+#[test]
+fn inspection_and_capabilities_match_released_reference() {
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../test/fixtures/desktop-inspection-v1.json"
+    ))
+    .unwrap();
+    for case in fixtures["cases"].as_array().unwrap() {
         let actual = evaluate(case);
         assert!(
             equal(&actual, &case["expected"]),

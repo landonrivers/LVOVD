@@ -246,6 +246,7 @@ impl Assets {
                     duration_seconds: None,
                     streams: vec![],
                     mime: None,
+                    media: None,
                 },
             };
             self.registry.lock().unwrap().retired.insert(

@@ -1,6 +1,12 @@
 //! Bounded external-tool execution. The caller retains admission until this returns.
 use crate::{AppError, Result};
-use std::{ffi::OsString, path::Path, process::Stdio, time::Duration};
+use std::{
+    ffi::OsString,
+    path::Path,
+    process::Stdio,
+    sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
+};
 use tokio::{
     io::{AsyncRead, AsyncReadExt},
     process::Command,
@@ -13,7 +19,11 @@ pub struct Output {
     pub stderr: Vec<u8>,
 }
 
-async fn read_bounded(mut pipe: impl AsyncRead + Unpin, limit: usize) -> Result<Vec<u8>> {
+async fn read_bounded(
+    mut pipe: impl AsyncRead + Unpin,
+    limit: usize,
+    captured: &AtomicUsize,
+) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut buffer = [0u8; 8192];
     loop {
@@ -24,7 +34,12 @@ async fn read_bounded(mut pipe: impl AsyncRead + Unpin, limit: usize) -> Result<
         if count == 0 {
             return Ok(bytes);
         }
-        if bytes.len() + count > limit {
+        if captured
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |total| {
+                total.checked_add(count).filter(|total| *total <= limit)
+            })
+            .is_err()
+        {
             return Err(AppError::new(
                 "TOOL_OUTPUT_LIMIT",
                 "Tool output exceeded its limit.",
@@ -96,12 +111,13 @@ pub async fn run(
     };
     let stdout = child.stdout.take().expect("piped stdout");
     let stderr = child.stderr.take().expect("piped stderr");
+    let captured = AtomicUsize::new(0);
     let result = tokio::select! {
         biased;
         _ = cancel.cancelled() => Err(AppError::new("CANCELLED", "Operation cancelled.")),
         result = tokio::time::timeout(deadline, async {
             let (stdout, stderr, status) = tokio::try_join!(
-                read_bounded(stdout, limit), read_bounded(stderr, limit),
+                read_bounded(stdout, limit, &captured), read_bounded(stderr, limit, &captured),
                 async { child.wait().await.map_err(|_| AppError::new("TOOL_EXIT", "Could not confirm tool exit.")) }
             )?;
             if !status.success() { return Err(AppError::new("TOOL_FAILED", "The tool rejected this operation.")); }

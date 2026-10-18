@@ -1,9 +1,18 @@
 //! Platform-independent application operations. Tauri is only a transport.
+macro_rules! pattern {
+    ($text:literal) => {{
+        static PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| regex::Regex::new($text).expect("static pattern"));
+        &*PATTERN
+    }};
+}
 pub mod assets;
 pub mod audio_policy;
+pub mod capabilities;
 pub mod edit_plan;
 pub mod inspection;
 pub mod media;
+pub mod media_inspection;
 #[cfg(unix)]
 pub mod playback;
 pub mod process;

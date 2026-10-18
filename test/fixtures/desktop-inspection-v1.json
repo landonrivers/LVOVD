@@ -1,0 +1,5408 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "release": "v2.7.0",
+    "commit": "7e192ad7ddee6478b517a74174cedf6dccd85a19",
+    "modules": [
+      "media-inspection.js",
+      "ffmpeg-capabilities.js"
+    ]
+  },
+  "cases": [
+    {
+      "id": "inspection/base",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        },
+        "sourceSize": 50000
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 50000,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/qt",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "qt  ",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MOV / QuickTime",
+          "container": {
+            "kind": "mov",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/3gp6",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "3gp6",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "QuickTime / MOV",
+          "container": {
+            "kind": "3gp",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/avif",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "avif",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "QuickTime / MOV",
+          "container": {
+            "kind": "other-iso",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/m4a",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "m4a ",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/mjp2",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "mjp2",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "QuickTime / MOV",
+          "container": {
+            "kind": "other-iso",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/xxxx",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "xxxx",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/brand/isom",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom",
+              "compatible_brands": "isomiso2mp41"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/ambiguous-iso",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {}
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "QuickTime / MOV",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/compatible-brand",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "compatible_brands": "xxxx, mp42"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/matroska,webm",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "matroska,webm",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 4,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "matroska,webm",
+          "container": {
+            "kind": "matroska",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "matroska",
+            "webm"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": null,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/wav",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/mp3",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "mp3",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "mp3",
+          "container": {
+            "kind": "mp3",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "mp3"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/flac",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "flac",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "flac",
+          "container": {
+            "kind": "flac",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "flac"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/aac",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "aac",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "aac",
+          "container": {
+            "kind": "aac",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "aac"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/aiff",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "aiff",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "aiff",
+          "container": {
+            "kind": "aiff",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "aiff"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/ogg",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "ogg",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "ogg",
+          "container": {
+            "kind": "ogg",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "ogg"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": null,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/ape",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "ape",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "ape",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [
+            "ape"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": null,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/caf",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "caf",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "caf",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [
+            "caf"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": null,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio/unknown",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "unknown",
+            "start_time": "1",
+            "duration": "5"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 1,
+          "sourceSize": null,
+          "format": "unknown",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [
+            "unknown"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": null,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/audio-artwork",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            },
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "disposition": {
+                "attached_pic": 1
+              }
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 1,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/timed-thumbnails",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "disposition": {
+                "timed_thumbnails": "1"
+              }
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 1,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/invalid-first-stream",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": -1,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 0,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": "NaN",
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 3,
+            "audio": 2,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 5,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/extra-tracks",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            },
+            {
+              "index": 5,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            },
+            {
+              "index": 6,
+              "codec_type": "subtitle"
+            },
+            {
+              "index": 7,
+              "codec_type": "data"
+            }
+          ],
+          "chapters": [
+            {
+              "id": 1
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 2,
+            "subtitle": 1
+          },
+          "extraStreams": {
+            "total": 5,
+            "artwork": 0,
+            "other": 1,
+            "chapters": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/missing-streams",
+      "operation": "inspection",
+      "input": {
+        "raw": {}
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "unsupported",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "Unknown container",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [],
+          "video": null,
+          "audio": null,
+          "trackCounts": {
+            "video": null,
+            "audio": null,
+            "subtitle": null
+          },
+          "extraStreams": null
+        }
+      }
+    },
+    {
+      "id": "inspection/empty-streams",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "streams": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "unsupported",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "Unknown container",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [],
+          "video": null,
+          "audio": null,
+          "trackCounts": {
+            "video": 0,
+            "audio": 0,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 0,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/untimed-video",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "unsupported",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "Unknown container",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": null,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": null,
+          "trackCounts": {
+            "video": 1,
+            "audio": 0,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/incomplete-video",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "video"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "unknown",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "Unknown container",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/missing-audio-metadata",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "Unknown container",
+          "container": {
+            "kind": "unknown",
+            "evidence": null
+          },
+          "formatNames": [],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": null,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\"N/A\"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": "N/A",
+            "size": "N/A"
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "N/A",
+              "channels": "N/A",
+              "bit_rate": "N/A",
+              "bits_per_sample": "N/A",
+              "bits_per_raw_sample": "N/A"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\"0x10\"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": "0x10",
+            "size": "0x10"
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "0x10",
+              "channels": "0x10",
+              "bit_rate": "0x10",
+              "bits_per_sample": "0x10",
+              "bits_per_raw_sample": "0x10"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/true",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": true,
+            "size": true
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": true,
+              "channels": true,
+              "bit_rate": true,
+              "bits_per_sample": true,
+              "bits_per_raw_sample": true
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\"\"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": "",
+            "size": ""
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "",
+              "channels": "",
+              "bit_rate": "",
+              "bits_per_sample": "",
+              "bits_per_raw_sample": ""
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\" 1.2e2 \"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": " 1.2e2 ",
+            "size": " 1.2e2 "
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": " 1.2e2 ",
+              "channels": " 1.2e2 ",
+              "bit_rate": " 1.2e2 ",
+              "bits_per_sample": " 1.2e2 ",
+              "bits_per_raw_sample": " 1.2e2 "
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 120,
+          "timeOriginSeconds": 0,
+          "sourceSize": 120,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": 120,
+            "channels": 120,
+            "channelLayout": null,
+            "bitRate": 120,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\"9007199254740992\"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": "9007199254740992",
+            "size": "9007199254740992"
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "9007199254740992",
+              "channels": "9007199254740992",
+              "bit_rate": "9007199254740992",
+              "bits_per_sample": "9007199254740992",
+              "bits_per_raw_sample": "9007199254740992"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 9007199254740992,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\"-1\"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": "-1",
+            "size": "-1"
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "-1",
+              "channels": "-1",
+              "bit_rate": "-1",
+              "bits_per_sample": "-1",
+              "bits_per_raw_sample": "-1"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/\"0\"",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": "0",
+            "size": "0"
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "0",
+              "channels": "0",
+              "bit_rate": "0",
+              "bits_per_sample": "0",
+              "bits_per_raw_sample": "0"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": 0,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": 0,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/numeric/null",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "wav",
+            "duration": null,
+            "size": null
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": null,
+              "channels": null,
+              "bit_rate": null,
+              "bits_per_sample": null,
+              "bits_per_raw_sample": null
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": null,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "wav",
+          "container": {
+            "kind": "wav",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "wav"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 0,
+            "codec": null,
+            "sampleRate": null,
+            "channels": null,
+            "channelLayout": null,
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/bounded-text",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "H264\u0000\n",
+              "profile": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "sample_aspect_ratio": "4:3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "\tstereo\n",
+              "sample_fmt": "s32;filter",
+              "bits_per_sample": 999,
+              "bits_per_raw_sample": 0,
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": "4:3",
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": null,
+            "bitsPerSample": null,
+            "bitsPerRawSample": null,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/shift/5",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            },
+            "start_time": "5"
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "5",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "5.5",
+              "duration": "3"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3.5,
+          "timeOriginSeconds": 5,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 3
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/shift/-2",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            },
+            "start_time": "-2"
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "-2",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "-1.5",
+              "duration": "3"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3.5,
+          "timeOriginSeconds": -2,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 3
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/matroska-endpoint",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "matroska,webm",
+            "start_time": "4",
+            "duration": "9"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "4.5",
+              "tags": {
+                "DURATION": "00:00:09.000000000"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 5,
+          "timeOriginSeconds": 4,
+          "sourceSize": null,
+          "format": "matroska,webm",
+          "container": {
+            "kind": "matroska",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "matroska",
+            "webm"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 4.5
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/invalid-duration-tag",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "format_name": "matroska",
+            "duration": "9"
+          },
+          "streams": [
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "tags": {
+                "DURATION": "999999999:00:00"
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "audio",
+          "durationSeconds": 9,
+          "timeOriginSeconds": 0,
+          "sourceSize": null,
+          "format": "matroska",
+          "container": {
+            "kind": "matroska",
+            "evidence": "demuxer"
+          },
+          "formatNames": [
+            "matroska"
+          ],
+          "video": null,
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": null
+          },
+          "trackCounts": {
+            "video": 0,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 1,
+            "artwork": 0,
+            "other": 0,
+            "chapters": null
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/rotation",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "tags": {
+                "rotate": "-90"
+              }
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": 270,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/nonorthogonal",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "tags": {
+                "rotate": "45"
+              }
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": 45,
+            "orientationSupported": false,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/matrix",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "side_data_list": [
+                {
+                  "side_data_type": "Display Matrix",
+                  "rotation": 90,
+                  "displaymatrix": "00000000: 0 -65536 0\n00000001: 65536 0 0\n00000002: 0 0 1073741824"
+                }
+              ]
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": 90,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/reflection",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "side_data_list": [
+                {
+                  "side_data_type": "Display Matrix",
+                  "rotation": 90,
+                  "displaymatrix": "00000000: 0 65536 0\n00000001: 65536 0 0\n00000002: 0 0 1073741824"
+                }
+              ]
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": 90,
+            "orientationSupported": false,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/malformed-matrix",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "side_data_list": [
+                {
+                  "side_data_type": "Display Matrix",
+                  "rotation": 0,
+                  "displaymatrix": "not a matrix"
+                }
+              ]
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": 0,
+            "orientationSupported": false,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/hdr-transfer",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "color_transfer": "SMPTE2084"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": "smpte2084",
+            "hdr": true,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/hdr-side-data",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "side_data_list": [
+                {
+                  "side_data_type": "Mastering display metadata"
+                }
+              ]
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": true,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/alpha-format",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "gbrap10le",
+              "start_time": "0",
+              "duration": "3"
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "gbrap10le",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": true
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/alpha-tag",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "tags": {
+                "alpha_mode": 1
+              }
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": true
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "inspection/side-limit",
+      "operation": "inspection",
+      "input": {
+        "raw": {
+          "format": {
+            "filename": "/synthetic/private-input.mp4",
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "duration": "99",
+            "size": "12345",
+            "tags": {
+              "major_brand": "isom"
+            }
+          },
+          "streams": [
+            {
+              "index": 2,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "profile": "High",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30000/1001",
+              "pix_fmt": "yuv420p",
+              "start_time": "0",
+              "duration": "3",
+              "side_data_list": [
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {},
+                {
+                  "side_data_type": "Mastering display metadata"
+                }
+              ]
+            },
+            {
+              "index": 4,
+              "codec_type": "audio",
+              "codec_name": "pcm_s24le",
+              "sample_rate": "44100",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "sample_fmt": "s32",
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24",
+              "start_time": "0.5",
+              "duration": "2.5"
+            }
+          ],
+          "chapters": []
+        }
+      },
+      "expected": {
+        "value": {
+          "mediaKind": "video",
+          "durationSeconds": 3,
+          "timeOriginSeconds": 0,
+          "sourceSize": 12345,
+          "format": "MP4",
+          "container": {
+            "kind": "mp4",
+            "evidence": "brand"
+          },
+          "formatNames": [
+            "mov",
+            "mp4",
+            "m4a",
+            "3gp",
+            "3g2",
+            "mj2"
+          ],
+          "video": {
+            "streamIndex": 2,
+            "codec": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "frameRate": 29.97,
+            "bitRate": null,
+            "pixelFormat": "yuv420p",
+            "startSeconds": 0,
+            "durationSeconds": 3,
+            "rotationDegrees": null,
+            "orientationSupported": true,
+            "sampleAspectRatio": null,
+            "colorTransfer": null,
+            "hdr": null,
+            "alpha": null
+          },
+          "audio": {
+            "streamIndex": 4,
+            "codec": "pcm_s24le",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "bitRate": null,
+            "profile": null,
+            "sampleFormat": "s32",
+            "bitsPerSample": 24,
+            "bitsPerRawSample": 24,
+            "startSeconds": 0.5,
+            "durationSeconds": 2.5
+          },
+          "trackCounts": {
+            "video": 1,
+            "audio": 1,
+            "subtitle": 0
+          },
+          "extraStreams": {
+            "total": 2,
+            "artwork": 0,
+            "other": 0,
+            "chapters": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "frame/\"30000/1001\"",
+      "operation": "frame-rate",
+      "input": "30000/1001",
+      "expected": {
+        "value": 29.97
+      }
+    },
+    {
+      "id": "frame/\"0/0\"",
+      "operation": "frame-rate",
+      "input": "0/0",
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "frame/\"24\"",
+      "operation": "frame-rate",
+      "input": "24",
+      "expected": {
+        "value": 24
+      }
+    },
+    {
+      "id": "frame/29.97",
+      "operation": "frame-rate",
+      "input": 29.97,
+      "expected": {
+        "value": 29.97
+      }
+    },
+    {
+      "id": "frame/\"0x10\"",
+      "operation": "frame-rate",
+      "input": "0x10",
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "frame/\"1/0\"",
+      "operation": "frame-rate",
+      "input": "1/0",
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "frame/\"-24\"",
+      "operation": "frame-rate",
+      "input": "-24",
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "frame/\"1e2\"",
+      "operation": "frame-rate",
+      "input": "1e2",
+      "expected": {
+        "value": 100
+      }
+    },
+    {
+      "id": "frame/\"N/A\"",
+      "operation": "frame-rate",
+      "input": "N/A",
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "frame/null",
+      "operation": "frame-rate",
+      "input": null,
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "frame/true",
+      "operation": "frame-rate",
+      "input": true,
+      "expected": {
+        "value": null
+      }
+    },
+    {
+      "id": "capabilities/base",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "value": {
+          "available": true,
+          "version": "7.1-test",
+          "encoders": [
+            "libx264",
+            "aac",
+            "libopus",
+            "flac"
+          ],
+          "decoders": [
+            "h264",
+            "aac",
+            "mp3float",
+            "libdav1d"
+          ],
+          "decoderCodecs": {
+            "h264": [
+              {
+                "name": "h264",
+                "software": true
+              }
+            ],
+            "aac": [
+              {
+                "name": "aac",
+                "software": true
+              }
+            ],
+            "mp3": [
+              {
+                "name": "mp3float",
+                "software": true
+              }
+            ],
+            "av1": [
+              {
+                "name": "libdav1d",
+                "software": true
+              }
+            ]
+          },
+          "muxers": [
+            "mp4",
+            "ogg",
+            "matroska",
+            "webm",
+            "flac",
+            "wav"
+          ],
+          "software": {
+            "h264": true,
+            "aac": true,
+            "av1": true,
+            "mp3": true,
+            "hevc": false,
+            "vp9": false,
+            "unknown": false
+          },
+          "summary": {
+            "available": true,
+            "version": "7.1-test",
+            "broadMp4": {
+              "h264SoftwareEncoder": true,
+              "aacEncoder": true,
+              "mp4Muxer": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "capabilities/hardware-and-aliases",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n V....D h264_cuvid CUDA (codec h264)\n V....D av1 AV1\n V....D hevc_qsv Quick Sync (codec hevc)\n V....D vp9_vulkan hardware (codec vp9)\n V....D hevc HEVC software\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "value": {
+          "available": true,
+          "version": "7.1-test",
+          "encoders": [
+            "libx264",
+            "aac",
+            "libopus",
+            "flac"
+          ],
+          "decoders": [
+            "h264",
+            "aac",
+            "mp3float",
+            "libdav1d",
+            "h264_cuvid",
+            "av1",
+            "hevc_qsv",
+            "vp9_vulkan",
+            "hevc"
+          ],
+          "decoderCodecs": {
+            "h264": [
+              {
+                "name": "h264",
+                "software": true
+              },
+              {
+                "name": "h264_cuvid",
+                "software": false
+              }
+            ],
+            "aac": [
+              {
+                "name": "aac",
+                "software": true
+              }
+            ],
+            "mp3": [
+              {
+                "name": "mp3float",
+                "software": true
+              }
+            ],
+            "av1": [
+              {
+                "name": "libdav1d",
+                "software": true
+              },
+              {
+                "name": "av1",
+                "software": false
+              }
+            ],
+            "hevc": [
+              {
+                "name": "hevc_qsv",
+                "software": false
+              },
+              {
+                "name": "hevc",
+                "software": true
+              }
+            ],
+            "vp9": [
+              {
+                "name": "vp9_vulkan",
+                "software": false
+              }
+            ]
+          },
+          "muxers": [
+            "mp4",
+            "ogg",
+            "matroska",
+            "webm",
+            "flac",
+            "wav"
+          ],
+          "software": {
+            "h264": true,
+            "aac": true,
+            "av1": true,
+            "mp3": true,
+            "hevc": true,
+            "vp9": false,
+            "unknown": false
+          },
+          "summary": {
+            "available": true,
+            "version": "7.1-test",
+            "broadMp4": {
+              "h264SoftwareEncoder": true,
+              "aacEncoder": true,
+              "mp4Muxer": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "capabilities/hardware-only",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": " V....D av1 AV1\n V....D h264_d3d11va hardware (codec h264)\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "value": {
+          "available": true,
+          "version": "7.1-test",
+          "encoders": [
+            "libx264",
+            "aac",
+            "libopus",
+            "flac"
+          ],
+          "decoders": [
+            "av1",
+            "h264_d3d11va"
+          ],
+          "decoderCodecs": {
+            "av1": [
+              {
+                "name": "av1",
+                "software": false
+              }
+            ],
+            "h264": [
+              {
+                "name": "h264_d3d11va",
+                "software": false
+              }
+            ]
+          },
+          "muxers": [
+            "mp4",
+            "ogg",
+            "matroska",
+            "webm",
+            "flac",
+            "wav"
+          ],
+          "software": {
+            "h264": false,
+            "aac": false,
+            "av1": false,
+            "mp3": false,
+            "hevc": false,
+            "vp9": false,
+            "unknown": false
+          },
+          "summary": {
+            "available": true,
+            "version": "7.1-test",
+            "broadMp4": {
+              "h264SoftwareEncoder": true,
+              "aacEncoder": true,
+              "mp4Muxer": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "capabilities/no-alias-guessing",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": " A....D mp3float MP3 without explicit alias\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "value": {
+          "available": true,
+          "version": "7.1-test",
+          "encoders": [
+            "libx264",
+            "aac",
+            "libopus",
+            "flac"
+          ],
+          "decoders": [
+            "mp3float"
+          ],
+          "decoderCodecs": {
+            "mp3float": [
+              {
+                "name": "mp3float",
+                "software": true
+              }
+            ]
+          },
+          "muxers": [
+            "mp4",
+            "ogg",
+            "matroska",
+            "webm",
+            "flac",
+            "wav"
+          ],
+          "software": {
+            "h264": false,
+            "aac": false,
+            "av1": false,
+            "mp3": false,
+            "hevc": false,
+            "vp9": false,
+            "unknown": false
+          },
+          "summary": {
+            "available": true,
+            "version": "7.1-test",
+            "broadMp4": {
+              "h264SoftwareEncoder": true,
+              "aacEncoder": true,
+              "mp4Muxer": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "capabilities/headers-duplicates",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": "Encoders:\n V..... = Video\n ------\n V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n A..... AAC duplicate\n",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": " E = Muxing supported\n D ignored demuxer\n E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n E mp4 duplicate\n"
+      },
+      "expected": {
+        "value": {
+          "available": true,
+          "version": "7.1-test",
+          "encoders": [
+            "libx264",
+            "aac",
+            "libopus",
+            "flac"
+          ],
+          "decoders": [
+            "h264",
+            "aac",
+            "mp3float",
+            "libdav1d"
+          ],
+          "decoderCodecs": {
+            "h264": [
+              {
+                "name": "h264",
+                "software": true
+              }
+            ],
+            "aac": [
+              {
+                "name": "aac",
+                "software": true
+              }
+            ],
+            "mp3": [
+              {
+                "name": "mp3float",
+                "software": true
+              }
+            ],
+            "av1": [
+              {
+                "name": "libdav1d",
+                "software": true
+              }
+            ]
+          },
+          "muxers": [
+            "mp4",
+            "ogg",
+            "matroska",
+            "webm",
+            "flac",
+            "wav"
+          ],
+          "software": {
+            "h264": true,
+            "aac": true,
+            "av1": true,
+            "mp3": true,
+            "hevc": false,
+            "vp9": false,
+            "unknown": false
+          },
+          "summary": {
+            "available": true,
+            "version": "7.1-test",
+            "broadMp4": {
+              "h264SoftwareEncoder": true,
+              "aacEncoder": true,
+              "mp4Muxer": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "capabilities/missing-version",
+      "operation": "capabilities",
+      "input": {
+        "version": "",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "error": {
+          "code": "CAPABILITY_UNPARSEABLE",
+          "message": "FFmpeg capability listings could not be recognized."
+        }
+      }
+    },
+    {
+      "id": "capabilities/missing-encoders",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": "",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "error": {
+          "code": "CAPABILITY_UNPARSEABLE",
+          "message": "FFmpeg capability listings could not be recognized."
+        }
+      }
+    },
+    {
+      "id": "capabilities/missing-decoders",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": "",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "error": {
+          "code": "CAPABILITY_UNPARSEABLE",
+          "message": "FFmpeg capability listings could not be recognized."
+        }
+      }
+    },
+    {
+      "id": "capabilities/missing-muxers",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " V..... libx264 software\n A..... aac audio\n A..... libopus Opus\n A..... flac FLAC\n",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": ""
+      },
+      "expected": {
+        "error": {
+          "code": "CAPABILITY_UNPARSEABLE",
+          "message": "FFmpeg capability listings could not be recognized."
+        }
+      }
+    },
+    {
+      "id": "capabilities/invalid-flags",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " AV.... bad invalid\n v..... lower invalid\n A..... ;shell invalid\n",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "value": {
+          "available": true,
+          "version": "7.1-test",
+          "encoders": [
+            "bad"
+          ],
+          "decoders": [
+            "h264",
+            "aac",
+            "mp3float",
+            "libdav1d"
+          ],
+          "decoderCodecs": {
+            "h264": [
+              {
+                "name": "h264",
+                "software": true
+              }
+            ],
+            "aac": [
+              {
+                "name": "aac",
+                "software": true
+              }
+            ],
+            "mp3": [
+              {
+                "name": "mp3float",
+                "software": true
+              }
+            ],
+            "av1": [
+              {
+                "name": "libdav1d",
+                "software": true
+              }
+            ]
+          },
+          "muxers": [
+            "mp4",
+            "ogg",
+            "matroska",
+            "webm",
+            "flac",
+            "wav"
+          ],
+          "software": {
+            "h264": true,
+            "aac": true,
+            "av1": true,
+            "mp3": true,
+            "hevc": false,
+            "vp9": false,
+            "unknown": false
+          },
+          "summary": {
+            "available": true,
+            "version": "7.1-test",
+            "broadMp4": {
+              "h264SoftwareEncoder": false,
+              "aacEncoder": false,
+              "mp4Muxer": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "capabilities/long-line",
+      "operation": "capabilities",
+      "input": {
+        "version": "ffmpeg version 7.1-test Copyright\n",
+        "encoders": " A..... aac xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "decoders": " V....D h264 software\n A....D aac audio\n A....D mp3float MPEG audio (codec mp3)\n V....D libdav1d AV1 software (codec av1)\n",
+        "muxers": " E mp4 MP4\n E ogg Ogg\n DE matroska,webm Matroska\n E flac FLAC\n E wav WAV\n"
+      },
+      "expected": {
+        "error": {
+          "code": "CAPABILITY_UNPARSEABLE",
+          "message": "FFmpeg capability listings could not be recognized."
+        }
+      }
+    }
+  ]
+}

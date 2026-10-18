@@ -6,6 +6,8 @@ This contract records the accepted product and engineering commitments. It appli
 
 LVOVD is a practical local media utility. Users should be able to identify the next action, understand what is happening, and recover from failures without knowing the implementation.
 
+Downloading video and audio remains the product's primary purpose. Local Media editing and conversion support that purpose; a functioning editor is not sufficient for v3.0 acceptance. The native preview is incomplete until URL Preview, source-format selection, single and playlist downloads, queued acquisition, cancellation, failure recovery, history and native saving preserve the released workflows. These are required migration work in 8D, not optional features deferred beyond v3.0.
+
 - Keep Download, Local Media, History, and Settings as the accepted desktop workflow structure. The small 8A playback preview is a temporary proof, not a replacement product design.
 - Retain the released interface and interaction behavior while moving backend authority to Rust. Avoid gratuitous renaming, extra confirmation steps, or rebuilding controls without a functional reason.
 - Keep primary actions, playback, editing controls, and the chosen destination reachable. Use bounded internal scrolling; validate desktop and narrow layouts, keyboard access, scaling, and contrast.
