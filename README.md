@@ -311,6 +311,8 @@ You do **not** need to install yt-dlp globally or run `npm install` for LVOVD it
 
 ## Development
 
+The v3.0 Rust/Tauri desktop migration is being delivered in separate stages. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. See [desktop foundation setup and gates](docs/desktop-foundation.md). The existing `npm start` browser workflow remains available during migration.
+
 ```bash
 git clone https://github.com/landonrivers/LVOVD.git
 cd LVOVD

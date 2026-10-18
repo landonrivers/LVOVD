@@ -82,3 +82,17 @@ Do not commit `.env` files, npm credentials, exported browser cookies, HAR captu
 ## Responsible use
 
 Security reports should focus on LVOVD itself. LVOVD is not intended to bypass DRM, authentication, paywalls, or other access controls, and reports requesting such bypasses are outside the project's intended scope.
+
+## Desktop preview and maintenance
+
+Report suspected vulnerabilities privately through the repository's GitHub security reporting facility when enabled; otherwise contact the maintainer privately before sharing exploit details. Do not include private media, cookies, credentials or source-provider URLs in public reports.
+
+The v2.7 browser release and the v3.0 desktop development preview are different execution paths. Desktop Rust code runs with the user's OS privileges; Tauri permissions constrain the interface, not a compromised native tool. External media and provider metadata are untrusted. No administrator privileges are required for normal application use.
+
+The desktop preview loads packaged scripts, denies external navigation, exposes only declared native operations, and reads media through opaque owned identities. It does not listen on a localhost application port. Test drivers are opt-in debug-only dependencies and must never be distributed. Native commands must validate ownership, limits, revisions and all fields independently of UI validation.
+
+Before stable v3.0, delivery must include dependency-update PRs, weekly advisory scans, Cargo advisory/license checks, shipped-component inventories, current/upcoming Evergreen compatibility tests and a documented release-maintenance checklist. These scheduled workflows are not yet enabled by the 8A foundation. Relevant critical/high advisories block stable release until resolved or documented as non-applicable. Security fixes can ship independently of feature milestones.
+
+Evergreen WebView2 normally updates through Microsoft and requires application restart to adopt a new runtime. Respect administrator policy and never interrupt work to force a restart. macOS system-webview updates are an OS responsibility. Every WebKit/GStreamer component actually bundled on Linux, and every bundled tool or compiled Rust/Tauri dependency, is a project maintenance responsibility. Rust does not make FFmpeg or provider helpers immune to vulnerabilities.
+
+Release/update keys belong only in protected release secrets, never this repository. Updates require signature verification and safe shutdown. OS publisher signing and update-artifact signing are separate; free distribution does not remove the update-signature requirement.

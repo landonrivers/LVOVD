@@ -1,0 +1,83 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawn, spawnSync } = require('node:child_process');
+const { setTimeout: delay } = require('node:timers/promises');
+const { environment } = require('../../scripts/desktop.cjs');
+const root = path.resolve(__dirname, '../..');
+const resultDir = path.join(root, 'desktop/test-results');
+fs.mkdirSync(resultDir, { recursive: true });
+const env = environment().env;
+const ffmpeg = env.LVOVD_DESKTOP_FFMPEG;
+assert.ok(ffmpeg, 'FFmpeg must be installed for the native playback gate');
+function generate(name, args) {
+  const file = path.join(resultDir, name);
+  const result = spawnSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', ...args, file], { windowsHide: true, timeout: 120000, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.error?.message || result.stderr); return file;
+}
+const video = generate('synthetic.mp4', ['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=20', '-f', 'lavfi', '-i', 'sine=frequency=500:duration=20', '-c:v', 'libx264', '-threads', '2', '-preset', 'ultrafast', '-b:v', '8M', '-minrate', '8M', '-maxrate', '8M', '-bufsize', '8M', '-x264-params', 'nal-hrd=cbr', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart']);
+assert.ok(fs.statSync(video).size > 8 * 1024 * 1024, 'video must exercise bounded range responses');
+const audio = generate('synthetic.m4a', ['-f', 'lavfi', '-i', 'sine=frequency=700:duration=4', '-c:a', 'aac']);
+async function waitForDriver(port, child) {
+  for (let i = 0; i < 100; i++) {
+    if (child.exitCode !== null) throw new Error('Desktop exited before the driver became ready');
+    try { if ((await fetch(`http://127.0.0.1:${port}/status`)).ok) return; } catch {}
+    await delay(200);
+  }
+  throw new Error('Native driver did not become ready');
+}
+async function scenario(file, index) {
+  const port = 4455 + index, log = fs.openSync(path.join(resultDir, `native-${index}.log`), 'w');
+  const child = spawn(path.join(root, 'target/debug/lvovd-desktop' + (process.platform === 'win32' ? '.exe' : '')), [], {
+    cwd: root, env: { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file }, windowsHide: true, stdio: ['ignore', log, log]
+  });
+  const closed = new Promise(resolve => child.once('close', resolve));
+  let browser;
+  try {
+    await waitForDriver(port, child);
+    const { remote } = await import('webdriverio');
+    browser = await remote({ hostname: '127.0.0.1', port, logLevel: 'error', connectionRetryCount: 0, capabilities: { browserName: 'wry' } });
+    await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Rust'), { timeout: 15000 });
+    await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
+    await browser.$('#add-file').click();
+    await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 2), { timeout: 25000, timeoutMsg: 'Native media did not reach playable state' });
+    const metadata = await browser.execute(() => ({ duration: document.getElementById('player').duration, url: document.getElementById('player').currentSrc }));
+    assert.ok(metadata.duration > 0); assert.match(metadata.url, /lvovd-media/);
+    for (const target of [metadata.duration - 0.5, 0.25, metadata.duration / 2]) {
+      await browser.execute(t => { document.getElementById('player').currentTime = t; }, target);
+      await browser.waitUntil(async () => browser.execute(t => { const p = document.getElementById('player'); return !p.seeking && Math.abs(p.currentTime - t) < 0.15 && p.readyState >= 2; }, target), { timeout: 10000 });
+    }
+    await browser.execute(() => { const p = document.getElementById('player'); p.muted = true; p.play(); });
+    const before = await browser.execute(() => document.getElementById('player').currentTime);
+    await browser.waitUntil(async () => (await browser.execute(() => document.getElementById('player').currentTime)) > before + 0.15, { timeout: 10000 });
+    await browser.saveScreenshot(path.join(resultDir, `desktop-${process.platform}-${index}.png`));
+    await browser.setWindowSize(960, 640);
+    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
+    await browser.$('#remove-file').click();
+    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
+    assert.equal(fs.existsSync(file), true, 'removal must not delete the selected original');
+    const denied = await browser.execute(async () => {
+      try { await window.__TAURI__.core.invoke('plugin:fs|read_text_file', { path: 'anything' }); return false; } catch { return true; }
+    });
+    assert.equal(denied, true, 'arbitrary file access must not be exposed');
+    const shape = await browser.execute(async () => {
+      try { await window.__TAURI__.core.invoke('remove_source', { request: { assetId: '00000000-0000-4000-8000-000000000000', path: '/not-allowed' } }); return false; } catch { return true; }
+    });
+    assert.equal(shape, true, 'unknown command fields must be rejected');
+    console.log(`PASS ${process.platform}: ${path.basename(file)} native playback, seeking, removal, capabilities, narrow layout`);
+    await browser.execute(() => { window.__TAURI__.core.invoke('shutdown_desktop'); });
+    const timeout = new AbortController();
+    try {
+      await Promise.race([closed, delay(10000, undefined, { signal: timeout.signal }).then(() => { throw new Error('Desktop shutdown timed out'); })]);
+    } finally { timeout.abort(); }
+  } catch (error) {
+    if (browser) { await browser.saveScreenshot(path.join(resultDir, `failure-${process.platform}-${index}.png`)).catch(() => {}); }
+    throw error;
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await closed; fs.closeSync(log);
+  }
+}
+(async () => { await scenario(video, 0); await scenario(audio, 1); })().catch(error => { console.error(error); process.exitCode = 1; });

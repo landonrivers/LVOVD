@@ -186,16 +186,11 @@ Reduce setup friction so normal users do not need to understand the runtime stac
 
 ### 8. Packaged desktop distribution
 
-Investigate a supported desktop package that can run without a separate user-managed Node.js installation.
+The accepted v3.0 direction replaces the Node application backend with Rust, retains the JavaScript interface, and uses Tauri native commands/channels plus an owned-media protocol. Production will have no localhost application server. Windows uses Evergreen WebView2; Windows, macOS and Linux are all required launch targets.
 
-Priorities:
+Deliver through separate gates: **8A native foundation/playback**, **8B media policy and worker parity**, **8C Local Media operations**, **8D Download/history/native saving**, **8E compact desktop UX and backend cutover**, and **8F packages/updates/security maintenance**. See [the desktop migration contract](docs/desktop-foundation.md) for setup, boundaries and acceptance.
 
-1. Windows first;
-2. determine the safest way to bundle or manage Node.js;
-3. determine whether FFmpeg can be bundled or managed responsibly and legally across target platforms;
-4. preserve the existing verified yt-dlp update model or replace it only with something equivalently transparent;
-5. evaluate installer/update signing and release-security requirements before treating packaged builds as the default distribution;
-6. consider macOS and Linux packages after the Windows path is proven.
+8A is a development preview, not a completed desktop release. Bundled tools, native export handling, remembered settings/history, signed application updates and Windows portable rollback remain required before v3.0 publication. Node remains only as yt-dlp's provider-script helper. The existing browser application remains the working reference during migration. Roadmap #7 stays incomplete.
 
 ### Mobile / phone use — exploratory
 

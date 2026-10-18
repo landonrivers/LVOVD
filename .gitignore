@@ -32,3 +32,9 @@ cookies*.txt
 # Editor / local tooling
 .vscode/
 .idea/
+
+# Rust / desktop generated artifacts
+/target/
+/src-tauri/gen/
+/desktop/dist/
+/desktop/test-results/
