@@ -1,6 +1,6 @@
 # Security Policy
 
-LVOVD is a local-first application. Its normal security boundary assumes the Node server is running only on the user's own computer and is bound to `127.0.0.1` unless the user deliberately changes that configuration.
+LVOVD processes media locally. The released v2.7 browser application uses a Node server bound to `127.0.0.1` unless the user deliberately changes that configuration. The v3.0 desktop preview uses restricted native commands and owned media access without a localhost application server; see [Desktop preview and maintenance](#desktop-preview-and-maintenance). The [development contract](docs/development-contract.md) keeps these execution paths distinct during migration.
 
 ## Reporting a vulnerability
 
@@ -22,7 +22,7 @@ Examples include:
 - unsafe behavior caused by exposing LVOVD beyond localhost;
 - dependency or supply-chain vulnerabilities that materially affect LVOVD users.
 
-## Local security model
+## Browser reference security model
 
 By default LVOVD listens on `127.0.0.1`. The public-facing browser UI and the Node server are on the same computer.
 

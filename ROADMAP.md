@@ -188,7 +188,7 @@ Reduce setup friction so normal users do not need to understand the runtime stac
 
 The accepted v3.0 direction replaces the Node application backend with Rust, retains the JavaScript interface, and uses Tauri native commands/channels plus an owned-media protocol. Production will have no localhost application server. Windows uses Evergreen WebView2; Windows, macOS and Linux are all required launch targets.
 
-Deliver through separate gates: **8A native foundation/playback**, **8B media policy and worker parity**, **8C Local Media operations**, **8D Download/history/native saving**, **8E compact desktop UX and backend cutover**, and **8F packages/updates/security maintenance**. See [the desktop migration contract](docs/desktop-foundation.md) for setup, boundaries and acceptance.
+Deliver through separate gates: **8A native foundation/playback**, **8B media policy and worker parity**, **8C Local Media operations**, **8D Download/history/native saving**, **8E compact desktop UX and backend cutover**, and **8F packages/updates/security maintenance**. Follow [the development contract](docs/development-contract.md); see [the current desktop stage](docs/desktop-foundation.md) for setup, boundaries and acceptance evidence.
 
 8A is a development preview, not a completed desktop release. Its Linux custom-protocol playback gate remains unresolved; the documented transport revision must be proven before 8B. Bundled tools, native export handling, remembered settings/history, signed application updates and Windows portable rollback remain required before v3.0 publication. Node remains only as yt-dlp's provider-script helper. The existing browser application remains the working reference during migration. Roadmap #7 stays incomplete.
 
@@ -231,5 +231,5 @@ The queue improves convenience while remote source acquisition remains serialize
 - SponsorBlock remains optional and off by default.
 - LVOVD is local-first, not anonymous. Source services still see the user's network requests.
 - LVOVD should not add telemetry/profiling as a condition of normal use.
-- Keep the default server bind local-only and do not weaken the loopback security model for convenience.
+- Keep the browser reference's default server bind local-only and do not weaken its loopback checks. The desktop application uses its native security boundary and has no localhost application server.
 - Do not add DRM or access-control bypass behavior.
