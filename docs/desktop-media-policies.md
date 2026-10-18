@@ -47,6 +47,14 @@ Run `npm run check`, `npm run test:media`, `npm run test:browser`, `npm run fmt:
 
 The existing Windows, Linux and both macOS native gates remain required on staging. This continuation changes native inspection and tool capture, so it also requires native playback/cleanup regression tests and a normal build without test controls afterward. No package, tag, update metadata or release is produced. Roadmap #7 remains incomplete.
 
+### Feature-register validation and open playback finding
+
+The register increment at `42b4b36` passed 589 local checks, its eight validator tests, released-tree reference validation, prior-head comparison and `git diff --check`. The strict release check failed as expected because no capability has complete native verification. The [Linux/Windows reference workflow](https://github.com/landonrivers/LVOVD/actions/runs/39162731563) passed on that commit.
+
+The [native workflow](https://github.com/landonrivers/LVOVD/actions/runs/39162731706/attempts/1) passed Windows, Linux and Intel macOS, but Apple Silicon failed while selecting a second owned copy of the generated MP4 after initial playback, seeking and layout checks had succeeded. `desktop/test/native.cjs:85` timed out waiting for the newly selected media's metadata; the webview reported error 4 with readyState 0. The captured protocol log shows successful range responses but does not establish the cause. This increment changed no runtime code. The failure remains an open `media.direct-playback` finding; do not waive it, weaken the test or treat the earlier 8A results as current acceptance.
+
+One [targeted rerun](https://github.com/landonrivers/LVOVD/actions/runs/39162731706/attempts/2) passed on the same implementation revision, including the normal build without test controls. That establishes an intermittent failure, not a diagnosed fix. Investigate selection/read admission and decoder lifecycle before claiming reliable native workflow completion; retain the original failure evidence and all platform gates.
+
 ## Download remains required
 
 The desktop preview is not yet a replacement Video Downloader. Stage 8D must restore URL Preview, automatic/manual format selection, ordinary single downloads, playlist selection and queueing, serialized acquisition with the released 0.5–1-second pauses, stop-on-rejection behavior, cancellation/failure recovery, history and native saving. Editing must remain optional for ordinary downloads. The inspection and capability work here supplies facts needed for safe Download conversion as well as Local Media; it does not replace source acquisition.

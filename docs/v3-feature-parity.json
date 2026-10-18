@@ -1405,7 +1405,7 @@
         "Use actual webviews for large files, end/repeated seeks, selection changes and cleanup; 8A proof alone does not complete the workbench."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "The foundation player exists, but the full Local Media workflow is not integrated. Resolve the macOS ARM64 second-copy selection failure observed at 42b4b36 (see docs/desktop-media-policies.md), then verify complete workbench playback on all platforms."
     },
     {
       "id": "media.proxy",
@@ -2881,7 +2881,7 @@
         "native": []
       },
       "acceptance": [
-        "Preserve supported package contents; reject unsafe paths/links and installation hooks, isolate ambient discovery, snapshot admitted versions and reapprove changed code."
+        "Preserve supported package contents; reject unsafe paths/links, never execute installation hooks, isolate ambient discovery, snapshot admitted versions and reapprove changed code."
       ],
       "evidence": [],
       "remaining": "Rust operation and full native workflow are not implemented."
