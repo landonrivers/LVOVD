@@ -6,6 +6,16 @@ use uuid::Uuid;
 pub const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 pub const ORIGINS: [&str; 2] = ["tauri://localhost", "http://tauri.localhost"];
 
+pub fn trusted_navigation(url: &str) -> bool {
+    // Custom-scheme root URLs need not have the slash that HTTP URLs acquire.
+    ORIGINS.iter().any(|origin| {
+        url == *origin
+            || url
+                .strip_prefix(origin)
+                .is_some_and(|path| path.starts_with('/'))
+    })
+}
+
 fn empty(status: StatusCode) -> Response<Vec<u8>> {
     Response::builder().status(status).body(Vec::new()).unwrap()
 }
@@ -129,6 +139,27 @@ pub fn respond(assets: &Arc<Assets>, request: Request<Vec<u8>>, window: &str) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn packaged_navigation_accepts_platform_roots_only() {
+        for url in [
+            "tauri://localhost",
+            "tauri://localhost/",
+            "tauri://localhost/index.html",
+            "http://tauri.localhost/",
+        ] {
+            assert!(trusted_navigation(url));
+        }
+        for url in [
+            "tauri://localhost.evil/",
+            "tauri://localhost@evil/",
+            "http://tauri.localhost:3000/",
+            "https://example.org/",
+            "file:///tmp/index.html",
+            "about:blank",
+        ] {
+            assert!(!trusted_navigation(url));
+        }
+    }
     #[test]
     fn ranges_are_bounded_and_exact() {
         assert_eq!(

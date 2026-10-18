@@ -205,11 +205,7 @@ fn main() {
                 picker_admission: tokio::sync::Mutex::new(()),
             });
             tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
-                .on_navigation(|url| {
-                    lvovd_core::media::ORIGINS
-                        .iter()
-                        .any(|origin| url.as_str().starts_with(&format!("{origin}/")))
-                })
+                .on_navigation(|url| lvovd_core::media::trusted_navigation(url.as_str()))
                 .build()?;
             if let Some(window) = app.get_webview_window("main")
                 && let Ok(Some(monitor)) = window.current_monitor()
@@ -242,11 +238,10 @@ fn main() {
             });
         })
         .on_page_load(|webview, _| {
-            if !lvovd_core::media::ORIGINS.iter().any(|origin| {
-                webview
-                    .url()
-                    .is_ok_and(|url| url.as_str().starts_with(&format!("{origin}/")))
-            }) {
+            if !webview
+                .url()
+                .is_ok_and(|url| lvovd_core::media::trusted_navigation(url.as_str()))
+            {
                 let _ = webview.close();
             }
         })

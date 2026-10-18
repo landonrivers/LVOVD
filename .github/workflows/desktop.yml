@@ -33,7 +33,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev ffmpeg xvfb gstreamer1.0-libav gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev ffmpeg xvfb dbus-x11 gstreamer1.0-libav gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
       - name: macOS media tools
         if: runner.os == 'macOS'
         run: brew install ffmpeg
@@ -57,7 +57,11 @@ jobs:
         run: npm run test:desktop:native
       - name: Native media gate (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:desktop:native
+        env:
+          # Hosted Xvfb has no GPU; keep this setting out of the application.
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: dbus-run-session -- xvfb-run -a npm run test:desktop:native
       - name: Build without test controls
         run: node scripts/desktop.cjs build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

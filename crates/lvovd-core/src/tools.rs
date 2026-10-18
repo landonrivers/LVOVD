@@ -49,10 +49,14 @@ impl Tools {
 
     pub async fn health(&self, cancel: &CancellationToken) -> Health {
         let (ffmpeg, ffprobe, ytdlp, provider_runtime) = tokio::join!(
-            probe(&self.ffmpeg, "-version", cancel),
-            probe(&self.ffprobe, "-version", cancel),
-            probe(&self.ytdlp, "--version", cancel),
-            probe(&self.node, "--version", cancel)
+            probe(&self.ffmpeg, &["-version"], cancel),
+            probe(&self.ffprobe, &["-version"], cancel),
+            probe(
+                &self.ytdlp,
+                &["--ignore-config", "--no-plugin-dirs", "--version"],
+                cancel
+            ),
+            probe(&self.node, &["--version"], cancel)
         );
         Health {
             backend: "rust",
@@ -65,10 +69,10 @@ impl Tools {
     }
 }
 
-async fn probe(path: &Path, argument: &str, cancel: &CancellationToken) -> ToolStatus {
+async fn probe(path: &Path, arguments: &[&str], cancel: &CancellationToken) -> ToolStatus {
     let result: Result<_> = process::run(
         path,
-        &[argument.into()],
+        &arguments.iter().map(Into::into).collect::<Vec<_>>(),
         Duration::from_secs(3),
         16 * 1024,
         cancel,

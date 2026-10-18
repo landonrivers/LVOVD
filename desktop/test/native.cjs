@@ -19,9 +19,10 @@ function generate(name, args) {
 const video = generate('synthetic.mp4', ['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=20', '-f', 'lavfi', '-i', 'sine=frequency=500:duration=20', '-c:v', 'libx264', '-threads', '2', '-preset', 'ultrafast', '-b:v', '8M', '-minrate', '8M', '-maxrate', '8M', '-bufsize', '8M', '-x264-params', 'nal-hrd=cbr', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart']);
 assert.ok(fs.statSync(video).size > 8 * 1024 * 1024, 'video must exercise bounded range responses');
 const audio = generate('synthetic.m4a', ['-f', 'lavfi', '-i', 'sine=frequency=700:duration=4', '-c:a', 'aac']);
+const tailIndex = generate('synthetic-tail-index.mp4', ['-i', video, '-c', 'copy']);
 async function waitForDriver(port, child) {
   for (let i = 0; i < 100; i++) {
-    if (child.exitCode !== null) throw new Error('Desktop exited before the driver became ready');
+    if (child.exitCode !== null || child.signalCode !== null) throw new Error('Desktop exited before the driver became ready');
     try { if ((await fetch(`http://127.0.0.1:${port}/status`)).ok) return; } catch {}
     await delay(200);
   }
@@ -51,9 +52,11 @@ async function scenario(file, index) {
     await browser.execute(() => { const p = document.getElementById('player'); p.muted = true; p.play(); });
     const before = await browser.execute(() => document.getElementById('player').currentTime);
     await browser.waitUntil(async () => (await browser.execute(() => document.getElementById('player').currentTime)) > before + 0.15, { timeout: 10000 });
+    await browser.setWindowSize(1280, 720);
+    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'desktop workflow must fit without outer-page scrolling');
     await browser.saveScreenshot(path.join(resultDir, `desktop-${process.platform}-${index}.png`));
     await browser.setWindowSize(960, 640);
-    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'narrow workflow must fit without outer-page scrolling');
     await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
     await browser.$('#remove-file').click();
     await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
@@ -67,17 +70,22 @@ async function scenario(file, index) {
     });
     assert.equal(shape, true, 'unknown command fields must be rejected');
     console.log(`PASS ${process.platform}: ${path.basename(file)} native playback, seeking, removal, capabilities, narrow layout`);
-    await browser.execute(() => { window.__TAURI__.core.invoke('shutdown_desktop'); });
+    await browser.execute(() => { setTimeout(() => window.__TAURI__.core.invoke('shutdown_desktop'), 100); });
     const timeout = new AbortController();
     try {
       await Promise.race([closed, delay(10000, undefined, { signal: timeout.signal }).then(() => { throw new Error('Desktop shutdown timed out'); })]);
+      assert.equal(child.exitCode, 0, 'coordinated shutdown must exit successfully');
     } finally { timeout.abort(); }
   } catch (error) {
-    if (browser) { await browser.saveScreenshot(path.join(resultDir, `failure-${process.platform}-${index}.png`)).catch(() => {}); }
+    if (browser) {
+      console.error('Native page diagnostics:', await browser.execute(() => ({ url: location.href, text: document.body?.innerText?.slice(0, 2000), media: document.getElementById('player')?.error?.message })).catch(() => 'unavailable'));
+      await browser.saveScreenshot(path.join(resultDir, `failure-${process.platform}-${index}.png`)).catch(() => {});
+    }
+    console.error('Native process diagnostics:', fs.readFileSync(path.join(resultDir, `native-${index}.log`), 'utf8').slice(-8192));
     throw error;
   } finally {
     if (child.exitCode === null) child.kill();
     await closed; fs.closeSync(log);
   }
 }
-(async () => { await scenario(video, 0); await scenario(audio, 1); })().catch(error => { console.error(error); process.exitCode = 1; });
+(async () => { await scenario(video, 0); await scenario(audio, 1); await scenario(tailIndex, 2); })().catch(error => { console.error(error); process.exitCode = 1; });

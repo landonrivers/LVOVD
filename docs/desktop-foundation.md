@@ -38,7 +38,7 @@ node scripts/desktop.cjs build --features test-driver
 npm run test:desktop:native
 ```
 
-Native tests use generated media, real inspection, byte-range playback and repeated seeking in the actual platform webview. They also check removal, original preservation, rejected privileged operations, and narrow-window layout. On Linux run the native test under `xvfb-run -a`. CI includes Windows, Linux, and both macOS architectures. Do not advance the larger backend port until all native playback gates pass.
+Native tests use generated media, real inspection, byte-range playback and repeated seeking in the actual platform webview, including large MP4s with their index at either end. They also check removal, original preservation, rejected privileged operations, and desktop/narrow layout. On headless Linux run under `dbus-run-session -- xvfb-run -a`; CI supplies software rendering because the virtual display has no GPU. These are test-environment settings, not production defaults; packaged desktop/GPU acceptance remains required. CI includes Windows, Linux, and both macOS architectures. Do not advance the larger backend port until all native playback gates pass.
 
 The optional WebdriverIO driver embeds a control server **only in explicitly enabled debug test builds**. Production rejects that feature at compile time. `LVOVD_DESKTOP_TEST_FILE` is accepted only in that test build to automate picker intake using generated fixtures; there is no frontend command accepting arbitrary paths. Normal builds have neither mechanism. Keep automation test binaries local/CI-only.
 
