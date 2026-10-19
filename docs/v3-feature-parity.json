@@ -1233,7 +1233,11 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -1242,14 +1246,18 @@
           "test/local-processing-api.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Test multiple Unicode paths, interrupted intake, copy failures and rejection without original modification."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Foundation intake now survives an abandoned command: copying/probing, admission and cleanup remain in a tracked task. Full collection intake, native multi-file workflow and reservations still require 8C integration."
     },
     {
       "id": "media.inspection",
@@ -1810,7 +1818,10 @@
           "crates/lvovd-core/src/processing_plan/processing.rs",
           "crates/lvovd-core/src/processing_plan/legacy.rs",
           "crates/lvovd-core/src/processing_command.rs",
-          "crates/lvovd-core/src/processing_command/validation.rs"
+          "crates/lvovd-core/src/processing_command/validation.rs",
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -1822,7 +1833,10 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -1830,7 +1844,7 @@
         "No-op skips encoder discovery/execution and duplicate bytes; incompatible remux or cuts require explicit encoding choices."
       ],
       "evidence": [],
-      "remaining": "Owned no-op reviews cannot start an encoder; generated remux samples and unchanged originals are tested, including rejection of a remux that loses timestamp gaps. Exact original-byte delivery leases and native workflow integration remain incomplete."
+      "remaining": "Unified processing now publishes exact original-byte aliases without probes or encoding, leases the source and retires replaced aliases without deleting originals. Legacy edited-input delivery and the native workbench/result workflow remain incomplete."
     },
     {
       "id": "media.video-encoding",
@@ -1900,7 +1914,7 @@
           "start_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Ported",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -1909,7 +1923,10 @@
           "crates/lvovd-core/src/processing_plan/legacy.rs",
           "crates/lvovd-core/src/processing_command.rs",
           "crates/lvovd-core/src/processing_command/validation.rs",
-          "crates/lvovd-core/src/processing_command/size.rs"
+          "crates/lvovd-core/src/processing_command/size.rs",
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -1920,7 +1937,10 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -1928,7 +1948,7 @@
         "Reject oversized results; never silently lower resolution/remove audio/downmix; encoded-FLAC maximum-size mode remains unavailable."
       ],
       "evidence": [],
-      "remaining": "Rust budgeting, two-pass arguments, final-byte assessment and one corrective bitrate decision are implemented. The 8C owner must perform correction cleanup, enforce publication and preserve prior results; end-to-end operation acceptance remains incomplete."
+      "remaining": "The Rust operation owns both passes and one size controller across at most one correction, requires successful attempt cleanup, rejects oversized publication and retains the previous result. Native settings, queue, progress and recovery integration remain 8C work."
     },
     {
       "id": "media.picture",
@@ -2048,7 +2068,10 @@
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
           "crates/lvovd-core/src/processing_plan/legacy.rs",
-          "crates/lvovd-core/src/processing_command.rs"
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -2060,7 +2083,10 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -2068,7 +2094,7 @@
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
       "evidence": [],
-      "remaining": "Owned keys bind source/revision/settings/capability facts; arguments reject changed inspection and invalid paths/passes. Native ownership lookup, pre-admission revalidation and immutable queue integration remain incomplete."
+      "remaining": "Unified admission resolves owned originals, binds the owner/source/revision/inspection, requires warning acknowledgements, rechecks file identity before execution and captures an immutable single-use job. Legacy edited-input admission and native collection/queue transport remain incomplete."
     },
     {
       "id": "media.edited-input",
@@ -2131,7 +2157,10 @@
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_command/validation.rs",
-          "crates/lvovd-core/src/processing_command/size.rs"
+          "crates/lvovd-core/src/processing_command/size.rs",
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -2143,7 +2172,10 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -2151,7 +2183,7 @@
         "Malformed/wrong/oversized output remains unavailable; failures retain previous successful results."
       ],
       "evidence": [],
-      "remaining": "Core stream/timing/precision and byte-size validation is implemented and tested against reference failures and generated media. Operation-owned publication, prior-result retention and native workflow acceptance remain outstanding."
+      "remaining": "The Rust operation probes its private output, rejects replaced/linked files and invalid media/size, and atomically publishes only for the still-current uncancelled operation/source. Prior successes remain available on failure. Legacy operation integration and complete native acceptance remain outstanding."
     },
     {
       "id": "media.naming",
@@ -2287,7 +2319,10 @@
       "status": "Missing",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/process.rs"
+          "crates/lvovd-core/src/process.rs",
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -2297,7 +2332,10 @@
           "test/real/local-processing-queue.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/worker_ownership.rs"
+          "crates/lvovd-core/tests/worker_ownership.rs",
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -2305,7 +2343,7 @@
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
       "evidence": [],
-      "remaining": "The worker supervisor retains supplied ownership guards through confirmed descendant exit even when a caller disappears; progress is streamed and bounded. The authoritative processing queue, reservations, immutable jobs and native controls are still missing."
+      "remaining": "Core admitted tickets own immutable reviews and source leases, enforce one active worker and a 20-ticket bound per application owner, and survive abandoned waiters. The collection queue ordering, expiry, waveform preemption, Cancel All and native controls remain incomplete; 8C must reuse one application owner."
     },
     {
       "id": "media.results",
@@ -2328,7 +2366,11 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2336,14 +2378,18 @@
           "test/browser/processing-progress.spec.js",
           "test/processing-workspace.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Core published descriptors retain captured names, revisions, reviewed settings and actual inspected facts; failed attempts preserve the previous successful identity. Native result rows, Edit source, progress snapshots and export actions remain incomplete."
     },
     {
       "id": "media.bulk-save",
@@ -2439,7 +2485,11 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2447,14 +2497,18 @@
           "test/workspace-cleanup.test.js",
           "test/browser/playlist-cleanup.spec.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Source revocation cancels admitted processing and prevents late publication or new result leases. Cleanup and prior result readers remain owned. Native collection removal, late-response presentation guards and expiry still require 8C integration."
     },
     {
       "id": "media.cleanup",
@@ -2477,7 +2531,11 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2485,14 +2543,18 @@
           "test/workspace-cleanup.test.js",
           "test/browser/playlist-cleanup.spec.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Locked/read-held/permission failures retain ownership; retries never delete originals or exports."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Unpublished attempts retain their source lease/reservation until deletion succeeds. Failed deletion remains reachable, blocks that source’s next admission and cannot silently replenish a size-correction retry. Explicit core retry is tested. Collection cleanup controls, bounded transient backoff and lifecycle integration remain incomplete."
     },
     {
       "id": "media.expiry",
@@ -2591,7 +2653,11 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2599,14 +2665,18 @@
           "test/local-processing-queue.test.js",
           "test/playlist-intake.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Foundation source accounting includes retired copies held by import, worker, no-op and failed-attempt leases. Unified processing holds a bounded immutable admission until execution/retirement. Full two-workbench/20-file/100-GiB collection and playlist reservation coordination remains incomplete."
     },
     {
       "id": "media.leases",
@@ -2629,7 +2699,11 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2637,14 +2711,18 @@
           "test/edited-conversion.test.js",
           "test/conversion-lifecycle.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Exercise active reads during rerender, removal, failed cleanup and shutdown; retire only unreferenced owned bytes."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Current results allow bounded reads by opaque result identity. Replacement revokes new lookup while existing readers retain old bytes; no-op aliases retain source bytes and retirement never deletes the original. Legacy edited-render aliases, protocol/export lease integration and complete workspace lifecycle remain incomplete."
     },
     {
       "id": "history.records",
@@ -3280,14 +3358,20 @@
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/process.rs",
-          "src-tauri/src/main.rs"
+          "src-tauri/src/main.rs",
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
       "tests": {
         "reference": [],
         "rust": [
-          "crates/lvovd-core/tests/worker_ownership.rs"
+          "crates/lvovd-core/tests/worker_ownership.rs",
+          "crates/lvovd-core/src/processing_operation/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/owned_file.rs"
         ],
         "native": []
       },
@@ -3295,7 +3379,7 @@
         "Confirm worker/read exit before owned cleanup; crash manifests allow only owned stale-session cleanup."
       ],
       "evidence": [],
-      "remaining": "Foundation shutdown drains readers and tracked tool workers before asset cleanup; incomplete exit retains ownership and reports a retryable close failure. Single-instance behavior, active jobs/unsaved edits/results and crash-session ownership manifests remain incomplete."
+      "remaining": "Foundation shutdown drains tracked imports/readers/workers. The unified operation owner rejects new result reads, cancels admitted work, drains tasks and retains pending cleanup/readers for retry. 8C must shut that owner down before source storage; single-instance, unsaved edits/results and crash manifests remain incomplete."
     },
     {
       "id": "desktop.packages",

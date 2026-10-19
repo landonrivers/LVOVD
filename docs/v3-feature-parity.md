@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 78 Missing, 9 Ported, 0 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 77 Missing, 10 Ported, 0 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -86,7 +86,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `media.audio-outputs` | Local audio outputs | Local Media / Output settings and results | 8C | Missing |
 | `media.noop-remux` | Original no-op and remux | Local Media / Review and results | 8B | Missing |
 | `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Ported |
-| `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Missing |
+| `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Ported |
 | `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Ported |
 | `media.estimates-help` | Linked estimates and help | Local Media / Output settings and review | 8C | Missing |
 | `media.review-contract` | Reviewed plan validation | Local Media / Review | 8B | Missing |
