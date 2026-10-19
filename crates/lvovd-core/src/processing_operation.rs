@@ -192,6 +192,18 @@ pub struct Prepared {
     operation_id: Uuid,
     cancel: CancellationToken,
 }
+struct Waiter {
+    owner: Processing,
+    source_id: Uuid,
+    operation_id: Uuid,
+}
+impl Drop for Waiter {
+    fn drop(&mut self) {
+        // Cancellation and publication share the registry lock. A raw token
+        // drop guard could cancel between publication's check and its commit.
+        self.owner.cancel(self.source_id, self.operation_id);
+    }
+}
 impl Prepared {
     pub fn operation_id(&self) -> Uuid {
         self.operation_id
@@ -421,7 +433,11 @@ impl Processing {
         if !Arc::ptr_eq(&self.0, &prepared.owner.0) {
             return Err(stale().into());
         }
-        let _cancel_on_drop = prepared.cancel.clone().drop_guard();
+        let _cancel_on_drop = Waiter {
+            owner: self.clone(),
+            source_id: prepared.source.source.asset_id,
+            operation_id: prepared.operation_id,
+        };
         let owner = self.clone();
         let (send, receive) = tokio::sync::oneshot::channel();
         {
