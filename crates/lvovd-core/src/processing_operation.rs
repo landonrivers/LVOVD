@@ -515,6 +515,8 @@ impl Processing {
                 prepared.release_admission();
                 let cleanup_owner = owner.clone();
                 let _ = blocking(move || cleanup_owner.cleanup_sync(false)).await;
+                #[cfg(test)]
+                owner.0.hooks.before_retirement().await;
                 drop(prepared);
                 drop(execution);
                 let _ = send.send(result);
