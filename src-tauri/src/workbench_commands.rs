@@ -147,8 +147,7 @@ pub(crate) fn subscribe_workbench(
             "This workbench connection has been replaced.",
         ));
     }
-    state.workbenches.touch(request.workbench_id)?;
-    let snapshot = state.workbenches.snapshot(request.workbench_id)?;
+    let snapshot = state.workbenches.reopen(request.workbench_id)?;
     let id = Uuid::new_v4();
     subscriptions.generation = request.generation;
     subscriptions.current = Some(Connection {

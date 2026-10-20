@@ -187,9 +187,17 @@ async fn removal_retains_result_and_source_reservations_until_last_reader_exits(
     f.owner.reconcile().await.unwrap();
     assert_eq!(f.owner.snapshot(f.ids[0]).unwrap().cleanup, vec![source]);
     assert_eq!(f.owner.0.assets.pending_cleanup(), vec![source]);
+    f.owner.discard(f.ids[0]).unwrap();
+    let reopened = f.owner.reopen(f.ids[0]).unwrap();
+    assert!(reopened.discarded);
+    assert_eq!(
+        reopened.cleanup,
+        vec![source],
+        "discarded cleanup must stay reachable after switching workbenches"
+    );
     drop(lease);
     f.owner.reconcile().await.unwrap();
-    assert!(f.owner.snapshot(f.ids[0]).unwrap().cleanup.is_empty());
+    assert!(f.owner.reopen(f.ids[0]).is_err());
     assert!(f.owner.0.assets.pending_cleanup().is_empty());
     assert!(f.original.exists());
     f.owner.shutdown().await.unwrap();
@@ -282,6 +290,16 @@ async fn failed_batch_keeps_earlier_files_and_expiry_revokes_only_idle_workbench
         .unwrap();
     assert_eq!(result.sources.len(), 1);
     assert!(result.failure.is_some());
+    assert_eq!(
+        f.owner
+            .snapshot(f.ids[0])
+            .unwrap()
+            .intake_failure
+            .unwrap()
+            .code,
+        "SOURCE_READ"
+    );
+    assert!(f.owner.snapshot(f.ids[1]).unwrap().intake_failure.is_none());
     let source = f.import(1).await;
     {
         let mut registry = f.owner.0.registry.lock().unwrap();

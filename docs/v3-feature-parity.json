@@ -1265,7 +1265,7 @@
         "Test multiple Unicode paths, interrupted intake, copy failures and rejection without original modification."
       ],
       "evidence": [],
-      "remaining": "The native picker accepts multiple files and OS drop captures the current workbench. Rust reserves twenty slots per workbench, copies in order, preserves partial successes and owns abandoned intake. Full editor eligibility/recovery and cross-platform multi-file/drop failure acceptance remain outstanding."
+      "remaining": "The native picker accepts multiple files and OS drop captures the current workbench. Rust reserves twenty slots per workbench, copies in order, preserves partial successes and owns abandoned intake. Admitted failures remain in the workbench snapshot for reopening; delayed drop errors cannot disturb another connection. Full editor eligibility/recovery and cross-platform multi-file/drop failure acceptance remain outstanding."
     },
     {
       "id": "media.inspection",

@@ -3,6 +3,7 @@
   const native = globalThis.LVOVDNative, byId = id => document.getElementById(id);
   let sources = [], selected = null, revision = -1, queueRevision = -1, selectionGeneration = 0, operation = 0, healthGeneration = 0;
   let workbenchId = null, workbenchGeneration = 0, importing = false, discarded = false;
+  let intakeFailureKey = '';
   let pendingSelection = null;
   const cleanup = new Set();
   function message(text, error = false) { byId('status').textContent = text; byId('status').classList.toggle('error', error); }
@@ -38,6 +39,9 @@
       const id = pendingSelection.id; pendingSelection = null; select(id);
     } else if (!sources.some(s => s.assetId === selected)) select(sources[0]?.assetId || null);
     else byId('files').value = selected;
+    const failureKey = value.intakeFailure ? `${value.intakeFailure.code}:${value.intakeFailure.message}` : '';
+    if (failureKey && failureKey !== intakeFailureKey && !discarded) message(value.intakeFailure.message, true);
+    intakeFailureKey = failureKey;
   }
   function cleanupControls() {
     byId('cleanup').replaceChildren(...[...cleanup].map(id => {
@@ -85,7 +89,7 @@
   async function switchWorkbench(id) {
     const generation = ++workbenchGeneration;
     operation++; workbenchId = id; pendingSelection = null;
-    revision = -1; queueRevision = -1; sources = []; cleanup.clear(); select(null); cleanupControls();
+    revision = -1; queueRevision = -1; intakeFailureKey = ''; sources = []; cleanup.clear(); select(null); cleanupControls();
     byId('files').replaceChildren(); byId('workbenches').value = id;
     byId('add-file').disabled = true;
     await native.subscribe(id, value => { if (generation === workbenchGeneration) snapshot(value); });

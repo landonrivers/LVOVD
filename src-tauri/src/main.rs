@@ -332,20 +332,23 @@ fn main() {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 let paths = paths.clone();
                 let app = window.app_handle().clone();
-                let workbench = app
-                    .state::<AppState>()
-                    .subscriptions
-                    .lock()
-                    .unwrap()
-                    .workbench();
+                let (workbench, generation) = {
+                    let state = app.state::<AppState>();
+                    let subscription = state.subscriptions.lock().unwrap();
+                    (subscription.workbench(), subscription.generation())
+                };
                 tauri::async_runtime::spawn(async move {
                     let state = app.state::<AppState>();
                     if let Some(id) = workbench {
-                        let error = match state.workbenches.import(id, paths).await {
-                            Ok(result) => result.failure,
-                            Err(error) => Some(error),
+                        // Admitted failures belong to the workbench snapshot,
+                        // including after switching away and reopening it.
+                        let error = state.workbenches.import(id, paths).await.err();
+                        let still_selected = {
+                            let subscription = state.subscriptions.lock().unwrap();
+                            subscription.workbench() == Some(id)
+                                && subscription.generation() == generation
                         };
-                        if let Some(error) = error {
+                        if let Some(error) = error.filter(|_| still_selected) {
                             app.dialog()
                                 .message(error.message)
                                 .title("Could not import media")

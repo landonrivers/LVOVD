@@ -19,7 +19,7 @@ async function setup(page, bridge = true) {
     const fixture = window.fixture = {
       workbenchId, otherId, channels: [],
       sources: ids.map((assetId, i) => ({ assetId, name: `Synthetic ${i + 1}`, size: 10, inspection: { format: 'test', mime: null, streams: [] } })),
-      snapshot(revision, indices, cleanup = []) { channel.onmessage({ connectionId: connection, snapshot: state(this.active || workbenchId, revision, indices, cleanup) }); },
+      snapshot(revision, indices, cleanup = [], intakeFailure = null) { channel.onmessage({ connectionId: connection, snapshot: { ...state(this.active || workbenchId, revision, indices, cleanup), intakeFailure } }); },
       stale(revision, indices) { this.channels[0].onmessage({ connectionId: 1, snapshot: state(workbenchId, revision, indices) }); }
     };
     window.__TAURI__ = { core: {
@@ -72,6 +72,20 @@ test('desktop workbench switch rejects delayed removal response and prior connec
   await expect(page.locator('#media-name')).toHaveText('Synthetic 3');
   await expect(page.locator('#files option')).toHaveCount(1);
   await expect(page.locator('#cleanup button')).toHaveCount(0);
+});
+
+test('desktop intake failures stay with their workbench and are visible on reopening', async ({ page }) => {
+  await setup(page);
+  await page.evaluate(() => window.fixture.snapshot(1, [0], [], { code: 'SOURCE_READ', message: 'Could not open the selected file.' }));
+  await expect(page.locator('#status')).toHaveText('Could not open the selected file.');
+  await page.locator('#new-workbench').click();
+  await expect(page.locator('#workbenches')).toHaveValue('20000000-0000-4000-8000-000000000002');
+  await page.evaluate(() => window.fixture.snapshot(1, [1]));
+  await expect(page.locator('#status')).not.toContainText('Could not open');
+  await page.locator('#workbenches').selectOption('20000000-0000-4000-8000-000000000001');
+  await page.evaluate(() => window.fixture.snapshot(2, [0], [], { code: 'SOURCE_READ', message: 'Could not open the selected file.' }));
+  await expect(page.locator('#media-name')).toHaveText('Synthetic 1');
+  await expect(page.locator('#status')).toHaveText('Could not open the selected file.');
 });
 
 test('desktop late removal failure and older snapshot cannot revive cleanup or replace selection', async ({ page }) => {

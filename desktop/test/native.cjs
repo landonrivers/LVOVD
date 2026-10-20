@@ -191,7 +191,7 @@ async function scenario(file, index) {
       try { await window.__TAURI__.core.invoke('remove_source', { request: { assetId: '00000000-0000-4000-8000-000000000000', path: '/not-allowed' } }); return false; } catch { return true; }
     });
     assert.equal(shape, true, 'unknown command fields must be rejected');
-    console.log(`PASS ${process.platform}: ${path.basename(file)} native playback, seeking, removal, capabilities, narrow layout`);
+    console.log(`PASS ${process.platform}: ${path.basename(file)} native playback, seeking, workbench commands, owned processing, removal, permissions, desktop/narrow layout`);
     await browser.execute(() => { setTimeout(() => window.__TAURI__.core.invoke('shutdown_desktop'), 100); });
     const timeout = new AbortController();
     try {

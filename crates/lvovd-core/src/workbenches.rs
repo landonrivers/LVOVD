@@ -37,6 +37,7 @@ struct Workbench {
     sources: Vec<Source>,
     retired: Vec<Retired>,
     intake_slots: usize,
+    intake_failure: Option<AppError>,
     discarded: bool,
     cancel: CancellationToken,
     touched: Instant,
@@ -70,6 +71,7 @@ pub struct Snapshot {
     pub queue_revision: u64,
     pub discarded: bool,
     pub importing: bool,
+    pub intake_failure: Option<AppError>,
     pub sources: Vec<Source>,
     pub cleanup: Vec<Uuid>,
     pub jobs: Vec<Job>,
@@ -115,6 +117,7 @@ impl Workbenches {
                 sources: Vec::new(),
                 retired: Vec::new(),
                 intake_slots: 0,
+                intake_failure: None,
                 discarded: false,
                 cancel: CancellationToken::new(),
                 touched: Instant::now(),
@@ -149,6 +152,7 @@ impl Workbenches {
             queue_revision: queue.revision,
             discarded: entry.discarded,
             importing: entry.intake_slots > 0,
+            intake_failure: entry.intake_failure.clone(),
             sources: entry.sources.clone(),
             cleanup: entry.retired.iter().map(|entry| entry.id).collect(),
             jobs: queue
@@ -168,6 +172,20 @@ impl Workbenches {
         let entry = active(&mut registry, id)?;
         entry.touched = Instant::now();
         Ok(())
+    }
+    /// Discard revokes media operations, not access to outstanding cleanup.
+    pub fn reopen(&self, id: Uuid) -> Result<Snapshot> {
+        let mut registry = self.0.registry.lock().unwrap();
+        if registry.closing {
+            return Err(closing());
+        }
+        let entry = registry
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or_else(gone)?;
+        entry.touched = Instant::now();
+        Ok(self.snapshot_locked(entry))
     }
     fn member(&self, id: Uuid, source: Uuid) -> Result<()> {
         let mut registry = self.0.registry.lock().unwrap();
@@ -207,6 +225,7 @@ impl Workbenches {
                 ));
             }
             entry.intake_slots = paths.len();
+            entry.intake_failure = None;
             entry.revision += 1;
             entry.touched = Instant::now();
             let cancel = entry.cancel.clone();
@@ -279,6 +298,7 @@ impl Workbenches {
         let mut registry = self.0.registry.lock().unwrap();
         let entry = registry.entries.iter_mut().find(|e| e.id == id).unwrap();
         entry.intake_slots = 0;
+        entry.intake_failure = result.failure.clone();
         entry.revision += 1;
         Ok(result)
     }
