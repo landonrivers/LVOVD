@@ -186,6 +186,40 @@ impl Fixture {
 }
 
 #[tokio::test]
+async fn collection_epoch_rejects_cancelled_admission_without_cancelling_another_collection() {
+    let f = Fixture::new(false).await;
+    for cancelled in [true, false] {
+        let admission = f.review(0, 0, false).await;
+        let current = Arc::new(AtomicBool::new(true));
+        let guard = current.clone();
+        f.queue.0.hooks.admission.arm();
+        let queue = f.queue.clone();
+        let waiting = tokio::spawn(async move {
+            queue
+                .enqueue_guarded(vec![admission], move || guard.load(Ordering::Acquire))
+                .await
+        });
+        f.queue.0.hooks.admission.reached().await;
+        if cancelled {
+            current.store(false, Ordering::Release);
+        }
+        f.queue
+            .cancel_sources(&[f.ids[usize::from(!cancelled)]], None)
+            .unwrap();
+        f.queue.0.hooks.admission.release();
+        let result = waiting.await.unwrap();
+        if cancelled {
+            assert_eq!(result.err().unwrap().code, "CANCELLED");
+            assert!(f.queue.snapshot().jobs.is_empty());
+        } else {
+            result.unwrap();
+            assert_eq!(f.finished().await.jobs[0].status, Status::Completed);
+        }
+    }
+    f.close().await;
+}
+
+#[tokio::test]
 async fn atomic_batch_rejects_stale_duplicate_and_invalid_entries_without_partial_admission() {
     let f = Fixture::new(false).await;
     let first = f.review(0, 1, false).await;

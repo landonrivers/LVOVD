@@ -129,6 +129,13 @@ impl ProcessingQueue {
     /// All-or-none admission; after publication, the queue owns every ticket.
     /// Dropping a command response or subscription cannot lose admitted work.
     pub async fn enqueue(&self, entries: Vec<Admission>) -> Result<Snapshot> {
+        self.enqueue_guarded(entries, || true).await
+    }
+    pub(crate) async fn enqueue_guarded(
+        &self,
+        entries: Vec<Admission>,
+        still_current: impl Fn() -> bool,
+    ) -> Result<Snapshot> {
         if self.0.registry.lock().unwrap().closing {
             return Err(closing());
         }
@@ -193,7 +200,7 @@ impl ProcessingQueue {
         if registry.closing {
             return Err(closing());
         }
-        if registry.epoch != epoch {
+        if registry.epoch != epoch || !still_current() {
             return Err(AppError::new(
                 "CANCELLED",
                 "The pending queue submission was cancelled. Review and submit again.",
@@ -321,6 +328,28 @@ impl ProcessingQueue {
         }
         registry.epoch += 1;
         self.cancel_locked(&mut registry, |job| job_id.is_none_or(|id| job.id == id));
+        Ok(self.publish(&mut registry))
+    }
+    /// Collection-scoped cancellation selects all matching rows under one lock.
+    /// It must never turn Cancel All in one workbench into application-wide cancel.
+    pub fn cancel_sources(&self, sources: &[Uuid], job_id: Option<Uuid>) -> Result<Snapshot> {
+        let mut registry = self.0.registry.lock().unwrap();
+        if job_id.is_some_and(|id| {
+            !registry
+                .entries
+                .iter()
+                .any(|entry| entry.job.id == id && sources.contains(&entry.job.source_id))
+        }) {
+            return Err(AppError::new(
+                "PROCESSING_JOB_GONE",
+                "This job does not belong to this workbench.",
+            ));
+        }
+        // The collection owner invalidates its own admission epoch. Do not
+        // invalidate a different workbench's pending submission.
+        self.cancel_locked(&mut registry, |job| {
+            sources.contains(&job.source_id) && job_id.is_none_or(|id| job.id == id)
+        });
         Ok(self.publish(&mut registry))
     }
     fn cancel_locked(&self, registry: &mut Registry, selected: impl Fn(&Job) -> bool) {

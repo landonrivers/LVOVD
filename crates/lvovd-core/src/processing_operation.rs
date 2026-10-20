@@ -855,6 +855,10 @@ impl Processing {
         let owner = self.clone();
         blocking(move || owner.cleanup_sync(true)).await
     }
+    pub(crate) async fn reconcile_cleanup(&self) -> Result<()> {
+        let owner = self.clone();
+        blocking(move || owner.cleanup_sync(false)).await
+    }
     fn cleanup_sync(&self, retry_failed: bool) -> Result<()> {
         let mut registry = self.0.registry.lock().unwrap();
         let closing = registry.closing;
@@ -917,6 +921,17 @@ impl Processing {
     pub fn pending_cleanup(&self) -> usize {
         let registry = self.0.registry.lock().unwrap();
         registry.cleanup.len() + registry.retired.len()
+    }
+    /// Retired workbench membership cannot release its reservation while a
+    /// worker, published output lease, or failed deletion still owns the source.
+    pub fn retains_source(&self, id: Uuid) -> bool {
+        let registry = self.0.registry.lock().unwrap();
+        registry.slots.contains_key(&id)
+            || registry
+                .retired
+                .iter()
+                .any(|output| output.descriptor.source_id == id)
+            || registry.cleanup.values().any(|entry| entry.source_id == id)
     }
     pub async fn shutdown(&self) -> Result<()> {
         {

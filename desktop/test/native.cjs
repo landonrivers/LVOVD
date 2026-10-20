@@ -111,6 +111,77 @@ async function scenario(file, index) {
     await browser.$('#remove-file').click();
     await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
     await browser.waitUntil(async () => (await browser.$$('#cleanup button')).length === 0, { timeout: 10000, timeoutMsg: 'The decoder did not release temporary media after removal' });
+    // Exercise the real collection commands behind the forthcoming editor.
+    // The command cannot substitute frontend inspections, paths or membership.
+    const owned = await browser.execute(async () => {
+      const invoke = window.__TAURI__.core.invoke;
+      const workbenchId = document.getElementById('workbenches').value;
+      const intake = await invoke('pick_source', { request: { workbenchId } });
+      const source = intake.sources[0];
+      const review = await invoke('review_processing', { request: {
+        workbenchId, sourceId: source.assetId, draftRevision: 0
+      } });
+      await invoke('queue_processing', { request: { workbenchId, entries: [{
+        sourceId: source.assetId, key: review.key, acknowledgements: []
+      }] } });
+      return { workbenchId, sourceId: source.assetId, size: source.size };
+    });
+    await browser.waitUntil(async () => browser.execute(async id => {
+      const entries = await window.__TAURI__.core.invoke('list_workbenches');
+      return entries.find(e => e.workbenchId === id)?.jobs[0]?.status === 'completed';
+    }, owned.workbenchId), { timeout: 15000, timeoutMsg: 'Native owned no-op processing did not complete' });
+    const result = await browser.execute(async id =>
+      (await window.__TAURI__.core.invoke('list_workbenches')).find(e => e.workbenchId === id).results[0],
+    owned.workbenchId);
+    assert.equal(result.noOp, true); assert.equal(result.size, owned.size);
+    await browser.$('#new-workbench').click();
+    await browser.waitUntil(async () => browser.execute(id => {
+      const value = document.getElementById('workbenches').value;
+      return value && value !== id && !document.getElementById('add-file').disabled;
+    }, owned.workbenchId), { timeout: 10000 });
+    const scope = await browser.execute(async owned => {
+      const invoke = window.__TAURI__.core.invoke;
+      const workbenchId = document.getElementById('workbenches').value;
+      const failures = [];
+      for (const command of ['review_processing', 'remove_source']) {
+        try { await invoke(command, { request: { workbenchId, sourceId: owned.sourceId, ...(command === 'review_processing' ? { draftRevision: 0 } : {}) } }); }
+        catch (error) { failures.push(error.code); }
+      }
+      await invoke('cancel_processing', { request: { workbenchId } });
+      return failures;
+    }, owned);
+    assert.deepEqual(scope, ['WORKBENCH_SOURCE', 'WORKBENCH_SOURCE']);
+    await expectEmptyFiles(browser);
+    // Wry's test driver does not apply the default action of option.click(),
+    // which WebdriverIO selectByAttribute uses. Dispatch the real UI handler
+    // inside the native webview; this is not an OS-picker interaction test.
+    await browser.execute(id => {
+      const select = document.getElementById('workbenches');
+      select.value = id; select.dispatchEvent(new Event('change', { bubbles: true }));
+    }, owned.workbenchId);
+    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 1, { timeout: 10000 });
+    if (index === 1) {
+      await browser.execute(async owned => {
+        const invoke = window.__TAURI__.core.invoke;
+        const review = await invoke('review_processing', { request: {
+          workbenchId: owned.workbenchId, sourceId: owned.sourceId, draftRevision: 1,
+          settings: { container: 'wav', audio: { codec: 'pcm' } }
+        } });
+        await invoke('queue_processing', { request: { workbenchId: owned.workbenchId, entries: [{
+          sourceId: owned.sourceId, key: review.key,
+          acknowledgements: (review.warnings || []).map(w => w.code)
+        }] } });
+      }, owned);
+      await browser.waitUntil(async () => browser.execute(async id => {
+        const snapshot = (await window.__TAURI__.core.invoke('list_workbenches')).find(e => e.workbenchId === id);
+        return snapshot?.results[0]?.draftRevision === 1 && snapshot.jobs[0]?.status === 'completed';
+      }, owned.workbenchId), { timeout: 15000, timeoutMsg: 'Native PCM conversion did not publish a validated result' });
+    }
+    await browser.$('#discard-workbench').click();
+    await browser.waitUntil(async () => browser.execute(async id =>
+      !(await window.__TAURI__.core.invoke('list_workbenches')).some(e => e.workbenchId === id),
+    owned.workbenchId), { timeout: 15000 });
+    await expectEmptyFiles(browser);
     assert.equal(fs.existsSync(file), true, 'removal must not delete the selected original');
     const denied = await browser.execute(async path => {
       try { await window.__TAURI__.core.invoke('plugin:fs|read_file', { path }); return ''; } catch (error) { return String(error); }
@@ -141,5 +212,8 @@ async function scenario(file, index) {
     if (child.exitCode === null) child.kill();
     await closed; fs.closeSync(log);
   }
+}
+async function expectEmptyFiles(browser) {
+  await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
 }
 (async () => { await scenario(video, 0); await scenario(audio, 1); await scenario(tailIndex, 2); })().catch(error => { console.error(error); process.exitCode = 1; });

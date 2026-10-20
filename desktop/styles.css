@@ -15,6 +15,7 @@ button:disabled{opacity:.45;cursor:default}
 button:focus-visible,select:focus-visible,video:focus-visible,summary:focus-visible{outline:2px solid #deb75f;outline-offset:3px}
 #remove-file{background:#48272b;border-color:#90505c}
 select{width:100%;min-height:100px;background:#121613;border:1px solid #475b42;color:inherit;padding:5px}
+#workbenches{min-height:32px}
 option{padding:6px}
 dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:7px;font-size:11px}
 dt{color:#aaa}

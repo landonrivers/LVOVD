@@ -3,5 +3,5 @@
   "identifier": "main",
   "description": "Only the packaged main window may use the reviewed desktop operations.",
   "windows": ["main"],
-  "permissions": ["allow-desktop-handshake", "allow-runtime-health", "allow-subscribe-sources", "allow-pick-source", "allow-remove-source", "allow-shutdown-desktop"]
+  "permissions": ["allow-desktop-handshake", "allow-runtime-health", "allow-create-workbench", "allow-list-workbenches", "allow-subscribe-workbench", "allow-acknowledge-workbench", "allow-review-processing", "allow-queue-processing", "allow-cancel-processing", "allow-discard-workbench", "allow-cleanup-workbench", "allow-pick-source", "allow-remove-source", "allow-shutdown-desktop"]
 }

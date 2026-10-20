@@ -1236,9 +1236,14 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -1249,15 +1254,18 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Test multiple Unicode paths, interrupted intake, copy failures and rejection without original modification."
       ],
       "evidence": [],
-      "remaining": "Foundation intake now survives an abandoned command: copying/probing, admission and cleanup remain in a tracked task. Full collection intake, native multi-file workflow and reservations still require 8C integration."
+      "remaining": "The native picker accepts multiple files and OS drop captures the current workbench. Rust reserves twenty slots per workbench, copies in order, preserves partial successes and owns abandoned intake. Full editor eligibility/recovery and cross-platform multi-file/drop failure acceptance remain outstanding."
     },
     {
       "id": "media.inspection",
@@ -1279,9 +1287,14 @@
       "status": "Ported",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/media_inspection.rs"
+          "crates/lvovd-core/src/media_inspection.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -1289,9 +1302,12 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/policy_parity.rs",
-          "crates/lvovd-core/tests/inspection_media.rs"
+          "crates/lvovd-core/tests/inspection_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Compare the shared corpus and generated inspected media; expose all applicable facts in the finished workbench."
@@ -1319,9 +1335,14 @@
       "status": "Ported",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/capabilities.rs"
+          "crates/lvovd-core/src/capabilities.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -1329,9 +1350,12 @@
         ],
         "rust": [
           "crates/lvovd-core/src/capabilities_tests.rs",
-          "crates/lvovd-core/tests/inspection_media.rs"
+          "crates/lvovd-core/tests/inspection_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Missing/failing/timed-out tools cannot authorize encoding; retry and planner integration must remain reachable."
@@ -2072,9 +2096,14 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2088,15 +2117,18 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
       "evidence": [],
-      "remaining": "Unified admission resolves owned originals, binds source/revision/inspection, and checks required warnings and immutable review keys. Batch admission now validates every entry before committing any ticket under shared review/source registry guards. Legacy edited-input admission and native collection/queue transport remain incomplete."
+      "remaining": "Typed native review resolves collection membership and owned inspection, bounds settings, and preserves version-1 review keys/revisions. Actual native no-op/PCM operations exercise this boundary. Existing settings and review controls, acknowledgement presentation and full workflow acceptance remain outstanding."
     },
     {
       "id": "media.edited-input",
@@ -2286,9 +2318,14 @@
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/processing_operation.rs"
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2296,15 +2333,18 @@
           "test/browser/local-media.spec.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Exclude queued/running and already successful current drafts; unchanged eligible files retain no-op behavior."
       ],
       "evidence": [],
-      "remaining": "Atomic Rust batch admission rejects a stale or invalid entry without admitting any file and invalidates pending batches on Cancel All. Collection-wide review, eligibility selection, warning presentation and the native Review All Files flow are not integrated."
+      "remaining": "Collection-scoped native batches validate every member and admit immutable tickets atomically. Review All Files controls, shared settings with individual drafts and full native batch acceptance remain outstanding."
     },
     {
       "id": "media.processing-queue",
@@ -2332,9 +2372,14 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2346,15 +2391,18 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
       "evidence": [],
-      "remaining": "The Rust queue owns immutable tickets, drains in FIFO order, bounds 20 live jobs, cancels individual/all jobs, expires unstarted jobs after one hour and coalesces revisioned snapshots. Tests cover disconnected readers, abandoned admission and late cancellation/publication. Collection-scoped admission/cancellation, waveform preemption and the native queue workflow remain incomplete; integration must reuse one application owner."
+      "remaining": "One application queue is wired to scoped native enqueue/cancel commands and acknowledged revisioned snapshots. Cancel All cannot cancel another collection; pending collection admission is invalidated. Native commands exercise no-op/PCM publication. Editor/queue presentation, analysis preemption and full native workflow acceptance remain outstanding."
     },
     {
       "id": "media.results",
@@ -2381,9 +2429,14 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2394,15 +2447,18 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
       ],
       "evidence": [],
-      "remaining": "Core descriptors capture names, revisions, reviewed settings and actual inspection. Queue failures have no new result and preserve the prior successful identity separately; late cancellation cannot relabel a published success. Native result rows, Edit source, scoped channels and export actions remain incomplete."
+      "remaining": "Native collection snapshots expose current validated results separately from latest job failures. Source removal revokes new result lookup and retains reservations through output leases. Result playback via both native transports, revision-labelled result controls and export actions remain outstanding."
     },
     {
       "id": "media.bulk-save",
@@ -2502,9 +2558,14 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2515,15 +2576,18 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
       ],
       "evidence": [],
-      "remaining": "Core revocation prevents new result leases/publication. Retiring a queue row cancels that source without reinserting it after delayed completion. Cleanup ownership survives row removal. Authoritative collection removal/discard and native response/selection guards still require integration."
+      "remaining": "Rust workbenches revoke member access, cancel/forget its job and retain cleanup/source reservations. Native Remove/Discard and connection/collection/revision guards reject delayed responses across workbench switches. Complete editor, proxy/waveform removal and full platform workflow acceptance remain outstanding."
     },
     {
       "id": "media.cleanup",
@@ -2549,9 +2613,14 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2561,15 +2630,18 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Locked/read-held/permission failures retain ownership; retries never delete originals or exports."
       ],
       "evidence": [],
-      "remaining": "Unpublished attempts retain their source lease/reservation until deletion succeeds. Failed deletion remains reachable, blocks that source’s next admission and cannot silently replenish a size-correction retry. Explicit core retry is tested. Collection cleanup controls, bounded transient backoff and lifecycle integration remain incomplete."
+      "remaining": "Removed/discarded membership retains source and result ownership; passive reconciliation does not endlessly retry failed deletions. Native cleanup retry remains reachable, including discarded collections. Broader transient retry, analysis cleanup and full workflow failure acceptance remain outstanding."
     },
     {
       "id": "media.expiry",
@@ -2593,9 +2665,14 @@
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/processing_operation.rs"
+          "crates/lvovd-core/src/processing_operation.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2603,15 +2680,18 @@
           "test/local-processing-queue.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Expiry cancels analysis/processing and waits for owned readers/workers before releasing capacity."
       ],
       "evidence": [],
-      "remaining": "Queued jobs now expire after one hour without starting and release their unstarted tickets; sources and prior results remain separately owned. Collection inactivity/attached-editor activity, analysis cancellation and native expiry/recovery are still missing."
+      "remaining": "Idle workbenches expire after one hour; native connection heartbeats keep the current workbench active. Importing/live jobs defer collection expiry, queued jobs retain their one-hour deadline. Full editor/analysis expiry and platform acceptance remain outstanding."
     },
     {
       "id": "media.reopen",
@@ -2635,22 +2715,32 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs"
+        ],
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
           "test/local-processing-api.test.js",
           "test/browser/playlist-cleanup.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Stale reopen cannot revive a removed/reopened collection; no editing sessions or queue restoration across process restarts."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "The native preview lists, switches and reopens retained workbenches with fresh acknowledged snapshots. Late connection/response events cannot repopulate another workbench. Editor draft/review/result recovery and full platform workflow acceptance remain outstanding."
     },
     {
       "id": "media.reservations",
@@ -2677,9 +2767,14 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2690,15 +2785,18 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
       ],
       "evidence": [],
-      "remaining": "Atomic batch admission enforces the shared 20-operation limit; queued tickets retain source leases until cancellation or supervised completion. Source accounting includes retired copies and failed cleanup. Full two-workbench/20-file/100-GiB collection and playlist reservation coordination remains incomplete."
+      "remaining": "The application owns two workbenches with twenty slots each, forty aggregate sources, twenty live processing jobs and serialized 100-GiB source accounting. Removed sources stay reserved through workers/result/read leases and failed cleanup. Playlist admission/intermediates and full workflow acceptance remain outstanding."
     },
     {
       "id": "media.leases",
@@ -2724,9 +2822,14 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
@@ -2736,15 +2839,18 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Exercise active reads during rerender, removal, failed cleanup and shutdown; retire only unreferenced owned bytes."
       ],
       "evidence": [],
-      "remaining": "Current results allow bounded reads by opaque result identity. Replacement revokes new lookup while existing readers retain old bytes; no-op aliases retain source bytes and retirement never deletes the original. Legacy edited-render aliases, protocol/export lease integration and complete workspace lifecycle remain incomplete."
+      "remaining": "Workbench retirement holds source reservations until processing, readers and cleanup finish. Native source playback remains bounded; result lookup is revoked on removal. Result URI/Linux transport integration, proxy/analysis roles and complete workflow acceptance remain outstanding."
     },
     {
       "id": "history.records",
@@ -3384,9 +3490,14 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs"
         ],
-        "native": []
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "src-tauri/src/main.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [],
@@ -3395,15 +3506,18 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Confirm worker/read exit before owned cleanup; crash manifests allow only owned stale-session cleanup."
       ],
       "evidence": [],
-      "remaining": "The queue closes admission, invalidates pending batches, cancels unstarted tickets and waits for owned jobs. Integration must drain the queue, then Processing, then source storage; the host is not connected to the new queue yet. Full unsaved-edit/result handling and crash manifests remain incomplete."
+      "remaining": "The native host creates one processing owner and queue and drains workbenches, workers and sources on close. Native regression tests include processed results and discarded collections. Unsaved editor/result quit UX and complete workflow shutdown acceptance remain outstanding."
     },
     {
       "id": "desktop.packages",

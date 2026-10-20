@@ -18,7 +18,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 pub const MAX_SOURCE_BYTES: u64 = 100 * 1024 * 1024 * 1024;
-pub const MAX_ASSETS: usize = 20;
+// Application aggregate. Workbenches enforce twenty members apiece.
+pub const MAX_ASSETS: usize = 40;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -231,16 +232,33 @@ impl Assets {
         }
         changed
     }
+    pub(crate) fn cleanup_has_readers(&self, id: Uuid) -> bool {
+        self.registry
+            .lock()
+            .unwrap()
+            .retired
+            .get(&id)
+            .is_some_and(|asset| Arc::strong_count(asset) > 1)
+    }
 
     /// Only the trusted native picker/drop handler may supply this path, never a frontend command argument.
     pub async fn import(&self, selected: &Path, ffprobe: &Path) -> Result<Source> {
+        self.import_cancellable(selected, ffprobe, &self.cancel)
+            .await
+    }
+    pub(crate) async fn import_cancellable(
+        &self,
+        selected: &Path,
+        ffprobe: &Path,
+        parent_cancel: &CancellationToken,
+    ) -> Result<Source> {
         let admission = self.intake.clone().try_lock_owned().map_err(|_| {
             AppError::new(
                 "INTAKE_BUSY",
                 "Wait for the current file to finish importing.",
             )
         })?;
-        let cancel = self.cancel.child_token();
+        let cancel = parent_cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
         let owned = self.clone();
         let selected = selected.to_owned();
@@ -439,6 +457,56 @@ impl Assets {
 #[cfg(test)]
 mod ownership_tests {
     use super::*;
+    #[tokio::test]
+    async fn retired_sources_keep_the_aggregate_byte_budget_until_cleanup_completes() {
+        let parent = tempfile::tempdir().unwrap();
+        let original = parent.path().join("original");
+        std::fs::write(&original, b"unchanged original").unwrap();
+        let assets = Assets::new(parent.path()).unwrap();
+        let id = Uuid::new_v4();
+        let asset = Arc::new(Asset {
+            source: Source {
+                asset_id: id,
+                name: "Retained source".into(),
+                size: MAX_SOURCE_BYTES,
+                inspection: Inspection {
+                    format: String::new(),
+                    duration_seconds: None,
+                    streams: vec![],
+                    mime: None,
+                    media: None,
+                },
+            },
+            revoked: AtomicBool::new(true),
+            cancelled: CancellationToken::new(),
+            file: Mutex::new(None),
+            path: assets.root.path().join(id.to_string()),
+            _root: assets.root.clone(),
+            seal: None,
+        });
+        assets
+            .registry
+            .lock()
+            .unwrap()
+            .retired
+            .insert(id, asset.clone());
+        let probe = PathBuf::from(std::env::var_os("LVOVD_DESKTOP_FFPROBE").unwrap());
+        assert!(!assets.remove(id).unwrap().cleanup_complete);
+        assert_eq!(
+            assets.import(&original, &probe).await.err().unwrap().code,
+            "STORAGE_LIMIT"
+        );
+        drop(asset);
+        assert!(assets.remove(id).unwrap().cleanup_complete);
+        // The synthetic bytes fail inspection, proving storage admission was
+        // released without creating a real hundred-GiB fixture.
+        assert_ne!(
+            assets.import(&original, &probe).await.err().unwrap().code,
+            "STORAGE_LIMIT"
+        );
+        assets.shutdown().await.unwrap();
+        assert_eq!(std::fs::read(original).unwrap(), b"unchanged original");
+    }
     #[tokio::test]
     async fn abandoned_import_keeps_intake_owned_until_cleanup_finishes() {
         let parent = tempfile::tempdir().unwrap();

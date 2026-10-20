@@ -24,6 +24,7 @@ pub mod processing_plan;
 pub mod processing_queue;
 pub mod processing_settings;
 pub mod tools;
+pub mod workbenches;
 
 use serde::Serialize;
 

@@ -13,8 +13,10 @@
   <p class="notice">Playback preview. Downloading and editing are not available yet.</p>
   <main>
     <aside>
-      <div class="section-title"><h2>Local Media</h2><button id="add-file" disabled>Choose file</button></div>
-      <p class="help">Choose a file or drop it here. Your original file is not changed.</p>
+      <div class="section-title"><h2>Local Media</h2><button id="add-file" disabled>Add files</button></div>
+      <label for="workbenches">Workbench</label><select id="workbenches" aria-label="Retained workbenches"></select>
+      <div class="section-title"><button id="new-workbench" disabled>New workbench</button><button id="discard-workbench" disabled>Discard</button></div>
+      <p class="help">Choose files or drop them here. Your originals are not changed.</p>
       <label for="files">Files</label><select id="files" size="7" aria-label="Local files"></select>
       <button id="remove-file" disabled>Remove file</button>
       <div id="cleanup" aria-live="polite"></div>
