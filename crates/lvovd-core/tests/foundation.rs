@@ -112,6 +112,41 @@ fn wav(path: &std::path::Path) {
 }
 
 #[tokio::test]
+async fn removal_revokes_a_queued_protocol_read_before_it_can_open_the_source() {
+    use lvovd_core::media_admission::{ACTIVE_READS, MediaAdmission};
+    let temp = tempfile::tempdir().unwrap();
+    let input = temp.path().join("queued.wav");
+    wav(&input);
+    let assets = Arc::new(Assets::new(temp.path()).unwrap());
+    let probe = PathBuf::from(std::env::var_os("LVOVD_DESKTOP_FFPROBE").unwrap());
+    let source = assets.import(&input, &probe).await.unwrap();
+    let gate = MediaAdmission::new(assets.cancellation());
+    let mut busy = Vec::new();
+    for _ in 0..ACTIVE_READS {
+        busy.push(gate.admit().unwrap().wait().await.unwrap());
+    }
+    let request = http::Request::builder()
+        .uri(format!("lvovd-media://localhost/{}", source.asset_id))
+        .header("range", "bytes=0-127")
+        .body(vec![])
+        .unwrap();
+    let ticket = gate.admit().unwrap();
+    let owned = assets.clone();
+    let queued = tokio::spawn(async move {
+        let _active = ticket.wait().await.unwrap();
+        media::respond(&owned, request, "main")
+    });
+    assert!(assets.remove(source.asset_id).unwrap().cleanup_complete);
+    drop(busy);
+    let response = queued.await.unwrap();
+    assert_eq!(response.status(), 410);
+    assert!(response.body().is_empty());
+    assert!(input.exists());
+    gate.shutdown().await;
+    assets.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn owned_media_ranges_revocation_and_cleanup_preserve_original() {
     let temp = tempfile::tempdir().unwrap();
     let input = temp.path().join("synthetic audio.wav");

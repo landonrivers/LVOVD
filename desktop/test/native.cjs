@@ -44,7 +44,8 @@ async function scenario(file, index) {
   const port = 4455 + index, log = fs.openSync(path.join(resultDir, `native-${index}.log`), 'w');
   // Exercise the same tool discovery as a direct executable launch, without the
   // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
-  const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file };
+  const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file,
+    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1' };
   for (const key of ['FFPROBE', 'FFMPEG', 'NODE', 'YTDLP']) delete directEnv['LVOVD_DESKTOP_' + key];
   const child = spawn(path.join(root, 'target/debug/lvovd' + (process.platform === 'win32' ? '.exe' : '')), [], {
     cwd: resultDir, env: directEnv, windowsHide: true, stdio: ['ignore', log, log]
@@ -80,12 +81,27 @@ async function scenario(file, index) {
     await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
     // A second owned copy exercises selection changes while the first decoder
     // may still have queued reads. Removing it must preserve the other entry.
+    // The test build holds these eight small reads for 1.5 seconds per batch.
+    // All four read slots are occupied when the new decoder requests metadata;
+    // normal contention must wait instead of returning a fatal 429 to WebKit.
+    // Linux's decoder uses the broker; these fetches still test its URI handler.
+    await browser.execute(() => {
+      const url = document.getElementById('player').currentSrc;
+      window.__rangeContention = Promise.all(Array.from({ length: 8 }, async () => {
+        const response = await fetch(url, { headers: { Range: 'bytes=128-255' } });
+        return { status: response.status, bytes: (await response.arrayBuffer()).byteLength };
+      }));
+    });
     await browser.$('#add-file').click();
     await browser.waitUntil(async () => (await browser.$$('#files option')).length === 2, { timeout: 10000 });
     await browser.waitUntil(async () => browser.execute(previous => {
       const player = document.getElementById('player');
       return player.currentSrc !== previous && player.readyState >= 1;
     }, metadata.url), { timeout: 10000 });
+    const burst = await browser.execute(async () => {
+      const results = await window.__rangeContention; delete window.__rangeContention; return results;
+    });
+    assert.deepEqual(burst, Array.from({ length: 8 }, () => ({ status: 206, bytes: 128 })), 'read contention must not reject valid ranges');
     await browser.$('#remove-file').click();
     await browser.waitUntil(async () => (await browser.$$('#files option')).length === 1, { timeout: 10000 });
     await browser.waitUntil(async () => browser.execute(previous => {

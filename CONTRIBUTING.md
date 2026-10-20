@@ -12,7 +12,7 @@ Desktop migration PRs target `staging/v3-desktop`, not `master`. Branch each sta
 
 Follow [desktop setup and current limitations](docs/desktop-foundation.md). Run `npm ci` and `npm run build:desktop` to compile, then open `target/debug/lvovd.exe` on Windows. The built app starts directly without a batch file or Node wrapper. `npm run dev:desktop` is an optional compile-and-run command for development. Do not open `desktop/index.html` or `desktop/dist/index.html` as the application: those are internal interface assets and cannot provide native operations in Chrome.
 
-Normal builds omit the test driver. Debug builds resolve installed tools themselves; release builds use packaged tools only. This preview is not the finished installer or portable distribution.
+Normal builds omit the test driver. Debug builds resolve installed tools themselves; current preview release builds use packaged tools only. Finished v3.0 also requires explicitly approved custom tools/plugins through native settings; that management is not yet implemented. This preview is not the finished installer or portable distribution.
 
 ### v2.7 browser reference
 
@@ -54,8 +54,11 @@ Choose additional checks by changed behavior:
 | Rust core or host | `npm run fmt:desktop`, `npm run check:desktop`, `npm run test:desktop:core`, `npm run test:desktop:host` |
 | Desktop launch, permissions, protocol, or playback | Build with `node scripts/desktop.cjs build --features test-driver`, run `npm run test:desktop:native`, then rebuild without the driver; verify the normal native launch |
 | Documentation or interface copy only | Check links/claims and inspect the affected presentation; do not add tests that merely freeze prose |
+| Feature parity register or its validator/CI | `npm run check:parity`, `node --test test/feature-parity.test.js`, and `npm run check`; regenerate the table explicitly with `npm run parity:docs` after inventory edits |
 
 Run `git diff --check`. Existing Linux/Windows gates remain required; native CI covers Windows, Linux, and both Mac architectures. Report each failing native gate rather than skipping it or calling Chromium a substitute. Full release acceptance remains broader than any individual change's checks.
+
+Read [the parity register](docs/v3-feature-parity.md) before porting a workflow. CI validates references and evidence structure and compares existing capability IDs/reference facts with the PR base and previous head. `npm run check:parity:release` intentionally fails while capabilities remain unverified; stable v3+ npm or Cargo metadata enables that strict check automatically. Future release automation must run it, alongside real tests and artifact/security acceptance, before publication. A structurally valid register is not proof of feature parity.
 
 Keep processing local. The browser reference must preserve its `127.0.0.1` boundary; the desktop production path must have no localhost application server. Do not apply the browser startup model to desktop work.
 

@@ -315,7 +315,9 @@ You do **not** need to install yt-dlp globally or run `npm install` for LVOVD it
 
 Read [the development contract](docs/development-contract.md) and [contributor setup and validation](CONTRIBUTING.md) before making changes. Agents also follow [AGENTS.md](AGENTS.md).
 
-The v3.0 Rust/Tauri desktop migration is being delivered in separate stages. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. Linux playback uses an application-owned GStreamer source with private, bounded reads from Rust. See [desktop foundation setup and native acceptance evidence](docs/desktop-foundation.md). Build with `npm run build:desktop`, then open `target/debug/lvovd.exe` on Windows. The executable starts directly; no batch file is required. The existing `npm start` and `Start-LVOVD-Windows.bat` browser workflow remains available during migration.
+The [v3.0 feature parity register](docs/v3-feature-parity.md) tracks the complete v2.7 migration, including Download extras, subtitles, chapters, SponsorBlock and custom yt-dlp/plugins. Missing functionality blocks the desktop release. The standalone window replaces browser/LAN hosting; ordinary Download remains independent of the editor.
+
+The v3.0 Rust/Tauri desktop migration is being delivered in separate stages on `staging/v3-desktop`; `master` stays on the released application until the full migration is accepted. The first native preview implements local intake, inspection and direct playback; it is **not the completed v3.0 release**. Linux playback uses an application-owned GStreamer source with private, bounded reads from Rust. See [desktop foundation setup and native acceptance evidence](docs/desktop-foundation.md) and [8B policy work in progress](docs/desktop-media-policies.md). Build with `npm run build:desktop`, then open `target/debug/lvovd.exe` on Windows. The executable starts directly; no batch file is required. The existing `npm start` and `Start-LVOVD-Windows.bat` browser workflow remains available during migration.
 
 ```bash
 git clone https://github.com/landonrivers/LVOVD.git

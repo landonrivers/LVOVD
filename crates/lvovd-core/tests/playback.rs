@@ -62,6 +62,10 @@ async fn broker_keeps_reads_bounded_and_revokes_active_decoders() {
     .await
     .unwrap();
     assert_eq!(bytes, original[..44]);
+    // The idle broker may observe cancellation and drop its lease before
+    // remove checks the count. Hold a reader explicitly to make pending
+    // cleanup deterministic while still testing the live decoder's revocation.
+    let held_reader = assets.lease(source.asset_id).unwrap();
     assert!(!assets.remove(source.asset_id).unwrap().cleanup_complete);
     assert!(
         tokio::task::spawn_blocking(move || client.read(0, 44))
@@ -69,6 +73,10 @@ async fn broker_keeps_reads_bounded_and_revokes_active_decoders() {
             .unwrap()
             .is_err()
     );
+    assert_eq!(assets.pending_cleanup(), [source.asset_id]);
+    assert!(held_reader.read(0, 44).is_err());
+    drop(held_reader);
+    assets.retry_pending_cleanup();
     tokio::time::timeout(Duration::from_secs(2), async {
         while !assets.pending_cleanup().is_empty() {
             tokio::time::sleep(Duration::from_millis(10)).await;

@@ -35,9 +35,22 @@ pub struct Asset {
     cancelled: CancellationToken,
     file: Mutex<Option<File>>,
     path: PathBuf,
+    // A read/worker lease keeps the session directory alive as well as the file.
+    _root: Arc<tempfile::TempDir>,
+    seal: Option<crate::owned_file::Seal>,
 }
 
 impl Asset {
+    pub(crate) fn processing_path(&self) -> Result<&Path> {
+        if self.revoked.load(Ordering::Acquire) {
+            return Err(AppError::new("ASSET_GONE", "This media has been removed."));
+        }
+        self.seal
+            .as_ref()
+            .ok_or_else(|| AppError::new("SOURCE_CHANGED", "The owned source is unavailable."))?
+            .check(&self.path)?;
+        Ok(&self.path)
+    }
     pub fn cancellation(&self) -> CancellationToken {
         self.cancelled.clone()
     }
@@ -80,11 +93,15 @@ struct Registry {
     pending: bool,
     closing: bool,
 }
+#[derive(Clone)]
 pub struct Assets {
-    root: tempfile::TempDir,
-    registry: Mutex<Registry>,
-    intake: tokio::sync::Mutex<()>,
+    root: Arc<tempfile::TempDir>,
+    registry: Arc<Mutex<Registry>>,
+    intake: Arc<tokio::sync::Mutex<()>>,
     cancel: CancellationToken,
+    imports: tokio_util::task::TaskTracker,
+    #[cfg(test)]
+    pause_probe: Arc<(AtomicBool, tokio::sync::Notify, tokio::sync::Notify)>,
 }
 
 #[derive(Serialize)]
@@ -112,10 +129,17 @@ impl Assets {
                 )
             })?;
         Ok(Self {
-            root,
-            registry: Mutex::new(Registry::default()),
-            intake: tokio::sync::Mutex::new(()),
+            root: Arc::new(root),
+            registry: Arc::new(Mutex::new(Registry::default())),
+            intake: Arc::new(tokio::sync::Mutex::new(())),
             cancel: CancellationToken::new(),
+            imports: tokio_util::task::TaskTracker::new(),
+            #[cfg(test)]
+            pause_probe: Arc::new((
+                AtomicBool::new(false),
+                tokio::sync::Notify::new(),
+                tokio::sync::Notify::new(),
+            )),
         })
     }
     pub fn cancellation(&self) -> CancellationToken {
@@ -129,6 +153,27 @@ impl Assets {
             .get(&id)
             .cloned()
             .ok_or_else(|| AppError::new("ASSET_GONE", "This media has expired or been removed."))
+    }
+    /// Linearize publication against removal. The callback cannot await or call
+    /// back into this registry; only an active, identical owned source qualifies.
+    pub(crate) fn with_current<T>(
+        &self,
+        asset: &Arc<Asset>,
+        publish: impl FnOnce() -> T,
+    ) -> Result<T> {
+        let registry = self.registry.lock().unwrap();
+        if registry.closing
+            || !registry
+                .active
+                .get(&asset.source.asset_id)
+                .is_some_and(|current| Arc::ptr_eq(current, asset))
+        {
+            return Err(AppError::new(
+                "ASSET_GONE",
+                "This media has expired or been removed.",
+            ));
+        }
+        Ok(publish())
     }
     pub fn list(&self) -> Vec<Source> {
         self.registry
@@ -166,12 +211,43 @@ impl Assets {
 
     /// Only the trusted native picker/drop handler may supply this path, never a frontend command argument.
     pub async fn import(&self, selected: &Path, ffprobe: &Path) -> Result<Source> {
-        let _admission = self.intake.try_lock().map_err(|_| {
+        let admission = self.intake.clone().try_lock_owned().map_err(|_| {
             AppError::new(
                 "INTAKE_BUSY",
                 "Wait for the current file to finish importing.",
             )
         })?;
+        let cancel = self.cancel.child_token();
+        let _cancel_on_drop = cancel.clone().drop_guard();
+        let owned = self.clone();
+        let selected = selected.to_owned();
+        let ffprobe = ffprobe.to_owned();
+        let (send, receive) = tokio::sync::oneshot::channel();
+        {
+            let registry = self.registry.lock().unwrap();
+            if registry.closing {
+                return Err(AppError::new("CLOSING", "The application is closing."));
+            }
+            self.imports.spawn(async move {
+                let _admission = admission;
+                let result = owned.import_inner(&selected, &ffprobe, &cancel).await;
+                // No source may become unreachable just because its caller left.
+                if let Err(Ok(source)) = send.send(result) {
+                    let _ = owned.remove(source.asset_id);
+                }
+            });
+        }
+        receive
+            .await
+            .map_err(|_| AppError::new("INTAKE_FAILED", "Media intake ended unexpectedly."))?
+    }
+
+    async fn import_inner(
+        &self,
+        selected: &Path,
+        ffprobe: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<Source> {
         let mut input = tokio::fs::File::open(selected)
             .await
             .map_err(|_| AppError::new("SOURCE_READ", "Could not open the selected file."))?;
@@ -214,7 +290,7 @@ impl Assets {
             let mut copied = 0;
             let mut buffer = vec![0u8; 256 * 1024];
             loop {
-                let count = tokio::select! { biased; _ = self.cancel.cancelled() => return Err(AppError::new("CANCELLED", "Import cancelled.")), count = input.read(&mut buffer) => count.map_err(|_| AppError::new("SOURCE_READ", "Could not read the selected file."))? };
+                let count = tokio::select! { biased; _ = cancel.cancelled() => return Err(AppError::new("CANCELLED", "Import cancelled.")), count = input.read(&mut buffer) => count.map_err(|_| AppError::new("SOURCE_READ", "Could not read the selected file."))? };
                 if count == 0 { break; }
                 copied += count as u64;
                 if copied > size { return Err(AppError::new("SOURCE_CHANGED", "The selected file changed while importing.")); }
@@ -223,13 +299,17 @@ impl Assets {
             if copied != size { return Err(AppError::new("SOURCE_CHANGED", "The selected file changed while importing.")); }
             output.flush().await.map_err(|_| AppError::new("SOURCE_COPY", "Could not finish copying media."))?;
             drop(output);
-            let inspection = inspection::inspect(ffprobe, &owned, &self.cancel).await?;
+            let seal = crate::owned_file::Seal::capture(&owned)?;
+            #[cfg(test)]
+            if self.pause_probe.0.load(Ordering::Acquire) { self.pause_probe.1.notify_one(); self.pause_probe.2.notified().await; }
+            let inspection = inspection::inspect(ffprobe, &owned, cancel).await?;
+            seal.check(&owned)?;
             let name = selected.file_name().unwrap_or_default().to_string_lossy().chars().filter(|c| !c.is_control()).take(240).collect();
             let source = Source { asset_id: id, name, size, inspection };
             let file = File::open(&owned).map_err(|_| AppError::new("SOURCE_READ", "Could not reopen owned media."))?;
-            let asset = Arc::new(Asset { source: source.clone(), revoked: AtomicBool::new(false), cancelled: CancellationToken::new(), file: Mutex::new(Some(file)), path: owned.clone() });
+            let asset = Arc::new(Asset { source: source.clone(), revoked: AtomicBool::new(false), cancelled: CancellationToken::new(), file: Mutex::new(Some(file)), path: owned.clone(), _root: self.root.clone(), seal: Some(seal) });
             let mut registry = self.registry.lock().unwrap();
-            if registry.closing || self.cancel.is_cancelled() { return Err(AppError::new("CANCELLED", "Import cancelled.")); }
+            if registry.closing || cancel.is_cancelled() { return Err(AppError::new("CANCELLED", "Import cancelled.")); }
             registry.active.insert(id, asset);
             Ok(source)
         }.await;
@@ -246,6 +326,7 @@ impl Assets {
                     duration_seconds: None,
                     streams: vec![],
                     mime: None,
+                    media: None,
                 },
             };
             self.registry.lock().unwrap().retired.insert(
@@ -256,6 +337,8 @@ impl Assets {
                     cancelled: CancellationToken::new(),
                     file: Mutex::new(None),
                     path: owned,
+                    _root: self.root.clone(),
+                    seal: None,
                 }),
             );
             if let Err(error) = &mut result {
@@ -299,6 +382,15 @@ impl Assets {
     pub async fn shutdown(&self) -> Result<()> {
         self.registry.lock().unwrap().closing = true;
         self.cancel.cancel();
+        self.imports.close();
+        tokio::time::timeout(std::time::Duration::from_secs(5), self.imports.wait())
+            .await
+            .map_err(|_| {
+                AppError::new(
+                    "CLEANUP_PENDING",
+                    "Media intake is still stopping. Try closing again.",
+                )
+            })?;
         let _admission = self.intake.lock().await;
         let ids: Vec<_> = {
             let registry = self.registry.lock().unwrap();
@@ -318,5 +410,39 @@ impl Assets {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+    #[tokio::test]
+    async fn abandoned_import_keeps_intake_owned_until_cleanup_finishes() {
+        let parent = tempfile::tempdir().unwrap();
+        let original = parent.path().join("original");
+        std::fs::write(&original, b"original bytes").unwrap();
+        let assets = Assets::new(parent.path()).unwrap();
+        assets.pause_probe.0.store(true, Ordering::Release);
+        let importer = assets.clone();
+        let path = original.clone();
+        let probe = PathBuf::from(std::env::var_os("LVOVD_DESKTOP_FFPROBE").unwrap());
+        let handle = tokio::spawn(async move { importer.import(&path, &probe).await });
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            assets.pause_probe.1.notified(),
+        )
+        .await
+        .unwrap();
+        handle.abort();
+        assert!(handle.await.err().unwrap().is_cancelled());
+        assert!(assets.is_busy());
+        assert_eq!(std::fs::read_dir(assets.root.path()).unwrap().count(), 1);
+        assert!(assets.intake.try_lock().is_err());
+        assets.pause_probe.2.notify_one();
+        assets.shutdown().await.unwrap();
+        assert!(!assets.is_busy());
+        assert!(assets.list().is_empty());
+        assert_eq!(std::fs::read_dir(assets.root.path()).unwrap().count(), 0);
+        assert_eq!(std::fs::read(original).unwrap(), b"original bytes");
     }
 }

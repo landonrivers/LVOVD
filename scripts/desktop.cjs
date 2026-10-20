@@ -39,7 +39,7 @@ function main() {
     run: ['run', '--locked', '-p', 'lvovd-desktop'],
     build: ['build', '--locked', '-p', 'lvovd-desktop'],
     check: ['clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings'],
-    test: ['test', '--locked', '-p', 'lvovd-core', '-p', 'lvovd-media-ipc'],
+    test: ['test', '--locked', '--no-fail-fast', '-p', 'lvovd-core', '-p', 'lvovd-media-ipc'],
     'test-host': ['test', '--locked', '-p', 'lvovd-desktop'],
     fmt: ['fmt', '--all', '--', '--check']
   }[action];

@@ -3,7 +3,8 @@
 ## Read before changing the project
 
 - Read [the development contract](docs/development-contract.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the relevant section of [ROADMAP.md](ROADMAP.md).
-- Read [SECURITY.md](SECURITY.md) for trust boundaries. For desktop work, also read [the current desktop stage and evidence](docs/desktop-foundation.md).
+- Read [SECURITY.md](SECURITY.md) for trust boundaries. For desktop work, also read [the foundation evidence](docs/desktop-foundation.md) and [the in-progress 8B policy stage](docs/desktop-media-policies.md).
+- Before desktop workflow changes, read [the feature parity register](docs/v3-feature-parity.md), identify affected capability IDs, and update their implementation, tests, remaining work and evidence in the same PR. Follow its status rules; library tests do not establish a completed native workflow.
 - Treat these files as shared project guidance. Follow the user's current instructions and existing authorization; do not invent approval requirements.
 - If code, documentation, and the accepted plan disagree, identify the discrepancy and correct it within the authorized scope. Do not silently change product commitments.
 
@@ -33,6 +34,7 @@
 - Keep synthetic examples in public artifacts; never publish private source URLs, media titles, cookies, credentials, or local media.
 - Inspect the diff and run `git diff --check`. Report passed, failed, and untested checks separately. Never turn an unresolved failure into a skipped gate.
 - Update the development contract when an accepted product decision changes, and stage documentation when implementation evidence changes. Keep them consistent rather than duplicating instructions across agent files.
+- Run the parity checks for register/workflow changes. Never remove a baseline capability or mark it Verified to bypass a failure; the register documents the sole approved access-mode exception and stable-release gate.
 - PR preparation is authorized for the current migration. Merge, tagging, and publication require separate user authorization.
 
 ## User communication

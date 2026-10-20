@@ -1,11 +1,12 @@
 use crate::{
     AppError, Result,
+    media_inspection::{self, MediaInspection},
     process::{self, CancellationToken},
 };
 use serde::{Deserialize, Serialize};
 use std::{ffi::OsString, path::Path, time::Duration};
 
-// Foundation metadata only. Full v2.7 policy parity is a separate migration gate.
+// Keep the 8A playback descriptor stable; media carries the authoritative v2.7 facts.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inspection {
@@ -13,6 +14,7 @@ pub struct Inspection {
     pub duration_seconds: Option<f64>,
     pub streams: Vec<Stream>,
     pub mime: Option<String>,
+    pub media: Option<MediaInspection>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,8 +47,11 @@ fn integer(value: &serde_json::Value) -> Option<u32> {
         .map(|n| n as u32)
 }
 pub fn normalize(bytes: &[u8]) -> Result<Inspection> {
-    let raw: serde_json::Value = serde_json::from_slice(bytes)
-        .map_err(|_| AppError::new("INSPECTION_INVALID", "FFprobe returned invalid metadata."))?;
+    normalize_with_size(bytes, None)
+}
+fn normalize_with_size(bytes: &[u8], source_size: Option<u64>) -> Result<Inspection> {
+    let raw = media_inspection::parse(bytes)?;
+    let media = media_inspection::normalize_value(&raw, source_size)?;
     let entries = raw["streams"]
         .as_array()
         .filter(|a| a.len() <= 64)
@@ -65,7 +70,10 @@ pub fn normalize(bytes: &[u8]) -> Result<Inspection> {
                 codec: text(&s["codec_name"], 80),
                 sample_rate: integer(&s["sample_rate"]).filter(|v| *v > 0),
                 channels: integer(&s["channels"]).filter(|v| *v > 0),
-                sample_format: text(&s["sample_fmt"], 16),
+                sample_format: s["sample_fmt"]
+                    .as_str()
+                    .filter(|s| pattern!(r"\A(?:u8|s16|s32|s64|flt|dbl)p?\z").is_match(s))
+                    .map(str::to_owned),
                 bits_per_sample: integer(&s["bits_per_sample"]).filter(|v| (1..=64).contains(v)),
                 bits_per_raw_sample: integer(&s["bits_per_raw_sample"])
                     .filter(|v| (1..=64).contains(v)),
@@ -84,7 +92,7 @@ pub fn normalize(bytes: &[u8]) -> Result<Inspection> {
     }
     let format = text(&raw["format"]["format_name"], 400).unwrap_or_default();
     let names: Vec<_> = format.split(',').collect();
-    let has_video = streams.iter().any(|s| s.kind == "video");
+    let has_video = media.video.is_some();
     let mime = if names.contains(&"mp4") || names.contains(&"mov") {
         Some(if has_video { "video/mp4" } else { "audio/mp4" })
     } else if names.contains(&"webm") {
@@ -106,9 +114,10 @@ pub fn normalize(bytes: &[u8]) -> Result<Inspection> {
     };
     Ok(Inspection {
         format,
-        duration_seconds: number(&raw["format"]["duration"]).filter(|n| *n > 0.0),
+        duration_seconds: media.duration_seconds,
         streams,
         mime: mime.map(str::to_owned),
+        media: Some(media),
     })
 }
 
@@ -117,10 +126,16 @@ pub async fn inspect(
     source: &Path,
     cancel: &CancellationToken,
 ) -> Result<Inspection> {
+    if !source.is_absolute() {
+        return Err(AppError::new(
+            "SOURCE_PATH",
+            "An owned absolute media path is required.",
+        ));
+    }
     // Self-contained demuxers only; playlist / concat / network inputs are never followed.
     let args: Vec<OsString> = [
         "-v",
-        "error",
+        "warning",
         "-protocol_whitelist",
         "file",
         "-format_whitelist",
@@ -131,6 +146,7 @@ pub async fn inspect(
         "0",
         "-show_format",
         "-show_streams",
+        "-show_chapters",
         "-of",
         "json",
     ]
@@ -146,7 +162,17 @@ pub async fn inspect(
         cancel,
     )
     .await?;
-    normalize(&output.stdout)
+    let size = tokio::fs::metadata(source).await.ok().map(|m| m.len());
+    finish_probe(&output.stdout, &output.stderr, size)
+}
+fn finish_probe(stdout: &[u8], stderr: &[u8], size: Option<u64>) -> Result<Inspection> {
+    if pattern!(r"(?i)Skipped opening external track").is_match(&String::from_utf8_lossy(stderr)) {
+        return Err(AppError::new(
+            "LOCAL_INPUT_UNSUPPORTED",
+            "This file refers to external media. Choose a self-contained local video or audio file.",
+        ));
+    }
+    normalize_with_size(stdout, size)
 }
 
 #[cfg(test)]
@@ -165,5 +191,25 @@ mod tests {
         for bytes in [b"{".as_slice(), br#"{"streams":[]}"#] {
             assert!(normalize(bytes).is_err());
         }
+    }
+    #[test]
+    fn external_track_warning_rejects_successful_probe_without_path_disclosure() {
+        let raw =
+            br#"{"streams":[{"index":0,"codec_type":"audio"}],"format":{"format_name":"mov"}}"#;
+        let error = finish_probe(
+            raw,
+            b"Skipped opening external track: /synthetic/private/audio.wav",
+            Some(10),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "LOCAL_INPUT_UNSUPPORTED");
+        assert!(!error.message.contains("private"));
+    }
+    #[test]
+    fn attached_artwork_is_not_video_playback() {
+        let raw = br#"{"streams":[{"index":0,"codec_type":"audio"},{"index":1,"codec_type":"video","width":64,"height":64,"disposition":{"attached_pic":1}}],"format":{"format_name":"mov,mp4,m4a"}}"#;
+        let result = normalize(raw).unwrap();
+        assert_eq!(result.mime.as_deref(), Some("audio/mp4"));
+        assert_eq!(result.media.unwrap().media_kind, "audio");
     }
 }

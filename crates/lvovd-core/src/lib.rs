@@ -1,10 +1,27 @@
 //! Platform-independent application operations. Tauri is only a transport.
+macro_rules! pattern {
+    ($text:literal) => {{
+        static PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| regex::Regex::new($text).expect("static pattern"));
+        &*PATTERN
+    }};
+}
 pub mod assets;
+pub mod audio_policy;
+pub mod capabilities;
+pub mod edit_plan;
 pub mod inspection;
 pub mod media;
+pub mod media_admission;
+pub mod media_inspection;
+mod owned_file;
 #[cfg(unix)]
 pub mod playback;
 pub mod process;
+pub mod processing_command;
+pub mod processing_operation;
+pub mod processing_plan;
+pub mod processing_settings;
 pub mod tools;
 
 use serde::Serialize;

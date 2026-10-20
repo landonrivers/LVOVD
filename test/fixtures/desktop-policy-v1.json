@@ -1,0 +1,5389 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "release": "v2.7.0",
+    "commit": "7e192ad7ddee6478b517a74174cedf6dccd85a19",
+    "modules": [
+      "audio-policy.js",
+      "public/edit-plan.js"
+    ]
+  },
+  "cases": [
+    {
+      "id": "precision/u8",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_u8",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "u8",
+        "bitsPerSample": 8,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 8
+        }
+      }
+    },
+    {
+      "id": "audio/u8/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_u8",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "u8",
+          "bitsPerSample": 8,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_u8",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s16",
+            "bitDepth": 16,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "audio/u8/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_u8",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "u8",
+          "bitsPerSample": 8,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_u8",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_u8",
+            "bitDepth": 8,
+            "representation": "integer",
+            "sampleFormat": "u8",
+            "bitRate": 705600
+          },
+          "outputCodec": "pcm_u8"
+        }
+      }
+    },
+    {
+      "id": "precision/s16",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s16le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s16",
+        "bitsPerSample": 16,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 16
+        }
+      }
+    },
+    {
+      "id": "audio/s16/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s16le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s16",
+          "bitsPerSample": 16,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s16le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s16",
+            "bitDepth": 16,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "audio/s16/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s16le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s16",
+          "bitsPerSample": 16,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s16le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s16le",
+            "bitDepth": 16,
+            "representation": "integer",
+            "sampleFormat": "s16",
+            "bitRate": 1411200
+          },
+          "outputCodec": "pcm_s16le"
+        }
+      }
+    },
+    {
+      "id": "precision/s24",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32",
+        "bitsPerSample": 24,
+        "bitsPerRawSample": 24
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 24
+        }
+      }
+    },
+    {
+      "id": "audio/s24/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "audio/s24/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2116800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "precision/s32",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s32le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32",
+        "bitsPerSample": 32,
+        "bitsPerRawSample": 32
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 32
+        }
+      }
+    },
+    {
+      "id": "audio/s32/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s32le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 32,
+          "bitsPerRawSample": 32
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision of at most 24 bits here. Choose WAV to preserve this source without reducing precision.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/s32/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s32le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 32,
+          "bitsPerRawSample": 32
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s32le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s32le",
+            "bitDepth": 32,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2822400
+          },
+          "outputCodec": "pcm_s32le"
+        }
+      }
+    },
+    {
+      "id": "precision/float32",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_f32le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "flt",
+        "bitsPerSample": 32,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "float",
+          "bitDepth": 32
+        }
+      }
+    },
+    {
+      "id": "audio/float32/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_f32le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "flt",
+          "bitsPerSample": 32,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision of at most 24 bits here. Choose WAV to preserve this source without reducing precision.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/float32/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_f32le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "flt",
+          "bitsPerSample": 32,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_f32le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_f32le",
+            "bitDepth": 32,
+            "representation": "float",
+            "sampleFormat": "flt",
+            "bitRate": 2822400
+          },
+          "outputCodec": "pcm_f32le"
+        }
+      }
+    },
+    {
+      "id": "precision/float64",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_f64le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "dblp",
+        "bitsPerSample": 64,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "float",
+          "bitDepth": 64
+        }
+      }
+    },
+    {
+      "id": "audio/float64/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_f64le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "dblp",
+          "bitsPerSample": 64,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision of at most 24 bits here. Choose WAV to preserve this source without reducing precision.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/float64/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_f64le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "dblp",
+          "bitsPerSample": 64,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_f64le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_f64le",
+            "bitDepth": 64,
+            "representation": "float",
+            "sampleFormat": "dbl",
+            "bitRate": 5644800
+          },
+          "outputCodec": "pcm_f64le"
+        }
+      }
+    },
+    {
+      "id": "precision/integer64",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s64le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s64",
+        "bitsPerSample": 64,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 64
+        }
+      }
+    },
+    {
+      "id": "audio/integer64/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s64le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s64",
+          "bitsPerSample": 64,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision of at most 24 bits here. Choose WAV to preserve this source without reducing precision.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/integer64/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s64le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s64",
+          "bitsPerSample": 64,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "error": "WAV cannot preserve this integer precision with the supported encoders.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "precision/unknown",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "flac",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32",
+        "bitsPerSample": null,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": null
+        }
+      }
+    },
+    {
+      "id": "audio/unknown/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "flac",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": null,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision. Choose WAV when the source sample format can be inspected; meaningful precision will not be guessed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/unknown/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "flac",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": null,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "flac",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s32le",
+            "bitDepth": 32,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2822400
+          },
+          "outputCodec": "pcm_s32le"
+        }
+      }
+    },
+    {
+      "id": "precision/codec-evidence",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24be",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32",
+        "bitsPerSample": null,
+        "bitsPerRawSample": null
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 24
+        }
+      }
+    },
+    {
+      "id": "audio/codec-evidence/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24be",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": null,
+          "bitsPerRawSample": null
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24be",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "audio/codec-evidence/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24be",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": null,
+          "bitsPerRawSample": null
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24be",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2116800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "precision/raw-precedence",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32",
+        "bitsPerSample": 32,
+        "bitsPerRawSample": 20
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 20
+        }
+      }
+    },
+    {
+      "id": "audio/raw-precedence/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 32,
+          "bitsPerRawSample": 20
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "audio/raw-precedence/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 32,
+          "bitsPerRawSample": 20
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2116800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "precision/inconsistent",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s16",
+        "bitsPerSample": 24,
+        "bitsPerRawSample": 24
+      },
+      "expected": {
+        "value": {
+          "representation": null,
+          "bitDepth": null
+        }
+      }
+    },
+    {
+      "id": "audio/inconsistent/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s16",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision. Choose WAV when the source sample format can be inspected; meaningful precision will not be guessed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/inconsistent/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s16",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio precision is unknown. Choose another source with usable sample-format metadata.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "precision/missing-format",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": null,
+        "bitsPerSample": 24,
+        "bitsPerRawSample": 24
+      },
+      "expected": {
+        "value": {
+          "representation": null,
+          "bitDepth": null
+        }
+      }
+    },
+    {
+      "id": "audio/missing-format/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": null,
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision. Choose WAV when the source sample format can be inspected; meaningful precision will not be guessed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/missing-format/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": null,
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio precision is unknown. Choose another source with usable sample-format metadata.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "precision/invalid-format",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32;filter",
+        "bitsPerSample": 24,
+        "bitsPerRawSample": 24
+      },
+      "expected": {
+        "value": {
+          "representation": null,
+          "bitDepth": null
+        }
+      }
+    },
+    {
+      "id": "audio/invalid-format/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32;filter",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC requires proven integer precision. Choose WAV when the source sample format can be inspected; meaningful precision will not be guessed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "audio/invalid-format/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32;filter",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio precision is unknown. Choose another source with usable sample-format metadata.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "precision/planar",
+      "operation": "precision",
+      "input": {
+        "streamIndex": 4,
+        "codec": "pcm_s24le",
+        "sampleRate": 44100,
+        "channels": 2,
+        "channelLayout": "stereo",
+        "sampleFormat": "s32p",
+        "bitsPerSample": 24,
+        "bitsPerRawSample": 24
+      },
+      "expected": {
+        "value": {
+          "representation": "integer",
+          "bitDepth": 24
+        }
+      }
+    },
+    {
+      "id": "audio/planar/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32p",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "audio/planar/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32p",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2116800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/mono/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "aac",
+            "bitRate": 128000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "layout/mono/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "libmp3lame",
+            "quality": 0
+          },
+          "outputCodec": "mp3"
+        }
+      }
+    },
+    {
+      "id": "layout/mono/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "libopus",
+            "bitRate": 64000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/mono/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/mono/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 1058400
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/stereo/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 256000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "layout/stereo/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libmp3lame",
+            "quality": 0
+          },
+          "outputCodec": "mp3"
+        }
+      }
+    },
+    {
+      "id": "layout/stereo/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/stereo/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/stereo/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2116800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/3.0/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 3,
+          "channelLayout": "3.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/3.0/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 3,
+          "channelLayout": "3.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/3.0/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 3,
+          "channelLayout": "3.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 3,
+            "channelLayout": "3.0",
+            "encoder": "libopus",
+            "bitRate": 192000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/3.0/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 3,
+          "channelLayout": "3.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 3,
+            "channelLayout": "3.0",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/3.0/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 3,
+          "channelLayout": "3.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 3,
+            "channelLayout": "3.0",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 3175200
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/quad/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 4,
+          "channelLayout": "quad",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/quad/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 4,
+          "channelLayout": "quad",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/quad/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 4,
+          "channelLayout": "quad",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 4,
+            "channelLayout": "quad",
+            "encoder": "libopus",
+            "bitRate": 256000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/quad/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 4,
+          "channelLayout": "quad",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 4,
+            "channelLayout": "quad",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/quad/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 4,
+          "channelLayout": "quad",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 4,
+            "channelLayout": "quad",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 4233600
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/5.0/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 5,
+          "channelLayout": "5.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/5.0/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 5,
+          "channelLayout": "5.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/5.0/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 5,
+          "channelLayout": "5.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 5,
+            "channelLayout": "5.0",
+            "encoder": "libopus",
+            "bitRate": 320000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/5.0/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 5,
+          "channelLayout": "5.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 5,
+            "channelLayout": "5.0",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/5.0/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 5,
+          "channelLayout": "5.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 5,
+            "channelLayout": "5.0",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 5292000
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 6,
+            "channelLayout": "5.1",
+            "encoder": "aac",
+            "bitRate": 512000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 6,
+            "channelLayout": "5.1",
+            "encoder": "libopus",
+            "bitRate": 384000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 6,
+            "channelLayout": "5.1",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 6,
+            "channelLayout": "5.1",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 6350400
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1(side)/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1(side)",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 6,
+            "channelLayout": "5.1(side)",
+            "encoder": "aac",
+            "bitRate": 512000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1(side)/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1(side)",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1(side)/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1(side)",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "Opus cannot preserve the 5.1(side) layout here. Choose FLAC or WAV; speakers will not be remapped.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1(side)/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1(side)",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 6,
+            "channelLayout": "5.1(side)",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/5.1(side)/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1(side)",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 6,
+            "channelLayout": "5.1(side)",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 6350400
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/6.1/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 7,
+          "channelLayout": "6.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/6.1/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 7,
+          "channelLayout": "6.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/6.1/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 7,
+          "channelLayout": "6.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 7,
+            "channelLayout": "6.1",
+            "encoder": "libopus",
+            "bitRate": 448000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/6.1/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 7,
+          "channelLayout": "6.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 7,
+            "channelLayout": "6.1",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/6.1/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 7,
+          "channelLayout": "6.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 7,
+            "channelLayout": "6.1",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 7408800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "layout/7.1/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/7.1/mp3",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded here without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "layout/7.1/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 8,
+            "channelLayout": "7.1",
+            "encoder": "libopus",
+            "bitRate": 512000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "layout/7.1/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 8,
+            "channelLayout": "7.1",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "layout/7.1/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 8,
+            "channelLayout": "7.1",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 8467200
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "validation/mono-inferred",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": null,
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "libopus",
+            "bitRate": 64000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "validation/stereo-inferred",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": null,
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "validation/surround-unknown",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": null,
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "An audio channel layout is required before encoding.",
+          "reason": "incomplete"
+        }
+      }
+    },
+    {
+      "id": "validation/layout-mismatch",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "validation/layout-unsupported",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 4,
+          "channelLayout": "4.0",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "This audio layout cannot be encoded without a channel change. No downmix is performed.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "validation/missing-stream",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": null,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio codec, stream identity, channels, or sample rate is incomplete.",
+          "reason": "incomplete"
+        }
+      }
+    },
+    {
+      "id": "validation/missing-codec",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": null,
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio codec, stream identity, channels, or sample rate is incomplete.",
+          "reason": "incomplete"
+        }
+      }
+    },
+    {
+      "id": "validation/missing-rate",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": null,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio codec, stream identity, channels, or sample rate is incomplete.",
+          "reason": "incomplete"
+        }
+      }
+    },
+    {
+      "id": "validation/zero-rate",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 0,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio codec, stream identity, channels, or sample rate is incomplete.",
+          "reason": "incomplete"
+        }
+      }
+    },
+    {
+      "id": "validation/zero-channels",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 0,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "error": "Audio codec, stream identity, channels, or sample rate is incomplete.",
+          "reason": "incomplete"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/7",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 7
+      },
+      "expected": {
+        "value": {
+          "error": "Opus bitrate must be between 8 and 512 kbps for this channel count.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/8",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 8
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 8000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/8.5",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 8.5
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 8500
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/512",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 512
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 512000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/513",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 513
+      },
+      "expected": {
+        "value": {
+          "error": "Opus bitrate must be between 8 and 512 kbps for this channel count.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/mp3/31",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3",
+        "bitrateKbps": 31
+      },
+      "expected": {
+        "value": {
+          "error": "Choose a supported MP3 bitrate: 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320 kbps.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/mp3/32",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3",
+        "bitrateKbps": 32
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libmp3lame",
+            "bitRate": 32000
+          },
+          "outputCodec": "mp3"
+        }
+      }
+    },
+    {
+      "id": "bitrate/mp3/64",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3",
+        "bitrateKbps": 64
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libmp3lame",
+            "bitRate": 64000
+          },
+          "outputCodec": "mp3"
+        }
+      }
+    },
+    {
+      "id": "bitrate/mp3/320",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3",
+        "bitrateKbps": 320
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libmp3lame",
+            "bitRate": 320000
+          },
+          "outputCodec": "mp3"
+        }
+      }
+    },
+    {
+      "id": "bitrate/mp3/321",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "mp3",
+        "bitrateKbps": 321
+      },
+      "expected": {
+        "value": {
+          "error": "Choose a supported MP3 bitrate: 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320 kbps.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/aac/128",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac",
+        "bitrateKbps": 128
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 44100,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 128000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "bitrate/flac/64",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac",
+        "bitrateKbps": 64
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC and WAV preserve precision automatically and do not take an audio bitrate.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/pcm/64",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm",
+        "bitrateKbps": 64
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC and WAV preserve precision automatically and do not take an audio bitrate.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/unknown/null",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "unknown",
+        "bitrateKbps": null
+      },
+      "expected": {
+        "value": {
+          "error": "Choose a supported audio encoder explicitly.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/1/256",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 256
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 1,
+            "channelLayout": "mono",
+            "encoder": "libopus",
+            "bitRate": 256000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/1/257",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 1,
+          "channelLayout": "mono",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 257
+      },
+      "expected": {
+        "value": {
+          "error": "Opus bitrate must be between 8 and 256 kbps for this channel count.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/6/1536",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 1536
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 6,
+            "channelLayout": "5.1",
+            "encoder": "libopus",
+            "bitRate": 1536000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/6/1537",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 6,
+          "channelLayout": "5.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 1537
+      },
+      "expected": {
+        "value": {
+          "error": "Opus bitrate must be between 8 and 1536 kbps for this channel count.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/8/2048",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 2048
+      },
+      "expected": {
+        "value": {
+          "error": "Opus bitrate must be between 8 and 1536 kbps for this channel count.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "bitrate/opus/8/1537",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 44100,
+          "channels": 8,
+          "channelLayout": "7.1",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus",
+        "bitrateKbps": 1537
+      },
+      "expected": {
+        "value": {
+          "error": "Opus bitrate must be between 8 and 1536 kbps for this channel count.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "rate/22050/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 22050,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 256000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "rate/22050/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 22050,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "rate/22050/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 22050,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 22050,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "rate/22050/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 22050,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 22050,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 1058400
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "rate/48000/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 48000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 256000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "rate/48000/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 48000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "rate/48000/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 48000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "rate/48000/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 48000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 2304000
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "rate/96000/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 96000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 256000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "rate/96000/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 96000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "rate/96000/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 96000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 96000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "rate/96000/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 96000,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 96000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 4608000
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "rate/655350/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655350,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 256000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "rate/655350/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655350,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "rate/655350/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655350,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 655350,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "flac",
+            "sampleFormat": "s32",
+            "bitDepth": 24,
+            "representation": "integer",
+            "compressionLevel": 5
+          },
+          "outputCodec": "flac"
+        }
+      }
+    },
+    {
+      "id": "rate/655350/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655350,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 655350,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 31456800
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "rate/655351/aac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655351,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "aac"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "aac",
+            "bitRate": 256000
+          },
+          "outputCodec": "aac"
+        }
+      }
+    },
+    {
+      "id": "rate/655351/opus",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655351,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "opus"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 48000,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "libopus",
+            "bitRate": 128000
+          },
+          "outputCodec": "opus"
+        }
+      }
+    },
+    {
+      "id": "rate/655351/flac",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655351,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "flac"
+      },
+      "expected": {
+        "value": {
+          "error": "FLAC cannot preserve this sample rate. Choose WAV.",
+          "reason": "unsupported"
+        }
+      }
+    },
+    {
+      "id": "rate/655351/pcm",
+      "operation": "audio",
+      "input": {
+        "audio": {
+          "streamIndex": 4,
+          "codec": "pcm_s24le",
+          "sampleRate": 655351,
+          "channels": 2,
+          "channelLayout": "stereo",
+          "sampleFormat": "s32",
+          "bitsPerSample": 24,
+          "bitsPerRawSample": 24
+        },
+        "codec": "pcm"
+      },
+      "expected": {
+        "value": {
+          "stream": {
+            "role": "audio",
+            "index": 4,
+            "codec": "pcm_s24le",
+            "action": "encode",
+            "sampleRate": 655351,
+            "channels": 2,
+            "channelLayout": "stereo",
+            "encoder": "pcm_s24le",
+            "bitDepth": 24,
+            "representation": "integer",
+            "sampleFormat": "s32",
+            "bitRate": 31456848
+          },
+          "outputCodec": "pcm_s24le"
+        }
+      }
+    },
+    {
+      "id": "timeline/video-clock",
+      "operation": "timeline",
+      "input": {
+        "durationSeconds": 5,
+        "video": {},
+        "audio": {
+          "startSeconds": 0.5,
+          "durationSeconds": 4
+        }
+      },
+      "expected": {
+        "value": {
+          "durationSeconds": 5,
+          "offsetSeconds": 0
+        }
+      }
+    },
+    {
+      "id": "timeline/audio-clock",
+      "operation": "timeline",
+      "input": {
+        "durationSeconds": 5,
+        "audio": {
+          "startSeconds": 0.5,
+          "durationSeconds": 4
+        }
+      },
+      "expected": {
+        "value": {
+          "durationSeconds": 4,
+          "offsetSeconds": 0.5
+        }
+      }
+    },
+    {
+      "id": "timeline/audio-endpoint",
+      "operation": "timeline",
+      "input": {
+        "durationSeconds": 5,
+        "audio": {
+          "startSeconds": 0.5
+        }
+      },
+      "expected": {
+        "value": {
+          "durationSeconds": 4.5,
+          "offsetSeconds": 0.5
+        }
+      }
+    },
+    {
+      "id": "timeline/audio-missing-clock",
+      "operation": "timeline",
+      "input": {
+        "durationSeconds": 5,
+        "audio": {}
+      },
+      "expected": {
+        "value": {
+          "durationSeconds": null,
+          "offsetSeconds": null
+        }
+      }
+    },
+    {
+      "id": "timeline/audio-negative-start",
+      "operation": "timeline",
+      "input": {
+        "durationSeconds": 5,
+        "audio": {
+          "startSeconds": -0.5,
+          "durationSeconds": 5.5005
+        }
+      },
+      "expected": {
+        "value": {
+          "durationSeconds": 5.501,
+          "offsetSeconds": -0.5
+        }
+      }
+    },
+    {
+      "id": "timeline/audio-ended",
+      "operation": "timeline",
+      "input": {
+        "durationSeconds": 5,
+        "audio": {
+          "startSeconds": 5
+        }
+      },
+      "expected": {
+        "value": {
+          "durationSeconds": null,
+          "offsetSeconds": 5
+        }
+      }
+    },
+    {
+      "id": "edit/full",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 10
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 0,
+                "endSeconds": 10
+              }
+            ]
+          },
+          "durationSeconds": 10,
+          "fullDuration": true
+        }
+      }
+    },
+    {
+      "id": "edit/cut",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 1.23449,
+              "endSeconds": 9.87651
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 1.234,
+                "endSeconds": 9.877
+              }
+            ]
+          },
+          "durationSeconds": 8.643,
+          "fullDuration": false
+        }
+      }
+    },
+    {
+      "id": "edit/gaps",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2
+            },
+            {
+              "startSeconds": 4,
+              "endSeconds": 6.125
+            },
+            {
+              "startSeconds": 8,
+              "endSeconds": 9
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 0,
+                "endSeconds": 2
+              },
+              {
+                "startSeconds": 4,
+                "endSeconds": 6.125
+              },
+              {
+                "startSeconds": 8,
+                "endSeconds": 9
+              }
+            ]
+          },
+          "durationSeconds": 5.125,
+          "fullDuration": false
+        }
+      }
+    },
+    {
+      "id": "edit/adjacent",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2
+            },
+            {
+              "startSeconds": 2,
+              "endSeconds": 4
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 0,
+                "endSeconds": 4
+              }
+            ]
+          },
+          "durationSeconds": 4,
+          "fullDuration": false
+        }
+      }
+    },
+    {
+      "id": "edit/rounded-gap",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2.0004
+            },
+            {
+              "startSeconds": 2.00049,
+              "endSeconds": 4
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 0,
+                "endSeconds": 4
+              }
+            ]
+          },
+          "durationSeconds": 4,
+          "fullDuration": false
+        }
+      }
+    },
+    {
+      "id": "edit/raw-overlap",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2.00049
+            },
+            {
+              "startSeconds": 2.0004,
+              "endSeconds": 4
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained ranges must not overlap."
+        }
+      }
+    },
+    {
+      "id": "edit/out-of-order",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 4,
+              "endSeconds": 6
+            },
+            {
+              "startSeconds": 1,
+              "endSeconds": 2
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained ranges must be sorted in ascending chronological order."
+        }
+      }
+    },
+    {
+      "id": "edit/negative",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": -0.0001,
+              "endSeconds": 2
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 must stay within the inspected media duration."
+        }
+      }
+    },
+    {
+      "id": "edit/outside",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 10.0001
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 must stay within the inspected media duration."
+        }
+      }
+    },
+    {
+      "id": "edit/empty",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": []
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan must retain at least one range."
+        }
+      }
+    },
+    {
+      "id": "edit/inverted",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 3,
+              "endSeconds": 2
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 end must be after its start."
+        }
+      }
+    },
+    {
+      "id": "edit/zero-length",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 2,
+              "endSeconds": 2
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 end must be after its start."
+        }
+      }
+    },
+    {
+      "id": "edit/rounded-empty",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 2.0001,
+              "endSeconds": 2.0004
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 end must be after its start."
+        }
+      }
+    },
+    {
+      "id": "edit/string-time",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": "1",
+              "endSeconds": 2
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 must contain numeric start and end times."
+        }
+      }
+    },
+    {
+      "id": "edit/null-time",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": null,
+              "endSeconds": 2
+            }
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 must contain numeric start and end times."
+        }
+      }
+    },
+    {
+      "id": "edit/wrong-version",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 2,
+          "keepRanges": []
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan version 1 is required."
+        }
+      }
+    },
+    {
+      "id": "edit/string-version",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": "1",
+          "keepRanges": []
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan version 1 is required."
+        }
+      }
+    },
+    {
+      "id": "edit/null",
+      "operation": "edit",
+      "input": {
+        "plan": null,
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan must be an object."
+        }
+      }
+    },
+    {
+      "id": "edit/array",
+      "operation": "edit",
+      "input": {
+        "plan": [],
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan must be an object."
+        }
+      }
+    },
+    {
+      "id": "edit/missing-ranges",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan must retain at least one range."
+        }
+      }
+    },
+    {
+      "id": "edit/not-an-array",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": {}
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan must retain at least one range."
+        }
+      }
+    },
+    {
+      "id": "edit/array-range",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            [
+              0,
+              1
+            ]
+          ]
+        },
+        "durationSeconds": 10
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Retained range 1 must contain numeric start and end times."
+        }
+      }
+    },
+    {
+      "id": "edit/reject-noop",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 10
+            }
+          ]
+        },
+        "durationSeconds": 10,
+        "rejectNoop": true
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Move an outer boundary or remove a section before creating an edited file."
+        }
+      }
+    },
+    {
+      "id": "edit/zero-duration",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 1
+            }
+          ]
+        },
+        "durationSeconds": 0
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "The inspected media duration must be a finite positive number."
+        }
+      }
+    },
+    {
+      "id": "edit/rounding-boundary",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0.0005,
+              "endSeconds": 1.0015
+            }
+          ]
+        },
+        "durationSeconds": 2
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 0.001,
+                "endSeconds": 1.002
+              }
+            ]
+          },
+          "durationSeconds": 1.001,
+          "fullDuration": false
+        }
+      }
+    },
+    {
+      "id": "edit/range-limit/50",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 1
+            },
+            {
+              "startSeconds": 2,
+              "endSeconds": 3
+            },
+            {
+              "startSeconds": 4,
+              "endSeconds": 5
+            },
+            {
+              "startSeconds": 6,
+              "endSeconds": 7
+            },
+            {
+              "startSeconds": 8,
+              "endSeconds": 9
+            },
+            {
+              "startSeconds": 10,
+              "endSeconds": 11
+            },
+            {
+              "startSeconds": 12,
+              "endSeconds": 13
+            },
+            {
+              "startSeconds": 14,
+              "endSeconds": 15
+            },
+            {
+              "startSeconds": 16,
+              "endSeconds": 17
+            },
+            {
+              "startSeconds": 18,
+              "endSeconds": 19
+            },
+            {
+              "startSeconds": 20,
+              "endSeconds": 21
+            },
+            {
+              "startSeconds": 22,
+              "endSeconds": 23
+            },
+            {
+              "startSeconds": 24,
+              "endSeconds": 25
+            },
+            {
+              "startSeconds": 26,
+              "endSeconds": 27
+            },
+            {
+              "startSeconds": 28,
+              "endSeconds": 29
+            },
+            {
+              "startSeconds": 30,
+              "endSeconds": 31
+            },
+            {
+              "startSeconds": 32,
+              "endSeconds": 33
+            },
+            {
+              "startSeconds": 34,
+              "endSeconds": 35
+            },
+            {
+              "startSeconds": 36,
+              "endSeconds": 37
+            },
+            {
+              "startSeconds": 38,
+              "endSeconds": 39
+            },
+            {
+              "startSeconds": 40,
+              "endSeconds": 41
+            },
+            {
+              "startSeconds": 42,
+              "endSeconds": 43
+            },
+            {
+              "startSeconds": 44,
+              "endSeconds": 45
+            },
+            {
+              "startSeconds": 46,
+              "endSeconds": 47
+            },
+            {
+              "startSeconds": 48,
+              "endSeconds": 49
+            },
+            {
+              "startSeconds": 50,
+              "endSeconds": 51
+            },
+            {
+              "startSeconds": 52,
+              "endSeconds": 53
+            },
+            {
+              "startSeconds": 54,
+              "endSeconds": 55
+            },
+            {
+              "startSeconds": 56,
+              "endSeconds": 57
+            },
+            {
+              "startSeconds": 58,
+              "endSeconds": 59
+            },
+            {
+              "startSeconds": 60,
+              "endSeconds": 61
+            },
+            {
+              "startSeconds": 62,
+              "endSeconds": 63
+            },
+            {
+              "startSeconds": 64,
+              "endSeconds": 65
+            },
+            {
+              "startSeconds": 66,
+              "endSeconds": 67
+            },
+            {
+              "startSeconds": 68,
+              "endSeconds": 69
+            },
+            {
+              "startSeconds": 70,
+              "endSeconds": 71
+            },
+            {
+              "startSeconds": 72,
+              "endSeconds": 73
+            },
+            {
+              "startSeconds": 74,
+              "endSeconds": 75
+            },
+            {
+              "startSeconds": 76,
+              "endSeconds": 77
+            },
+            {
+              "startSeconds": 78,
+              "endSeconds": 79
+            },
+            {
+              "startSeconds": 80,
+              "endSeconds": 81
+            },
+            {
+              "startSeconds": 82,
+              "endSeconds": 83
+            },
+            {
+              "startSeconds": 84,
+              "endSeconds": 85
+            },
+            {
+              "startSeconds": 86,
+              "endSeconds": 87
+            },
+            {
+              "startSeconds": 88,
+              "endSeconds": 89
+            },
+            {
+              "startSeconds": 90,
+              "endSeconds": 91
+            },
+            {
+              "startSeconds": 92,
+              "endSeconds": 93
+            },
+            {
+              "startSeconds": 94,
+              "endSeconds": 95
+            },
+            {
+              "startSeconds": 96,
+              "endSeconds": 97
+            },
+            {
+              "startSeconds": 98,
+              "endSeconds": 99
+            }
+          ]
+        },
+        "durationSeconds": 102
+      },
+      "expected": {
+        "value": {
+          "plan": {
+            "version": 1,
+            "keepRanges": [
+              {
+                "startSeconds": 0,
+                "endSeconds": 1
+              },
+              {
+                "startSeconds": 2,
+                "endSeconds": 3
+              },
+              {
+                "startSeconds": 4,
+                "endSeconds": 5
+              },
+              {
+                "startSeconds": 6,
+                "endSeconds": 7
+              },
+              {
+                "startSeconds": 8,
+                "endSeconds": 9
+              },
+              {
+                "startSeconds": 10,
+                "endSeconds": 11
+              },
+              {
+                "startSeconds": 12,
+                "endSeconds": 13
+              },
+              {
+                "startSeconds": 14,
+                "endSeconds": 15
+              },
+              {
+                "startSeconds": 16,
+                "endSeconds": 17
+              },
+              {
+                "startSeconds": 18,
+                "endSeconds": 19
+              },
+              {
+                "startSeconds": 20,
+                "endSeconds": 21
+              },
+              {
+                "startSeconds": 22,
+                "endSeconds": 23
+              },
+              {
+                "startSeconds": 24,
+                "endSeconds": 25
+              },
+              {
+                "startSeconds": 26,
+                "endSeconds": 27
+              },
+              {
+                "startSeconds": 28,
+                "endSeconds": 29
+              },
+              {
+                "startSeconds": 30,
+                "endSeconds": 31
+              },
+              {
+                "startSeconds": 32,
+                "endSeconds": 33
+              },
+              {
+                "startSeconds": 34,
+                "endSeconds": 35
+              },
+              {
+                "startSeconds": 36,
+                "endSeconds": 37
+              },
+              {
+                "startSeconds": 38,
+                "endSeconds": 39
+              },
+              {
+                "startSeconds": 40,
+                "endSeconds": 41
+              },
+              {
+                "startSeconds": 42,
+                "endSeconds": 43
+              },
+              {
+                "startSeconds": 44,
+                "endSeconds": 45
+              },
+              {
+                "startSeconds": 46,
+                "endSeconds": 47
+              },
+              {
+                "startSeconds": 48,
+                "endSeconds": 49
+              },
+              {
+                "startSeconds": 50,
+                "endSeconds": 51
+              },
+              {
+                "startSeconds": 52,
+                "endSeconds": 53
+              },
+              {
+                "startSeconds": 54,
+                "endSeconds": 55
+              },
+              {
+                "startSeconds": 56,
+                "endSeconds": 57
+              },
+              {
+                "startSeconds": 58,
+                "endSeconds": 59
+              },
+              {
+                "startSeconds": 60,
+                "endSeconds": 61
+              },
+              {
+                "startSeconds": 62,
+                "endSeconds": 63
+              },
+              {
+                "startSeconds": 64,
+                "endSeconds": 65
+              },
+              {
+                "startSeconds": 66,
+                "endSeconds": 67
+              },
+              {
+                "startSeconds": 68,
+                "endSeconds": 69
+              },
+              {
+                "startSeconds": 70,
+                "endSeconds": 71
+              },
+              {
+                "startSeconds": 72,
+                "endSeconds": 73
+              },
+              {
+                "startSeconds": 74,
+                "endSeconds": 75
+              },
+              {
+                "startSeconds": 76,
+                "endSeconds": 77
+              },
+              {
+                "startSeconds": 78,
+                "endSeconds": 79
+              },
+              {
+                "startSeconds": 80,
+                "endSeconds": 81
+              },
+              {
+                "startSeconds": 82,
+                "endSeconds": 83
+              },
+              {
+                "startSeconds": 84,
+                "endSeconds": 85
+              },
+              {
+                "startSeconds": 86,
+                "endSeconds": 87
+              },
+              {
+                "startSeconds": 88,
+                "endSeconds": 89
+              },
+              {
+                "startSeconds": 90,
+                "endSeconds": 91
+              },
+              {
+                "startSeconds": 92,
+                "endSeconds": 93
+              },
+              {
+                "startSeconds": 94,
+                "endSeconds": 95
+              },
+              {
+                "startSeconds": 96,
+                "endSeconds": 97
+              },
+              {
+                "startSeconds": 98,
+                "endSeconds": 99
+              }
+            ]
+          },
+          "durationSeconds": 50,
+          "fullDuration": false
+        }
+      }
+    },
+    {
+      "id": "edit/range-limit/51",
+      "operation": "edit",
+      "input": {
+        "plan": {
+          "version": 1,
+          "keepRanges": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 1
+            },
+            {
+              "startSeconds": 2,
+              "endSeconds": 3
+            },
+            {
+              "startSeconds": 4,
+              "endSeconds": 5
+            },
+            {
+              "startSeconds": 6,
+              "endSeconds": 7
+            },
+            {
+              "startSeconds": 8,
+              "endSeconds": 9
+            },
+            {
+              "startSeconds": 10,
+              "endSeconds": 11
+            },
+            {
+              "startSeconds": 12,
+              "endSeconds": 13
+            },
+            {
+              "startSeconds": 14,
+              "endSeconds": 15
+            },
+            {
+              "startSeconds": 16,
+              "endSeconds": 17
+            },
+            {
+              "startSeconds": 18,
+              "endSeconds": 19
+            },
+            {
+              "startSeconds": 20,
+              "endSeconds": 21
+            },
+            {
+              "startSeconds": 22,
+              "endSeconds": 23
+            },
+            {
+              "startSeconds": 24,
+              "endSeconds": 25
+            },
+            {
+              "startSeconds": 26,
+              "endSeconds": 27
+            },
+            {
+              "startSeconds": 28,
+              "endSeconds": 29
+            },
+            {
+              "startSeconds": 30,
+              "endSeconds": 31
+            },
+            {
+              "startSeconds": 32,
+              "endSeconds": 33
+            },
+            {
+              "startSeconds": 34,
+              "endSeconds": 35
+            },
+            {
+              "startSeconds": 36,
+              "endSeconds": 37
+            },
+            {
+              "startSeconds": 38,
+              "endSeconds": 39
+            },
+            {
+              "startSeconds": 40,
+              "endSeconds": 41
+            },
+            {
+              "startSeconds": 42,
+              "endSeconds": 43
+            },
+            {
+              "startSeconds": 44,
+              "endSeconds": 45
+            },
+            {
+              "startSeconds": 46,
+              "endSeconds": 47
+            },
+            {
+              "startSeconds": 48,
+              "endSeconds": 49
+            },
+            {
+              "startSeconds": 50,
+              "endSeconds": 51
+            },
+            {
+              "startSeconds": 52,
+              "endSeconds": 53
+            },
+            {
+              "startSeconds": 54,
+              "endSeconds": 55
+            },
+            {
+              "startSeconds": 56,
+              "endSeconds": 57
+            },
+            {
+              "startSeconds": 58,
+              "endSeconds": 59
+            },
+            {
+              "startSeconds": 60,
+              "endSeconds": 61
+            },
+            {
+              "startSeconds": 62,
+              "endSeconds": 63
+            },
+            {
+              "startSeconds": 64,
+              "endSeconds": 65
+            },
+            {
+              "startSeconds": 66,
+              "endSeconds": 67
+            },
+            {
+              "startSeconds": 68,
+              "endSeconds": 69
+            },
+            {
+              "startSeconds": 70,
+              "endSeconds": 71
+            },
+            {
+              "startSeconds": 72,
+              "endSeconds": 73
+            },
+            {
+              "startSeconds": 74,
+              "endSeconds": 75
+            },
+            {
+              "startSeconds": 76,
+              "endSeconds": 77
+            },
+            {
+              "startSeconds": 78,
+              "endSeconds": 79
+            },
+            {
+              "startSeconds": 80,
+              "endSeconds": 81
+            },
+            {
+              "startSeconds": 82,
+              "endSeconds": 83
+            },
+            {
+              "startSeconds": 84,
+              "endSeconds": 85
+            },
+            {
+              "startSeconds": 86,
+              "endSeconds": 87
+            },
+            {
+              "startSeconds": 88,
+              "endSeconds": 89
+            },
+            {
+              "startSeconds": 90,
+              "endSeconds": 91
+            },
+            {
+              "startSeconds": 92,
+              "endSeconds": 93
+            },
+            {
+              "startSeconds": 94,
+              "endSeconds": 95
+            },
+            {
+              "startSeconds": 96,
+              "endSeconds": 97
+            },
+            {
+              "startSeconds": 98,
+              "endSeconds": 99
+            },
+            {
+              "startSeconds": 100,
+              "endSeconds": 101
+            }
+          ]
+        },
+        "durationSeconds": 102
+      },
+      "expected": {
+        "error": {
+          "code": "LVOVD_EDIT_PLAN_INVALID",
+          "message": "Edit plan cannot contain more than 50 retained ranges."
+        }
+      }
+    }
+  ]
+}
