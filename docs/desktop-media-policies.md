@@ -1,6 +1,6 @@
-# v3.0 desktop migration — 8B (in progress)
+# v3.0 desktop migration — 8B (accepted core checkpoint)
 
-Stage 8B continues from the [8A staging merge](https://github.com/landonrivers/LVOVD/pull/52) on `staging/v3-desktop`. Its PR targets staging; `master` remains the released v2.7 application. This document records partial implementation, not stage acceptance or release readiness. Follow the [development contract](development-contract.md) and [8A setup and platform evidence](desktop-foundation.md).
+Stage 8B continued from the [8A staging merge](https://github.com/landonrivers/LVOVD/pull/52) on `staging/v3-desktop`. The user accepted [PR #53](https://github.com/landonrivers/LVOVD/pull/53), merged at `109cf635301dc8f28ae18cbffa5cf8fde41e14d0` after the reviewed head `10c5cbfd988ba655994971dbaf60b461dc7caa96` passed every native and reference gate. `master` remains the released v2.7 application. This accepts the policy, worker and unified ownership checkpoint, not complete native workflows or release readiness. [8C Local Media integration](desktop-local-media.md) continues in a separate PR. Follow the [development contract](development-contract.md) and [8A setup and platform evidence](desktop-foundation.md).
 
 The [feature parity register](v3-feature-parity.md) maps every audited v2.7 capability and accepted desktop addition to its native workflow and migration stage. Core policy entries can be Ported; no completed user workflow is claimed Verified. CI validates register/test references, prevents silent inventory loss against prior revisions, and blocks stable-version acceptance while any required entry remains incomplete. This is migration tracking, not implementation of the missing Download or Local Media operations.
 
@@ -77,13 +77,11 @@ Worker guards demonstrate why Rust ownership is useful here: moving a reservatio
 
 `Prepared` adds a single-use ownership boundary: Rust moves an admitted review and source lease into the operation; it cannot be reconstructed from interface JSON or reused by another owner. `OutputLease` keeps bytes alive while a reader uses them. A private publication method makes “validated and still authorized” a prerequisite for a visible result, instead of relying on every future command handler to remember the sequence.
 
-## Remaining work in this PR
+## Accepted checkpoint and handoff
 
-8B is not ready to merge until all of the following are implemented and validated:
+The command, validation, generated-media, worker and ownership suites passed on the final reviewed head, together with the four native playback targets and reference checks. The user accepted the ownership/publication review and its explicit integration gaps before the staging merge. The exact receipts are in [PR #53](https://github.com/landonrivers/LVOVD/pull/53).
 
-1. Close any failures in the new command, validation, generated-media and worker-ownership suites on every native platform. Record exact-revision receipts before accepting this increment.
-2. Accept the ownership/publication review above against its new regressions and exact-revision platform receipts. Preserve its explicit 8C integration requirements; the core tests do not establish a finished Local Media workflow.
-3. Complete stage acceptance against the parity register and all reference/native gates. No complete Local Media or Download workflow is claimed by these core tests, and no working-looking processing controls are added during this port.
+[8C](desktop-local-media.md) must now connect collections, the editor, analysis, queue snapshots and results to this ownership boundary. Legacy edited-input execution and collection reservations remain explicit work. No complete Local Media or Download workflow is claimed by 8B core tests, and no parity entry becomes Verified merely because the checkpoint was accepted.
 
 ## Validation of the implemented portion
 
@@ -109,7 +107,7 @@ The command/worker increment at `b2dca42` passed local Windows core/native check
 
 The [next Linux run](https://github.com/landonrivers/LVOVD/actions/runs/39169168693/job/117798712210) built those tools successfully but exposed a pre-existing broker-test race before reaching encoding tests: cancellation can release an idle decoder's lease before `remove` checks whether cleanup is pending. The test now holds an explicit reader through removal, checks both decoder and held-reader revocation, then releases it and confirms cleanup. Production cleanup behavior is unchanged. The core test command also runs all test binaries after a failure so one unrelated regression does not hide later diagnostics.
 
-The ownership/publication review passed local Rust core/host tests, all eight new unified-operation regressions, formatting and Clippy, 590 reference checks and 123 generated-media reference tests. All three Windows native fixtures passed second-file contention, seeking, removal and permission checks; the actual 1280×720 and 960×640 layouts were inspected, and the normal executable was rebuilt without test controls. Baseline/prior-head register checks and its eight validator tests passed; the strict release gate still rejects the incomplete migration. Exact-revision reference/Chromium and Windows/Linux/both-macOS receipts are recorded in PR #53 before accepting this increment. These are core and foundation regressions, not complete native Local Media/Download acceptance or a live-provider pass.
+The ownership/publication review passed local Rust core/host tests, all eight new unified-operation regressions, formatting and Clippy, 590 reference checks and 123 generated-media reference tests. All three Windows native fixtures passed second-file contention, seeking, removal and permission checks; the actual 1280×720 and 960×640 layouts were inspected, and the normal executable was rebuilt without test controls. Baseline/prior-head register checks and its eight validator tests passed; the strict release gate still rejects the incomplete migration. The final head `10c5cbfd988ba655994971dbaf60b461dc7caa96` passed [reference/Chromium CI](https://github.com/landonrivers/LVOVD/actions/runs/39182795892) and the [Windows/Linux/both-macOS matrix](https://github.com/landonrivers/LVOVD/actions/runs/39182782850); PR #53 records individual job receipts. These are core and foundation regressions, not complete native Local Media/Download acceptance or a live-provider pass.
 
 ## Download remains required
 

@@ -78,6 +78,13 @@ pub struct ReviewRequest {
     pub settings: Option<Value>,
     pub edit_plan: Option<Value>,
 }
+#[derive(Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Admission {
+    pub source_id: Uuid,
+    pub key: String,
+    pub acknowledgements: Vec<String>,
+}
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Published {
@@ -205,6 +212,12 @@ impl Drop for Waiter {
     }
 }
 impl Prepared {
+    pub fn source_id(&self) -> Uuid {
+        self.source.source.asset_id
+    }
+    pub fn draft_revision(&self) -> u32 {
+        self.revision
+    }
     pub fn operation_id(&self) -> Uuid {
         self.operation_id
     }
@@ -334,17 +347,49 @@ impl Processing {
         key: String,
         acknowledgements: Vec<String>,
     ) -> Result<Prepared> {
-        let owner = self.clone();
-        blocking(move || owner.prepare_sync(source_id, &key, &acknowledgements)).await
+        Ok(self
+            .prepare_batch(vec![Admission {
+                source_id,
+                key,
+                acknowledgements,
+            }])
+            .await?
+            .pop()
+            .unwrap())
     }
-    fn prepare_sync(
-        &self,
-        source_id: Uuid,
-        key: &str,
-        acknowledgements: &[String],
-    ) -> Result<Prepared> {
-        let source = self.0.assets.lease(source_id)?;
-        source.processing_path()?;
+    pub async fn prepare_batch(&self, entries: Vec<Admission>) -> Result<Vec<Prepared>> {
+        let owner = self.clone();
+        blocking(move || owner.prepare_batch_sync(entries)).await
+    }
+    fn prepare_batch_sync(&self, entries: Vec<Admission>) -> Result<Vec<Prepared>> {
+        if entries.is_empty()
+            || entries.len() > 20
+            || entries.iter().any(|entry| {
+                entry.key.len() > 128
+                    || entry.acknowledgements.len() > 64
+                    || entry.acknowledgements.iter().any(|id| id.len() > 128)
+            })
+        {
+            return Err(AppError::new(
+                "PROCESSING_REQUEST",
+                "Submit a bounded list of reviewed files.",
+            ));
+        }
+        let mut seen = std::collections::HashSet::new();
+        let sources: Vec<_> = entries
+            .iter()
+            .map(|entry| {
+                if !seen.insert(entry.source_id) {
+                    return Err(AppError::new(
+                        "PROCESSING_REQUEST",
+                        "Submit each file only once.",
+                    ));
+                }
+                let source = self.0.assets.lease(entry.source_id)?;
+                source.processing_path()?;
+                Ok(source)
+            })
+            .collect::<Result<_>>()?;
         let mut registry = self.0.registry.lock().unwrap();
         if registry.closing {
             return Err(cancelled());
@@ -352,7 +397,7 @@ impl Processing {
         if registry
             .cleanup
             .values()
-            .any(|entry| entry.source_id == source_id)
+            .any(|entry| seen.contains(&entry.source_id))
         {
             return Err(cleanup_pending());
         }
@@ -361,54 +406,63 @@ impl Processing {
             .values()
             .filter(|s| s.active.is_some())
             .count()
-            >= 20
+            + entries.len()
+            > 20
         {
             return Err(AppError::new(
                 "PROCESSING_QUEUE_FULL",
                 "Wait for a queued file to finish before adding another.",
             ));
         }
-        self.0.assets.with_current(&source, || {
-            let slot = registry.slots.get_mut(&source_id).ok_or_else(stale)?;
-            if slot.active.is_some() {
-                return Err(AppError::new(
-                    "PROCESSING_BUSY",
-                    "This file already has a queued or running operation.",
-                ));
+        self.0.assets.with_current_batch(&sources, || {
+            // Validate the whole batch before reserving any slot. Reviews and
+            // membership cannot change between this check and its commit.
+            for entry in &entries {
+                let slot = registry.slots.get(&entry.source_id).ok_or_else(stale)?;
+                if slot.active.is_some() {
+                    return Err(AppError::new(
+                        "PROCESSING_BUSY",
+                        "This file already has a queued or running operation.",
+                    ));
+                }
+                let review = slot.review.as_ref().ok_or_else(stale)?;
+                review.plan.check_key(&entry.key)?;
+                let p = review.plan.document();
+                if !review.plan.is_executable() && p["status"] != "no-op" {
+                    return Err(AppError::new(
+                        "PROCESSING_UNAVAILABLE",
+                        p["message"]
+                            .as_str()
+                            .unwrap_or("This processing plan is unavailable."),
+                    ));
+                }
+                if p["warnings"].as_array().unwrap().iter().any(|w| {
+                    w["required"] == true && !entry.acknowledgements.iter().any(|id| w["id"] == *id)
+                }) {
+                    return Err(AppError::new(
+                        "PROCESSING_WARNINGS",
+                        "Acknowledge the reviewed omissions before processing.",
+                    ));
+                }
             }
-            let review = slot.review.as_ref().ok_or_else(stale)?;
-            review.plan.check_key(key)?;
-            let p = review.plan.document();
-            if !review.plan.is_executable() && p["status"] != "no-op" {
-                return Err(AppError::new(
-                    "PROCESSING_UNAVAILABLE",
-                    p["message"]
-                        .as_str()
-                        .unwrap_or("This processing plan is unavailable."),
-                ));
-            }
-            if p["warnings"]
-                .as_array()
-                .unwrap()
+            Ok(sources
                 .iter()
-                .any(|w| w["required"] == true && !acknowledgements.iter().any(|id| w["id"] == *id))
-            {
-                return Err(AppError::new(
-                    "PROCESSING_WARNINGS",
-                    "Acknowledge the reviewed omissions before processing.",
-                ));
-            }
-            let operation_id = Uuid::new_v4();
-            let cancel = source.cancellation().child_token();
-            slot.active = Some((operation_id, cancel.clone()));
-            Ok(Prepared {
-                owner: self.clone(),
-                source: source.clone(),
-                plan: review.plan.clone(),
-                revision: review.revision,
-                operation_id,
-                cancel,
-            })
+                .map(|source| {
+                    let slot = registry.slots.get_mut(&source.source.asset_id).unwrap();
+                    let review = slot.review.as_ref().unwrap();
+                    let operation_id = Uuid::new_v4();
+                    let cancel = source.cancellation().child_token();
+                    slot.active = Some((operation_id, cancel.clone()));
+                    Prepared {
+                        owner: self.clone(),
+                        source: source.clone(),
+                        plan: review.plan.clone(),
+                        revision: review.revision,
+                        operation_id,
+                        cancel,
+                    }
+                })
+                .collect())
         })?
     }
     pub fn cancel(&self, source_id: Uuid, operation_id: Uuid) -> bool {

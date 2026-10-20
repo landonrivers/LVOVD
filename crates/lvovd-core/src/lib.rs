@@ -21,6 +21,7 @@ pub mod process;
 pub mod processing_command;
 pub mod processing_operation;
 pub mod processing_plan;
+pub mod processing_queue;
 pub mod processing_settings;
 pub mod tools;
 

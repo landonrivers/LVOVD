@@ -2071,7 +2071,8 @@
           "crates/lvovd-core/src/processing_command.rs",
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -2086,7 +2087,8 @@
           "crates/lvovd-core/tests/processing_media.rs",
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -2094,7 +2096,7 @@
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
       "evidence": [],
-      "remaining": "Unified admission resolves owned originals, binds the owner/source/revision/inspection, requires warning acknowledgements, rechecks file identity before execution and captures an immutable single-use job. Legacy edited-input admission and native collection/queue transport remain incomplete."
+      "remaining": "Unified admission resolves owned originals, binds source/revision/inspection, and checks required warnings and immutable review keys. Batch admission now validates every entry before committing any ticket under shared review/source registry guards. Legacy edited-input admission and native collection/queue transport remain incomplete."
     },
     {
       "id": "media.edited-input",
@@ -2160,7 +2162,8 @@
           "crates/lvovd-core/src/processing_command/size.rs",
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -2175,7 +2178,8 @@
           "crates/lvovd-core/tests/processing_media.rs",
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -2183,7 +2187,7 @@
         "Malformed/wrong/oversized output remains unavailable; failures retain previous successful results."
       ],
       "evidence": [],
-      "remaining": "The Rust operation probes its private output, rejects replaced/linked files and invalid media/size, and atomically publishes only for the still-current uncancelled operation/source. Prior successes remain available on failure. Legacy operation integration and complete native acceptance remain outstanding."
+      "remaining": "The Rust operation validates private output and publishes only for the current source/operation. Queue regressions exercise actual FLAC and exact original no-op bytes, keep prior success on failure and respect publication winning late cancellation. Legacy operation integration and complete native acceptance remain outstanding."
     },
     {
       "id": "media.naming",
@@ -2280,7 +2284,10 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/processing_operation.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2288,14 +2295,16 @@
           "test/local-processing-queue.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_queue/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Exclude queued/running and already successful current drafts; unchanged eligible files retain no-op behavior."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Atomic Rust batch admission rejects a stale or invalid entry without admitting any file and invalidates pending batches on Cancel All. Collection-wide review, eligibility selection, warning presentation and the native Review All Files flow are not integrated."
     },
     {
       "id": "media.processing-queue",
@@ -2322,7 +2331,8 @@
           "crates/lvovd-core/src/process.rs",
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -2335,7 +2345,8 @@
           "crates/lvovd-core/tests/worker_ownership.rs",
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -2343,7 +2354,7 @@
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
       "evidence": [],
-      "remaining": "Core admitted tickets own immutable reviews and source leases, enforce one active worker and a 20-ticket bound per application owner, and survive abandoned waiters. The collection queue ordering, expiry, waveform preemption, Cancel All and native controls remain incomplete; 8C must reuse one application owner."
+      "remaining": "The Rust queue owns immutable tickets, drains in FIFO order, bounds 20 live jobs, cancels individual/all jobs, expires unstarted jobs after one hour and coalesces revisioned snapshots. Tests cover disconnected readers, abandoned admission and late cancellation/publication. Collection-scoped admission/cancellation, waveform preemption and the native queue workflow remain incomplete; integration must reuse one application owner."
     },
     {
       "id": "media.results",
@@ -2369,7 +2380,8 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -2381,7 +2393,8 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -2389,7 +2402,7 @@
         "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
       ],
       "evidence": [],
-      "remaining": "Core published descriptors retain captured names, revisions, reviewed settings and actual inspected facts; failed attempts preserve the previous successful identity. Native result rows, Edit source, progress snapshots and export actions remain incomplete."
+      "remaining": "Core descriptors capture names, revisions, reviewed settings and actual inspection. Queue failures have no new result and preserve the prior successful identity separately; late cancellation cannot relabel a published success. Native result rows, Edit source, scoped channels and export actions remain incomplete."
     },
     {
       "id": "media.bulk-save",
@@ -2488,7 +2501,8 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -2500,7 +2514,8 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -2508,7 +2523,7 @@
         "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
       ],
       "evidence": [],
-      "remaining": "Source revocation cancels admitted processing and prevents late publication or new result leases. Cleanup and prior result readers remain owned. Native collection removal, late-response presentation guards and expiry still require 8C integration."
+      "remaining": "Core revocation prevents new result leases/publication. Retiring a queue row cancels that source without reinserting it after delayed completion. Cleanup ownership survives row removal. Authoritative collection removal/discard and native response/selection guards still require integration."
     },
     {
       "id": "media.cleanup",
@@ -2576,7 +2591,10 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/processing_operation.rs"
+        ],
         "native": []
       },
       "tests": {
@@ -2584,14 +2602,16 @@
           "test/media-workspace.test.js",
           "test/local-processing-queue.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/processing_queue/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Expiry cancels analysis/processing and waits for owned readers/workers before releasing capacity."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Queued jobs now expire after one hour without starting and release their unstarted tickets; sources and prior results remain separately owned. Collection inactivity/attached-editor activity, analysis cancellation and native expiry/recovery are still missing."
     },
     {
       "id": "media.reopen",
@@ -2656,7 +2676,8 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -2668,7 +2689,8 @@
         "rust": [
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -2676,7 +2698,7 @@
         "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
       ],
       "evidence": [],
-      "remaining": "Foundation source accounting includes retired copies held by import, worker, no-op and failed-attempt leases. Unified processing holds a bounded immutable admission until execution/retirement. Full two-workbench/20-file/100-GiB collection and playlist reservation coordination remains incomplete."
+      "remaining": "Atomic batch admission enforces the shared 20-operation limit; queued tickets retain source leases until cancellation or supervised completion. Source accounting includes retired copies and failed cleanup. Full two-workbench/20-file/100-GiB collection and playlist reservation coordination remains incomplete."
     },
     {
       "id": "media.leases",
@@ -3361,7 +3383,8 @@
           "src-tauri/src/main.rs",
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue.rs"
         ],
         "native": []
       },
@@ -3371,7 +3394,8 @@
           "crates/lvovd-core/tests/worker_ownership.rs",
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": []
       },
@@ -3379,7 +3403,7 @@
         "Confirm worker/read exit before owned cleanup; crash manifests allow only owned stale-session cleanup."
       ],
       "evidence": [],
-      "remaining": "Foundation shutdown drains tracked imports/readers/workers. The unified operation owner rejects new result reads, cancels admitted work, drains tasks and retains pending cleanup/readers for retry. 8C must shut that owner down before source storage; single-instance, unsaved edits/results and crash manifests remain incomplete."
+      "remaining": "The queue closes admission, invalidates pending batches, cancels unstarted tickets and waits for owned jobs. Integration must drain the queue, then Processing, then source storage; the host is not connected to the new queue yet. Full unsaved-edit/result handling and crash manifests remain incomplete."
     },
     {
       "id": "desktop.packages",

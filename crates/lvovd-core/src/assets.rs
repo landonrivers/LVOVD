@@ -175,6 +175,29 @@ impl Assets {
         }
         Ok(publish())
     }
+    /// Batch admission must validate every source under one registry guard.
+    /// The callback must not await or acquire this registry again.
+    pub(crate) fn with_current_batch<T>(
+        &self,
+        assets: &[Arc<Asset>],
+        admit: impl FnOnce() -> T,
+    ) -> Result<T> {
+        let registry = self.registry.lock().unwrap();
+        if registry.closing
+            || assets.iter().any(|asset| {
+                !registry
+                    .active
+                    .get(&asset.source.asset_id)
+                    .is_some_and(|current| Arc::ptr_eq(current, asset))
+            })
+        {
+            return Err(AppError::new(
+                "ASSET_GONE",
+                "A reviewed file was removed or expired.",
+            ));
+        }
+        Ok(admit())
+    }
     pub fn list(&self) -> Vec<Source> {
         self.registry
             .lock()

@@ -15,7 +15,7 @@ The only approved access-mode exception is **standalone access**: the applicatio
 
 Each receipt records platform, full commit, `native-workflow` kind, passed result, repository Actions run/job URL, mapped test files and a description of the actual scenario. A reviewer must inspect those receipts and determine whether tests cover the behavior. The validator checks completeness and references; it cannot prove that a linked test exercises the claim or that a remote run passed. Reopen a capability's status when relevant behavior changes; historical evidence is not permission to skip current CI or packaged acceptance.
 
-Ported entries describe implemented core policies with linked Rust tests. They do not claim that downloading, editing or processing is available in the desktop preview. [8A's native playback evidence](desktop-foundation.md) and [8B's current work](desktop-media-policies.md) remain useful supporting evidence, not substitutes for complete workflows.
+Ported entries describe implemented core policies with linked Rust tests. They do not claim that downloading, editing or processing is available in the desktop preview. [8A's native playback evidence](desktop-foundation.md) and [8B's accepted checkpoint](desktop-media-policies.md) remain useful supporting evidence, not substitutes for complete workflows.
 
 ## Maintaining the register
 
@@ -30,7 +30,7 @@ Normal migration CI allows honest Missing/Ported/Integrated entries. The strict 
 
 Download is the initial application view. Preserve the existing JavaScript controls and defaults in Download, Local Media, History and Settings. Compact layout changes cannot remove options. Download audio conversion and strict Local Media FLAC remain distinct contracts. Extras, subtitles/languages, chapter outputs, SponsorBlock, advanced source formats, native save recovery and custom tools/plugins are explicit 8D work, not optional post-release enhancements.
 
-8B establishes policy/worker parity in draft PR #53. 8C integrates the full Local Media workbench. 8D restores Download, both acquisition handoffs, history, native saving and tool/plugin management. 8E completes navigation, settings, accessibility, lifecycle and cutover. 8F supplies verified tools/frameworks, packages, updates and maintenance. Stage PRs target `staging/v3-desktop`; `master` stays on the working release. Merge, promotion, tagging and publication require separate authorization. Roadmap #7 remains incomplete.
+8B established its policy/worker/ownership checkpoint in accepted PR #53. [8C](desktop-local-media.md) integrates the full Local Media workbench in a separate draft PR; its initial owned queue does not yet provide a native workflow. 8D restores Download, both acquisition handoffs, history, native saving and tool/plugin management. 8E completes navigation, settings, accessibility, lifecycle and cutover. 8F supplies verified tools/frameworks, packages, updates and maintenance. Stage PRs target `staging/v3-desktop`; `master` stays on the working release. Merge, promotion, tagging and publication require separate authorization. Roadmap #7 remains incomplete.
 
 <!-- parity-table:start -->
 
