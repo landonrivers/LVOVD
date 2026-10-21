@@ -5,6 +5,8 @@
   const document = root.document, $ = selector => document.querySelector(selector);
   const panel = $('#media-workspace-panel');
   if (!panel) return;
+  const transport = root.LVOVDWorkspaceTransport;
+  const request = transport?.request || root.fetch.bind(root);
   const editor = root.LVOVDEditorView, facts = root.LVOVDMediaFacts, profiles = root.LVOVDProcessingProfile;
   const intake = $('#media-drop-zone'), input = $('#media-file-input'), choose = $('#media-choose-button');
   const ready = $('#local-media-ready'), status = $('#workspace-status'), progress = $('#workspace-progress');
@@ -86,7 +88,7 @@
   function message(text, error = false) { messageVersion++; status.textContent = text || ''; status.className = `status${error ? ' error' : ''}`; }
   function closeSource() { source?.close(); source = null; }
   async function post(url, body) {
-    const response = await root.fetch(url, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const response = await request(url, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'The local operation could not complete.');
     return data;
@@ -190,6 +192,22 @@
           $('#processing-file-list').focus({ preventScroll: true });
           $('#local-media-ready').scrollIntoView({ block: 'start', behavior: 'instant' });
         });
+        if (transport) {
+          row.parts.download.addEventListener('click', async event => {
+            event.preventDefault();
+            const output = entries.get(id)?.snapshot.conversion?.output;
+            if (!output || row.saving) return;
+            row.saving = true; row.saveState = { assetId: output.assetId, message: 'Saving…' }; renderProcessingResults();
+            try {
+              const filename = await transport.save(output);
+              if (row.isConnected && entries.get(id)?.snapshot.conversion?.output?.assetId === output.assetId) { row.saveState.message = filename ? `Saved ${filename}` : 'Save cancelled. Prepared result remains available.'; renderProcessingResults(); }
+            } catch (error) { if (row.isConnected && entries.get(id)?.snapshot.conversion?.output?.assetId === output.assetId) { row.saveState.message = `Save failed. ${error.message}`; renderProcessingResults(); } }
+            finally { row.saving = false; }
+          });
+          const preview = document.createElement('button'); preview.type = 'button'; preview.className = 'text-button'; preview.textContent = 'Preview result'; preview.dataset.result = 'preview';
+          preview.addEventListener('click', () => { const output = entries.get(id)?.snapshot.conversion?.output; if (output?.playbackUrl) transport.preview(output); });
+          row.parts.edit.before(preview); row.parts.preview = preview;
+        }
         list.append(row);
       }
       if (id === workspaceId && output) {
@@ -198,6 +216,7 @@
       }
       // Preserve links/focus and avoid replacing unchanged result DOM for every
       // other file's progress tick. The server-owned output is the authority.
+      if (row.saveState && row.saveState.assetId === output?.assetId) view.status = active || status === 'failed' || status === 'cancelled' ? `${view.status} · ${row.saveState.message}` : row.saveState.message;
       const key = JSON.stringify(view);
       if (row.resultKey === key) continue;
       row.resultKey = key;
@@ -207,18 +226,19 @@
       row.dataset.previous = String(previous); row.parts.details.hidden = !output;
       edit.setAttribute('aria-label', view.edit);
       download.hidden = !view.url;
-      download.textContent = `Download ${view.format || 'file'}`;
+      download.textContent = `${transport ? 'Save' : 'Download'} ${view.format || 'file'}`;
+      if (row.parts.preview) row.parts.preview.hidden = !output?.playbackUrl;
       if (view.url) { download.href = view.url; download.download = view.name; download.setAttribute('aria-label', `${download.textContent} — ${view.name}${previous ? ' (previous result)' : ''}`); }
       else { download.removeAttribute('href'); download.removeAttribute('download'); download.removeAttribute('aria-label'); }
     }
     for (const row of [...list.children]) if (!live.has(row.dataset.processingResult)) row.remove();
     $('#processing-results').hidden = !live.size;
-    const summary = [`${completed} of ${live.size} completed`, queued && `${queued} queued`, running && `${running} processing`, failed && `${failed} failed`, cancelled && `${cancelled} cancelled`, `${downloads} ${downloads === 1 ? 'download' : 'downloads'} available`].filter(Boolean).join(' · ');
+    const summary = [`${completed} of ${live.size} completed`, queued && `${queued} queued`, running && `${running} processing`, failed && `${failed} failed`, cancelled && `${cancelled} cancelled`, `${downloads} ${transport ? (downloads === 1 ? 'result' : 'results') : (downloads === 1 ? 'download' : 'downloads')} available`].filter(Boolean).join(' · ');
     if ($('#processing-results-summary').textContent !== summary) $('#processing-results-summary').textContent = summary;
     const all = $('#processing-download-all');
     all.hidden = live.size < 2;
     all.disabled = Boolean(allDownloads) || discarding || completed !== live.size || downloads !== completed || queued > 0 || running > 0;
-    all.textContent = allDownloads ? `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…` : `Download All (${downloads})`;
+    all.textContent = allDownloads ? `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…` : `${transport ? 'Save' : 'Download'} All (${downloads})`;
   }
   function describeProcessingResult(output, currentRevision) {
     if (!output) return {};
@@ -259,7 +279,7 @@
     $('#processing-results-title').focus({ preventScroll: true });
     $('#processing-results').scrollIntoView({ block: 'start', behavior: 'instant' });
   }
-  $('#processing-download-all').addEventListener('click', () => {
+  $('#processing-download-all').addEventListener('click', async () => {
     // Recheck the current authoritative results at the user's click. Never
     // substitute a previous output for a failed/cancelled/latest pending job.
     renderProcessingResults();
@@ -268,6 +288,15 @@
       const output = entry.snapshot.conversion?.output;
       return output?.downloadUrl ? [{ id, assetId: output.assetId, planKey: output.planKey, url: output.downloadUrl, filename: output.filename }] : [];
     });
+    if (transport) {
+      const owner = collectionId, note = $('#processing-download-note'); note.hidden = false; note.textContent = 'Saving…';
+      allDownloads = { outputs, index: 0 }; renderProcessingResults();
+      try { const result = await transport.saveAll(outputs);
+        if (owner === collectionId) note.textContent = result ? result.files.map(file => file.saved ? `Saved ${file.filename}` : `${file.filename}: ${file.error}`).join(' · ') : 'Save cancelled. Prepared results remain available.';
+      } catch (error) { if (owner === collectionId) note.textContent = error.message; }
+      finally { allDownloads = null; renderProcessingResults(); }
+      return;
+    }
     // Existing protected download endpoints own their readers. No new media
     // copies, browser buffers, or provider requests. Pace browser requests so
     // a full 20-file set is not dropped as one burst by the browser's limiter.
@@ -298,6 +327,7 @@
   function selectEntry(id) {
     const entry = entries.get(id); if (!entry) return;
     if (id === workspaceId) { if (!entry.previewAttempted) preparePreview(); return; }
+    if (transport && workspaceId) { transport.cancelPreview(workspaceId, snapshot?.editor?.operationId); const previous = entries.get(workspaceId); if (previous && !previous.snapshot.playback) previous.previewAttempted = false; }
     saveSelected(); closeHelp(); generation++; planVersion++; clearTimeout(reviewTimer); clearTimeout(retryTimer);
     workspaceId = id; snapshot = entry.snapshot; profile = entry.profile; plan = entry.plan;
     operationRequest = false; discarding = false; planBusy = false; reviewQueued = false;
@@ -325,6 +355,7 @@
     removedCleanup = new Map((data.removedCleanup || []).map(item => [item.workspaceId, item])); renderCleanup();
     jobs = data.jobs || []; limits = data.limits || limits; intakeBatch = data.intake || null;
     renderImport();
+    if (transport) { const error = $('#native-intake-status'); error.textContent = data.intakeFailure?.message || (data.importing ? 'Copying selected files…' : ''); error.hidden = !error.textContent; $('#native-intake-cancel').hidden = !data.importing; }
     // Descriptors have no source or inspection until the real acquisition starts.
     const workspaces = [...(data.workspaces || [])];
     for (const item of intakeBatch?.items || []) if (!item.workspaceId && !item.removed && item.status === 'waiting') {
@@ -384,8 +415,8 @@
       const summary = document.createElement('div'); summary.className = 'help';
       summary.textContent = `${item.files} ${item.files === 1 ? 'file' : 'files'}${item.cleanup.length ? ` · ${item.cleanup.length} pending/failed cleanups` : ''}${item.busy ? ' · Work still active' : ''}${item.available ? '' : ' · Open or being recovered in another tab; close it there, then refresh this list'}`; row.append(summary);
       const actions = document.createElement('div'); actions.className = 'inline-actions';
-      const choices = [['reopen', !item.files && item.cleanup.length && !item.busy ? 'Open cleanup' : 'Reopen files']];
-      if (item.files || item.busy || !item.cleanup.length) choices.push(['remove', 'Remove workbench']);
+      const choices = transport ? [] : [['reopen', !item.files && item.cleanup.length && !item.busy ? 'Open cleanup' : 'Reopen files']];
+      if (!transport && (item.files || item.busy || !item.cleanup.length)) choices.push(['remove', 'Remove workbench']);
       if (item.cleanup.length) choices.push(['retry', 'Retry cleanup']);
       for (const [action, label] of choices) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'button secondary mini'; button.textContent = label;
@@ -651,6 +682,13 @@
   }
   function connect() {
     closeSource();
+    if (transport) {
+      const owned = { close: () => {} }; source = owned;
+      transport.subscribe(collectionId, data => { if (source === owned) acceptCollection(data); }, () => {
+        if (source === owned) { closeSource(); collectionId = null; collectionRevision = -1; message("Local media expired. Add files to begin again."); }
+      }).then(close => { if (source === owned) owned.close = close; else close(); }).catch(error => message(error.message, true));
+      return;
+    }
     const eventSource = new root.EventSource(`/api/processing/queue/progress?collection=${encodeURIComponent(collectionId)}&epoch=${connectionEpoch}`); source = eventSource;
     eventSource.onmessage = event => {
       if (source !== eventSource) return;
@@ -668,7 +706,7 @@
     };
   }
   async function removeOwned(id) {
-    const response = await root.fetch(`/api/workspace?workspace=${encodeURIComponent(id)}`, { method: 'DELETE', cache: 'no-store' });
+    const response = await request(`/api/workspace?workspace=${encodeURIComponent(id)}`, { method: 'DELETE', cache: 'no-store' });
     const data = await response.json();
     if (!response.ok && response.status !== 404) throw new Error(data.error || 'Remove File could not complete.');
     return data;
@@ -1075,8 +1113,17 @@
     } catch (error) { if (cleanupIds.size || removedCleanup.size) message(error.message, true); }
     finally { cleanupBusy = false; renderCleanup(); }
   });
-  choose.addEventListener('click', () => input.click());
-  $('#processing-add-files').addEventListener('click', () => input.click());
+  async function chooseFiles() {
+    if (!transport) { input.click(); return; }
+    choose.disabled = true; $('#processing-add-files').disabled = true;
+    const token = generation;
+    try { const owner = await ensureCollection(); const result = await transport.pick(owner);
+      if (result?.failure && token === generation) message(result.failure.message, true);
+    } catch (error) { if (token === generation) message(error.message, true); }
+    finally { choose.disabled = false; $('#processing-add-files').disabled = false; }
+  }
+  choose.addEventListener('click', chooseFiles);
+  $('#processing-add-files').addEventListener('click', chooseFiles);
   input.addEventListener('change', () => addFiles([...input.files || []]));
   for (const selector of ['#workspace-discard', '#workspace-failure-discard']) $(selector).addEventListener('click', discard);
   $('#workspace-cancel').addEventListener('click', () => {
@@ -1091,7 +1138,7 @@
   panel.addEventListener('dragleave', () => intake.classList.remove('dragover'));
   panel.addEventListener('drop', event => {
     event.preventDefault(); intake.classList.remove('dragover');
-    addFiles([...(event.dataTransfer?.files || [])]);
+    if (!transport) addFiles([...(event.dataTransfer?.files || [])]);
   });
   root.addEventListener('beforeunload', event => { if (hasTemporaryWork()) { event.preventDefault(); event.returnValue = ''; } });
   function renderImport() {
@@ -1133,5 +1180,7 @@
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
   root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
     collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
-  publish(); refreshRecovery();
+  publish();
+  if (transport) transport.ready.then(ensureCollection).then(refreshRecovery).catch(error => message(error.message, true));
+  else refreshRecovery();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

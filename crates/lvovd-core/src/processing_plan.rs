@@ -22,6 +22,14 @@ pub struct ReviewedPlan {
     document: Value,
 }
 impl ReviewedPlan {
+    pub(crate) fn owned_metadata(mut self, fields: Value) -> Self {
+        for (key, value) in fields.as_object().expect("owned metadata").iter() {
+            self.document[key] = value.clone();
+        }
+        self.document.as_object_mut().unwrap().remove("key");
+        self.document["key"] = json!(hash(&self.document));
+        self
+    }
     pub fn document(&self) -> &Value {
         &self.document
     }

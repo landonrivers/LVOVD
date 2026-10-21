@@ -29,7 +29,15 @@ function environment() {
 }
 function prepare() {
   const dist = path.join(root, 'desktop', 'dist'); fs.mkdirSync(dist, { recursive: true });
-  for (const name of ['index.html', 'app.js', 'native.js', 'styles.css']) fs.copyFileSync(path.join(root, 'desktop', name), path.join(dist, name));
+  for (const name of ['index.html', 'app.js', 'native.js', 'workspace-transport.js', 'styles.css']) fs.copyFileSync(path.join(root, 'desktop', name), path.join(dist, name));
+  for (const name of ['edit-plan.js', 'audio-waveform.js', 'media-editor.js', 'conversion-inspector.js', 'processing-profile.js', 'local-workspace.js']) fs.copyFileSync(path.join(root, 'public', name), path.join(dist, name));
+  fs.copyFileSync(path.join(root, 'public', 'styles.css'), path.join(dist, 'reference.css'));
+  const reference = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+  if (!reference.includes('<section id="media-workspace-panel"') || !reference.includes('<section id="history-panel"')) throw new Error('Local Media template boundaries are missing.');
+  const section = reference.slice(reference.indexOf('<section id="media-workspace-panel"'), reference.indexOf('<section id="history-panel"'));
+  const html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8').replace('<!-- local-media -->', section);
+  fs.writeFileSync(path.join(dist, 'index.html'), html);
+
 }
 function main() {
   prepare();
