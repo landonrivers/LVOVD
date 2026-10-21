@@ -68,8 +68,8 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.progress` | Download progress | Download / Queue | 8D | Missing |
 | `download.outputs` | Prepared Download outputs | Download / Queue | 8D | Missing |
 | `download.cleanup` | Download expiry and cleanup | Download / Queue | 8D | Missing |
-| `handoff.url-edit` | Edit Source Video | Download â†’ Local Media | 8D | Missing |
-| `handoff.playlist-intake` | Add Selected to Local Media | Download â†’ Local Media | 8D | Missing |
+| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Missing |
+| `handoff.playlist-intake` | Add Selected to Local Media | Download → Local Media | 8D | Missing |
 | `media.intake` | Multiple local files | Local Media / Files | 8C | Integrated |
 | `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Integrated |
 | `media.capabilities` | Capability discovery | Local Media / Review | 8B | Integrated |
@@ -108,7 +108,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `history.records` | Durable terminal history | History | 8D | Missing |
 | `history.presentation` | History details and pagination | History | 8D | Missing |
 | `history.deletion` | Delete and Clear All | History | 8D | Missing |
-| `history.reuse` | Use Again | History â†’ Download | 8D | Missing |
+| `history.reuse` | Use Again | History → Download | 8D | Missing |
 | `history.faults` | Nonfatal history faults | History / Download | 8D | Missing |
 | `runtime.health` | Runtime status and Recheck | Settings / Runtime | 8E | Missing |
 | `runtime.ytdlp-updates` | Managed yt-dlp lifecycle | Settings / Runtime | 8D | Missing |

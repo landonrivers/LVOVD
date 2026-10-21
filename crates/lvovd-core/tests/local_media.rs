@@ -417,6 +417,17 @@ async fn legacy_render_conversion_roles_keep_inputs_and_reject_stale_edits() {
             assert_eq!(review.document()["inputRole"], "edited-output");
             let converted = run(&f, source, review.key(), revision).await;
             assert!(converted.no_op);
+            let obsolete = f.root.path().join(format!("obsolete-{revision}.mp4"));
+            assert!(
+                f.owner
+                    .save_result(
+                        f.workbench,
+                        f.owner.result(f.workbench, rendered.result_id).unwrap(),
+                        &obsolete,
+                    )
+                    .is_err()
+            );
+            assert!(!obsolete.exists());
             assert_eq!(
                 f.owner
                     .result(f.workbench, converted.result_id)

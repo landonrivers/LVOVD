@@ -1157,7 +1157,7 @@
         ]
       },
       "desktop": {
-        "location": "Download â†’ Local Media",
+        "location": "Download → Local Media",
         "stage": "8D",
         "operations": [
           "import_url"
@@ -1195,7 +1195,7 @@
         ]
       },
       "desktop": {
-        "location": "Download â†’ Local Media",
+        "location": "Download → Local Media",
         "stage": "8D",
         "operations": [
           "import_playlist",
@@ -3273,7 +3273,7 @@
         ]
       },
       "desktop": {
-        "location": "History â†’ Download",
+        "location": "History → Download",
         "stage": "8D",
         "operations": [
           "preview_source"

@@ -715,8 +715,21 @@ impl Workbenches {
         destination: &std::path::Path,
     ) -> Result<PathBuf> {
         let result_id = result.descriptor().result_id;
+        let source_id = result.descriptor().source_id;
         crate::export::save_copy_checked(result, destination, || {
-            self.result(id, result_id).map(|_| ())
+            self.result(id, result_id)?;
+            if self
+                .0
+                .processing
+                .latest(source_id)
+                .is_none_or(|r| r.result_id != result_id)
+            {
+                return Err(AppError::new(
+                    "ASSET_GONE",
+                    "This result has been replaced. Save the current result.",
+                ));
+            }
+            Ok(())
         })
     }
 }
