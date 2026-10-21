@@ -43,7 +43,7 @@ async function setup(page, bridge = true, retired = false) {
         });
         if (command === 'cancel_editor') return;
         if (command === 'save_result') return new Promise(resolve => { fixture.resolveSave = resolve; });
-        if (command === 'cleanup_workbench') return new Promise(resolve => { fixture.resolveCleanup = () => { fixture.retired=false; resolve({...state(otherId,2),discarded:true}); }; });
+        if (command === 'cleanup_workbench') return new Promise(resolve => { fixture.resolveCleanup = () => { fixture.retired=false; resolve(null); }; });
         throw new Error('Unexpected command: ' + command);
       }
     } };

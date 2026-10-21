@@ -68,7 +68,7 @@
     }
     if (path === '/api/processing/cleanup' || path === '/api/conversion/cleanup') {
       const result = await native.call('cleanup_workbench', { request: { workbenchId: body.collectionId || active } });
-      return { collection: result.workbenchId === active ? projection(result) : null };
+      return { collection: result?.workbenchId === active ? projection(result) : null };
     }
     if (path === '/api/processing/collection/remove') {
       return { collection: projection(await native.call('discard_workbench', { request: { workbenchId: body.collectionId } })) };
