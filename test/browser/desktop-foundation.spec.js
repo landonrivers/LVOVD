@@ -102,9 +102,10 @@ test('desktop save status survives updates and late receipts cannot relabel a re
   await page.evaluate(ids => window.fixture.snapshot(0,[0],[],null,{jobs:[{sourceId:ids[0],status:'queued',draftRevision:0}]}),ids);
   await page.evaluate(ids => {
     const result = window.fixture.result = {resultId:ids[2],sourceId:ids[0],filename:'Synthetic.wav',size:100,draftRevision:0,noOp:true,review:{},inspection:{durationSeconds:2,format:'wav',container:{kind:'wav'},video:null,audio:{codec:'pcm_s16le',sampleRate:48000,channels:1}}};
-    window.fixture.snapshot(1,[0,1],[],null,{results:[result]});
+    window.fixture.snapshot(1,[0,1],[],null,{results:[result],jobs:[{sourceId:ids[0],status:'completed',progress:{validating:true}}]});
   }, ids);
   const row = page.locator(`[data-processing-result="${ids[0]}"]`);
+  await expect(page.locator('#conversion-status')).not.toContainText('Validating output');
   await row.locator('[data-result="download"]').click();
   await expect(row.locator('[data-result="status"]')).toHaveText('Saving…');
   await page.evaluate(() => { window.fixture.sources[0].name='Updated source label'; window.fixture.snapshot(2,[0,1],[],null,{results:[window.fixture.result]}); });

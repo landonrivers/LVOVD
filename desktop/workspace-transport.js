@@ -28,7 +28,7 @@
           editor: { ...editor, operationId: preview?.operationId, status: preview?.status || 'idle', message: preview?.message }, waveform: waveform || { status: 'idle' },
           playback: preview?.status === 'ready' && preview.assetId ? { assetId: preview.assetId, role: preview.proxy ? 'playback-proxy' : 'original', proxy: preview.proxy, mime: source.inspection.media?.video ? 'video/mp4' : 'audio/mp4', url: native.mediaUrl(preview.assetId) } : null,
           conversion: { status: job?.status || (result ? 'ready' : 'idle'), percent: job?.progress?.outTimeUs != null && duration > 0 ? Math.min(99, ((Math.max(1, job.progress.pass) - 1) * 100 + job.progress.outTimeUs / (duration * 10000)) / Math.max(1, job.progress.passes)) : null,
-            message: job?.message || (job?.progress?.validating ? 'Validating output…' : job?.progress?.passes === 2 ? `Pass ${job.progress.pass} of 2 · Attempt ${job.progress.attempt}` : null), failure: job?.failure, output, cleanupPending: value.failedCleanup.includes(id) },
+            message: job?.message || (job?.status === 'running' ? (job?.progress?.validating ? 'Validating output…' : job?.progress?.passes === 2 ? `Pass ${job.progress.pass} of 2 · Attempt ${job.progress.attempt}` : null) : null), failure: job?.failure, output, cleanupPending: value.failedCleanup.includes(id) },
           outputCleanup: { blocked: value.failedCleanup.includes(id) } };
       }) };
   }
