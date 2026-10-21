@@ -113,6 +113,10 @@ struct Inner {
     worker: tokio::sync::Mutex<()>,
     supervisor: Supervisor,
     tasks: TaskTracker,
+    #[cfg(test)]
+    fail_cleanup: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    deadline_ms: std::sync::atomic::AtomicU64,
 }
 #[derive(Clone)]
 pub struct Analysis(Arc<Inner>);
@@ -174,6 +178,10 @@ impl Analysis {
             worker: tokio::sync::Mutex::new(()),
             supervisor: Supervisor::default(),
             tasks: TaskTracker::new(),
+            #[cfg(test)]
+            fail_cleanup: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            deadline_ms: std::sync::atomic::AtomicU64::new(120_000),
         }))
     }
     pub fn revision(&self) -> u64 {
@@ -323,6 +331,14 @@ impl Analysis {
             r.revision += 1;
         }
         let began = std::time::Instant::now();
+        #[cfg(test)]
+        let deadline = Duration::from_millis(
+            self.0
+                .deadline_ms
+                .load(std::sync::atomic::Ordering::Acquire),
+        );
+        #[cfg(not(test))]
+        let deadline = Duration::from_secs(120);
         let caps = self.0.capabilities.get(cancel).await?;
         let media = source.source.inspection.media.as_ref().ok_or_else(gone)?;
         let clock = timeline(media);
@@ -407,7 +423,7 @@ impl Analysis {
                     Request {
                         executable: &self.0.ffmpeg,
                         args: &args,
-                        deadline: Duration::from_secs(120)
+                        deadline: deadline
                             .checked_sub(began.elapsed())
                             .filter(|d| !d.is_zero())
                             .ok_or_else(|| {
@@ -485,14 +501,15 @@ impl Analysis {
                 source.clone(),
             )
             .await?;
+        let seal = crate::owned_file::Seal::capture(&path)?;
         let checked = inspection::inspect(&self.0.ffprobe, &path, cancel).await?;
+        seal.check(&path)?;
         if !checked
             .duration_seconds
             .is_some_and(|d| (d - duration).abs() < 1.)
         {
             return Err(failed("Playback proxy duration did not match the source."));
         }
-        let seal = crate::owned_file::Seal::capture(&path)?;
         let file = File::open(&path).map_err(|_| failed("Playback proxy could not be opened."))?;
         let size = file
             .metadata()
@@ -638,8 +655,16 @@ impl Analysis {
                 {
                     return true;
                 }
-                entry.failed = std::fs::remove_dir_all(&entry.directory)
-                    .is_err_and(|e| e.kind() != std::io::ErrorKind::NotFound);
+                #[cfg(test)]
+                let fail = owner
+                    .0
+                    .fail_cleanup
+                    .load(std::sync::atomic::Ordering::Acquire);
+                #[cfg(not(test))]
+                let fail = false;
+                entry.failed = fail
+                    || std::fs::remove_dir_all(&entry.directory)
+                        .is_err_and(|e| e.kind() != std::io::ErrorKind::NotFound);
                 if entry.failed {
                     entry.retry.failed();
                 }
@@ -693,5 +718,121 @@ impl Library for Analysis {
             return Err(gone());
         }
         Ok(proxy.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+    async fn terminal(owner: &Analysis, id: Uuid, kind: Kind) -> State {
+        tokio::time::timeout(Duration::from_secs(20), async {
+            loop {
+                let state = owner.state(id, kind);
+                if !owner
+                    .0
+                    .registry
+                    .lock()
+                    .unwrap()
+                    .tasks
+                    .get(&(id, kind))
+                    .unwrap()
+                    .running
+                    && owner.0.tasks.is_empty()
+                {
+                    return state;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap()
+    }
+    #[tokio::test]
+    async fn deadlines_preemption_revocation_and_failed_cleanup_keep_ownership() {
+        let root = tempfile::tempdir().unwrap();
+        let original = root.path().join("synthetic.wav");
+        let tool = |name| PathBuf::from(std::env::var_os(format!("LVOVD_DESKTOP_{name}")).unwrap());
+        let mut args: Vec<OsString> = [
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=duration=2:sample_rate=48000",
+            "-c:a",
+            "pcm_s16le",
+        ]
+        .map(Into::into)
+        .into();
+        args.push(original.as_os_str().into());
+        crate::process::run(
+            &tool("FFMPEG"),
+            &args,
+            Duration::from_secs(20),
+            1024 * 1024,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let assets = Assets::new(root.path()).unwrap();
+        let source = assets.import(&original, &tool("FFPROBE")).await.unwrap();
+        let id = source.asset_id;
+        let owner = Analysis::new(assets.clone(), tool("FFMPEG"), tool("FFPROBE"));
+        owner.0.deadline_ms.store(1, Ordering::Release);
+        let timed = owner.start(id, Kind::Waveform).unwrap();
+        let state = terminal(&owner, id, Kind::Waveform).await;
+        assert_eq!(state.status, "failed");
+        assert!(state.message.unwrap().contains("timed out"));
+        assert!(assets.lease(id).is_ok());
+        owner.0.deadline_ms.store(120000, Ordering::Release);
+        let foreground = owner.preempt().await;
+        let waiting = owner.start(id, Kind::Waveform).unwrap();
+        assert_ne!(waiting.operation_id, timed.operation_id);
+        owner.cancel(id, Kind::Waveform, timed.operation_id);
+        assert!(
+            !owner.0.registry.lock().unwrap().tasks[&(id, Kind::Waveform)]
+                .cancel
+                .is_cancelled()
+        );
+        let second = owner.preempt().await;
+        assert_eq!(
+            terminal(&owner, id, Kind::Waveform).await.status,
+            "cancelled"
+        );
+        drop(second);
+        drop(foreground);
+        owner.start(id, Kind::Waveform).unwrap();
+        let ready = terminal(&owner, id, Kind::Waveform).await;
+        assert_eq!(ready.status, "ready");
+        assert!(
+            owner
+                .window(id, waiting.operation_id.unwrap(), 0., 1., 50)
+                .is_err()
+        );
+        owner.start(id, Kind::Preview).unwrap();
+        let preview = terminal(&owner, id, Kind::Preview).await;
+        assert_eq!(preview.status, "ready", "{:?}", preview.message);
+        let reader = owner.media_lease(preview.asset_id.unwrap()).unwrap();
+        assets.remove(id).unwrap();
+        owner.retire(id);
+        assert!(reader.read(0, 1).is_err());
+        owner.cleanup(false).await.unwrap();
+        assert!(owner.retains_source(id));
+        drop(reader);
+        owner.0.fail_cleanup.store(true, Ordering::Release);
+        assert!(owner.cleanup(false).await.is_err());
+        assert!(owner.cleanup_pending(id));
+        // Reconciliation must publish the failure and retain its source lease.
+        assert!(!assets.remove(id).unwrap().cleanup_complete);
+        owner.0.fail_cleanup.store(false, Ordering::Release);
+        owner.cleanup(true).await.unwrap();
+        assert!(!owner.retains_source(id));
+        assert!(assets.remove(id).unwrap().cleanup_complete);
+        assert!(original.is_file());
+        owner.shutdown().await.unwrap();
+        assets.shutdown().await.unwrap();
     }
 }

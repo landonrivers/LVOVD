@@ -12,7 +12,7 @@
     "allow-list-workbenches",
     "allow-subscribe-workbench",
     "allow-acknowledge-workbench",
-    "allow-review-processing",
+    "allow-review-render", "allow-review-conversion", "allow-review-processing",
     "allow-queue-processing",
     "allow-cancel-processing",
     "allow-discard-workbench",

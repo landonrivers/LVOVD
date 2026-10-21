@@ -122,6 +122,60 @@ pub(crate) struct Review {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct RenderReview {
+    workbench_id: Uuid,
+    source_id: Uuid,
+    draft_revision: u32,
+    edit_plan: Value,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ConversionRequest {
+    workbench_id: Uuid,
+    source_id: Uuid,
+    input_asset_id: Uuid,
+    draft_revision: u32,
+    target_id: String,
+    edit_plan: Option<Value>,
+}
+#[tauri::command]
+pub(crate) async fn review_render(
+    state: State<'_, AppState>,
+    request: RenderReview,
+) -> Result<Value> {
+    state
+        .workbenches
+        .review_render(
+            request.workbench_id,
+            request.source_id,
+            request.draft_revision,
+            request.edit_plan,
+        )
+        .await
+        .map(|p| p.public_document())
+}
+#[tauri::command]
+pub(crate) async fn review_conversion(
+    state: State<'_, AppState>,
+    request: ConversionRequest,
+) -> Result<Value> {
+    state
+        .workbenches
+        .review_conversion(
+            request.workbench_id,
+            lvovd_core::processing_operation::ConversionReview {
+                source_id: request.source_id,
+                input_asset_id: request.input_asset_id,
+                draft_revision: request.draft_revision,
+                target_id: request.target_id,
+                edit_plan: request.edit_plan,
+            },
+        )
+        .await
+        .map(|p| p.public_document())
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Batch {
     workbench_id: Uuid,
     entries: Vec<Admission>,
@@ -452,6 +506,14 @@ mod tests {
                 .is_err()
         );
         assert!(serde_json::from_value::<Ack>(serde_json::json!({"connectionId":id,"revision":0,"queueRevision":0,"workbenchId":id})).is_err());
+        assert!(serde_json::from_value::<ConversionRequest>(serde_json::json!({"workbenchId":id,"sourceId":id,"inputAssetId":id,"draftRevision":0,"targetId":"mp3","inputRole":"edited-output"})).is_err());
+        assert!(
+            serde_json::from_value::<ResultRequest>(
+                serde_json::json!({"workbenchId":id,"resultId":id,"destination":"untrusted"})
+            )
+            .is_err()
+        );
+        assert!(serde_json::from_value::<WaveformWindow>(serde_json::json!({"workbenchId":id,"sourceId":id,"operationId":id,"startSeconds":0,"endSeconds":1,"points":4096,"path":"untrusted"})).is_err());
     }
     #[test]
     fn channel_backpressure_coalesces_updates_and_rejects_replaced_acknowledgements() {

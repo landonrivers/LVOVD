@@ -147,6 +147,25 @@ async function scenario(file, index) {
       await browser.waitUntil(async () => browser.execute(() => window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.waveform?.status === 'ready'), {timeout:20000});
       assert.match(await browser.$('#audio-waveform-note').getText(), /overview/);
     }
+    if (index === 2) {
+      await browser.execute(async ({sourceId,workbenchId}) => {
+        const invoke=(command,request)=>window.__TAURI__.core.invoke(command,{request});
+        const editPlan={version:1,keepRanges:[{startSeconds:0.25,endSeconds:1.25}]};
+        const review=await invoke('review_render',{workbenchId,sourceId,draftRevision:1,editPlan});
+        await invoke('queue_processing',{workbenchId,entries:[{sourceId,key:review.key,acknowledgements:[]}]});
+        window.__legacyEdit=editPlan;
+      },{sourceId:result.sourceId,workbenchId:owner});
+      await browser.waitUntil(async()=>browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.conversion.output?.role==='edited-output'),{timeout:20000});
+      await browser.execute(async ({sourceId,workbenchId})=>{
+        const inputAssetId=window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId;
+        const review=await window.__TAURI__.core.invoke('review_conversion',{request:{workbenchId,sourceId,inputAssetId,draftRevision:2,targetId:'m4a-aac',editPlan:window.__legacyEdit}});
+        await window.__TAURI__.core.invoke('queue_processing',{request:{workbenchId,entries:[{sourceId,key:review.key,acknowledgements:[]}]}});
+      },{sourceId:result.sourceId,workbenchId:owner});
+      await browser.waitUntil(async()=>browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.conversion.output?.role==='converted-output'),{timeout:20000});
+      const converted=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output);
+      assert.equal(converted.inspection.video,null); assert.equal(converted.inspection.audio.codec,'aac');
+      assert.ok(Math.abs(converted.inspection.durationSeconds-1)<0.1);
+    }
     if (index === 0 || index === 3) {
       const field = async (id, value) => browser.execute((id, value) => { const input=document.getElementById(id); input.value=value; input.dispatchEvent(new Event('change',{bubbles:true})); },id,value);
       await field('editor-end-time','00:00:01.500');
@@ -180,6 +199,29 @@ async function scenario(file, index) {
       await browser.$('#processing-download-all').click();
       await browser.waitUntil(async () => (await browser.$('#processing-download-note').getText()).startsWith('Saved '),{timeout:15000});
       assert.equal((await browser.$('#processing-download-note').getText()).match(/Saved /g).length,2);
+      if (index === 3) {
+        for (const [container,codec] of [['opus','opus'],['flac','flac'],['wav','pcm_s24le']]) {
+          const previous=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId);
+          await field('processing-container',container);
+          await browser.waitUntil(async()=>(await browser.$('#conversion-start').isEnabled()),{timeout:15000});
+          await browser.$('#conversion-start').click();
+          await browser.waitUntil(async()=>browser.execute(previous=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId!==previous,previous),{timeout:20000});
+          const actual=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.inspection.audio);
+          assert.equal(actual.codec,codec);assert.equal(actual.sampleRate,container==='opus'?48000:44100);
+        }
+      } else {
+        const previous=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId);
+        await field('processing-scale','fit');await field('processing-width','80');await field('processing-height','80');
+        await browser.$('input[name="processing-rate"][value="size"]').click();await field('processing-maximum-mb','0.15');
+        await field('processing-audio-codec','aac');await field('processing-audio-bitrate','32');
+        await browser.waitUntil(async()=>(await browser.$('#conversion-start').isEnabled()),{timeout:15000});
+        await browser.$('#conversion-start').click();
+        await browser.waitUntil(async()=>browser.execute(previous=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId!==previous,previous),{timeout:20000});
+        const output=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output);
+        assert.ok(output.size<=150000);assert.equal(output.inspection.video.width,80);assert.equal(output.inspection.video.height,44);assert.equal(output.review.passes,2);
+      }
+      assert.equal(await browser.execute(()=>document.documentElement.scrollHeight<=innerHeight && document.documentElement.scrollWidth<=innerWidth),true,'results must retain bounded page scrolling');
+
       await browser.execute(() => { window.confirm=()=>true; });
       await browser.$('#workspace-discard').click();
       await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length===1,{timeout:10000});

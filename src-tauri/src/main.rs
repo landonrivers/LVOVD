@@ -413,6 +413,8 @@ fn main() {
             list_workbenches,
             subscribe_workbench,
             acknowledge_workbench,
+            review_render,
+            review_conversion,
             review_processing,
             queue_processing,
             cancel_processing,

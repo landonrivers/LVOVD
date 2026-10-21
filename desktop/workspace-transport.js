@@ -12,7 +12,7 @@
     if (!value) return null;
     if (current?.workbenchId === value.workbenchId && (value.revision < current.revision || value.queueRevision < current.queueRevision)) value = current;
     else { current = value; revision++; }
-    const jobs = value.jobs.map(job => ({ ...job, workspaceId: job.sourceId, message: job.failure?.message, failure: job.failure && { ...job.failure, explanation: job.failure.message } }));
+    const jobs = value.jobs.map(job => { const failure = job.failure?.workspaceFailure || job.failure; return { ...job, workspaceId: job.sourceId, message: job.failure?.message, failure: failure && { ...failure, explanation: failure.explanation || job.failure.message } }; });
     return { id: value.workbenchId, revision, connectionEpoch: connection, limits: { maxEntries: 20 }, jobs,
       intakeFailure: value.intakeFailure, importing: value.importing, removedCleanup: value.cleanup.map(id => ({ workspaceId: id, name: 'Removed file', status: value.failedCleanup.includes(id) ? 'failed' : 'pending', message: value.failedCleanup.includes(id) ? 'Retry temporary-file cleanup.' : 'Waiting for active resources to close.' })),
       workspaces: value.sources.map(source => {
@@ -21,14 +21,14 @@
         const job = jobs.find(j => j.sourceId === id), result = value.results.find(r => r.sourceId === id);
         const output = result && { ...result, assetId: result.resultId, planKey: result.review.key, processingSnapshot: result.review,
           downloadUrl: native.mediaUrl(result.resultId), playbackUrl: result.mime ? native.mediaUrl(result.resultId) : null };
-        const duration = job?.result?.review?.output?.durationSeconds || result?.review?.output?.durationSeconds || editor.durationSeconds;
+        const duration = job?.durationSeconds || job?.result?.review?.output?.durationSeconds || result?.review?.output?.durationSeconds || editor.durationSeconds;
         return { id, sourceAssetId: id, purpose: 'local', source: { name: source.name, size: source.size, origin: 'local' }, inspection: source.inspection.media,
           status: 'ready', activeOperation: preview?.status === 'preparing' ? 'proxying' : null,
           processingRevision: value.processingRevisions.find(([sourceId]) => sourceId === id)?.[1] ?? null,
           editor: { ...editor, operationId: preview?.operationId, status: preview?.status || 'idle', message: preview?.message }, waveform: waveform || { status: 'idle' },
           playback: preview?.status === 'ready' && preview.assetId ? { assetId: preview.assetId, role: preview.proxy ? 'playback-proxy' : 'original', proxy: preview.proxy, mime: source.inspection.media?.video ? 'video/mp4' : 'audio/mp4', url: native.mediaUrl(preview.assetId) } : null,
           conversion: { status: job?.status || (result ? 'ready' : 'idle'), percent: job?.progress?.outTimeUs != null && duration > 0 ? Math.min(99, ((Math.max(1, job.progress.pass) - 1) * 100 + job.progress.outTimeUs / (duration * 10000)) / Math.max(1, job.progress.passes)) : null,
-            message: job?.failure?.message, failure: job?.failure, output, cleanupPending: value.failedCleanup.includes(id) },
+            message: job?.message || (job?.progress?.validating ? 'Validating output…' : job?.progress?.passes === 2 ? `Pass ${job.progress.pass} of 2 · Attempt ${job.progress.attempt}` : null), failure: job?.failure, output, cleanupPending: value.failedCleanup.includes(id) },
           outputCleanup: { blocked: value.failedCleanup.includes(id) } };
       }) };
   }

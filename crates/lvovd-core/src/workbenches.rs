@@ -323,7 +323,11 @@ impl Workbenches {
                             id,
                             lease: None,
                             failed: true,
-                            retry: Default::default(),
+                            retry: {
+                                let mut retry = crate::cleanup_retry::Retry::default();
+                                retry.failed();
+                                retry
+                            },
                         });
                     }
                     result.failure = Some(error);
@@ -611,6 +615,57 @@ impl Workbenches {
                     Status::Queued | Status::Running | Status::Cancelling
                 )
             }));
+    }
+    pub async fn review_render(
+        &self,
+        id: Uuid,
+        source: Uuid,
+        revision: u32,
+        edit: serde_json::Value,
+    ) -> Result<ReviewedPlan> {
+        self.member(id, source)?;
+        if serde_json::to_vec(&edit).map_or(true, |v| v.len() > 64 * 1024) {
+            return Err(AppError::new(
+                "PROCESSING_REQUEST",
+                "The edit request is too large.",
+            ));
+        }
+        let caps = self
+            .0
+            .capabilities
+            .get(&self.0.assets.cancellation())
+            .await?;
+        self.member(id, source)?;
+        let result = self
+            .0
+            .processing
+            .review_render(source, revision, edit, caps)
+            .await?;
+        self.member(id, source)?;
+        Ok(result)
+    }
+    pub async fn review_conversion(
+        &self,
+        id: Uuid,
+        request: crate::processing_operation::ConversionReview,
+    ) -> Result<ReviewedPlan> {
+        let source = request.source_id;
+        self.member(id, source)?;
+        if serde_json::to_vec(&request.edit_plan).map_or(true, |v| v.len() > 64 * 1024) {
+            return Err(AppError::new(
+                "PROCESSING_REQUEST",
+                "The edit request is too large.",
+            ));
+        }
+        let caps = self
+            .0
+            .capabilities
+            .get(&self.0.assets.cancellation())
+            .await?;
+        self.member(id, source)?;
+        let result = self.0.processing.review_conversion(request, caps).await?;
+        self.member(id, source)?;
+        Ok(result)
     }
     pub fn prepare_analysis(&self, id: Uuid, source: Uuid, kind: Kind) -> Result<Snapshot> {
         self.member(id, source)?;

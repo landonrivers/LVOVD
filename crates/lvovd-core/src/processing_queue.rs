@@ -16,8 +16,8 @@ use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
 pub const MAX_LIVE_JOBS: usize = 20;
-// Two workbenches of twenty sources. Terminal rows are replaced per source,
-// not appended forever. The collection owner must forget removed members.
+// One active workbench plus a retiring workbench awaiting cleanup, twenty
+// sources each. Terminal rows replace prior rows; removed members are retired.
 const MAX_ROWS: usize = 40;
 const QUEUED_TTL: Duration = Duration::from_secs(60 * 60);
 
@@ -43,6 +43,7 @@ pub struct Job {
     pub source_id: Uuid,
     pub draft_revision: u32,
     pub plan_key: String,
+    pub duration_seconds: Option<f64>,
     pub status: Status,
     pub progress: Progress,
     pub result: Option<Published>,
@@ -220,6 +221,8 @@ impl ProcessingQueue {
                     source_id: ticket.source_id(),
                     draft_revision: ticket.draft_revision(),
                     plan_key: ticket.review().key().into(),
+                    duration_seconds: ticket.review().document()["timing"]["durationSeconds"]
+                        .as_f64(),
                     status: Status::Queued,
                     progress: Progress::default(),
                     result: None,

@@ -2344,24 +2344,34 @@
           "start_conversion"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/processing_operation/legacy.rs",
+          "crates/lvovd-core/src/workbenches.rs"
+        ],
+        "native": [
+          "src-tauri/src/workbench_commands.rs",
+          "desktop/native.js"
+        ]
       },
       "tests": {
         "reference": [
           "test/edited-conversion.test.js",
           "test/real/edited-conversion.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Proxy/converted/retired inputs are rejected; rerenders and cancellation preserve valid previous results and active aliases."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Legacy render and original/edited conversion are connected as native contracts alongside unified editor processing. Finish all-platform real-media acceptance; retain the reference validation policy for short AAC-to-MP3 padding and prior results on rejection."
     },
     {
       "id": "media.output-validation",
