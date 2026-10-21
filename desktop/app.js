@@ -1,6 +1,10 @@
 'use strict';
 (async function() {
   const native = globalThis.LVOVDNative, byId = id => document.getElementById(id);
+  const cleanup = byId('workspace-recovery');
+  cleanup.setAttribute('aria-label', 'Temporary file cleanup');
+  cleanup.querySelector('strong').textContent = 'Temporary file cleanup';
+  cleanup.querySelector('.help').textContent = 'Removed files stay listed until cleanup finishes.';
   async function health() {
     byId('recheck').disabled = true;
     try { const result = await native.call('runtime_health');

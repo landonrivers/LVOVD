@@ -7,9 +7,9 @@ require('../../scripts/desktop.cjs').prepare();
 const html = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '');
 const ids = ['10000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000003'];
 
-async function setup(page, bridge = true) {
+async function setup(page, bridge = true, retired = false) {
   await page.setContent(html);
-  if (bridge) await page.evaluate(ids => {
+  if (bridge) await page.evaluate(({ids,retired}) => {
     let channel, connection = 0;
     const workbenchId = '20000000-0000-4000-8000-000000000001';
     const otherId = '20000000-0000-4000-8000-000000000002';
@@ -18,7 +18,7 @@ async function setup(page, bridge = true) {
       cleanup, jobs: [], results: [], importing: false, discarded: false, previews: [], waveforms: [], editors: [], processingRevisions: [], failedCleanup: []
     });
     const fixture = window.fixture = {
-      workbenchId, otherId, channels: [],
+      workbenchId, otherId, channels: [], retired,
       sources: ids.map((assetId, i) => ({ assetId, name: `Synthetic ${i + 1}`, size: 10, inspection: { format: 'test', mime: null, streams: [] } })),
       snapshot(revision, indices, cleanup = [], intakeFailure = null, extra = {}) { channel.onmessage({ connectionId: connection, snapshot: { ...state(this.active || workbenchId, revision, indices, cleanup), intakeFailure, ...extra } }); },
       stale(revision, indices) { this.channels[0].onmessage({ connectionId: 1, snapshot: state(workbenchId, revision, indices) }); }
@@ -28,7 +28,7 @@ async function setup(page, bridge = true) {
       convertFileSrc: id => `lvovd-media://localhost/${id}`,
       async invoke(command, args) {
         if (command === 'desktop_handshake') return { protocolVersion: 1, connectionGeneration: 0, appVersion: 'test', webviewVersion: 'test' };
-        if (command === 'list_workbenches') return [state(workbenchId), ...(fixture.created ? [state(otherId)] : [])];
+        if (command === 'list_workbenches') return [state(workbenchId), ...(fixture.retired ? [{...state(otherId,1,[],[ids[2]]),discarded:true,failedCleanup:[ids[2]]}] : [])];
         if (command === 'create_workbench') { return state(workbenchId); }
         if (command === 'subscribe_workbench') {
           channel = args.channel; fixture.channels.push(channel); fixture.active = args.request.workbenchId;
@@ -43,10 +43,11 @@ async function setup(page, bridge = true) {
         });
         if (command === 'cancel_editor') return;
         if (command === 'save_result') return new Promise(resolve => { fixture.resolveSave = resolve; });
+        if (command === 'cleanup_workbench') return new Promise(resolve => { fixture.resolveCleanup = () => { fixture.retired=false; resolve({...state(otherId,2),discarded:true}); }; });
         throw new Error('Unexpected command: ' + command);
       }
     } };
-  }, ids);
+  }, {ids,retired});
   await page.addScriptTag({ path: path.join(root, 'native.js') });
   await page.addScriptTag({ path: path.join(root, 'workspace-transport.js') });
   for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
@@ -117,4 +118,19 @@ test('desktop save status survives updates and late receipts cannot relabel a re
   await expect(row.locator('[data-result="status"]')).not.toContainText('obsolete');
   await expect(row.locator('[data-result="status"]')).not.toContainText('Saving');
   expect(errors).toEqual([]);
+});
+
+test('retired native work is cleanup only and its late reply cannot replace the active workbench', async ({ page }) => {
+  await setup(page, true, true);
+  await page.evaluate(() => window.fixture.snapshot(1,[0,1]));
+  const panel=page.locator('#workspace-recovery');
+  await expect(panel).toBeVisible();
+  await expect(panel.locator('[data-recovery-action="reopen"], [data-recovery-action="remove"]')).toHaveCount(0);
+  await panel.locator('[data-recovery-action="retry"]').click();
+  await page.locator('#processing-file-list').selectOption(ids[1]);
+  await page.evaluate(() => window.fixture.resolveCleanup());
+  await expect(panel).toBeHidden();
+  await page.evaluate(() => window.fixture.snapshot(2,[0,1]));
+  await expect(page.locator('#local-media-name')).toHaveText('Synthetic 2');
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
 });

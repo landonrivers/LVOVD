@@ -415,8 +415,8 @@
       const summary = document.createElement('div'); summary.className = 'help';
       summary.textContent = `${item.files} ${item.files === 1 ? 'file' : 'files'}${item.cleanup.length ? ` · ${item.cleanup.length} pending/failed cleanups` : ''}${item.busy ? ' · Work still active' : ''}${item.available ? '' : ' · Open or being recovered in another tab; close it there, then refresh this list'}`; row.append(summary);
       const actions = document.createElement('div'); actions.className = 'inline-actions';
-      const choices = [['reopen', !item.files && item.cleanup.length && !item.busy ? 'Open cleanup' : 'Reopen files']];
-      if (item.files || item.busy || !item.cleanup.length) choices.push(['remove', 'Remove workbench']);
+      const choices = transport ? [] : [['reopen', !item.files && item.cleanup.length && !item.busy ? 'Open cleanup' : 'Reopen files']];
+      if (!transport && (item.files || item.busy || !item.cleanup.length)) choices.push(['remove', 'Remove workbench']);
       if (item.cleanup.length) choices.push(['retry', 'Retry cleanup']);
       for (const [action, label] of choices) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'button secondary mini'; button.textContent = label;
@@ -1181,6 +1181,6 @@
   root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
     collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
   publish();
-  if (transport) transport.ready.then(ensureCollection).catch(error => message(error.message, true));
+  if (transport) transport.ready.then(ensureCollection).then(refreshRecovery).catch(error => message(error.message, true));
   else refreshRecovery();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
