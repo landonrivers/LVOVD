@@ -172,6 +172,7 @@ struct Cleanup {
     // Retiring a published result has provenance only, never an input lease.
     _source: Option<Arc<Asset>>,
     failed: bool,
+    retry: crate::cleanup_retry::Retry,
 }
 struct State {
     id: Uuid,
@@ -572,6 +573,7 @@ impl Processing {
                         source_id,
                         _source: Some(source),
                         failed: false,
+                        retry: Default::default(),
                     },
                 );
                 Ok(directory)
@@ -587,6 +589,12 @@ impl Processing {
             let pass_log = directory.join("pass");
             let passes = job.plan.document()["passes"].as_u64().unwrap_or(1);
             for pass in 1..=passes {
+                progress.send_replace(Progress {
+                    pass: pass as u8,
+                    passes: passes as u8,
+                    attempt: attempts,
+                    ..Default::default()
+                });
                 self.check(job).await?;
                 let args = processing_command::arguments(
                     job.source.processing_path()?,
@@ -620,6 +628,7 @@ impl Processing {
                     )
                     .await?;
             }
+            progress.send_modify(|value| value.validating = true);
             self.check(job).await?;
             #[cfg(test)]
             self.0.hooks.after_encode(&output).await;
@@ -823,7 +832,7 @@ impl Processing {
                 .unwrap()
                 .cleanup
                 .get(directory)
-                .is_some_and(|entry| entry.failed)
+                .is_some_and(|entry| entry.failed && !entry.retry.due())
         {
             return Err(cleanup_pending());
         }
@@ -846,6 +855,7 @@ impl Processing {
             Err(_) => {
                 if let Some(entry) = self.0.registry.lock().unwrap().cleanup.get_mut(directory) {
                     entry.failed = true;
+                    entry.retry.failed();
                 }
                 return Err(cleanup_pending());
             }
@@ -892,6 +902,7 @@ impl Processing {
                         source_id: output.descriptor.source_id,
                         _source: None,
                         failed: false,
+                        retry: Default::default(),
                     },
                 );
             }
@@ -923,6 +934,26 @@ impl Processing {
     pub fn pending_cleanup(&self) -> usize {
         let registry = self.0.registry.lock().unwrap();
         registry.cleanup.len() + registry.retired.len()
+    }
+    pub fn source_cleanup_pending(&self, source: Uuid) -> bool {
+        self.0
+            .registry
+            .lock()
+            .unwrap()
+            .cleanup
+            .values()
+            .any(|c| c.source_id == source && c.failed)
+    }
+    pub fn revision(&self, source: Uuid) -> Option<u32> {
+        self.0
+            .registry
+            .lock()
+            .unwrap()
+            .slots
+            .get(&source)?
+            .review
+            .as_ref()
+            .map(|r| r.revision)
     }
     /// Retired workbench membership cannot release its reservation while a
     /// worker, published output lease, or failed deletion still owns the source.

@@ -28,10 +28,16 @@ pub struct Request<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
     pub out_time_us: Option<u64>,
+    pub pass: u8,
+    pub passes: u8,
+    pub attempt: u8,
+    pub validating: bool,
 }
+type Consumer = Box<dyn FnMut(&[u8]) -> Result<()> + Send>;
 enum Capture {
     All,
     Progress(tokio::sync::watch::Sender<Progress>),
+    Stream(Consumer),
 }
 
 /// A dropped waiter cancels its worker; it does not abort the supervising task.
@@ -52,6 +58,17 @@ impl Default for Supervisor {
     }
 }
 impl Supervisor {
+    /// Consume bounded chunks without accumulating decoded media in memory.
+    /// The consumer enforces its inspected-duration byte ceiling.
+    pub async fn run_stream_owned<G: Send + 'static>(
+        &self,
+        request: Request<'_>,
+        consume: impl FnMut(&[u8]) -> Result<()> + Send + 'static,
+        ownership: G,
+    ) -> Result<Output> {
+        self.supervise(request, Capture::Stream(Box::new(consume)), ownership)
+            .await
+    }
     pub async fn run_owned<G: Send + 'static>(
         &self,
         executable: &Path,
@@ -212,9 +229,7 @@ async fn read_progress(
                     && let Ok(raw) = std::str::from_utf8(raw)
                     && let Ok(time) = raw.parse::<u64>()
                 {
-                    progress.send_replace(Progress {
-                        out_time_us: Some(time),
-                    });
+                    progress.send_modify(|value| value.out_time_us = Some(time));
                 }
                 line.clear();
             } else {
@@ -227,6 +242,20 @@ async fn read_progress(
                 line.push(*byte);
             }
         }
+    }
+}
+
+async fn read_stream(mut pipe: impl AsyncRead + Unpin, mut consume: Consumer) -> Result<Vec<u8>> {
+    let mut buffer = [0u8; 8192];
+    loop {
+        let count = pipe
+            .read(&mut buffer)
+            .await
+            .map_err(|_| AppError::new("TOOL_IO", "Could not read decoded samples."))?;
+        if count == 0 {
+            return Ok(vec![]);
+        }
+        consume(&buffer[..count])?;
     }
 }
 
@@ -310,7 +339,7 @@ async fn run_inner(
         _ = cancel.cancelled() => Err(AppError::new("CANCELLED", "Operation cancelled.")),
         result = tokio::time::timeout(deadline, async {
             let (stdout, stderr, status) = tokio::try_join!(
-                async {match capture {Capture::All=>read_bounded(stdout,limit,&captured).await,Capture::Progress(progress)=>read_progress(stdout,progress).await}}, read_bounded(stderr, limit, &captured),
+                async {match capture {Capture::All=>read_bounded(stdout,limit,&captured).await,Capture::Progress(progress)=>read_progress(stdout,progress).await,Capture::Stream(consume)=>read_stream(stdout,consume).await}}, read_bounded(stderr, limit, &captured),
                 async {
                     let status=child.wait().await;
                     // Retire descendants before waiting for inherited pipes.

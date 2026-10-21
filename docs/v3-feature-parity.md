@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 77 Missing, 10 Ported, 0 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 53 Missing, 0 Ported, 34 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -68,47 +68,47 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.progress` | Download progress | Download / Queue | 8D | Missing |
 | `download.outputs` | Prepared Download outputs | Download / Queue | 8D | Missing |
 | `download.cleanup` | Download expiry and cleanup | Download / Queue | 8D | Missing |
-| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Missing |
-| `handoff.playlist-intake` | Add Selected to Local Media | Download → Local Media | 8D | Missing |
-| `media.intake` | Multiple local files | Local Media / Files | 8C | Missing |
-| `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Ported |
-| `media.capabilities` | Capability discovery | Local Media / Review | 8B | Ported |
-| `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Ported |
-| `media.direct-playback` | Direct media playback | Local Media / Player | 8C | Missing |
-| `media.proxy` | Playback proxies | Local Media / Player | 8C | Missing |
-| `media.audio-clock` | Audio timeline policy | Local Media / Timeline | 8B | Ported |
-| `media.waveform` | Combined waveform | Local Media / Timeline | 8C | Missing |
-| `media.range-policy` | Retained-range normalization | Local Media / Cuts | 8B | Ported |
-| `media.trim-controls` | Trim and middle cuts | Local Media / Timeline | 8C | Missing |
-| `media.timeline-controls` | Timeline navigation and keyboard | Local Media / Timeline | 8C | Missing |
-| `media.drafts` | Per-file drafts and revisions | Local Media / Files | 8C | Missing |
-| `media.audio-policy` | Local audio encoding policy | Local Media / Output settings | 8B | Ported |
-| `media.audio-outputs` | Local audio outputs | Local Media / Output settings and results | 8C | Missing |
-| `media.noop-remux` | Original no-op and remux | Local Media / Review and results | 8B | Missing |
-| `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Ported |
-| `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Ported |
-| `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Ported |
-| `media.estimates-help` | Linked estimates and help | Local Media / Output settings and review | 8C | Missing |
-| `media.review-contract` | Reviewed plan validation | Local Media / Review | 8B | Missing |
+| `handoff.url-edit` | Edit Source Video | Download â†’ Local Media | 8D | Missing |
+| `handoff.playlist-intake` | Add Selected to Local Media | Download â†’ Local Media | 8D | Missing |
+| `media.intake` | Multiple local files | Local Media / Files | 8C | Integrated |
+| `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Integrated |
+| `media.capabilities` | Capability discovery | Local Media / Review | 8B | Integrated |
+| `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Integrated |
+| `media.direct-playback` | Direct media playback | Local Media / Player | 8C | Integrated |
+| `media.proxy` | Playback proxies | Local Media / Player | 8C | Integrated |
+| `media.audio-clock` | Audio timeline policy | Local Media / Timeline | 8B | Integrated |
+| `media.waveform` | Combined waveform | Local Media / Timeline | 8C | Integrated |
+| `media.range-policy` | Retained-range normalization | Local Media / Cuts | 8B | Integrated |
+| `media.trim-controls` | Trim and middle cuts | Local Media / Timeline | 8C | Integrated |
+| `media.timeline-controls` | Timeline navigation and keyboard | Local Media / Timeline | 8C | Integrated |
+| `media.drafts` | Per-file drafts and revisions | Local Media / Files | 8C | Integrated |
+| `media.audio-policy` | Local audio encoding policy | Local Media / Output settings | 8B | Integrated |
+| `media.audio-outputs` | Local audio outputs | Local Media / Output settings and results | 8C | Integrated |
+| `media.noop-remux` | Original no-op and remux | Local Media / Review and results | 8B | Integrated |
+| `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Integrated |
+| `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Integrated |
+| `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Integrated |
+| `media.estimates-help` | Linked estimates and help | Local Media / Output settings and review | 8C | Integrated |
+| `media.review-contract` | Reviewed plan validation | Local Media / Review | 8B | Integrated |
 | `media.edited-input` | Edited-result conversion handoff | Local Media / Conversion review | 8C | Missing |
-| `media.output-validation` | Validated processed outputs | Local Media / Results | 8B | Ported |
-| `media.naming` | Reviewed names and suffix | Local Media / Process actions | 8C | Missing |
-| `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Missing |
-| `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Missing |
-| `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Missing |
-| `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Missing |
-| `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Missing |
-| `media.reset` | Reset File | Local Media / Files | 8C | Missing |
-| `media.remove` | Remove File and Discard | Local Media / Files | 8C | Missing |
-| `media.cleanup` | Reachable cleanup recovery | Local Media / Cleanup recovery | 8C | Missing |
-| `media.expiry` | Workspace activity and expiry | Local Media | 8C | Missing |
-| `media.reopen` | Previous local workbenches | Local Media / Previous workbenches | 8C | Missing |
-| `media.reservations` | Capacity and storage reservations | Local Media / Intake and queue | 8C | Missing |
-| `media.leases` | Output leases and retirement | Local Media / Playback and results | 8C | Missing |
+| `media.output-validation` | Validated processed outputs | Local Media / Results | 8B | Integrated |
+| `media.naming` | Reviewed names and suffix | Local Media / Process actions | 8C | Integrated |
+| `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Integrated |
+| `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Integrated |
+| `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Integrated |
+| `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Integrated |
+| `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Integrated |
+| `media.reset` | Reset File | Local Media / Files | 8C | Integrated |
+| `media.remove` | Remove File and Discard | Local Media / Files | 8C | Integrated |
+| `media.cleanup` | Reachable cleanup recovery | Local Media / Cleanup recovery | 8C | Integrated |
+| `media.expiry` | Workspace activity and expiry | Local Media | 8C | Integrated |
+| `media.reopen` | Previous local workbenches | Local Media / Active workbench reconnection and cleanup recovery | 8C | Integrated |
+| `media.reservations` | Capacity and storage reservations | Local Media / Intake and queue | 8C | Integrated |
+| `media.leases` | Output leases and retirement | Local Media / Playback and results | 8C | Integrated |
 | `history.records` | Durable terminal history | History | 8D | Missing |
 | `history.presentation` | History details and pagination | History | 8D | Missing |
 | `history.deletion` | Delete and Clear All | History | 8D | Missing |
-| `history.reuse` | Use Again | History → Download | 8D | Missing |
+| `history.reuse` | Use Again | History â†’ Download | 8D | Missing |
 | `history.faults` | Nonfatal history faults | History / Download | 8D | Missing |
 | `runtime.health` | Runtime status and Recheck | Settings / Runtime | 8E | Missing |
 | `runtime.ytdlp-updates` | Managed yt-dlp lifecycle | Settings / Runtime | 8D | Missing |

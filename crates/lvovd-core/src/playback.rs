@@ -1,6 +1,6 @@
 //! Private Unix-socket broker for Linux's GStreamer source. The decoder receives
 //! bounded bytes, never an owned file path or descriptor with unrestricted reads.
-use crate::assets::Assets;
+use crate::media::Library;
 use crate::process::CancellationToken;
 use lvovd_media_ipc as wire;
 use std::{io, os::unix::net::UnixListener as StdListener, sync::Arc};
@@ -20,7 +20,7 @@ impl Broker {
     pub fn start(
         listener: StdListener,
         token: [u8; 32],
-        assets: Arc<Assets>,
+        assets: Arc<dyn Library>,
         changed: Arc<dyn Fn() + Send + Sync>,
     ) -> io::Result<Self> {
         listener.set_nonblocking(true)?;
@@ -69,20 +69,20 @@ impl Drop for Broker {
 async fn connection(
     mut stream: UnixStream,
     token: [u8; 32],
-    assets: Arc<Assets>,
+    assets: Arc<dyn Library>,
     stop: CancellationToken,
     changed: Arc<dyn Fn() + Send + Sync>,
 ) -> io::Result<()> {
     let mut hello = [0; wire::HELLO_BYTES];
     tokio::select! { biased; _ = stop.cancelled() => return Ok(()), result = timeout(wire::IO_TIMEOUT, stream.read_exact(&mut hello)) => { result??; } }
     let id = wire::authorize(&hello, &token).ok_or_else(wire::invalid)?;
-    let asset = assets.lease(id).map_err(|_| wire::invalid())?;
-    if asset.source.inspection.mime.is_none() {
+    let asset = assets.media_lease(id).map_err(|_| wire::invalid())?;
+    if asset.mime().is_none() {
         return Err(wire::invalid());
     }
     let revoked = asset.cancellation();
     let result = async {
-        let mut greeting = [0; 9]; greeting[1..].copy_from_slice(&asset.source.size.to_le_bytes());
+        let mut greeting = [0; 9]; greeting[1..].copy_from_slice(&asset.size().to_le_bytes());
         tokio::select! { biased; _ = stop.cancelled() => return Ok(()), _ = revoked.cancelled() => return Ok(()), result = timeout(wire::IO_TIMEOUT, stream.write_all(&greeting)) => { result??; } }
         loop {
             let mut request = [0; 12];
@@ -91,7 +91,7 @@ async fn connection(
                 timeout(wire::IO_TIMEOUT, stream.read_exact(&mut request[1..])).await??;
                 Ok::<_, io::Error>(())
             } => result? }
-            let (offset, length) = wire::read_range(request, asset.source.size).ok_or_else(wire::invalid)?;
+            let (offset, length) = wire::read_range(request, asset.size()).ok_or_else(wire::invalid)?;
             let lease = asset.clone();
             // Keep blocking disk access off the async/UI thread and wait for its
             // completion before retiring the lease, even during cancellation.
@@ -103,9 +103,7 @@ async fn connection(
     }.await;
     drop(stream);
     drop(asset);
-    if assets.pending_cleanup().contains(&id) {
-        let _ = assets.remove(id);
-        changed();
-    }
+    assets.reader_finished(id);
+    changed();
     result
 }

@@ -3,7 +3,8 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../../desktop');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '');
+require('../../scripts/desktop.cjs').prepare();
+const html = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '');
 const ids = ['10000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000003'];
 
 async function setup(page, bridge = true) {
@@ -14,7 +15,7 @@ async function setup(page, bridge = true) {
     const otherId = '20000000-0000-4000-8000-000000000002';
     const state = (id, revision = 0, indices = [], cleanup = []) => ({
       workbenchId: id, revision, queueRevision: 0, sources: indices.map(i => fixture.sources[i]),
-      cleanup, jobs: [], results: [], importing: false, discarded: false
+      cleanup, jobs: [], results: [], importing: false, discarded: false, previews: [], waveforms: [], editors: [], processingRevisions: [], failedCleanup: []
     });
     const fixture = window.fixture = {
       workbenchId, otherId, channels: [],
@@ -28,7 +29,7 @@ async function setup(page, bridge = true) {
       async invoke(command, args) {
         if (command === 'desktop_handshake') return { protocolVersion: 1, connectionGeneration: 0, appVersion: 'test', webviewVersion: 'test' };
         if (command === 'list_workbenches') return [state(workbenchId), ...(fixture.created ? [state(otherId)] : [])];
-        if (command === 'create_workbench') { fixture.created = true; return state(otherId); }
+        if (command === 'create_workbench') { return state(workbenchId); }
         if (command === 'subscribe_workbench') {
           channel = args.channel; fixture.channels.push(channel); fixture.active = args.request.workbenchId;
           return { connectionId: ++connection, snapshot: state(fixture.active) };
@@ -40,73 +41,55 @@ async function setup(page, bridge = true) {
           fixture.rejectRemoval = () => reject({ message: 'obsolete failure' });
           fixture.resolveRemoval = () => resolve(state(args.request.workbenchId, 2, [1], [fixture.sources[0].assetId]));
         });
-        throw new Error('Unexpected command');
+        if (command === 'cancel_editor') return;
+        throw new Error('Unexpected command: ' + command);
       }
     } };
   }, ids);
   await page.addScriptTag({ path: path.join(root, 'native.js') });
+  await page.addScriptTag({ path: path.join(root, 'workspace-transport.js') });
+  for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
   await page.addScriptTag({ path: path.join(root, 'app.js') });
+  if (bridge) await page.waitForFunction(() => window.fixture.channels.length > 0);
+  page.on('dialog', dialog => dialog.accept());
 }
+
 
 test('desktop picker acknowledgement waits for authoritative channel membership', async ({ page }) => {
   await setup(page);
-  await page.evaluate(() => window.fixture.snapshot(1, [0]));
-  await page.locator('#add-file').click();
+  await page.locator('#media-choose-button').click();
   await page.evaluate(() => window.fixture.resolvePick(1));
-  await expect(page.locator('#add-file')).toBeEnabled();
-  await expect(page.locator('#media-name')).toHaveText('Synthetic 1');
-  await page.evaluate(() => window.fixture.snapshot(2, [0, 1]));
-  await expect(page.locator('#media-name')).toHaveText('Synthetic 2');
-  await expect(page.locator('#remove-file')).toBeEnabled();
+  await expect(page.locator('#processing-file-list option')).toHaveCount(0);
+  await page.evaluate(() => window.fixture.snapshot(1, [0, 1]));
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  await expect(page.locator('#local-media-name')).toHaveText('Synthetic 1');
+  await expect(page.locator('#new-workbench')).toHaveCount(0);
 });
-
-test('desktop workbench switch rejects delayed removal response and prior connection snapshots', async ({ page }) => {
+for (const outcome of ['success','error']) test(`desktop late removal ${outcome} cannot replace selection or restore cleanup`, async ({ page }) => {
   await setup(page);
   await page.evaluate(() => window.fixture.snapshot(1, [0, 1]));
-  await page.locator('#remove-file').click();
-  await page.locator('#new-workbench').click();
-  await expect(page.locator('#workbenches')).toHaveValue('20000000-0000-4000-8000-000000000002');
-  await page.evaluate(() => window.fixture.snapshot(1, [2]));
-  await expect(page.locator('#media-name')).toHaveText('Synthetic 3');
-  await page.evaluate(() => { window.fixture.resolveRemoval(); window.fixture.stale(99, [0, 1]); });
-  await expect(page.locator('#media-name')).toHaveText('Synthetic 3');
-  await expect(page.locator('#files option')).toHaveCount(1);
-  await expect(page.locator('#cleanup button')).toHaveCount(0);
+  await page.locator('#workspace-discard').click();
+  await page.evaluate(() => window.fixture.snapshot(3, [1, 2]));
+  await page.locator('#processing-file-list').selectOption(ids[2]);
+  const status = await page.locator('#workspace-status').textContent();
+  await page.evaluate(outcome => { outcome === 'success' ? window.fixture.resolveRemoval() : window.fixture.rejectRemoval(); window.fixture.snapshot(2, [0, 1], [window.fixture.sources[0].assetId]); }, outcome);
+  await expect(page.locator('#local-media-name')).toHaveText('Synthetic 3');
+  await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+  await expect(page.locator('#workspace-removed-cleanup li')).toHaveCount(0);
+  await expect(page.locator('#workspace-status')).toHaveText(status);
 });
-
-test('desktop intake failures stay with their workbench and are visible on reopening', async ({ page }) => {
+test('desktop intake failure persists across selection and clears with newer intake', async ({ page }) => {
   await setup(page);
-  await page.evaluate(() => window.fixture.snapshot(1, [0], [], { code: 'SOURCE_READ', message: 'Could not open the selected file.' }));
-  await expect(page.locator('#status')).toHaveText('Could not open the selected file.');
-  await page.locator('#new-workbench').click();
-  await expect(page.locator('#workbenches')).toHaveValue('20000000-0000-4000-8000-000000000002');
-  await page.evaluate(() => window.fixture.snapshot(1, [1]));
-  await expect(page.locator('#status')).not.toContainText('Could not open');
-  await page.locator('#workbenches').selectOption('20000000-0000-4000-8000-000000000001');
-  await page.evaluate(() => window.fixture.snapshot(2, [0], [], { code: 'SOURCE_READ', message: 'Could not open the selected file.' }));
-  await expect(page.locator('#media-name')).toHaveText('Synthetic 1');
-  await expect(page.locator('#status')).toHaveText('Could not open the selected file.');
+  await page.evaluate(() => window.fixture.snapshot(1, [0,1], [], { code: 'SOURCE_READ', message: 'Could not open the selected file.' }));
+  await page.locator('#processing-file-list').selectOption(ids[1]);
+  await expect(page.locator('#native-intake-status')).toHaveText('Could not open the selected file.');
+  await page.evaluate(() => window.fixture.snapshot(2, [0,1,2]));
+  await expect(page.locator('#native-intake-status')).toBeHidden();
 });
-
-test('desktop late removal failure and older snapshot cannot revive cleanup or replace selection', async ({ page }) => {
-  await setup(page);
-  await page.evaluate(() => window.fixture.snapshot(1, [0, 1]));
-  await page.locator('#remove-file').click();
-  await page.evaluate(() => window.fixture.snapshot(2, [1, 2]));
-  await page.locator('#files').selectOption(ids[2]);
-  const status = await page.locator('#status').textContent();
-  await page.evaluate(() => { window.fixture.rejectRemoval(); window.fixture.snapshot(1, [0, 1], [window.fixture.sources[0].assetId]); });
-  await expect(page.locator('#media-name')).toHaveText('Synthetic 3');
-  await expect(page.locator('#files option')).toHaveCount(2);
-  await expect(page.locator('#cleanup button')).toHaveCount(0);
-  await expect(page.locator('#status')).toHaveText(status);
-});
-
-test('desktop adapter does not silently fall back to browser HTTP authority', async ({ page }) => {
+test('desktop adapter has no browser HTTP fallback', async ({ page }) => {
+  const requests = []; page.on('request', request => requests.push(request.url()));
   await setup(page, false);
   await expect(page.locator('#connection')).toHaveText('Desktop unavailable');
-  await expect(page.locator('#add-file')).toBeDisabled();
-  await expect(page.locator('#recheck')).toBeDisabled();
-  await expect(page.locator('#status')).toContainText('lvovd.exe');
-  await expect(page.locator('#status')).toContainText('npm run build:desktop');
+  await expect(page.locator('#workspace-status')).toContainText('lvovd.exe');
+  expect(requests).toEqual([]);
 });

@@ -2,11 +2,12 @@
 
 (function attachWaveform(root) {
   if (!root.document) return;
+  const transportRequest = root.LVOVDWorkspaceTransport?.request || root.fetch.bind(root);
   root.LVOVDAudioWaveform = { create({ canvas, note, retry }) {
     let selected = null, snapshot = null, viewport = null, generation = 0, request = 0, starting = false, attempted = false, startError = null, restartedOperationId = null, key = null, controller = null;
     function cancel(identity, operationId) {
       if (!identity || !operationId) return;
-      root.fetch('/api/workspace/waveform', { method: 'DELETE', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+      transportRequest('/api/workspace/waveform', { method: 'DELETE', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...identity, operationId }) }).catch(() => {});
     }
     function resumeCancelled() {
@@ -27,7 +28,7 @@
       if (!selected || starting || attempted && !force) return;
       const identity = { ...selected }, token = generation; starting = true; attempted = true; startError = null;
       try {
-        const response = await root.fetch('/api/workspace/waveform', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(identity) });
+        const response = await transportRequest('/api/workspace/waveform', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(identity) });
         const data = await response.json();
         if (token !== generation) {
           if (selected?.workspaceId !== identity.workspaceId || selected.sourceAssetId !== identity.sourceAssetId) cancel(identity, data.workspace?.waveform?.operationId);
@@ -47,8 +48,8 @@
       controller?.abort(); controller = new root.AbortController();
       const token = generation, revision = ++request, identity = { ...selected };
       try {
-        const query = new URLSearchParams({ ...identity, startSeconds: viewport.startSeconds, endSeconds: viewport.endSeconds, points });
-        const response = await root.fetch(`/api/workspace/waveform?${query}`, { cache: 'no-store', signal: controller.signal });
+        const query = new URLSearchParams({ ...identity, startSeconds: viewport.startSeconds, endSeconds: viewport.endSeconds, points, operationId });
+        const response = await transportRequest(`/api/workspace/waveform?${query}`, { cache: 'no-store', signal: controller.signal });
         const data = await response.json();
         if (token !== generation || revision !== request) return;
         if (!response.ok) throw new Error(data.error || 'Waveform unavailable.');

@@ -4,7 +4,20 @@
 
 This stage uses `codex/desktop-local-media` and a separate draft PR targeting staging. `master` remains the released v2.7 application. No promotion, tag or release is authorized. See the [development contract](development-contract.md), [feature parity register](v3-feature-parity.md), [8B ownership handoff](desktop-media-policies.md) and [native executable setup](desktop-foundation.md).
 
-## First increment: owned queue
+## Current integration increment (not yet accepted)
+
+The user approved one active workbench with up to twenty files. `create_workbench` is now idempotent for that active workbench. The earlier two-workbench controls described below are historical increments and have been removed. Backend retirement records remain until cleanup completes; originals and exported files are never cleanup targets.
+
+The desktop now embeds the released Local Media controls through `workspace-transport.js`: native picker/drop, per-file cuts, timeline, shared output settings, reviews, sequential processing and result details. Endpoint-shaped adapter names are internal dispatch only; no HTTP application server or Node backend handles desktop operations. Download remains required 8D work and the preview says it is unavailable.
+
+Rust now owns playback proxies and streaming combined-channel waveform analysis. One analysis worker is preempted before processing admission; cancellation confirms process-tree exit. Overview caches retain at most 200,000 pairs at >=10 ms resolution, windows return at most 4,096 pairs, and decode enforces the inspected-duration byte ceiling and 120-second budget. Ready originals, proxies and validated results share the bounded media reader used by the native URI and Linux broker. Proxy IDs cannot be submitted as originals.
+
+Save and Save All capture validated result leases before opening a native destination dialog. Writes use temporary files in the destination, flush/sync, and collision-safe publication. Failed saves leave results available. Automatic destination saving, export catalog and Open/Show in Folder remain 8D work.
+
+Validation is in progress. Windows playback/no-op saving passed the initial three fixtures; added cut/batch/proxy scenarios and four-platform CI must pass before acceptance. Core regressions cover proxy identity rejection, waveform windows, source revocation, original preservation and collision-safe saves. Worker tests exercise streaming failure, deadlines, cancellation and abandoned callers with descendants. Remaining acceptance work includes the legacy edited-result conversion role, exhaustive analysis/lifecycle failures, and native platform evidence. Do not mark 8C complete from this checkpoint.
+
+## First increment: owned queue (historical)
+
 
 `ProcessingQueue` connects ordered jobs to the accepted `Processing` owner. The next increment below connects that owner to collection-scoped native commands. The trim editor, processing controls and result presentation remain unfinished.
 

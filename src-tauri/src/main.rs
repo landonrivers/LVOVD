@@ -48,6 +48,8 @@ impl AppState {
         // Health probes share cancellation with intake. Keep the host alive until
         // their process guards have reaped the tools as well.
         let _health = self.health_admission.lock().await;
+        // Saving owns its result lease until its destination file is closed.
+        let _picker = self.picker_admission.lock().await;
         self.workbenches.shutdown().await
     }
     fn publish(&self) {
@@ -194,7 +196,7 @@ fn main() {
                     lvovd_core::playback::Broker::start(
                         listener,
                         playback_environment.token,
-                        assets.clone(),
+                        Arc::new(workbenches.clone()),
                         Arc::new(move || {
                             if let Some(state) = handle.try_state::<AppState>() {
                                 state.publish();
@@ -250,6 +252,7 @@ fn main() {
         .register_asynchronous_uri_scheme_protocol("lvovd-media", |context, request, responder| {
             let state = context.app_handle().state::<AppState>();
             let assets = state.assets.clone();
+            let library = Arc::new(state.workbenches.clone());
             let ticket = state.media_admission.admit();
             let Ok(ticket) = ticket else {
                 let error = ticket.err().unwrap();
@@ -301,7 +304,7 @@ fn main() {
                         request.headers().get("range"),
                         request.headers().get("origin")
                     );
-                    let response = lvovd_core::media::respond(&assets, request, &label);
+                    let response = lvovd_core::media::respond(&library, request, &label);
                     #[cfg(feature = "test-driver")]
                     eprintln!(
                         "Media protocol: {diagnostic} -> {} bytes={} content-range={:?}",
@@ -396,6 +399,14 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            cancel_intake,
+            prepare_editor,
+            save_result,
+            save_results,
+            prepare_waveform,
+            cancel_editor,
+            cancel_waveform,
+            waveform_window,
             desktop_handshake,
             runtime_health,
             create_workbench,

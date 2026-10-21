@@ -113,6 +113,9 @@ pub struct Removal {
 }
 
 impl Assets {
+    pub(crate) fn session_root(&self) -> Arc<tempfile::TempDir> {
+        self.root.clone()
+    }
     pub fn new(parent: &Path) -> Result<Self> {
         std::fs::create_dir_all(parent).map_err(|_| {
             AppError::new(

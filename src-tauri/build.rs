@@ -20,6 +20,13 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "desktop_handshake",
+            "prepare_editor",
+            "save_result",
+            "save_results",
+            "prepare_waveform",
+            "cancel_editor",
+            "cancel_waveform",
+            "waveform_window",
             "runtime_health",
             "create_workbench",
             "list_workbenches",
@@ -30,6 +37,7 @@ fn main() {
             "cancel_processing",
             "discard_workbench",
             "cleanup_workbench",
+            "cancel_intake",
             "pick_source",
             "remove_source",
             "shutdown_desktop",

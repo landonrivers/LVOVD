@@ -838,7 +838,7 @@
       "title": "Playlist acquisition pauses",
       "origin": "baseline",
       "reference": {
-        "behavior": "Keep cancellable randomized 0.5–1-second pauses between playlist items.",
+        "behavior": "Keep cancellable randomized 0.5\u00e2\u20ac\u201c1-second pauses between playlist items.",
         "sources": [
           "app-server.js",
           "playlist-intake.js"
@@ -1147,7 +1147,7 @@
         ]
       },
       "desktop": {
-        "location": "Download → Local Media",
+        "location": "Download \u00e2\u2020\u2019 Local Media",
         "stage": "8D",
         "operations": [
           "import_url"
@@ -1185,7 +1185,7 @@
         ]
       },
       "desktop": {
-        "location": "Download → Local Media",
+        "location": "Download \u00e2\u2020\u2019 Local Media",
         "stage": "8D",
         "operations": [
           "import_playlist",
@@ -1231,18 +1231,21 @@
           "import_sources"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -1255,7 +1258,8 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -1265,7 +1269,7 @@
         "Test multiple Unicode paths, interrupted intake, copy failures and rejection without original modification."
       ],
       "evidence": [],
-      "remaining": "The native picker accepts multiple files and OS drop captures the current workbench. Rust reserves twenty slots per workbench, copies in order, preserves partial successes and owns abandoned intake. Admitted failures remain in the workbench snapshot for reopening; delayed drop errors cannot disturb another connection. Full editor eligibility/recovery and cross-platform multi-file/drop failure acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.inspection",
@@ -1284,16 +1288,19 @@
           "inspect_source"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/media_inspection.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -1303,7 +1310,8 @@
         "rust": [
           "crates/lvovd-core/tests/policy_parity.rs",
           "crates/lvovd-core/tests/inspection_media.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -1313,7 +1321,7 @@
         "Compare the shared corpus and generated inspected media; expose all applicable facts in the finished workbench."
       ],
       "evidence": [],
-      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.capabilities",
@@ -1332,16 +1340,19 @@
           "discover_capabilities"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/capabilities.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -1351,7 +1362,8 @@
         "rust": [
           "crates/lvovd-core/src/capabilities_tests.rs",
           "crates/lvovd-core/tests/inspection_media.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -1361,7 +1373,7 @@
         "Missing/failing/timed-out tools cannot authorize encoding; retry and planner integration must remain reachable."
       ],
       "evidence": [],
-      "remaining": "Core policy/facts match shared reference fixtures; full native workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.input-boundary",
@@ -1382,13 +1394,19 @@
           "start_processing"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/inspection.rs",
-          "crates/lvovd-core/src/processing_command.rs"
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1398,15 +1416,19 @@
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
           "crates/lvovd-core/tests/processing_media.rs",
-          "crates/lvovd-core/tests/inspection_media.rs"
+          "crates/lvovd-core/tests/inspection_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Adversarial playlists/references fail before following dependencies, including output-validation/proxy paths."
       ],
       "evidence": [],
-      "remaining": "Inspection and processing preserve file-only demuxer restrictions, MOV external-reference blocking and explicit software decoders. Full proxy/operation wiring and native workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.direct-playback",
@@ -1427,13 +1449,19 @@
           "read_media"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/media.rs",
-          "crates/lvovd-core/src/media_admission.rs"
+          "crates/lvovd-core/src/media_admission.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1442,7 +1470,9 @@
         ],
         "rust": [
           "crates/lvovd-core/src/media_admission.rs",
-          "crates/lvovd-core/tests/foundation.rs"
+          "crates/lvovd-core/tests/foundation.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -1452,7 +1482,7 @@
         "Use actual webviews for large files, end/repeated seeks, selection changes and cleanup; 8A proof alone does not complete the workbench."
       ],
       "evidence": [],
-      "remaining": "The 8A owned-protocol playback regression is fixed: bounded queued reads pass forced old/new-file contention on Windows, Linux and both macOS architectures (8a7e181; Actions 39164673329). Complete selected-stream playback, proxies and editor integration remain 8C work; these foundation receipts do not establish the full capability."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.proxy",
@@ -1473,10 +1503,17 @@
           "cancel_editor"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1484,14 +1521,19 @@
           "test/local-audio.test.js",
           "test/real/local-audio.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Proxy failure/retry/cancellation leaves available cuts and final processing intact."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.audio-clock",
@@ -1511,13 +1553,19 @@
           "prepare_editor"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/audio_policy.rs",
-          "crates/lvovd-core/src/processing_command.rs"
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1527,15 +1575,19 @@
         "rust": [
           "crates/lvovd-core/tests/policy_parity.rs",
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Compare timing policy plus generated shifted/gapped sources; encoded timing remains a separate acceptance gate."
       ],
       "evidence": [],
-      "remaining": "Core policy, command fixtures and generated Rust media verify timing/ranges/precision/channel behavior. Full editor/processing workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.waveform",
@@ -1557,10 +1609,17 @@
           "cancel_waveform"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1568,14 +1627,19 @@
           "test/real/local-audio.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
-        "One decode, 120-second deadline, duration byte ceiling, ≤200000 pairs, ≥10 ms bins and ≤4096 returned pairs; confirm exit before processing preemption."
+        "One decode, 120-second deadline, duration byte ceiling, \u00e2\u2030\u00a4200000 pairs, \u00e2\u2030\u00a510 ms bins and \u00e2\u2030\u00a44096 returned pairs; confirm exit before processing preemption."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.range-policy",
@@ -1594,13 +1658,19 @@
           "review_processing"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/edit_plan.rs",
-          "crates/lvovd-core/src/processing_command.rs"
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1609,15 +1679,19 @@
         "rust": [
           "crates/lvovd-core/tests/policy_parity.rs",
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Use shared fixtures and reject stale/invalid ranges without changing authoritative source timing."
       ],
       "evidence": [],
-      "remaining": "Core policy, command fixtures and generated Rust media verify timing/ranges/precision/channel behavior. Full editor/processing workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.trim-controls",
@@ -1637,24 +1711,36 @@
           "review_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/media-editor.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Set boundaries with handles, exact fields and playhead actions; restore sections and retain individual cuts across selection."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.timeline-controls",
@@ -1673,24 +1759,36 @@
           "prepare_editor"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/media-editor.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Exercise keyboard-only editing, narrow layout, exact fields and zoomed handle positioning."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.drafts",
@@ -1710,24 +1808,36 @@
           "subscribe_collection"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/processing-profile.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Selection changes preserve drafts; admitted jobs/prior output names remain immutable."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.audio-policy",
@@ -1746,13 +1856,19 @@
           "review_processing"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/audio_policy.rs",
-          "crates/lvovd-core/src/processing_command.rs"
+          "crates/lvovd-core/src/processing_command.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1761,15 +1877,19 @@
         "rust": [
           "crates/lvovd-core/tests/policy_parity.rs",
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Match policy fixtures; unknown precision stays unknown, incompatible layouts fail without downmix, and strict FLAC offers WAV guidance."
       ],
       "evidence": [],
-      "remaining": "Core policy, command fixtures and generated Rust media verify timing/ranges/precision/channel behavior. Full editor/processing workflow integration and its platform acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.audio-outputs",
@@ -1790,13 +1910,19 @@
           "start_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_command.rs",
-          "crates/lvovd-core/src/processing_command/validation.rs"
+          "crates/lvovd-core/src/processing_command/validation.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1805,15 +1931,19 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Compare decoded samples/channel identity/Opus delay and cuts; hide/clear inactive FLAC/PCM bitrate and keep encoded-FLAC size unknown."
       ],
       "evidence": [],
-      "remaining": "Rust encoding and validation produce tested standalone/MKV audio outputs; native controls, queued operation ownership, result access and full workflow acceptance remain incomplete."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.noop-remux",
@@ -1834,7 +1964,7 @@
           "start_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -1845,9 +1975,15 @@
           "crates/lvovd-core/src/processing_command/validation.rs",
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1860,15 +1996,19 @@
           "crates/lvovd-core/tests/processing_media.rs",
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "No-op skips encoder discovery/execution and duplicate bytes; incompatible remux or cuts require explicit encoding choices."
       ],
       "evidence": [],
-      "remaining": "Unified processing now publishes exact original-byte aliases without probes or encoding, leases the source and retires replaced aliases without deleting originals. Legacy edited-input delivery and the native workbench/result workflow remain incomplete."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.video-encoding",
@@ -1889,7 +2029,7 @@
           "start_processing"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -1897,9 +2037,15 @@
           "crates/lvovd-core/src/processing_plan/processing.rs",
           "crates/lvovd-core/src/processing_plan/legacy.rs",
           "crates/lvovd-core/src/processing_command.rs",
-          "crates/lvovd-core/src/processing_command/validation.rs"
+          "crates/lvovd-core/src/processing_command/validation.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1908,15 +2054,19 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Compare CRF/preset/pixel-format/padding arguments; refuse unsupported HDR/alpha/transforms instead of silently degrading them."
       ],
       "evidence": [],
-      "remaining": "Rust decisions, argument arrays and output validation match shared reference cases; generated outputs verify encoding/geometry. Native controls, operation integration and platform workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.size-budget",
@@ -1938,7 +2088,7 @@
           "start_processing"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -1950,9 +2100,15 @@
           "crates/lvovd-core/src/processing_command/size.rs",
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -1964,15 +2120,19 @@
           "crates/lvovd-core/tests/processing_media.rs",
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs"
+          "crates/lvovd-core/src/owned_file.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Reject oversized results; never silently lower resolution/remove audio/downmix; encoded-FLAC maximum-size mode remains unavailable."
       ],
       "evidence": [],
-      "remaining": "The Rust operation owns both passes and one size controller across at most one correction, requires successful attempt cleanup, rejects oversized publication and retains the previous result. Native settings, queue, progress and recovery integration remain 8C work."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.picture",
@@ -1992,7 +2152,7 @@
           "review_processing"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2000,9 +2160,15 @@
           "crates/lvovd-core/src/processing_plan/processing.rs",
           "crates/lvovd-core/src/processing_plan/legacy.rs",
           "crates/lvovd-core/src/processing_command.rs",
-          "crates/lvovd-core/src/processing_command/validation.rs"
+          "crates/lvovd-core/src/processing_command/validation.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -2011,15 +2177,19 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/processing_parity.rs",
-          "crates/lvovd-core/tests/processing_media.rs"
+          "crates/lvovd-core/tests/processing_media.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Reviewed actual dimensions match encoding, including odd sizes and constrained source geometry."
       ],
       "evidence": [],
-      "remaining": "Rust decisions, argument arrays and output validation match shared reference cases; generated outputs verify encoding/geometry. Native controls, operation integration and platform workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.estimates-help",
@@ -2040,15 +2210,21 @@
           "review_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
           "crates/lvovd-core/src/processing_plan.rs",
           "crates/lvovd-core/src/processing_plan/processing.rs",
-          "crates/lvovd-core/src/processing_plan/legacy.rs"
+          "crates/lvovd-core/src/processing_plan/legacy.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -2056,15 +2232,19 @@
           "test/browser/local-media.spec.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/processing_parity.rs"
+          "crates/lvovd-core/tests/processing_parity.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Distinguish exact bytes/estimated/unknown sizes; keyboard help, dismissal and FLAC bitrate inactivity work."
       ],
       "evidence": [],
-      "remaining": "Rust review size estimates now distinguish original bytes, known bitrate estimates and unknown encoded sizes. Linked interface controls, controlling-value indication and accessible contextual help remain incomplete."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.review-contract",
@@ -2085,7 +2265,7 @@
           "start_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2097,12 +2277,15 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2118,7 +2301,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2128,7 +2312,7 @@
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
       "evidence": [],
-      "remaining": "Typed native review resolves collection membership and owned inspection, bounds settings, and preserves version-1 review keys/revisions. Actual native no-op/PCM operations exercise this boundary. Existing settings and review controls, acknowledgement presentation and full workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.edited-input",
@@ -2187,7 +2371,7 @@
           "validate_output"
         ]
       },
-      "status": "Ported",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_command/validation.rs",
@@ -2195,9 +2379,15 @@
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs"
+          "crates/lvovd-core/src/processing_queue.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
@@ -2211,15 +2401,19 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs"
+          "crates/lvovd-core/src/processing_queue/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Malformed/wrong/oversized output remains unavailable; failures retain previous successful results."
       ],
       "evidence": [],
-      "remaining": "The Rust operation validates private output and publishes only for the current source/operation. Queue regressions exercise actual FLAC and exact original no-op bytes, keep prior success on failure and respect publication winning late cancellation. Legacy operation integration and complete native acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.naming",
@@ -2239,24 +2433,36 @@
           "review_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/processing-plan.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Queue captures reviewed names; later suffix changes neither rename prior results nor alter queued work."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.shared-settings",
@@ -2276,24 +2482,36 @@
           "review_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/processing-profile.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Independent mode and Reset File disable sharing as specified; incompatible per-file settings stay visible for correction."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.batch-review",
@@ -2314,17 +2532,20 @@
           "enqueue_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_queue.rs",
           "crates/lvovd-core/src/processing_operation.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2334,7 +2555,8 @@
         ],
         "rust": [
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2344,7 +2566,7 @@
         "Exclude queued/running and already successful current drafts; unchanged eligible files retain no-op behavior."
       ],
       "evidence": [],
-      "remaining": "Collection-scoped native batches validate every member and admit immutable tickets atomically. Review All Files controls, shared settings with individual drafts and full native batch acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.processing-queue",
@@ -2365,7 +2587,7 @@
           "subscribe_collection"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/process.rs",
@@ -2373,12 +2595,15 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2392,7 +2617,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2402,7 +2628,7 @@
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
       "evidence": [],
-      "remaining": "One application queue is wired to scoped native enqueue/cancel commands and acknowledged revisioned snapshots. Cancel All cannot cancel another collection; pending collection admission is invalidated. Native commands exercise no-op/PCM publication. Editor/queue presentation, analysis preemption and full native workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.results",
@@ -2423,19 +2649,22 @@
           "save_output"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2448,7 +2677,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2458,7 +2688,7 @@
         "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
       ],
       "evidence": [],
-      "remaining": "Native collection snapshots expose current validated results separately from latest job failures. Source removal revokes new result lookup and retains reservations through output leases. Result playback via both native transports, revision-labelled result controls and export actions remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.bulk-save",
@@ -2477,24 +2707,36 @@
           "save_outputs"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/browser/processing-progress.spec.js",
           "test/browser/playlist-intake.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native Save All captures result leases and publishes without overwriting. Complete cross-platform save-failure and 8D export-catalog acceptance."
     },
     {
       "id": "media.reset",
@@ -2514,24 +2756,36 @@
           "subscribe_collection"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
+        ],
+        "native": [
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js",
+          "src-tauri/src/workbench_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/processing-profile.test.js",
           "test/browser/local-media.spec.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs"
+        ],
+        "native": [
+          "desktop/test/native.cjs"
+        ]
       },
       "acceptance": [
         "Other files, queued snapshots and successful outputs remain unchanged."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.remove",
@@ -2552,19 +2806,22 @@
           "discard_workspace"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2577,7 +2834,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2587,7 +2845,7 @@
         "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
       ],
       "evidence": [],
-      "remaining": "Rust workbenches revoke member access, cancel/forget its job and retain cleanup/source reservations. Native Remove/Discard and connection/collection/revision guards reject delayed responses across workbench switches. Complete editor, proxy/waveform removal and full platform workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.cleanup",
@@ -2608,18 +2866,21 @@
           "retry_cleanup"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2631,7 +2892,8 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2641,7 +2903,7 @@
         "Locked/read-held/permission failures retain ownership; retries never delete originals or exports."
       ],
       "evidence": [],
-      "remaining": "Removed/discarded membership retains source and result ownership; passive reconciliation does not endlessly retry failed deletions. Native cleanup retry remains reachable, including discarded collections. Broader transient retry, analysis cleanup and full workflow failure acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.expiry",
@@ -2661,17 +2923,20 @@
           "subscribe_collection"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_queue.rs",
           "crates/lvovd-core/src/processing_operation.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2681,7 +2946,8 @@
         ],
         "rust": [
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2691,7 +2957,7 @@
         "Expiry cancels analysis/processing and waits for owned readers/workers before releasing capacity."
       ],
       "evidence": [],
-      "remaining": "Idle workbenches expire after one hour; native connection heartbeats keep the current workbench active. Importing/live jobs defer collection expiry, queued jobs retain their one-hour deadline. Full editor/analysis expiry and platform acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.reopen",
@@ -2705,7 +2971,7 @@
         ]
       },
       "desktop": {
-        "location": "Local Media / Previous workbenches",
+        "location": "Local Media / Active workbench reconnection and cleanup recovery",
         "stage": "8C",
         "operations": [
           "list_collections",
@@ -2713,15 +2979,18 @@
           "remove_collection"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2730,7 +2999,8 @@
           "test/browser/playlist-cleanup.spec.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2740,7 +3010,7 @@
         "Stale reopen cannot revive a removed/reopened collection; no editing sessions or queue restoration across process restarts."
       ],
       "evidence": [],
-      "remaining": "The native preview lists, switches and reopens retained workbenches with fresh acknowledged snapshots. Late connection/response events cannot repopulate another workbench. Editor draft/review/result recovery and full platform workflow acceptance remain outstanding."
+      "remaining": "User approved one active workbench with multiple files on 2026-10-20; see the development contract. Same-session reconnection reuses it; removed/expired records retain cleanup only. Record the implementation commit as an accepted baseline change and verify all platform reconnections."
     },
     {
       "id": "media.reservations",
@@ -2761,19 +3031,22 @@
           "enqueue_processing"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2786,7 +3059,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2796,7 +3070,7 @@
         "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
       ],
       "evidence": [],
-      "remaining": "The application owns two workbenches with twenty slots each, forty aggregate sources, twenty live processing jobs and serialized 100-GiB source accounting. Removed sources stay reserved through workers/result/read leases and failed cleanup. Playlist admission/intermediates and full workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "media.leases",
@@ -2817,18 +3091,21 @@
           "save_output"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "src-tauri/src/workbench_commands.rs",
           "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/native.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -2840,7 +3117,8 @@
           "crates/lvovd-core/src/processing_operation/tests.rs",
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2850,7 +3128,7 @@
         "Exercise active reads during rerender, removal, failed cleanup and shutdown; retire only unreferenced owned bytes."
       ],
       "evidence": [],
-      "remaining": "Workbench retirement holds source reservations until processing, readers and cleanup finish. Native source playback remains bounded; result lookup is revoked on removal. Result URI/Linux transport integration, proxy/analysis roles and complete workflow acceptance remain outstanding."
+      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
     },
     {
       "id": "history.records",
@@ -2975,7 +3253,7 @@
         ]
       },
       "desktop": {
-        "location": "History → Download",
+        "location": "History \u00e2\u2020\u2019 Download",
         "stage": "8D",
         "operations": [
           "preview_source"

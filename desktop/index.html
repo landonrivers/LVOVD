@@ -1,33 +1,10 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LVOVD Desktop Preview</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="native.js" defer></script>
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <header><h1>LVOVD <small>Desktop preview</small></h1><span id="connection" role="status">Connecting…</span></header>
-  <p class="notice">Playback preview. Downloading and editing are not available yet.</p>
-  <main>
-    <aside>
-      <div class="section-title"><h2>Local Media</h2><button id="add-file" disabled>Add files</button></div>
-      <label for="workbenches">Workbench</label><select id="workbenches" aria-label="Retained workbenches"></select>
-      <div class="section-title"><button id="new-workbench" disabled>New workbench</button><button id="discard-workbench" disabled>Discard</button></div>
-      <p class="help">Choose files or drop them here. Your originals are not changed.</p>
-      <label for="files">Files</label><select id="files" size="7" aria-label="Local files"></select>
-      <button id="remove-file" disabled>Remove file</button>
-      <div id="cleanup" aria-live="polite"></div>
-      <h2>Source details</h2><dl id="details"><dt>No file selected</dt></dl>
-    </aside>
-    <section class="workbench" aria-label="Media playback">
-      <div class="section-title"><h2 id="media-name">Choose local media to begin</h2><span id="duration"></span></div>
-      <video id="player" controls preload="metadata" playsinline></video>
-      <p id="status" role="status" aria-live="polite"></p>
-    </section>
-  </main>
-  <footer><details><summary>Runtime details</summary><div class="section-title"><div id="runtime"></div><button id="recheck">Recheck</button></div><p id="runtime-detail" class="help"></p></details></footer>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LVOVD Desktop Preview</title><link rel="stylesheet" href="reference.css"><link rel="stylesheet" href="styles.css">
+<script src="native.js" defer></script><script src="workspace-transport.js" defer></script>
+<script src="edit-plan.js" defer></script><script src="audio-waveform.js" defer></script><script src="media-editor.js" defer></script>
+<script src="conversion-inspector.js" defer></script><script src="processing-profile.js" defer></script><script src="local-workspace.js" defer></script><script src="app.js" defer></script>
+</head><body><header class="desktop-header"><h1>LVOVD <small>Desktop preview</small></h1><span id="connection" role="status">Connecting…</span></header>
+<p class="notice">Local Media preview. URL downloading is not available yet.</p><main><button id="native-intake-cancel" class="button secondary mini" hidden>Cancel adding files</button><p id="native-intake-status" role="status" hidden></p>
+<!-- local-media --></main>
+<dialog id="result-preview"><div class="progress-head"><strong id="result-name"></strong><button id="close-result" class="text-button" type="button">Close</button></div><video id="result-player" controls playsinline></video><p class="help" id="result-status" role="status"></p></dialog><footer><details><summary>Runtime details</summary><div id="runtime"></div><button id="recheck" class="text-button">Recheck</button><p id="runtime-detail" class="help"></p></details></footer></body></html>

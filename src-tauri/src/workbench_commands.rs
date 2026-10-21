@@ -22,6 +22,97 @@ pub(crate) struct SourceRequest {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AnalysisRequest {
+    workbench_id: Uuid,
+    source_id: Uuid,
+    operation_id: Option<Uuid>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct WaveformWindow {
+    workbench_id: Uuid,
+    source_id: Uuid,
+    operation_id: Uuid,
+    start_seconds: f64,
+    end_seconds: f64,
+    points: usize,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ResultRequest {
+    workbench_id: Uuid,
+    result_id: Uuid,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ResultsRequest {
+    workbench_id: Uuid,
+    result_ids: Vec<Uuid>,
+}
+
+#[tauri::command]
+pub(crate) async fn save_results(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: ResultsRequest,
+) -> Result<Option<Value>> {
+    use tauri_plugin_dialog::DialogExt;
+    if request.result_ids.is_empty() || request.result_ids.len() > 20 {
+        return Err(AppError::new(
+            "SAVE_REQUEST",
+            "Choose between one and twenty prepared results.",
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut results = Vec::new();
+    for id in request.result_ids {
+        if !seen.insert(id) {
+            return Err(AppError::new(
+                "SAVE_REQUEST",
+                "A prepared result was selected twice.",
+            ));
+        }
+        results.push(state.workbenches.result(request.workbench_id, id)?);
+    }
+    let _picker = state
+        .picker_admission
+        .try_lock()
+        .map_err(|_| AppError::new("PICKER_BUSY", "Finish the current file dialog first."))?;
+    #[cfg(feature = "test-driver")]
+    let selected = std::env::var_os("LVOVD_DESKTOP_TEST_SAVE_FOLDER").map(std::path::PathBuf::from);
+    #[cfg(not(feature = "test-driver"))]
+    let selected: Option<std::path::PathBuf> = None;
+    let selected = if selected.is_some() {
+        selected
+    } else {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .set_title("Save all processed files")
+            .pick_folder(move |path| {
+                let _ = send.send(path);
+            });
+        let cancel = state.assets.cancellation();
+        tokio::select! {
+            _ = cancel.cancelled() => return Err(AppError::new("CLOSING", "The application is closing.")),
+            value = receive => value.map_err(|_| AppError::new("SAVE_CANCELLED", "The save dialog closed."))?
+                .map(|p| p.into_path().map_err(|_| AppError::new("SAVE_PATH", "Choose a local destination."))).transpose()?
+        }
+    };
+    let Some(folder) = selected else {
+        return Ok(None);
+    };
+    let receipts = tauri::async_runtime::spawn_blocking(move || results.into_iter().map(|result| {
+        let name = result.descriptor().filename.clone();
+        match lvovd_core::export::save_copy(result, &folder.join(&name)) {
+            Ok(saved) => serde_json::json!({"filename": saved.file_name().map(|s| s.to_string_lossy().into_owned()), "saved":true}),
+            Err(error) => serde_json::json!({"filename": name,"saved":false,"error":error.message})
+        }
+    }).collect::<Vec<_>>()).await.map_err(|_| AppError::new("SAVE_FAILED", "Saving ended unexpectedly. Prepared results remain available."))?;
+    Ok(Some(serde_json::json!({"files":receipts})))
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Review {
     workbench_id: Uuid,
     source_id: Uuid,
@@ -128,11 +219,15 @@ impl Subscriptions {
 
 #[tauri::command]
 pub(crate) fn create_workbench(state: State<'_, AppState>) -> Result<Snapshot> {
-    state.workbenches.create()
+    state.workbenches.open()
 }
 #[tauri::command]
 pub(crate) fn list_workbenches(state: State<'_, AppState>) -> Vec<Snapshot> {
     state.workbenches.list()
+}
+#[tauri::command]
+pub(crate) fn cancel_intake(state: State<'_, AppState>, request: WorkbenchRequest) -> Result<()> {
+    state.workbenches.cancel_intake(request.workbench_id)
 }
 #[tauri::command]
 pub(crate) fn subscribe_workbench(
@@ -231,6 +326,113 @@ pub(crate) async fn cleanup_workbench(
     Ok(state.workbenches.snapshot(request.workbench_id).ok())
 }
 
+#[tauri::command]
+pub(crate) async fn prepare_editor(
+    state: State<'_, AppState>,
+    request: SourceRequest,
+) -> Result<Snapshot> {
+    state.workbenches.prepare_analysis(
+        request.workbench_id,
+        request.source_id,
+        lvovd_core::analysis::Kind::Preview,
+    )
+}
+#[tauri::command]
+pub(crate) async fn prepare_waveform(
+    state: State<'_, AppState>,
+    request: SourceRequest,
+) -> Result<Snapshot> {
+    state.workbenches.prepare_analysis(
+        request.workbench_id,
+        request.source_id,
+        lvovd_core::analysis::Kind::Waveform,
+    )
+}
+#[tauri::command]
+pub(crate) fn cancel_waveform(state: State<'_, AppState>, request: AnalysisRequest) -> Result<()> {
+    state.workbenches.cancel_analysis(
+        request.workbench_id,
+        request.source_id,
+        lvovd_core::analysis::Kind::Waveform,
+        request.operation_id,
+    )
+}
+#[tauri::command]
+pub(crate) fn cancel_editor(state: State<'_, AppState>, request: AnalysisRequest) -> Result<()> {
+    state.workbenches.cancel_analysis(
+        request.workbench_id,
+        request.source_id,
+        lvovd_core::analysis::Kind::Preview,
+        request.operation_id,
+    )
+}
+#[tauri::command]
+pub(crate) fn waveform_window(
+    state: State<'_, AppState>,
+    request: WaveformWindow,
+) -> Result<Value> {
+    state.workbenches.waveform_window(
+        request.workbench_id,
+        request.source_id,
+        request.operation_id,
+        request.start_seconds,
+        request.end_seconds,
+        request.points,
+    )
+}
+
+#[tauri::command]
+pub(crate) async fn save_result(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: ResultRequest,
+) -> Result<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let result = state
+        .workbenches
+        .result(request.workbench_id, request.result_id)?;
+    let _picker = state
+        .picker_admission
+        .try_lock()
+        .map_err(|_| AppError::new("PICKER_BUSY", "Finish the current file dialog first."))?;
+    #[cfg(feature = "test-driver")]
+    let selected = std::env::var_os("LVOVD_DESKTOP_TEST_SAVE_FOLDER")
+        .map(|path| std::path::PathBuf::from(path).join(&result.descriptor().filename));
+    #[cfg(not(feature = "test-driver"))]
+    let selected: Option<std::path::PathBuf> = None;
+    let selected = if selected.is_some() {
+        selected
+    } else {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .set_title("Save processed file")
+            .set_file_name(&result.descriptor().filename)
+            .save_file(move |path| {
+                let _ = send.send(path);
+            });
+        let cancel = state.assets.cancellation();
+        tokio::select! {
+            _ = cancel.cancelled() => return Err(AppError::new("CLOSING", "The application is closing.")),
+            value = receive => value.map_err(|_| AppError::new("SAVE_CANCELLED", "The save dialog closed."))?
+                .map(|p| p.into_path().map_err(|_| AppError::new("SAVE_PATH", "Choose a local destination."))).transpose()?
+        }
+    };
+    let Some(path) = selected else {
+        return Ok(None);
+    };
+    let saved =
+        tauri::async_runtime::spawn_blocking(move || lvovd_core::export::save_copy(result, &path))
+            .await
+            .map_err(|_| {
+                AppError::new(
+                    "SAVE_FAILED",
+                    "Saving ended unexpectedly. Retry saving the prepared result.",
+                )
+            })??;
+    Ok(saved.file_name().map(|s| s.to_string_lossy().into_owned()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,7 +479,7 @@ mod tests {
         )
         .unwrap();
         let owner = Workbenches::new(assets, processing, tool.clone(), tool);
-        let first = owner.create().unwrap();
+        let first = owner.open().unwrap();
         let messages = Arc::new(Mutex::new(Vec::new()));
         let captured = messages.clone();
         let id = Uuid::new_v4();
