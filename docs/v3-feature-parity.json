@@ -1241,7 +1241,7 @@
           "import_sources"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -1278,8 +1278,53 @@
       "acceptance": [
         "Test multiple Unicode paths, interrupted intake, copy failures and rejection without original modification."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native picker intake adds multiple files, selection/removal preserves originals, and the second file loads under read contention. Workbench tests on this runner cover Unicode paths, cancelled/abandoned intake, partial copy failures and admission limits; OS dialogs use test-only file selection."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native picker intake adds multiple files, selection/removal preserves originals, and the second file loads under read contention. Workbench tests on this runner cover Unicode paths, cancelled/abandoned intake, partial copy failures and admission limits; OS dialogs use test-only file selection."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native picker intake adds multiple files, selection/removal preserves originals, and the second file loads under read contention. Workbench tests on this runner cover Unicode paths, cancelled/abandoned intake, partial copy failures and admission limits; OS dialogs use test-only file selection."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native picker intake adds multiple files, selection/removal preserves originals, and the second file loads under read contention. Workbench tests on this runner cover Unicode paths, cancelled/abandoned intake, partial copy failures and admission limits; OS dialogs use test-only file selection."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.inspection",
@@ -1298,7 +1343,7 @@
           "inspect_source"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/media_inspection.rs",
@@ -1330,8 +1375,53 @@
       "acceptance": [
         "Compare the shared corpus and generated inspected media; expose all applicable facts in the finished workbench."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The native workbench consumes bounded inspection facts to review and process MP4, M4A and 24-bit WAV. Shared inspection fixtures and generated corpus tests run on this platform; result assertions verify actual codec, rate, dimensions and duration."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The native workbench consumes bounded inspection facts to review and process MP4, M4A and 24-bit WAV. Shared inspection fixtures and generated corpus tests run on this platform; result assertions verify actual codec, rate, dimensions and duration."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The native workbench consumes bounded inspection facts to review and process MP4, M4A and 24-bit WAV. Shared inspection fixtures and generated corpus tests run on this platform; result assertions verify actual codec, rate, dimensions and duration."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The native workbench consumes bounded inspection facts to review and process MP4, M4A and 24-bit WAV. Shared inspection fixtures and generated corpus tests run on this platform; result assertions verify actual codec, rate, dimensions and duration."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.capabilities",
@@ -1350,7 +1440,7 @@
           "discover_capabilities"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/capabilities.rs",
@@ -1382,8 +1472,53 @@
       "acceptance": [
         "Missing/failing/timed-out tools cannot authorize encoding; retry and planner integration must remain reachable."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review populates supported output controls and successfully encodes H.264, AAC, Opus, FLAC and PCM. Platform core tests also cover failed/missing discovery and planner refusal; successful library tests alone are not this receipt."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review populates supported output controls and successfully encodes H.264, AAC, Opus, FLAC and PCM. Platform core tests also cover failed/missing discovery and planner refusal; successful library tests alone are not this receipt."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review populates supported output controls and successfully encodes H.264, AAC, Opus, FLAC and PCM. Platform core tests also cover failed/missing discovery and planner refusal; successful library tests alone are not this receipt."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review populates supported output controls and successfully encodes H.264, AAC, Opus, FLAC and PCM. Platform core tests also cover failed/missing discovery and planner refusal; successful library tests alone are not this receipt."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.input-boundary",
@@ -1404,7 +1539,7 @@
           "start_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/inspection.rs",
@@ -1437,8 +1572,53 @@
       "acceptance": [
         "Adversarial playlists/references fail before following dependencies, including output-validation/proxy paths."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native intake and reviewed commands resolve owned identities, and native permission/unknown-field tests reject extra authority. The same job runs adversarial local-input/probe/output boundary tests before the native workflow."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native intake and reviewed commands resolve owned identities, and native permission/unknown-field tests reject extra authority. The same job runs adversarial local-input/probe/output boundary tests before the native workflow."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native intake and reviewed commands resolve owned identities, and native permission/unknown-field tests reject extra authority. The same job runs adversarial local-input/probe/output boundary tests before the native workflow."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native intake and reviewed commands resolve owned identities, and native permission/unknown-field tests reject extra authority. The same job runs adversarial local-input/probe/output boundary tests before the native workflow."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.direct-playback",
@@ -1459,7 +1639,7 @@
           "read_media"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/media.rs",
@@ -1491,8 +1671,53 @@
       "acceptance": [
         "Use actual webviews for large files, end/repeated seeks, selection changes and cleanup; 8A proof alone does not complete the workbench."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native webview plays large MP4, tail-index MP4 and M4A, seeks repeatedly and near the end, changes to a second file under range contention, and releases files on removal."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native webview plays large MP4, tail-index MP4 and M4A, seeks repeatedly and near the end, changes to a second file under range contention, and releases files on removal."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native webview plays large MP4, tail-index MP4 and M4A, seeks repeatedly and near the end, changes to a second file under range contention, and releases files on removal."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native webview plays large MP4, tail-index MP4 and M4A, seeks repeatedly and near the end, changes to a second file under range contention, and releases files on removal."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.proxy",
@@ -1513,7 +1738,7 @@
           "cancel_editor"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -1533,7 +1758,8 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/local_media.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -1542,8 +1768,53 @@
       "acceptance": [
         "Proxy failure/retry/cancellation leaves available cuts and final processing intact."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.audio-clock",
@@ -1563,7 +1834,7 @@
           "prepare_editor"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/audio_policy.rs",
@@ -1596,8 +1867,53 @@
       "acceptance": [
         "Compare timing policy plus generated shifted/gapped sources; encoded timing remains a separate acceptance gate."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native M4A/WAV playback, trimming and output duration use the audio timeline. Shared policy/generated-media tests in this same job compare shifted timestamps, gaps, precision and extraction against the original timing policy."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native M4A/WAV playback, trimming and output duration use the audio timeline. Shared policy/generated-media tests in this same job compare shifted timestamps, gaps, precision and extraction against the original timing policy."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native M4A/WAV playback, trimming and output duration use the audio timeline. Shared policy/generated-media tests in this same job compare shifted timestamps, gaps, precision and extraction against the original timing policy."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native M4A/WAV playback, trimming and output duration use the audio timeline. Shared policy/generated-media tests in this same job compare shifted timestamps, gaps, precision and extraction against the original timing policy."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.waveform",
@@ -1619,7 +1935,7 @@
           "cancel_waveform"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -1639,7 +1955,8 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/local_media.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -1648,8 +1965,53 @@
       "acceptance": [
         "One decode, 120-second deadline, duration byte ceiling, ≤200000 pairs, ≥10 ms bins and ≤4096 returned pairs; confirm exit before processing preemption."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native M4A and WAV show a combined waveform overview while preserving editing and output channels. Core streaming tests enforce peak/window/byte bounds, malformed samples, deadline, stale operation cancellation and foreground preemption with worker exit."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native M4A and WAV show a combined waveform overview while preserving editing and output channels. Core streaming tests enforce peak/window/byte bounds, malformed samples, deadline, stale operation cancellation and foreground preemption with worker exit."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native M4A and WAV show a combined waveform overview while preserving editing and output channels. Core streaming tests enforce peak/window/byte bounds, malformed samples, deadline, stale operation cancellation and foreground preemption with worker exit."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native M4A and WAV show a combined waveform overview while preserving editing and output channels. Core streaming tests enforce peak/window/byte bounds, malformed samples, deadline, stale operation cancellation and foreground preemption with worker exit."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.range-policy",
@@ -1668,7 +2030,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/edit_plan.rs",
@@ -1700,8 +2062,53 @@
       "acceptance": [
         "Use shared fixtures and reject stale/invalid ranges without changing authoritative source timing."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls commit outer and middle cuts, and separately queued files produce the reviewed retained durations. Shared normalization/rounding fixtures and stale-plan rejection tests run in the same platform gate."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls commit outer and middle cuts, and separately queued files produce the reviewed retained durations. Shared normalization/rounding fixtures and stale-plan rejection tests run in the same platform gate."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls commit outer and middle cuts, and separately queued files produce the reviewed retained durations. Shared normalization/rounding fixtures and stale-plan rejection tests run in the same platform gate."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls commit outer and middle cuts, and separately queued files produce the reviewed retained durations. Shared normalization/rounding fixtures and stale-plan rejection tests run in the same platform gate."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.trim-controls",
@@ -1721,7 +2128,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -1749,8 +2156,53 @@
       "acceptance": [
         "Set boundaries with handles, exact fields and playhead actions; restore sections and retain individual cuts across selection."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native MP4/WAV controls change exact boundaries, remove/restore a middle section, retain independent cuts across selection and encode both retained durations. Shared editor browser tests complement the platform workflow with playhead/handle cases."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native MP4/WAV controls change exact boundaries, remove/restore a middle section, retain independent cuts across selection and encode both retained durations. Shared editor browser tests complement the platform workflow with playhead/handle cases."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native MP4/WAV controls change exact boundaries, remove/restore a middle section, retain independent cuts across selection and encode both retained durations. Shared editor browser tests complement the platform workflow with playhead/handle cases."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native MP4/WAV controls change exact boundaries, remove/restore a middle section, retain independent cuts across selection and encode both retained durations. Shared editor browser tests complement the platform workflow with playhead/handle cases."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.timeline-controls",
@@ -1769,7 +2221,7 @@
           "prepare_editor"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -1797,8 +2249,53 @@
       "acceptance": [
         "Exercise keyboard-only editing, narrow layout, exact fields and zoomed handle positioning."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native webview accepts keyboard ArrowRight trims, exact fields, zoom/full-timeline actions and per-file selection at desktop/narrow sizes; the shared editor suite covers panning and zoomed-handle positioning."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native webview accepts keyboard ArrowRight trims, exact fields, zoom/full-timeline actions and per-file selection at desktop/narrow sizes; the shared editor suite covers panning and zoomed-handle positioning."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native webview accepts keyboard ArrowRight trims, exact fields, zoom/full-timeline actions and per-file selection at desktop/narrow sizes; the shared editor suite covers panning and zoomed-handle positioning."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native webview accepts keyboard ArrowRight trims, exact fields, zoom/full-timeline actions and per-file selection at desktop/narrow sizes; the shared editor suite covers panning and zoomed-handle positioning."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.drafts",
@@ -1818,7 +2315,7 @@
           "subscribe_collection"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -1846,8 +2343,53 @@
       "acceptance": [
         "Selection changes preserve drafts; admitted jobs/prior output names remain immutable."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native selection round trips preserve cuts. Editing a draft and suffix after batch admission leaves both queued outputs' original retained durations and filenames unchanged."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native selection round trips preserve cuts. Editing a draft and suffix after batch admission leaves both queued outputs' original retained durations and filenames unchanged."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native selection round trips preserve cuts. Editing a draft and suffix after batch admission leaves both queued outputs' original retained durations and filenames unchanged."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native selection round trips preserve cuts. Editing a draft and suffix after batch admission leaves both queued outputs' original retained durations and filenames unchanged."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.audio-policy",
@@ -1866,7 +2408,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/audio_policy.rs",
@@ -1898,8 +2440,53 @@
       "acceptance": [
         "Match policy fixtures; unknown precision stays unknown, incompatible layouts fail without downmix, and strict FLAC offers WAV guidance."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls encode Opus at 48 kHz and FLAC/PCM at the original 44.1 kHz. Shared policy and generated-media tests in this gate verify unsupported layouts, unknown/float precision, strict FLAC/WAV guidance and bitrate bounds."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls encode Opus at 48 kHz and FLAC/PCM at the original 44.1 kHz. Shared policy and generated-media tests in this gate verify unsupported layouts, unknown/float precision, strict FLAC/WAV guidance and bitrate bounds."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls encode Opus at 48 kHz and FLAC/PCM at the original 44.1 kHz. Shared policy and generated-media tests in this gate verify unsupported layouts, unknown/float precision, strict FLAC/WAV guidance and bitrate bounds."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native controls encode Opus at 48 kHz and FLAC/PCM at the original 44.1 kHz. Shared policy and generated-media tests in this gate verify unsupported layouts, unknown/float precision, strict FLAC/WAV guidance and bitrate bounds."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.audio-outputs",
@@ -1920,7 +2507,7 @@
           "start_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_command.rs",
@@ -1952,8 +2539,53 @@
       "acceptance": [
         "Compare decoded samples/channel identity/Opus delay and cuts; hide/clear inactive FLAC/PCM bitrate and keep encoded-FLAC size unknown."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native WAV controls produce Opus, FLAC and PCM outputs with inspected codec/rate assertions. Same-platform generated-media comparisons verify decoded precision, channels, cut timing and Opus delay; reused browser controls cover inactive bitrate and unknown FLAC estimates."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native WAV controls produce Opus, FLAC and PCM outputs with inspected codec/rate assertions. Same-platform generated-media comparisons verify decoded precision, channels, cut timing and Opus delay; reused browser controls cover inactive bitrate and unknown FLAC estimates."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native WAV controls produce Opus, FLAC and PCM outputs with inspected codec/rate assertions. Same-platform generated-media comparisons verify decoded precision, channels, cut timing and Opus delay; reused browser controls cover inactive bitrate and unknown FLAC estimates."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native WAV controls produce Opus, FLAC and PCM outputs with inspected codec/rate assertions. Same-platform generated-media comparisons verify decoded precision, channels, cut timing and Opus delay; reused browser controls cover inactive bitrate and unknown FLAC estimates."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.noop-remux",
@@ -1974,7 +2606,7 @@
           "start_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2017,8 +2649,53 @@
       "acceptance": [
         "No-op skips encoder discovery/execution and duplicate bytes; incompatible remux or cuts require explicit encoding choices."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Process/Save preserves complete original bytes for all four fixtures. Generated-media and processing tests in the same job exercise copy/remux validation and encoding when cuts/transforms require it."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Process/Save preserves complete original bytes for all four fixtures. Generated-media and processing tests in the same job exercise copy/remux validation and encoding when cuts/transforms require it."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Process/Save preserves complete original bytes for all four fixtures. Generated-media and processing tests in the same job exercise copy/remux validation and encoding when cuts/transforms require it."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Process/Save preserves complete original bytes for all four fixtures. Generated-media and processing tests in the same job exercise copy/remux validation and encoding when cuts/transforms require it."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.video-encoding",
@@ -2039,7 +2716,7 @@
           "start_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2075,8 +2752,53 @@
       "acceptance": [
         "Compare CRF/preset/pixel-format/padding arguments; refuse unsupported HDR/alpha/transforms instead of silently degrading them."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native retained-range MP4 batch encoding and two-pass size processing produce validated H.264 outputs. Shared fixture/generated-media tests cover presets, CRF, pixel formats, padding and rejected incompatible transforms."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native retained-range MP4 batch encoding and two-pass size processing produce validated H.264 outputs. Shared fixture/generated-media tests cover presets, CRF, pixel formats, padding and rejected incompatible transforms."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native retained-range MP4 batch encoding and two-pass size processing produce validated H.264 outputs. Shared fixture/generated-media tests cover presets, CRF, pixel formats, padding and rejected incompatible transforms."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native retained-range MP4 batch encoding and two-pass size processing produce validated H.264 outputs. Shared fixture/generated-media tests cover presets, CRF, pixel formats, padding and rejected incompatible transforms."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.size-budget",
@@ -2098,7 +2820,7 @@
           "start_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2141,8 +2863,53 @@
       "acceptance": [
         "Reject oversized results; never silently lower resolution/remove audio/downmix; encoded-FLAC maximum-size mode remains unavailable."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native controls request 0.15 MB, two passes, 80x80 fit and AAC 32 kbps; the result is at most 150000 bytes with 80x44 inspected dimensions. Policy/output tests reject unsupported or oversized results."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native controls request 0.15 MB, two passes, 80x80 fit and AAC 32 kbps; the result is at most 150000 bytes with 80x44 inspected dimensions. Policy/output tests reject unsupported or oversized results."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native controls request 0.15 MB, two passes, 80x80 fit and AAC 32 kbps; the result is at most 150000 bytes with 80x44 inspected dimensions. Policy/output tests reject unsupported or oversized results."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native controls request 0.15 MB, two passes, 80x80 fit and AAC 32 kbps; the result is at most 150000 bytes with 80x44 inspected dimensions. Policy/output tests reject unsupported or oversized results."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.picture",
@@ -2162,7 +2929,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2198,8 +2965,53 @@
       "acceptance": [
         "Reviewed actual dimensions match encoding, including odd sizes and constrained source geometry."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native custom fit preserves the source aspect ratio as 80x44 inside an 80x80 bound. Generated-media/policy tests on this runner also cover scaling, odd/aligned geometry and frame-rate settings."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native custom fit preserves the source aspect ratio as 80x44 inside an 80x80 bound. Generated-media/policy tests on this runner also cover scaling, odd/aligned geometry and frame-rate settings."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native custom fit preserves the source aspect ratio as 80x44 inside an 80x80 bound. Generated-media/policy tests on this runner also cover scaling, odd/aligned geometry and frame-rate settings."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native custom fit preserves the source aspect ratio as 80x44 inside an 80x80 bound. Generated-media/policy tests on this runner also cover scaling, odd/aligned geometry and frame-rate settings."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.estimates-help",
@@ -2220,7 +3032,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2253,8 +3065,53 @@
       "acceptance": [
         "Distinguish exact bytes/estimated/unknown sizes; keyboard help, dismissal and FLAC bitrate inactivity work."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review drives actual no-op, audio and maximum-size outputs at desktop/narrow sizes. The reused controls retain linked estimates and explanatory help; browser tests cover keyboard help/dismissal and inactive FLAC bitrate."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review drives actual no-op, audio and maximum-size outputs at desktop/narrow sizes. The reused controls retain linked estimates and explanatory help; browser tests cover keyboard help/dismissal and inactive FLAC bitrate."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review drives actual no-op, audio and maximum-size outputs at desktop/narrow sizes. The reused controls retain linked estimates and explanatory help; browser tests cover keyboard help/dismissal and inactive FLAC bitrate."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native review drives actual no-op, audio and maximum-size outputs at desktop/narrow sizes. The reused controls retain linked estimates and explanatory help; browser tests cover keyboard help/dismissal and inactive FLAC bitrate."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.review-contract",
@@ -2275,7 +3132,7 @@
           "start_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_settings.rs",
@@ -2321,8 +3178,53 @@
       "acceptance": [
         "Reject stale keys, cross-workspace inputs, changed inspection/source facts and unsupported settings without running a worker."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native processing uses reviewed keys and rejects a wrong workbench. Same-platform owner/host tests reject stale drafts, changed inspection/source facts, arbitrary paths and hostile additional authority before admission."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native processing uses reviewed keys and rejects a wrong workbench. Same-platform owner/host tests reject stale drafts, changed inspection/source facts, arbitrary paths and hostile additional authority before admission."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native processing uses reviewed keys and rejects a wrong workbench. Same-platform owner/host tests reject stale drafts, changed inspection/source facts, arbitrary paths and hostile additional authority before admission."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native processing uses reviewed keys and rejects a wrong workbench. Same-platform owner/host tests reject stale drafts, changed inspection/source facts, arbitrary paths and hostile additional authority before admission."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.edited-input",
@@ -2344,7 +3246,7 @@
           "start_conversion"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation/legacy.rs",
@@ -2370,8 +3272,53 @@
       "acceptance": [
         "Proxy/converted/retired inputs are rejected; rerenders and cancellation preserve valid previous results and active aliases."
       ],
-      "evidence": [],
-      "remaining": "Legacy render and original/edited conversion are connected as native contracts alongside unified editor processing. Finish all-platform real-media acceptance; retain the reference validation policy for short AAC-to-MP3 padding and prior results on rejection."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Tail-index MP4 is rendered and converted to M4A through native review/queue commands. Generated owner tests on this runner cover repeated byte-preserving edited-input conversion, invalid roles/stale cuts, prior-result retention and obsolete export rejection."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Tail-index MP4 is rendered and converted to M4A through native review/queue commands. Generated owner tests on this runner cover repeated byte-preserving edited-input conversion, invalid roles/stale cuts, prior-result retention and obsolete export rejection."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Tail-index MP4 is rendered and converted to M4A through native review/queue commands. Generated owner tests on this runner cover repeated byte-preserving edited-input conversion, invalid roles/stale cuts, prior-result retention and obsolete export rejection."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Tail-index MP4 is rendered and converted to M4A through native review/queue commands. Generated owner tests on this runner cover repeated byte-preserving edited-input conversion, invalid roles/stale cuts, prior-result retention and obsolete export rejection."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.output-validation",
@@ -2391,7 +3338,7 @@
           "validate_output"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_command/validation.rs",
@@ -2432,8 +3379,53 @@
       "acceptance": [
         "Malformed/wrong/oversized output remains unavailable; failures retain previous successful results."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native result playback/saving follows actual encoded-media inspection. Generated output tests in the same job reject malformed, wrong-format and oversized publication; failed jobs retain the previous valid result."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native result playback/saving follows actual encoded-media inspection. Generated output tests in the same job reject malformed, wrong-format and oversized publication; failed jobs retain the previous valid result."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native result playback/saving follows actual encoded-media inspection. Generated output tests in the same job reject malformed, wrong-format and oversized publication; failed jobs retain the previous valid result."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native result playback/saving follows actual encoded-media inspection. Generated output tests in the same job reject malformed, wrong-format and oversized publication; failed jobs retain the previous valid result."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.naming",
@@ -2453,7 +3445,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -2481,8 +3473,53 @@
       "acceptance": [
         "Queue captures reviewed names; later suffix changes neither rename prior results nor alter queued work."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native batch admission captures the -native-cut suffix; changing it to -later-draft afterward leaves both queued filenames unchanged. Save/Save All use those validated names and collision-safe publication."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native batch admission captures the -native-cut suffix; changing it to -later-draft afterward leaves both queued filenames unchanged. Save/Save All use those validated names and collision-safe publication."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native batch admission captures the -native-cut suffix; changing it to -later-draft afterward leaves both queued filenames unchanged. Save/Save All use those validated names and collision-safe publication."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native batch admission captures the -native-cut suffix; changing it to -later-draft afterward leaves both queued filenames unchanged. Save/Save All use those validated names and collision-safe publication."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.shared-settings",
@@ -2502,7 +3539,7 @@
           "review_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -2530,8 +3567,53 @@
       "acceptance": [
         "Independent mode and Reset File disable sharing as specified; incompatible per-file settings stay visible for correction."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native files share output settings but retain distinct cuts; Reset File restores only the selected draft and preserves the other result. Shared interface tests cover independent mode and incompatible copied settings."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native files share output settings but retain distinct cuts; Reset File restores only the selected draft and preserves the other result. Shared interface tests cover independent mode and incompatible copied settings."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native files share output settings but retain distinct cuts; Reset File restores only the selected draft and preserves the other result. Shared interface tests cover independent mode and incompatible copied settings."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native files share output settings but retain distinct cuts; Reset File restores only the selected draft and preserves the other result. Shared interface tests cover independent mode and incompatible copied settings."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.batch-review",
@@ -2552,7 +3634,7 @@
           "enqueue_processing"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_queue.rs",
@@ -2585,8 +3667,53 @@
       "acceptance": [
         "Exclude queued/running and already successful current drafts; unchanged eligible files retain no-op behavior."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Review All Files/Queue And Process admits the eligible reviewed drafts together and produces separate retained outputs. Core queue and shared interface tests cover already-running/successful exclusions and all-or-none admission."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Review All Files/Queue And Process admits the eligible reviewed drafts together and produces separate retained outputs. Core queue and shared interface tests cover already-running/successful exclusions and all-or-none admission."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Review All Files/Queue And Process admits the eligible reviewed drafts together and produces separate retained outputs. Core queue and shared interface tests cover already-running/successful exclusions and all-or-none admission."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Review All Files/Queue And Process admits the eligible reviewed drafts together and produces separate retained outputs. Core queue and shared interface tests cover already-running/successful exclusions and all-or-none admission."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.processing-queue",
@@ -2607,7 +3734,7 @@
           "subscribe_collection"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/process.rs",
@@ -2647,8 +3774,53 @@
       "acceptance": [
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.results",
@@ -2669,7 +3841,7 @@
           "save_output"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -2707,8 +3879,53 @@
       "acceptance": [
         "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.bulk-save",
@@ -2727,7 +3944,7 @@
           "save_outputs"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -2755,8 +3972,53 @@
       "acceptance": [
         "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes."
       ],
-      "evidence": [],
-      "remaining": "Native Save All captures result leases and publishes without overwriting. Complete cross-platform save-failure and 8D export-catalog acceptance."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.reset",
@@ -2776,7 +4038,7 @@
           "subscribe_collection"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -2804,8 +4066,53 @@
       "acceptance": [
         "Other files, queued snapshots and successful outputs remain unchanged."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native Reset File restores the selected full range and leaves the other file's successful result intact. Immutable queue tests and shared interface checks preserve admitted jobs and previous results."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native Reset File restores the selected full range and leaves the other file's successful result intact. Immutable queue tests and shared interface checks preserve admitted jobs and previous results."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native Reset File restores the selected full range and leaves the other file's successful result intact. Immutable queue tests and shared interface checks preserve admitted jobs and previous results."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native Reset File restores the selected full range and leaves the other file's successful result intact. Immutable queue tests and shared interface checks preserve admitted jobs and previous results."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.remove",
@@ -2826,7 +4133,7 @@
           "discard_workspace"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -2864,8 +4171,53 @@
       "acceptance": [
         "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.cleanup",
@@ -2886,7 +4238,7 @@
           "retry_cleanup"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -2913,7 +4265,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/workbenches/tests.rs",
-          "crates/lvovd-core/tests/local_media.rs"
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -2922,8 +4275,53 @@
       "acceptance": [
         "Locked/read-held/permission failures retain ownership; retries never delete originals or exports."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native removal waits for decoder cleanup and leaves no owned cleanup row before shutdown. Same-platform core tests retain read-held/failed cleanup reservations and exercise bounded retry/manual recovery without deleting originals/exports."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native removal waits for decoder cleanup and leaves no owned cleanup row before shutdown. Same-platform core tests retain read-held/failed cleanup reservations and exercise bounded retry/manual recovery without deleting originals/exports."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native removal waits for decoder cleanup and leaves no owned cleanup row before shutdown. Same-platform core tests retain read-held/failed cleanup reservations and exercise bounded retry/manual recovery without deleting originals/exports."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native removal waits for decoder cleanup and leaves no owned cleanup row before shutdown. Same-platform core tests retain read-held/failed cleanup reservations and exercise bounded retry/manual recovery without deleting originals/exports."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.expiry",
@@ -2943,7 +4341,7 @@
           "subscribe_collection"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_queue.rs",
@@ -2976,8 +4374,53 @@
       "acceptance": [
         "Expiry cancels analysis/processing and waits for owned readers/workers before releasing capacity."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native lifecycle uses the same workbench/queue owner and confirms read cleanup on removal/shutdown. Same-platform owner tests drive idle/queued expiry and cancellation deterministically, retaining workers/readers until cleanup completes."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native lifecycle uses the same workbench/queue owner and confirms read cleanup on removal/shutdown. Same-platform owner tests drive idle/queued expiry and cancellation deterministically, retaining workers/readers until cleanup completes."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native lifecycle uses the same workbench/queue owner and confirms read cleanup on removal/shutdown. Same-platform owner tests drive idle/queued expiry and cancellation deterministically, retaining workers/readers until cleanup completes."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The actual native lifecycle uses the same workbench/queue owner and confirms read cleanup on removal/shutdown. Same-platform owner tests drive idle/queued expiry and cancellation deterministically, retaining workers/readers until cleanup completes."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.reopen",
@@ -2999,7 +4442,7 @@
           "remove_collection"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -3029,8 +4472,53 @@
       "acceptance": [
         "Stale reopen cannot revive a removed/reopened collection; no editing sessions or queue restoration across process restarts."
       ],
-      "evidence": [],
-      "remaining": "The user-approved single-workbench change is recorded in acceptedFixes. Finish all-platform reconnection acceptance; retired records remain cleanup obligations only."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.reservations",
@@ -3089,8 +4577,53 @@
       "acceptance": [
         "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
       ],
-      "evidence": [],
-      "remaining": "Local intake, queues, pending cleanup and source-byte reservations are integrated in 8C. Playlist selection and acquisition-intermediate reservations must join this owner in 8D before this combined capability is Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native multi-file intake, immutable sequential processing and removal use the shared owner. Core tests verify twenty-file/job limits and retained cleanup/source-byte reservations. Playlist/acquisition reservations still require 8D integration."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native multi-file intake, immutable sequential processing and removal use the shared owner. Core tests verify twenty-file/job limits and retained cleanup/source-byte reservations. Playlist/acquisition reservations still require 8D integration."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native multi-file intake, immutable sequential processing and removal use the shared owner. Core tests verify twenty-file/job limits and retained cleanup/source-byte reservations. Playlist/acquisition reservations still require 8D integration."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native multi-file intake, immutable sequential processing and removal use the shared owner. Core tests verify twenty-file/job limits and retained cleanup/source-byte reservations. Playlist/acquisition reservations still require 8D integration."
+        }
+      ],
+      "remaining": "Local-file/job capacity and source-byte accounting are verified in the native 8C owner. The same owner must still admit playlist selections and acquisition intermediates in 8D; that unintegrated portion remains a release blocker."
     },
     {
       "id": "media.leases",
@@ -3111,7 +4644,7 @@
           "save_output"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -3138,7 +4671,8 @@
           "crates/lvovd-core/src/assets.rs",
           "crates/lvovd-core/src/owned_file.rs",
           "crates/lvovd-core/src/workbenches/tests.rs",
-          "crates/lvovd-core/tests/local_media.rs"
+          "crates/lvovd-core/tests/local_media.rs",
+          "crates/lvovd-core/src/analysis.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
@@ -3147,8 +4681,53 @@
       "acceptance": [
         "Exercise active reads during rerender, removal, failed cleanup and shutdown; retire only unreferenced owned bytes."
       ],
-      "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native playback, second-file read contention, result playback/saving and removal use owned readers. Same-platform tests hold originals/edited inputs/results across rerender, failure, removal and cleanup; revoked reads cannot reopen files."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native playback, second-file read contention, result playback/saving and removal use owned readers. Same-platform tests hold originals/edited inputs/results across rerender, failure, removal and cleanup; revoked reads cannot reopen files."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native playback, second-file read contention, result playback/saving and removal use owned readers. Same-platform tests hold originals/edited inputs/results across rerender, failure, removal and cleanup; revoked reads cannot reopen files."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Native playback, second-file read contention, result playback/saving and removal use owned readers. Same-platform tests hold originals/edited inputs/results across rerender, failure, removal and cleanup; revoked reads cannot reopen files."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "history.records",

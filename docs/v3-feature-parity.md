@@ -30,11 +30,11 @@ Normal migration CI allows honest Missing/Ported/Integrated entries. The strict 
 
 Download is the initial application view. Preserve the existing JavaScript controls and defaults in Download, Local Media, History and Settings. Compact layout changes cannot remove options. Download audio conversion and strict Local Media FLAC remain distinct contracts. Extras, subtitles/languages, chapter outputs, SponsorBlock, advanced source formats, native save recovery and custom tools/plugins are explicit 8D work, not optional post-release enhancements.
 
-8B established its policy/worker/ownership checkpoint in accepted PR #53. [8C](desktop-local-media.md) integrates the full Local Media workbench in a separate draft PR; the released editor now runs through Rust-owned workbench, analysis and processing commands. Platform acceptance is recorded in the stage document. 8D restores Download, both acquisition handoffs, history, native saving and tool/plugin management. 8E completes navigation, settings, accessibility, lifecycle and cutover. 8F supplies verified tools/frameworks, packages, updates and maintenance. Stage PRs target `staging/v3-desktop`; `master` stays on the working release. Merge, promotion, tagging and publication require separate authorization. Roadmap #7 remains incomplete.
+8B established its policy/worker/ownership checkpoint in accepted PR #53. [8C](desktop-local-media.md) integrates the Local Media workbench in a separate reviewable PR; the released editor now runs through Rust-owned workbench, analysis and processing commands. All four native gates passed; capability-specific receipts and remaining shared acquisition work are recorded below and in the stage document. 8D restores Download, both acquisition handoffs, history, native saving and tool/plugin management. 8E completes navigation, settings, accessibility, lifecycle and cutover. 8F supplies verified tools/frameworks, packages, updates and maintenance. Stage PRs target `staging/v3-desktop`; `master` stays on the working release. Merge, promotion, tagging and publication require separate authorization. Roadmap #7 remains incomplete.
 
 <!-- parity-table:start -->
 
-87 required entries: 52 Missing, 0 Ported, 35 Integrated, 0 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 52 Missing, 0 Ported, 1 Integrated, 34 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -70,41 +70,41 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.cleanup` | Download expiry and cleanup | Download / Queue | 8D | Missing |
 | `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Missing |
 | `handoff.playlist-intake` | Add Selected to Local Media | Download → Local Media | 8D | Missing |
-| `media.intake` | Multiple local files | Local Media / Files | 8C | Integrated |
-| `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Integrated |
-| `media.capabilities` | Capability discovery | Local Media / Review | 8B | Integrated |
-| `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Integrated |
-| `media.direct-playback` | Direct media playback | Local Media / Player | 8C | Integrated |
-| `media.proxy` | Playback proxies | Local Media / Player | 8C | Integrated |
-| `media.audio-clock` | Audio timeline policy | Local Media / Timeline | 8B | Integrated |
-| `media.waveform` | Combined waveform | Local Media / Timeline | 8C | Integrated |
-| `media.range-policy` | Retained-range normalization | Local Media / Cuts | 8B | Integrated |
-| `media.trim-controls` | Trim and middle cuts | Local Media / Timeline | 8C | Integrated |
-| `media.timeline-controls` | Timeline navigation and keyboard | Local Media / Timeline | 8C | Integrated |
-| `media.drafts` | Per-file drafts and revisions | Local Media / Files | 8C | Integrated |
-| `media.audio-policy` | Local audio encoding policy | Local Media / Output settings | 8B | Integrated |
-| `media.audio-outputs` | Local audio outputs | Local Media / Output settings and results | 8C | Integrated |
-| `media.noop-remux` | Original no-op and remux | Local Media / Review and results | 8B | Integrated |
-| `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Integrated |
-| `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Integrated |
-| `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Integrated |
-| `media.estimates-help` | Linked estimates and help | Local Media / Output settings and review | 8C | Integrated |
-| `media.review-contract` | Reviewed plan validation | Local Media / Review | 8B | Integrated |
-| `media.edited-input` | Edited-result conversion handoff | Local Media / Conversion review | 8C | Integrated |
-| `media.output-validation` | Validated processed outputs | Local Media / Results | 8B | Integrated |
-| `media.naming` | Reviewed names and suffix | Local Media / Process actions | 8C | Integrated |
-| `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Integrated |
-| `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Integrated |
-| `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Integrated |
-| `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Integrated |
-| `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Integrated |
-| `media.reset` | Reset File | Local Media / Files | 8C | Integrated |
-| `media.remove` | Remove File and Discard | Local Media / Files | 8C | Integrated |
-| `media.cleanup` | Reachable cleanup recovery | Local Media / Cleanup recovery | 8C | Integrated |
-| `media.expiry` | Workspace activity and expiry | Local Media | 8C | Integrated |
-| `media.reopen` | Previous local workbenches | Local Media / Active workbench reconnection and cleanup recovery | 8C | Integrated |
+| `media.intake` | Multiple local files | Local Media / Files | 8C | Verified |
+| `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Verified |
+| `media.capabilities` | Capability discovery | Local Media / Review | 8B | Verified |
+| `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Verified |
+| `media.direct-playback` | Direct media playback | Local Media / Player | 8C | Verified |
+| `media.proxy` | Playback proxies | Local Media / Player | 8C | Verified |
+| `media.audio-clock` | Audio timeline policy | Local Media / Timeline | 8B | Verified |
+| `media.waveform` | Combined waveform | Local Media / Timeline | 8C | Verified |
+| `media.range-policy` | Retained-range normalization | Local Media / Cuts | 8B | Verified |
+| `media.trim-controls` | Trim and middle cuts | Local Media / Timeline | 8C | Verified |
+| `media.timeline-controls` | Timeline navigation and keyboard | Local Media / Timeline | 8C | Verified |
+| `media.drafts` | Per-file drafts and revisions | Local Media / Files | 8C | Verified |
+| `media.audio-policy` | Local audio encoding policy | Local Media / Output settings | 8B | Verified |
+| `media.audio-outputs` | Local audio outputs | Local Media / Output settings and results | 8C | Verified |
+| `media.noop-remux` | Original no-op and remux | Local Media / Review and results | 8B | Verified |
+| `media.video-encoding` | Video quality and bitrate | Local Media / Output settings | 8B | Verified |
+| `media.size-budget` | Maximum output size | Local Media / Output settings | 8B | Verified |
+| `media.picture` | Scaling and frame rate | Local Media / Output settings | 8B | Verified |
+| `media.estimates-help` | Linked estimates and help | Local Media / Output settings and review | 8C | Verified |
+| `media.review-contract` | Reviewed plan validation | Local Media / Review | 8B | Verified |
+| `media.edited-input` | Edited-result conversion handoff | Local Media / Conversion review | 8C | Verified |
+| `media.output-validation` | Validated processed outputs | Local Media / Results | 8B | Verified |
+| `media.naming` | Reviewed names and suffix | Local Media / Process actions | 8C | Verified |
+| `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Verified |
+| `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Verified |
+| `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Verified |
+| `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Verified |
+| `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Verified |
+| `media.reset` | Reset File | Local Media / Files | 8C | Verified |
+| `media.remove` | Remove File and Discard | Local Media / Files | 8C | Verified |
+| `media.cleanup` | Reachable cleanup recovery | Local Media / Cleanup recovery | 8C | Verified |
+| `media.expiry` | Workspace activity and expiry | Local Media | 8C | Verified |
+| `media.reopen` | Previous local workbenches | Local Media / Active workbench reconnection and cleanup recovery | 8C | Verified |
 | `media.reservations` | Capacity and storage reservations | Local Media / Intake and queue | 8C | Integrated |
-| `media.leases` | Output leases and retirement | Local Media / Playback and results | 8C | Integrated |
+| `media.leases` | Output leases and retirement | Local Media / Playback and results | 8C | Verified |
 | `history.records` | Durable terminal history | History | 8D | Missing |
 | `history.presentation` | History details and pagination | History | 8D | Missing |
 | `history.deletion` | Delete and Clear All | History | 8D | Missing |

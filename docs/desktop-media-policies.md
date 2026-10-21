@@ -4,6 +4,8 @@ Stage 8B continued from the [8A staging merge](https://github.com/landonrivers/L
 
 The [feature parity register](v3-feature-parity.md) maps every audited v2.7 capability and accepted desktop addition to its native workflow and migration stage. Core policy entries can be Ported; no completed user workflow is claimed Verified. CI validates register/test references, prevents silent inventory loss against prior revisions, and blocks stable-version acceptance while any required entry remains incomplete. This is migration tracking, not implementation of the missing Download or Local Media operations.
 
+The scope descriptions below record the accepted 8B checkpoint. For the editor, queues, analysis, result saving and legacy-input integration delivered afterward, use the [8C stage document](desktop-local-media.md).
+
 ## Implemented first
 
 The Rust core now contains audio policy, retained-range normalization, media inspection, FFmpeg capability discovery, processing settings, reviewed processing/conversion plans, argument construction, output validation and owned worker supervision. Policy and normalization remain separate from tool execution. Native intake uses the new inspection facts; the planner consumes capability facts without adding discovery to the short runtime-health probe. The desktop preview still exposes the 8A workflow; processing and Download operations are not yet connected.

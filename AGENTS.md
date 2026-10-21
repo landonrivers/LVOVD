@@ -3,7 +3,7 @@
 ## Read before changing the project
 
 - Read [the development contract](docs/development-contract.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the relevant section of [ROADMAP.md](ROADMAP.md).
-- Read [SECURITY.md](SECURITY.md) for trust boundaries. For desktop work, also read [the foundation evidence](docs/desktop-foundation.md), [the accepted 8B policy checkpoint](docs/desktop-media-policies.md), and [the in-progress 8C integration stage](docs/desktop-local-media.md).
+- Read [SECURITY.md](SECURITY.md) for trust boundaries. For desktop work, also read [the foundation evidence](docs/desktop-foundation.md), [the accepted 8B policy checkpoint](docs/desktop-media-policies.md), and [the 8C integration stage](docs/desktop-local-media.md).
 - Before desktop workflow changes, read [the feature parity register](docs/v3-feature-parity.md), identify affected capability IDs, and update their implementation, tests, remaining work and evidence in the same PR. Follow its status rules; library tests do not establish a completed native workflow.
 - Treat these files as shared project guidance. Follow the user's current instructions and existing authorization; do not invent approval requirements.
 - If code, documentation, and the accepted plan disagree, identify the discrepancy and correct it within the authorized scope. Do not silently change product commitments.
