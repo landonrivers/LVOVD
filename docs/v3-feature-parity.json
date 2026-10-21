@@ -3,7 +3,17 @@
   "baseline": {
     "version": "2.7.0",
     "commit": "7e192ad7ddee6478b517a74174cedf6dccd85a19",
-    "acceptedFixes": []
+    "acceptedFixes": [
+      {
+        "commit": "d2acf249ea244be7427951a570abb4dd810e2a50",
+        "capabilities": [
+          "media.reopen",
+          "media.reservations"
+        ],
+        "reason": "One active workbench with multiple files replaces the two-workbench switcher. Twenty files, owned cleanup, same-session reconnection and aggregate reservations remain.",
+        "approval": "User explicitly requested: simplify PR #54 to one workbench with multiple files (2026-10-20)."
+      }
+    ]
   },
   "platforms": [
     "windows-x64",
@@ -838,7 +848,7 @@
       "title": "Playlist acquisition pauses",
       "origin": "baseline",
       "reference": {
-        "behavior": "Keep cancellable randomized 0.5\u00e2\u20ac\u201c1-second pauses between playlist items.",
+        "behavior": "Keep cancellable randomized 0.5–1-second pauses between playlist items.",
         "sources": [
           "app-server.js",
           "playlist-intake.js"
@@ -1147,7 +1157,7 @@
         ]
       },
       "desktop": {
-        "location": "Download \u00e2\u2020\u2019 Local Media",
+        "location": "Download â†’ Local Media",
         "stage": "8D",
         "operations": [
           "import_url"
@@ -1185,7 +1195,7 @@
         ]
       },
       "desktop": {
-        "location": "Download \u00e2\u2020\u2019 Local Media",
+        "location": "Download â†’ Local Media",
         "stage": "8D",
         "operations": [
           "import_playlist",
@@ -1636,7 +1646,7 @@
         ]
       },
       "acceptance": [
-        "One decode, 120-second deadline, duration byte ceiling, \u00e2\u2030\u00a4200000 pairs, \u00e2\u2030\u00a510 ms bins and \u00e2\u2030\u00a44096 returned pairs; confirm exit before processing preemption."
+        "One decode, 120-second deadline, duration byte ceiling, â‰¤200000 pairs, â‰¥10 ms bins and â‰¤4096 returned pairs; confirm exit before processing preemption."
       ],
       "evidence": [],
       "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
@@ -3253,7 +3263,7 @@
         ]
       },
       "desktop": {
-        "location": "History \u00e2\u2020\u2019 Download",
+        "location": "History â†’ Download",
         "stage": "8D",
         "operations": [
           "preview_source"

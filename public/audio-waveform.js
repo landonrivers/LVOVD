@@ -48,7 +48,8 @@
       controller?.abort(); controller = new root.AbortController();
       const token = generation, revision = ++request, identity = { ...selected };
       try {
-        const query = new URLSearchParams({ ...identity, startSeconds: viewport.startSeconds, endSeconds: viewport.endSeconds, points, operationId });
+        const query = new URLSearchParams({ ...identity, startSeconds: viewport.startSeconds, endSeconds: viewport.endSeconds, points,
+          ...(root.LVOVDWorkspaceTransport ? { operationId } : {}) });
         const response = await transportRequest(`/api/workspace/waveform?${query}`, { cache: 'no-store', signal: controller.signal });
         const data = await response.json();
         if (token !== generation || revision !== request) return;
