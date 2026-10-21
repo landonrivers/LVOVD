@@ -259,12 +259,14 @@ async fn foreground_jobs_preempt_analysis_and_saved_copies_are_collision_safe() 
     let destination = f.root.path().join("saved.flac");
     let unavailable = f.root.path().join("unavailable-folder").join("saved.flac");
     assert_eq!(
-        lvovd_core::export::save_copy(
-            f.owner.result(f.workbench, output.result_id).unwrap(),
-            &unavailable,
-        )
-        .unwrap_err()
-        .code,
+        f.owner
+            .save_result(
+                f.workbench,
+                f.owner.result(f.workbench, output.result_id).unwrap(),
+                &unavailable,
+            )
+            .unwrap_err()
+            .code,
         "SAVE_FAILED"
     );
     assert!(!unavailable.exists());
@@ -278,12 +280,23 @@ async fn foreground_jobs_preempt_analysis_and_saved_copies_are_collision_safe() 
     );
     std::fs::write(&destination, b"existing user file").unwrap();
     let lease = f.owner.result(f.workbench, output.result_id).unwrap();
-    let saved = lvovd_core::export::save_copy(lease, &destination).unwrap();
+    let saved = f
+        .owner
+        .save_result(f.workbench, lease, &destination)
+        .unwrap();
     assert_eq!(saved.file_name().unwrap(), "saved (1).flac");
     assert_eq!(std::fs::read(&destination).unwrap(), b"existing user file");
     let reader = f.owner.media_lease(output.result_id).unwrap();
     assert_eq!(reader.size(), output.size);
+    let pending_save = f.owner.result(f.workbench, output.result_id).unwrap();
     f.owner.remove(f.workbench, f.source).unwrap();
+    let late_destination = f.root.path().join("removed-result.flac");
+    assert!(
+        f.owner
+            .save_result(f.workbench, pending_save, &late_destination)
+            .is_err()
+    );
+    assert!(!late_destination.exists());
     assert!(reader.read(0, 1).is_err());
     drop(reader);
     f.settled().await;

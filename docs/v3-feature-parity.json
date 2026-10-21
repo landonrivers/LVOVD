@@ -1646,7 +1646,7 @@
         ]
       },
       "acceptance": [
-        "One decode, 120-second deadline, duration byte ceiling, â‰¤200000 pairs, â‰¥10 ms bins and â‰¤4096 returned pairs; confirm exit before processing preemption."
+        "One decode, 120-second deadline, duration byte ceiling, ≤200000 pairs, ≥10 ms bins and ≤4096 returned pairs; confirm exit before processing preemption."
       ],
       "evidence": [],
       "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
@@ -3030,7 +3030,7 @@
         "Stale reopen cannot revive a removed/reopened collection; no editing sessions or queue restoration across process restarts."
       ],
       "evidence": [],
-      "remaining": "User approved one active workbench with multiple files on 2026-10-20; see the development contract. Same-session reconnection reuses it; removed/expired records retain cleanup only. Record the implementation commit as an accepted baseline change and verify all platform reconnections."
+      "remaining": "The user-approved single-workbench change is recorded in acceptedFixes. Finish all-platform reconnection acceptance; retired records remain cleanup obligations only."
     },
     {
       "id": "media.reservations",
@@ -3090,7 +3090,7 @@
         "Full playlist selection reserves slots; acquisition intermediates and pending cleanup keep their allowances; capacity is not a promise of total disk usage."
       ],
       "evidence": [],
-      "remaining": "Native controls and owned operations are connected. Complete the expanded native editor/analysis/lifecycle acceptance on Windows, Linux and both macOS architectures before marking Verified."
+      "remaining": "Local intake, queues, pending cleanup and source-byte reservations are integrated in 8C. Playlist selection and acquisition-intermediate reservations must join this owner in 8D before this combined capability is Verified."
     },
     {
       "id": "media.leases",

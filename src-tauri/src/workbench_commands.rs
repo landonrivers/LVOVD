@@ -102,13 +102,31 @@ pub(crate) async fn save_results(
     let Some(folder) = selected else {
         return Ok(None);
     };
-    let receipts = tauri::async_runtime::spawn_blocking(move || results.into_iter().map(|result| {
-        let name = result.descriptor().filename.clone();
-        match lvovd_core::export::save_copy(result, &folder.join(&name)) {
-            Ok(saved) => serde_json::json!({"filename": saved.file_name().map(|s| s.to_string_lossy().into_owned()), "saved":true}),
-            Err(error) => serde_json::json!({"filename": name,"saved":false,"error":error.message})
+    let owner = state.workbenches.clone();
+    let workbench_id = request.workbench_id;
+    let receipts = tauri::async_runtime::spawn_blocking(move || {
+        let mut revoked = false;
+        let mut receipts = Vec::new();
+        for result in results {
+            let name = result.descriptor().filename.clone();
+            if revoked || owner.result(workbench_id, result.descriptor().result_id).is_err() {
+                revoked = true;
+                receipts.push(serde_json::json!({"filename":name,"saved":false,"error":"Saving stopped because a captured result was removed or replaced."}));
+                continue;
+            }
+            let receipt = match owner.save_result(workbench_id, result, &folder.join(&name)) {
+                Ok(saved) => serde_json::json!({"filename": saved.file_name().map(|s| s.to_string_lossy().into_owned()), "saved":true}),
+                Err(error) => {
+                    if error.code != "SAVE_FAILED" && error.code != "MEDIA_READ" {
+                        revoked = true;
+                    }
+                    serde_json::json!({"filename": name,"saved":false,"error":error.message})
+                }
+            };
+            receipts.push(receipt);
         }
-    }).collect::<Vec<_>>()).await.map_err(|_| AppError::new("SAVE_FAILED", "Saving ended unexpectedly. Prepared results remain available."))?;
+        receipts
+    }).await.map_err(|_| AppError::new("SAVE_FAILED", "Saving ended unexpectedly. Prepared results remain available."))?;
     Ok(Some(serde_json::json!({"files":receipts})))
 }
 #[derive(Deserialize)]
@@ -475,15 +493,17 @@ pub(crate) async fn save_result(
     let Some(path) = selected else {
         return Ok(None);
     };
-    let saved =
-        tauri::async_runtime::spawn_blocking(move || lvovd_core::export::save_copy(result, &path))
-            .await
-            .map_err(|_| {
-                AppError::new(
-                    "SAVE_FAILED",
-                    "Saving ended unexpectedly. Retry saving the prepared result.",
-                )
-            })??;
+    let owner = state.workbenches.clone();
+    let saved = tauri::async_runtime::spawn_blocking(move || {
+        owner.save_result(request.workbench_id, result, &path)
+    })
+    .await
+    .map_err(|_| {
+        AppError::new(
+            "SAVE_FAILED",
+            "Saving ended unexpectedly. Retry saving the prepared result.",
+        )
+    })??;
     Ok(saved.file_name().map(|s| s.to_string_lossy().into_owned()))
 }
 

@@ -20,7 +20,7 @@ async function setup(page, bridge = true) {
     const fixture = window.fixture = {
       workbenchId, otherId, channels: [],
       sources: ids.map((assetId, i) => ({ assetId, name: `Synthetic ${i + 1}`, size: 10, inspection: { format: 'test', mime: null, streams: [] } })),
-      snapshot(revision, indices, cleanup = [], intakeFailure = null) { channel.onmessage({ connectionId: connection, snapshot: { ...state(this.active || workbenchId, revision, indices, cleanup), intakeFailure } }); },
+      snapshot(revision, indices, cleanup = [], intakeFailure = null, extra = {}) { channel.onmessage({ connectionId: connection, snapshot: { ...state(this.active || workbenchId, revision, indices, cleanup), intakeFailure, ...extra } }); },
       stale(revision, indices) { this.channels[0].onmessage({ connectionId: 1, snapshot: state(workbenchId, revision, indices) }); }
     };
     window.__TAURI__ = { core: {
@@ -42,6 +42,7 @@ async function setup(page, bridge = true) {
           fixture.resolveRemoval = () => resolve(state(args.request.workbenchId, 2, [1], [fixture.sources[0].assetId]));
         });
         if (command === 'cancel_editor') return;
+        if (command === 'save_result') return new Promise(resolve => { fixture.resolveSave = resolve; });
         throw new Error('Unexpected command: ' + command);
       }
     } };
@@ -92,4 +93,28 @@ test('desktop adapter has no browser HTTP fallback', async ({ page }) => {
   await expect(page.locator('#connection')).toHaveText('Desktop unavailable');
   await expect(page.locator('#workspace-status')).toContainText('lvovd.exe');
   expect(requests).toEqual([]);
+});
+
+test('desktop save status survives updates and late receipts cannot relabel a replacement', async ({ page }) => {
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await setup(page);
+  await page.evaluate(ids => window.fixture.snapshot(0,[0],[],null,{jobs:[{sourceId:ids[0],status:'queued',draftRevision:0}]}),ids);
+  await page.evaluate(ids => {
+    const result = window.fixture.result = {resultId:ids[2],sourceId:ids[0],filename:'Synthetic.wav',size:100,draftRevision:0,noOp:true,review:{},inspection:{durationSeconds:2,format:'wav',container:{kind:'wav'},video:null,audio:{codec:'pcm_s16le',sampleRate:48000,channels:1}}};
+    window.fixture.snapshot(1,[0,1],[],null,{results:[result]});
+  }, ids);
+  const row = page.locator(`[data-processing-result="${ids[0]}"]`);
+  await row.locator('[data-result="download"]').click();
+  await expect(row.locator('[data-result="status"]')).toHaveText('Saving…');
+  await page.evaluate(() => { window.fixture.sources[0].name='Updated source label'; window.fixture.snapshot(2,[0,1],[],null,{results:[window.fixture.result]}); });
+  await expect(row.locator('[data-result="status"]')).toHaveText('Saving…');
+  await page.evaluate(() => window.fixture.resolveSave('Synthetic (1).wav'));
+  await expect(row.locator('[data-result="status"]')).toHaveText('Saved Synthetic (1).wav');
+  await row.locator('[data-result="download"]').click();
+  await page.evaluate(() => { window.fixture.result={...window.fixture.result,resultId:'30000000-0000-4000-8000-000000000001',filename:'Replacement.wav'};window.fixture.snapshot(3,[0,1],[],null,{results:[window.fixture.result]}); });
+  await expect(row.locator('[data-result="name"]')).toHaveText('Replacement.wav');
+  await page.evaluate(() => window.fixture.resolveSave('obsolete.wav'));
+  await expect(row.locator('[data-result="status"]')).not.toContainText('obsolete');
+  await expect(row.locator('[data-result="status"]')).not.toContainText('Saving');
+  expect(errors).toEqual([]);
 });

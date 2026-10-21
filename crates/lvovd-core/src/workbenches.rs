@@ -706,6 +706,19 @@ impl Workbenches {
         self.member(id, lease.descriptor().source_id)?;
         Ok(lease)
     }
+    /// The dialog and file copy may outlive selection or publication. A held
+    /// lease preserves bytes, but only current membership authorizes saving.
+    pub fn save_result(
+        &self,
+        id: Uuid,
+        result: crate::processing_operation::OutputLease,
+        destination: &std::path::Path,
+    ) -> Result<PathBuf> {
+        let result_id = result.descriptor().result_id;
+        crate::export::save_copy_checked(result, destination, || {
+            self.result(id, result_id).map(|_| ())
+        })
+    }
 }
 
 struct ResultReader {

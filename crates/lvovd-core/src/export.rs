@@ -6,6 +6,15 @@ use std::{
 };
 
 pub fn save_copy(result: OutputLease, destination: &Path) -> Result<PathBuf> {
+    save_copy_checked(result, destination, || Ok(()))
+}
+
+pub(crate) fn save_copy_checked(
+    result: OutputLease,
+    destination: &Path,
+    mut current: impl FnMut() -> Result<()>,
+) -> Result<PathBuf> {
+    current()?;
     let error = || {
         AppError::new(
             "SAVE_FAILED",
@@ -27,6 +36,7 @@ pub fn save_copy(result: OutputLease, destination: &Path) -> Result<PathBuf> {
         .map_err(|_| error())?;
     let mut offset = 0;
     while offset < result.descriptor().size {
+        current()?;
         let count = (result.descriptor().size - offset).min(1024 * 1024) as usize;
         let bytes = result.read(offset, count)?;
         temp.write_all(&bytes).map_err(|_| error())?;
@@ -35,19 +45,19 @@ pub fn save_copy(result: OutputLease, destination: &Path) -> Result<PathBuf> {
     temp.flush()
         .and_then(|_| temp.as_file().sync_all())
         .map_err(|_| error())?;
+    // Close the writable handle before making the completed file visible.
+    let mut temp = temp.into_temp_path();
     for index in 0..10_000 {
+        current()?;
         let target = if index == 0 {
             destination.to_owned()
         } else {
             parent.join(format!("{stem} ({index}){extension}"))
         };
         match temp.persist_noclobber(&target) {
-            Ok(file) => {
-                drop(file);
-                return Ok(target);
-            }
+            Ok(()) => return Ok(target),
             Err(failure) if failure.error.kind() == std::io::ErrorKind::AlreadyExists => {
-                temp = failure.file;
+                temp = failure.path;
             }
             Err(_) => return Err(error()),
         }

@@ -168,7 +168,12 @@ async function scenario(file, index) {
     }
     if (index === 0 || index === 3) {
       const field = async (id, value) => browser.execute((id, value) => { const input=document.getElementById(id); input.value=value; input.dispatchEvent(new Event('change',{bubbles:true})); },id,value);
+      await browser.execute(()=>document.getElementById('timeline-start-handle').focus());
+      await browser.keys('ArrowRight');
+      assert.equal(await browser.$('#editor-start-time').getValue(),'00:00:00.100');
+      await field('editor-start-time','00:00:00.000');
       await field('editor-end-time','00:00:01.500');
+      await field('processing-filename-suffix','-native-cut');
       await browser.$('#processing-add-files').click();
       await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length===2,{timeout:15000});
       await browser.execute(() => { const list=document.getElementById('processing-file-list');list.selectedIndex=1;list.dispatchEvent(new Event('change',{bubbles:true})); });
@@ -176,6 +181,10 @@ async function scenario(file, index) {
       await field('cut-start-time','00:00:00.750'); await field('cut-end-time','00:00:01.000');
       await browser.$('#remove-section').click();
       await browser.waitUntil(async () => (await browser.$$('#removed-sections-list button')).length===1,{timeout:5000});
+      await browser.$('#removed-sections-list button').click();
+      assert.equal((await browser.$$('#removed-sections-list button')).length,0);
+      await field('cut-start-time','00:00:00.750'); await field('cut-end-time','00:00:01.000');
+      await browser.$('#remove-section').click();
       await browser.$('#timeline-zoom-in').click();
       assert.notEqual(await browser.$('#timeline-visible-label').getText(),'Showing full timeline');
       await browser.$('#timeline-fit').click();
@@ -186,11 +195,13 @@ async function scenario(file, index) {
       await browser.$('#processing-batch-submit').click();
       // Later edits cannot rewrite either captured queue ticket.
       await field('editor-end-time','00:00:01.000');
+      await field('processing-filename-suffix','-later-draft');
       await browser.waitUntil(async () => browser.execute(() => {
         const entries=window.LVOVDLocalWorkspace.collectionState().entries;
         return entries.length===2 && entries.every(e=>e.workspace.conversion.output && !e.workspace.conversion.output.noOp);
       }),{timeout:40000});
       const outputs=await browser.execute(() => window.LVOVDLocalWorkspace.collectionState().entries.map(e=>e.workspace.conversion.output));
+      assert.ok(outputs.every(output=>output.filename.includes('-native-cut')),'queued names must not change with later settings');
       assert.ok(Math.abs(outputs[0].inspection.durationSeconds-1.5)<0.15);
       assert.ok(Math.abs(outputs[1].inspection.durationSeconds-1.25)<0.15);
       await (await browser.$$('[data-result="preview"]'))[0].click();
@@ -221,7 +232,12 @@ async function scenario(file, index) {
         assert.ok(output.size<=150000);assert.equal(output.inspection.video.width,80);assert.equal(output.inspection.video.height,44);assert.equal(output.review.passes,2);
       }
       assert.equal(await browser.execute(()=>document.documentElement.scrollHeight<=innerHeight && document.documentElement.scrollWidth<=innerWidth),true,'results must retain bounded page scrolling');
-
+      const untouched=await browser.execute(()=>({output:window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.conversion.output.assetId}));
+      await browser.$('#processing-reset').click();
+      assert.equal(await browser.$('#editor-start-time').getValue(),'00:00:00.000');
+      assert.equal(await browser.$('#editor-end-time').getValue(),index===0?'00:00:20.000':'00:00:04.000');
+      assert.equal(await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.conversion.output.assetId),untouched.output,'Reset File must retain other successful results');
+      await browser.saveScreenshot(path.join(resultDir,`results-${process.platform}-${index}.png`));
       await browser.execute(() => { window.confirm=()=>true; });
       await browser.$('#workspace-discard').click();
       await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length===1,{timeout:10000});
