@@ -2,13 +2,14 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('./helpers/loopback-server');
 const { EventEmitter } = require('node:events');
 const { PassThrough } = require('node:stream');
 const childProcess = require('node:child_process');
 const originalSpawn = childProcess.spawn;
 process.env.YTDLP_PATH = 'generated-yt-dlp';
 process.env.HOST = '127.0.0.1';
-process.env.PORT = String(32000 + process.pid % 10000);
+process.env.PORT = '0';
 let behavior = 'present';
 const calls = [];
 childProcess.spawn = (command, args, options) => {
@@ -30,13 +31,14 @@ childProcess.spawn = (command, args, options) => {
 };
 const { server } = require('../server');
 childProcess.spawn = originalSpawn;
-test.before(async () => { await new Promise(resolve => server.listen(Number(process.env.PORT), '127.0.0.1', resolve)); });
+let port;
+test.before(async () => { port = await listenLoopback(server); });
 test.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
 
 for (const scenario of ['present', 'missing', 'failed', 'timeout']) {
   test(`protected health reports FFprobe ${scenario} without blocking other tools`, { timeout: 8000 }, async () => {
     behavior = scenario; calls.length = 0;
-    const response = await fetch(`http://127.0.0.1:${process.env.PORT}/api/health`);
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`);
     assert.equal(response.status, 200);
     const result = await response.json();
     assert.equal(result.node.installed, true); assert.equal(result.ytdlp.installed, true); assert.equal(result.ffmpeg.installed, true);

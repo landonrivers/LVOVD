@@ -1,0 +1,9 @@
+[
+  {"id":"combined-only","info":{"extractor_key":"Facebook","formats":[{"format_id":"sd","url":"https://cdn.example/reel.mp4","height":720,"vcodec":"avc1.4d401f","acodec":"mp4a.40.2"}]}},
+  {"id":"separate-compatible","info":{"extractor_key":"Youtube","formats":[{"vcodec":"h264","acodec":"none"},{"vcodec":"none","acodec":"aac"}]}},
+  {"id":"direct-unknown-codecs","info":{"extractor_key":"TwitchClips","formats":[{"format_id":"1080","url":"https://cdn.example/clip.mp4","height":1080,"fps":30}]}},
+  {"id":"known-video-unknown-audio","info":{"extractor_key":"Example","formats":[{"url":"https://cdn.example/media.mp4","height":720,"vcodec":"avc1.4d401f"}]}},
+  {"id":"maximum-combined","info":{"extractor":"generic","formats":[{"vcodec":"vp9","acodec":"opus"}]}},
+  {"id":"audio-only","info":{"extractor":"generic","formats":[{"vcodec":"none","acodec":"opus"}]}},
+  {"id":"unreported","info":{"extractor":"generic","formats":[]}}
+]

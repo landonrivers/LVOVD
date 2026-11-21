@@ -2,10 +2,11 @@
 
 process.env.YTDLP_PATH = process.platform === 'win32' ? 'C:\\fake\\yt-dlp.exe' : '/tmp/fake-yt-dlp';
 process.env.HOST = '127.0.0.1';
-process.env.PORT = String(35000 + (process.pid % 10000));
+process.env.PORT = '0';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('./helpers/loopback-server');
 const fsp = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
@@ -20,7 +21,7 @@ const { mediaWorkspaces, historyStore, jobs } = require('../app-server');
 const { normalizeMediaInspection } = require('../media-inspection');
 const { server } = require('../server');
 
-const PORT = Number(process.env.PORT);
+let port;
 const directInspection = Object.freeze({
   durationSeconds: 12.5,
   format: 'QuickTime / MOV',
@@ -60,7 +61,7 @@ test.before(async () => {
   originalCreateEditedAsset = mediaWorkspaces.createEditedAsset;
   originalDiscoverCapabilities = mediaWorkspaces.discoverCapabilities;
   originalAssessConversion = mediaWorkspaces.assessConversion;
-  await listen();
+  port = await listenLoopback(server);
 });
 
 test.beforeEach(async () => {
@@ -96,16 +97,6 @@ test.after(async () => {
   await closeServer();
 });
 
-function listen() {
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(PORT, '127.0.0.1', () => {
-      server.off('error', reject);
-      resolve();
-    });
-  });
-}
-
 function closeServer() {
   return new Promise((resolve) => {
     if (!server.listening) return resolve();
@@ -117,12 +108,12 @@ function request(pathname, { method = 'GET', headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: '127.0.0.1',
-      port: PORT,
+      port,
       path: pathname,
       method,
       headers: {
-        Host: `127.0.0.1:${PORT}`,
-        Origin: `http://127.0.0.1:${PORT}`,
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
         'Sec-Fetch-Site': 'same-origin',
         Connection: 'close',
         ...headers
@@ -208,12 +199,12 @@ function readOneSseEvent(pathname) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: '127.0.0.1',
-      port: PORT,
+      port,
       path: pathname,
       method: 'GET',
       headers: {
-        Host: `127.0.0.1:${PORT}`,
-        Origin: `http://127.0.0.1:${PORT}`,
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
         'Sec-Fetch-Site': 'same-origin'
       }
     }, (res) => {
@@ -242,12 +233,12 @@ function openSseConnection(pathname) {
   const firstEvent = new Promise((resolve, reject) => {
     req = http.request({
       hostname: '127.0.0.1',
-      port: PORT,
+      port,
       path: pathname,
       method: 'GET',
       headers: {
-        Host: `127.0.0.1:${PORT}`,
-        Origin: `http://127.0.0.1:${PORT}`,
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
         'Sec-Fetch-Site': 'same-origin'
       }
     }, (res) => {
@@ -914,7 +905,7 @@ test('Discard closes active playback and output readers before deletion and trut
   }
   async function openPaused(url) {
     return new Promise((resolve, reject) => {
-      const req = http.get({ hostname: '127.0.0.1', port: PORT, path: url }, res => {
+      const req = http.get({ hostname: '127.0.0.1', port, path: url }, res => {
         res.on('error', () => {});
         res.once('data', () => { res.pause(); resolve({ req, res }); });
       });

@@ -2,7 +2,7 @@
 
 8C builds on [accepted 8B PR #53](https://github.com/landonrivers/LVOVD/pull/53), staging commit `109cf635301dc8f28ae18cbffa5cf8fde41e14d0`. The accepted 8B head was `10c5cbfd988ba655994971dbaf60b461dc7caa96`; its [native matrix](https://github.com/landonrivers/LVOVD/actions/runs/39182782850) and [reference checks](https://github.com/landonrivers/LVOVD/actions/runs/39182795892) passed.
 
-[PR #54](https://github.com/landonrivers/LVOVD/pull/54) targets `staging/v3-desktop`. No merge, promotion, tag or release is authorized. `master` remains the working v2.7 release. Follow the [development contract](development-contract.md), [parity register](v3-feature-parity.md), [8B ownership checkpoint](desktop-media-policies.md) and [native executable setup](desktop-foundation.md).
+[PR #54](https://github.com/landonrivers/LVOVD/pull/54) merged into `staging/v3-desktop` at `a5dbab3`. `master` remains the working v2.7 release. Follow the [development contract](development-contract.md), [parity register](v3-feature-parity.md), [8B ownership checkpoint](desktop-media-policies.md) and [native executable setup](desktop-foundation.md).
 
 ## One workbench, multiple files
 
@@ -40,7 +40,7 @@ Automatic saving to a remembered destination, export receipts/catalog, Open/Show
 
 ## Acceptance evidence
 
-8C implementation is complete for review at `14bb94320233b30fb7eafe663fce100d89d4293f`. All required native jobs and the reference workflow passed. PR #54 remains unmerged; these receipts do not authorize promotion or release.
+The accepted 8C implementation was tested at `14bb94320233b30fb7eafe663fce100d89d4293f`. All required native jobs and the reference workflow passed. [8D.1](desktop-first-download.md) adds regression coverage for a delayed removal acknowledgement and for retrying interrupted playback preparation on the selected file.
 
 | Platform | Passed native receipt |
 |---|---|

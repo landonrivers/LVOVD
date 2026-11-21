@@ -4,14 +4,21 @@ compile_error!("The test driver is forbidden in release builds.");
 
 #[cfg(debug_assertions)]
 mod development;
+mod download_commands;
+mod download_destination;
+#[cfg(all(target_os = "windows", not(debug_assertions)))]
+mod evergreen;
+mod export_actions;
 #[cfg(target_os = "linux")]
 mod linux_playback;
 mod workbench_commands;
+use download_commands::*;
 use workbench_commands::*;
 
 use lvovd_core::{
     AppError, Result,
     assets::Assets,
+    downloads::Downloads,
     processing_operation::{Limits, Processing},
     tools::Tools,
     workbenches::{Intake, Workbenches},
@@ -32,8 +39,12 @@ struct AppState {
     assets: Arc<Assets>,
     workbenches: Workbenches,
     tools: Tools,
+    downloads: Arc<Downloads>,
+    destinations: Arc<download_destination::Destinations>,
+    download_subscription: Mutex<DownloadSubscription>,
     subscriptions: Mutex<Subscriptions>,
     closing: AtomicBool,
+    local_drop_target: AtomicBool,
     media_admission: lvovd_core::media_admission::MediaAdmission,
     health_admission: tokio::sync::Mutex<()>,
     picker_admission: tokio::sync::Mutex<()>,
@@ -41,6 +52,7 @@ struct AppState {
 impl AppState {
     async fn shutdown(&self) -> Result<()> {
         self.assets.cancellation().cancel();
+        self.downloads.shutdown().await?;
         self.media_admission.shutdown().await;
         lvovd_core::process::shutdown().await?;
         #[cfg(target_os = "linux")]
@@ -69,18 +81,25 @@ struct Handshake {
     backend: &'static str,
     webview_version: String,
     connection_generation: u32,
+    download_generation: u32,
 }
 
 #[tauri::command]
 fn desktop_handshake(state: State<'_, AppState>) -> Handshake {
+    state.local_drop_target.store(false, Ordering::Release);
     Handshake {
         protocol_version: lvovd_core::PROTOCOL_VERSION,
         app_version: env!("CARGO_PKG_VERSION"),
-        stage: "8C: workbench integration",
+        stage: "8D.1: first download",
         backend: "rust",
         webview_version: tauri::webview_version().unwrap_or_else(|_| "Unknown".into()),
         connection_generation: state.subscriptions.lock().unwrap().generation(),
+        download_generation: state.download_subscription.lock().unwrap().generation,
     }
+}
+#[tauri::command]
+fn set_local_drop_target(state: State<'_, AppState>, enabled: bool) {
+    state.local_drop_target.store(enabled, Ordering::Release);
 }
 #[tauri::command]
 async fn runtime_health(state: State<'_, AppState>) -> Result<lvovd_core::tools::Health> {
@@ -140,10 +159,10 @@ async fn pick_source(
     }
 }
 #[tauri::command]
-async fn shutdown_desktop(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<()> {
-    state.shutdown().await?;
-    app.exit(0);
-    Ok(())
+async fn shutdown_desktop(window: tauri::WebviewWindow) -> Result<()> {
+    window
+        .close()
+        .map_err(|_| AppError::new("CLOSING", "Could not close the window."))
 }
 
 fn tools(app: &tauri::AppHandle) -> std::result::Result<Tools, Box<dyn std::error::Error>> {
@@ -154,6 +173,10 @@ fn tools(app: &tauri::AppHandle) -> std::result::Result<Tools, Box<dyn std::erro
 }
 
 fn main() {
+    #[cfg(all(target_os = "windows", not(debug_assertions)))]
+    if !evergreen::ready() {
+        return;
+    }
     #[cfg(target_os = "linux")]
     let playback_environment =
         linux_playback::Environment::prepare().expect("Could not prepare Linux playback");
@@ -172,6 +195,13 @@ fn main() {
             let parent = app.path().app_cache_dir()?.join("sessions");
             let assets = Arc::new(Assets::new(&parent)?);
             let tools = tools(app.handle())?;
+            let downloads = Downloads::new(&parent, tools.clone())?;
+            let mut download_updates = downloads.subscribe();
+            let shutdown_signal = assets.cancellation();
+            let config = app.path().app_config_dir()?;
+            #[cfg(feature = "test-driver")]
+            let config = std::env::var_os("LVOVD_DESKTOP_TEST_CONFIG").map(PathBuf::from).unwrap_or(config);
+            let destinations = Arc::new(download_destination::Destinations::new(&config, app.path().download_dir().ok()));
             let processing = Processing::new(
                 (*assets).clone(),
                 &parent,
@@ -216,10 +246,25 @@ fn main() {
                 assets,
                 workbenches,
                 tools,
+                downloads,
+                destinations,
+                download_subscription: Mutex::new(DownloadSubscription::default()),
                 subscriptions: Mutex::new(Subscriptions::default()),
                 closing: AtomicBool::new(false),
+                local_drop_target: AtomicBool::new(false),
                 health_admission: tokio::sync::Mutex::new(()),
                 picker_admission: tokio::sync::Mutex::new(()),
+            });
+            let download_host = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = shutdown_signal.cancelled() => break,
+                        result = download_updates.changed() => if result.is_err() { break },
+                    }
+                    let latest = download_updates.borrow_and_update().clone();
+                    download_host.state::<AppState>().download_subscription.lock().unwrap().publish(latest);
+                }
             });
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -337,6 +382,9 @@ fn main() {
                 let app = window.app_handle().clone();
                 let (workbench, generation) = {
                     let state = app.state::<AppState>();
+                    if !state.local_drop_target.load(Ordering::Acquire) {
+                        return;
+                    }
                     let subscription = state.subscriptions.lock().unwrap();
                     (subscription.workbench(), subscription.generation())
                 };
@@ -368,12 +416,12 @@ fn main() {
                 if state.closing.swap(true, Ordering::AcqRel) {
                     return;
                 }
-                let busy = state.workbenches.busy();
+                let busy = state.workbenches.busy() || state.downloads.needs_quit_confirmation();
                 tauri::async_runtime::spawn(async move {
                     let allow = if busy {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         app.dialog()
-                            .message("Media work is still running. Cancel it and quit?")
+                            .message("Active work will stop and prepared downloads waiting to save will be discarded. Quit LVOVD?")
                             .title("Quit LVOVD")
                             .buttons(MessageDialogButtons::OkCancel)
                             .show(move |answer| {
@@ -399,6 +447,16 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            download_destination,
+            choose_download_destination,
+            preview_download,
+            start_download,
+            cancel_download,
+            retry_download_save,
+            open_download,
+            reveal_download,
+            subscribe_downloads,
+            acknowledge_downloads,
             cancel_intake,
             prepare_editor,
             save_result,
@@ -408,6 +466,7 @@ fn main() {
             cancel_waveform,
             waveform_window,
             desktop_handshake,
+            set_local_drop_target,
             runtime_health,
             create_workbench,
             list_workbenches,

@@ -1,10 +1,53 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LVOVD Desktop Preview</title><link rel="stylesheet" href="reference.css"><link rel="stylesheet" href="styles.css">
-<script src="native.js" defer></script><script src="workspace-transport.js" defer></script>
-<script src="edit-plan.js" defer></script><script src="audio-waveform.js" defer></script><script src="media-editor.js" defer></script>
-<script src="conversion-inspector.js" defer></script><script src="processing-profile.js" defer></script><script src="local-workspace.js" defer></script><script src="app.js" defer></script>
-</head><body><header class="desktop-header"><h1>LVOVD <small>Desktop preview</small></h1><span id="connection" role="status">Connecting…</span></header>
-<p class="notice">Local Media preview. URL downloading is not available yet.</p><main><button id="native-intake-cancel" class="button secondary mini" hidden>Cancel adding files</button><p id="native-intake-status" role="status" hidden></p>
-<!-- local-media --></main>
-<dialog id="result-preview"><div class="progress-head"><strong id="result-name"></strong><button id="close-result" class="text-button" type="button">Close</button></div><video id="result-player" controls playsinline></video><p class="help" id="result-status" role="status"></p></dialog><footer><details><summary>Runtime details</summary><div id="runtime"></div><button id="recheck" class="text-button">Recheck</button><p id="runtime-detail" class="help"></p></details></footer></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LVOVD Desktop Preview</title>
+  <link rel="stylesheet" href="reference.css"><link rel="stylesheet" href="styles.css">
+  <script src="native.js" defer></script><script src="workspace-transport.js" defer></script>
+  <script src="edit-plan.js" defer></script><script src="audio-waveform.js" defer></script><script src="media-editor.js" defer></script>
+  <script src="conversion-inspector.js" defer></script><script src="processing-profile.js" defer></script><script src="local-workspace.js" defer></script>
+  <script src="app.js" defer></script><script src="downloads.js" defer></script>
+</head><body>
+<header class="desktop-header">
+  <h1>LVOVD <small>Desktop preview</small></h1>
+  <nav aria-label="Workspace">
+    <button type="button" id="nav-download" aria-controls="desktop-download" aria-current="page">Download</button>
+    <button type="button" id="nav-local" aria-controls="desktop-local">Local Media</button>
+    <button type="button" id="nav-settings" aria-controls="desktop-settings">Settings</button>
+  </nav>
+  <span id="connection" role="status">Connecting…</span>
+</header>
+<main>
+  <section id="desktop-download" class="download-view" aria-labelledby="download-heading">
+    <h2 id="download-heading">Download</h2>
+    <form id="download-form">
+      <label for="download-url">Video URL</label>
+      <div class="download-toolbar"><input type="url" id="download-url" placeholder="https://…" required autocomplete="off" spellcheck="false"><button class="button" id="download-preview-button" disabled>Preview</button></div>
+    </form>
+    <p class="help">This preview supports Video + Audio from individual URLs.</p>
+    <div class="download-destination"><strong>Save to</strong> <span id="download-folder">Choose a folder</span> <button type="button" class="text-button" id="download-choose-folder" disabled>Choose folder</button></div>
+    <p id="download-message" role="status" aria-live="polite"></p>
+    <section id="download-preview" class="download-card" hidden>
+      <img id="download-artwork" alt="" hidden>
+      <div><h3 id="download-title"></h3><p id="download-facts"></p><p id="download-filename"></p>
+      <button type="button" class="button" id="download-start" disabled>Download Video</button></div>
+    </section>
+    <section id="download-queue" aria-labelledby="download-queue-heading" hidden>
+      <h3 id="download-queue-heading">Download queue</h3><ul id="download-jobs" class="download-jobs"></ul>
+    </section>
+  </section>
+  <section id="desktop-local" class="desktop-local" aria-label="Local Media" hidden>
+    <button id="native-intake-cancel" class="button secondary mini" hidden>Cancel adding files</button><p id="native-intake-status" role="status" hidden></p>
+    <!-- local-media -->
+  </section>
+  <section id="desktop-settings" class="download-view" aria-labelledby="settings-heading" hidden>
+    <h2 id="settings-heading">Settings</h2><h3>Download folder</h3>
+    <div class="download-destination"><span id="settings-folder">Choose a folder</span> <button type="button" class="text-button" id="settings-choose-folder" disabled>Choose folder</button></div>
+    <p class="help">Queued downloads keep the folder selected when they were added.</p>
+    <p id="settings-message" role="status"></p>
+    <h3>Runtime</h3><div id="runtime"></div><button id="recheck" type="button" class="text-button">Recheck</button><p id="runtime-detail" class="help"></p>
+  </section>
+</main>
+<dialog id="result-preview"><div class="progress-head"><strong id="result-name"></strong><button id="close-result" class="text-button" type="button">Close</button></div><video id="result-player" controls playsinline></video><p class="help" id="result-status" role="status"></p></dialog>
+</body></html>

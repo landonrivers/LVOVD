@@ -4,6 +4,7 @@
 // and decoded markers. A missing FFmpeg/FFprobe is a failure, never a skip.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { dropAudioPackets, assertAudioPacketGap } = require('../helpers/audio-packet-gap');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -172,10 +173,12 @@ function generateMarkers(name, { compressed = false, audio = true, delay = 0, au
     + (videoGap ? ",select='lt(t,1)+gte(t,1.5)'" : ''), '-fps_mode', 'passthrough',
     '-c:v', compressed ? 'libx264' : 'ffv1', '-pix_fmt', 'yuv420p');
   if (compressed) args.push('-crf', '0', '-preset', 'ultrafast');
-  if (audio) args.push('-map', '1:a', '-af', `atrim=start=${delay}:end=${audioEnd}${gap ? ",aselect='lt(t,2)+gte(t,2.5)'" : ''}`,
+  if (audio) args.push('-map', '1:a', '-af', `atrim=start=${delay}:end=${audioEnd}`,
     '-c:a', compressed ? 'aac' : 'pcm_s16le');
+  if (gap) args.push(...dropAudioPackets(2, 2.5, compressed ? undefined : 480));
   args.push('-output_ts_offset', String(offset), path.join(root, name));
   ffmpeg(args);
+  if (gap) assertAudioPacketGap(path.join(root, name), offset + 2, offset + 2.5);
 }
 
 test.before(async () => {

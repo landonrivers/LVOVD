@@ -3,6 +3,7 @@
 // Required real-tool suite: missing ffmpeg/ffprobe is a failure, never a skip.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('../helpers/loopback-server');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -267,21 +268,21 @@ test('MOV external-track aliases remain disabled and do not publish a misleading
 
 test('the real localhost upload/progress/media boundary exposes no usable URLs for a rejected reference file', async t => {
   process.env.HOST = '127.0.0.1';
-  process.env.PORT = String(35000 + process.pid % 10000);
+  process.env.PORT = '0';
   process.env.YTDLP_PATH = process.execPath; // no source operation is performed
   process.env.LVOVD_DATA_DIR = path.join(root, 'unused-history');
   const { mediaWorkspaces } = require('../../app-server');
   const { server } = require('../../server');
   mediaWorkspaces.tempDir = root;
   mediaWorkspaces.spawnProcess = observedSpawn;
-  await new Promise(resolve => server.listen(Number(process.env.PORT), '127.0.0.1', resolve));
+  const port = await listenLoopback(server);
   t.after(async () => {
     await mediaWorkspaces.clearAll();
     await new Promise(resolve => server.close(resolve));
   });
   const request = (pathname, method = 'GET', body = null) => new Promise((resolve, reject) => {
-    const req = http.request({ host: '127.0.0.1', port: Number(process.env.PORT), path: pathname, method,
-      headers: { Origin: `http://127.0.0.1:${process.env.PORT}`, 'Sec-Fetch-Site': 'same-origin', Connection: 'close',
+    const req = http.request({ host: '127.0.0.1', port, path: pathname, method,
+      headers: { Origin: `http://127.0.0.1:${port}`, 'Sec-Fetch-Site': 'same-origin', Connection: 'close',
         ...(body ? { 'Content-Length': body.length, 'Content-Type': 'video/mp4', 'X-LVOVD-Filename': 'fixture.mp4' } : {}) }
     }, res => {
       let data = ''; res.on('data', chunk => { data += chunk; });

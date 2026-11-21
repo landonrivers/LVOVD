@@ -30,22 +30,22 @@ Normal migration CI allows honest Missing/Ported/Integrated entries. The strict 
 
 Download is the initial application view. Preserve the existing JavaScript controls and defaults in Download, Local Media, History and Settings. Compact layout changes cannot remove options. Download audio conversion and strict Local Media FLAC remain distinct contracts. Extras, subtitles/languages, chapter outputs, SponsorBlock, advanced source formats, native save recovery and custom tools/plugins are explicit 8D work, not optional post-release enhancements.
 
-8B established its policy/worker/ownership checkpoint in accepted PR #53. [8C](desktop-local-media.md) integrates the Local Media workbench in a separate reviewable PR; the released editor now runs through Rust-owned workbench, analysis and processing commands. All four native gates passed; capability-specific receipts and remaining shared acquisition work are recorded below and in the stage document. 8D restores Download, both acquisition handoffs, history, native saving and tool/plugin management. 8E completes navigation, settings, accessibility, lifecycle and cutover. 8F supplies verified tools/frameworks, packages, updates and maintenance. Stage PRs target `staging/v3-desktop`; `master` stays on the working release. Merge, promotion, tagging and publication require separate authorization. Roadmap #7 remains incomplete.
+[8B](desktop-media-policies.md) and [8C](desktop-local-media.md) merged into staging. [8D.1](desktop-first-download.md) adds the first single-URL Download workflow. Further 8D stages cover single-source options, playlists, both acquisition handoffs, History, multi-output saving and provider management. 8E completes navigation, settings, lifecycle and cutover. 8F validates packages, updates and maintenance. Stage PRs target `staging/v3-desktop`. Stable release requires the complete register and packaged acceptance. Roadmap #7 remains incomplete.
 
 <!-- parity-table:start -->
 
-87 required entries: 52 Missing, 0 Ported, 1 Integrated, 34 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 49 Missing, 0 Ported, 8 Integrated, 30 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
-| `download.preview` | URL Preview | Download | 8D | Missing |
+| `download.preview` | URL Preview | Download | 8D | Integrated |
 | `download.capabilities` | Source capabilities | Download | 8D | Missing |
 | `download.artwork` | Preview artwork | Download / queue | 8D | Missing |
-| `download.content-av` | Video + Audio | Download | 8D | Missing |
+| `download.content-av` | Video + Audio | Download | 8D | Integrated |
 | `download.content-video` | Video Only | Download | 8D | Missing |
 | `download.content-audio` | Audio Only | Download | 8D | Missing |
 | `download.content-extras` | Extras Only | Download | 8D | Missing |
-| `download.compatible` | Compatible MP4 | Download | 8D | Missing |
+| `download.compatible` | Compatible MP4 | Download | 8D | Integrated |
 | `download.maximum` | Maximum Quality | Download | 8D | Missing |
 | `download.resolution` | Resolution cap | Download | 8D | Missing |
 | `download.format-inspection` | Source Formats details | Download / Source Formats | 8D | Missing |
@@ -75,7 +75,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `media.capabilities` | Capability discovery | Local Media / Review | 8B | Verified |
 | `media.input-boundary` | Self-contained inputs | Local Media / Intake and processing | 8B | Verified |
 | `media.direct-playback` | Direct media playback | Local Media / Player | 8C | Verified |
-| `media.proxy` | Playback proxies | Local Media / Player | 8C | Verified |
+| `media.proxy` | Playback proxies | Local Media / Player | 8C | Integrated |
 | `media.audio-clock` | Audio timeline policy | Local Media / Timeline | 8B | Verified |
 | `media.waveform` | Combined waveform | Local Media / Timeline | 8C | Verified |
 | `media.range-policy` | Retained-range normalization | Local Media / Cuts | 8B | Verified |
@@ -95,14 +95,14 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `media.naming` | Reviewed names and suffix | Local Media / Process actions | 8C | Verified |
 | `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Verified |
 | `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Verified |
-| `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Verified |
+| `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Integrated |
 | `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Verified |
 | `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Verified |
 | `media.reset` | Reset File | Local Media / Files | 8C | Verified |
-| `media.remove` | Remove File and Discard | Local Media / Files | 8C | Verified |
+| `media.remove` | Remove File and Discard | Local Media / Files | 8C | Integrated |
 | `media.cleanup` | Reachable cleanup recovery | Local Media / Cleanup recovery | 8C | Verified |
 | `media.expiry` | Workspace activity and expiry | Local Media | 8C | Verified |
-| `media.reopen` | Previous local workbenches | Local Media / Active workbench reconnection and cleanup recovery | 8C | Verified |
+| `media.reopen` | Previous local workbenches | Local Media / Active workbench reconnection and cleanup recovery | 8C | Integrated |
 | `media.reservations` | Capacity and storage reservations | Local Media / Intake and queue | 8C | Integrated |
 | `media.leases` | Output leases and retirement | Local Media / Playback and results | 8C | Verified |
 | `history.records` | Durable terminal history | History | 8D | Missing |

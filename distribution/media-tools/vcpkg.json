@@ -1,0 +1,11 @@
+{
+  "name": "lvovd-media-tools",
+  "version-string": "8d.1",
+  "builtin-baseline": "b894d027251179367faea647bdd3597287fa25f2",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "features": ["ffmpeg", "ffprobe", "mp3lame", "network", "opus", "x264", "zlib"]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 use crate::{AppError, Result};
 use std::{
     ffi::OsString,
-    path::Path,
+    path::{Path, PathBuf},
     process::Stdio,
     sync::{
         Mutex, OnceLock,
@@ -36,6 +36,10 @@ pub struct Progress {
 type Consumer = Box<dyn FnMut(&[u8]) -> Result<()> + Send>;
 enum Capture {
     All,
+    Provider {
+        temp_parent: PathBuf,
+        consumer: Option<Consumer>,
+    },
     Progress(tokio::sync::watch::Sender<Progress>),
     Stream(Consumer),
 }
@@ -58,6 +62,41 @@ impl Default for Supervisor {
     }
 }
 impl Supervisor {
+    /// Provider stderr is classified into fixed recovery messages; never return
+    /// the original diagnostic, which can contain signed URLs and credentials.
+    pub(crate) async fn run_provider_owned<G: Send + 'static>(
+        &self,
+        request: Request<'_>,
+        temp_parent: &Path,
+        ownership: G,
+    ) -> Result<Output> {
+        self.supervise(
+            request,
+            Capture::Provider {
+                temp_parent: temp_parent.to_owned(),
+                consumer: None,
+            },
+            ownership,
+        )
+        .await
+    }
+    pub(crate) async fn run_provider_stream_owned<G: Send + 'static>(
+        &self,
+        request: Request<'_>,
+        temp_parent: &Path,
+        consume: impl FnMut(&[u8]) -> Result<()> + Send + 'static,
+        ownership: G,
+    ) -> Result<Output> {
+        self.supervise(
+            request,
+            Capture::Provider {
+                temp_parent: temp_parent.to_owned(),
+                consumer: Some(Box::new(consume)),
+            },
+            ownership,
+        )
+        .await
+    }
     /// Consume bounded chunks without accumulating decoded media in memory.
     /// The consumer enforces its inspected-duration byte ceiling.
     pub async fn run_stream_owned<G: Send + 'static>(
@@ -167,6 +206,11 @@ fn supervisor() -> &'static Supervisor {
 }
 pub async fn shutdown() -> Result<()> {
     supervisor().shutdown().await
+}
+pub(crate) async fn provider_version(request: Request<'_>) -> Result<Output> {
+    supervisor()
+        .run_provider_owned(request, &std::env::temp_dir(), ())
+        .await
 }
 
 #[derive(Debug)]
@@ -288,6 +332,26 @@ async fn run_inner(
         ));
     }
     let mut command = Command::new(executable);
+    // One-file yt-dlp builds unpack their runtime at startup. On cancellation
+    // the bootloader itself is terminated and cannot clean that extraction.
+    // The supervisor retains this directory through confirmed process-tree exit.
+    let provider_temp = if let Capture::Provider { temp_parent, .. } = &capture {
+        let temp = tempfile::Builder::new()
+            .prefix("lvovd-provider-")
+            .tempdir_in(temp_parent)
+            .map_err(|_| {
+                AppError::new(
+                    "TOOL_TEMP",
+                    "Could not create the provider's temporary folder. Check available storage.",
+                )
+            })?;
+        for key in ["TMPDIR", "TMP", "TEMP"] {
+            command.env(key, temp.path());
+        }
+        Some(temp)
+    } else {
+        None
+    };
     command
         .args(args)
         .stdin(Stdio::null())
@@ -334,12 +398,13 @@ async fn run_inner(
     let stdout = child.stdout.take().expect("piped stdout");
     let stderr = child.stderr.take().expect("piped stderr");
     let captured = AtomicUsize::new(0);
+    let provider = provider_temp.is_some();
     let result = tokio::select! {
         biased;
         _ = cancel.cancelled() => Err(AppError::new("CANCELLED", "Operation cancelled.")),
         result = tokio::time::timeout(deadline, async {
             let (stdout, stderr, status) = tokio::try_join!(
-                async {match capture {Capture::All=>read_bounded(stdout,limit,&captured).await,Capture::Progress(progress)=>read_progress(stdout,progress).await,Capture::Stream(consume)=>read_stream(stdout,consume).await}}, read_bounded(stderr, limit, &captured),
+                async {match capture {Capture::All|Capture::Provider{consumer:None,..}=>read_bounded(stdout,limit,&captured).await,Capture::Progress(progress)=>read_progress(stdout,progress).await,Capture::Stream(consume)|Capture::Provider{consumer:Some(consume),..}=>read_stream(stdout,consume).await}}, read_bounded(stderr, limit, &captured),
                 async {
                     let status=child.wait().await;
                     // Retire descendants before waiting for inherited pipes.
@@ -347,7 +412,9 @@ async fn run_inner(
                     status.map_err(|_| AppError::new("TOOL_EXIT", "Could not confirm tool exit."))
                 }
             )?;
-            if !status.success() { return Err(AppError::new("TOOL_FAILED", "The tool rejected this operation.")); }
+            if !status.success() {
+                return Err(if provider { crate::downloads::provider_error(&stderr) } else { AppError::new("TOOL_FAILED", "The tool rejected this operation.") });
+            }
             Ok(Output { stdout, stderr })
         }) => result.unwrap_or_else(|_| Err(AppError::new("TOOL_TIMEOUT", "The tool exceeded its time limit.")))
     };
@@ -362,6 +429,14 @@ async fn run_inner(
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     parent_exit.map_err(|_| AppError::new("TOOL_EXIT", "Could not read the tool exit status."))?;
+    if let Some(temp) = provider_temp {
+        temp.close().map_err(|_| {
+            AppError::new(
+                "TOOL_CLEANUP",
+                "Provider temporary files are still in use. Close programs using them and retry.",
+            )
+        })?;
+    }
     result
 }
 

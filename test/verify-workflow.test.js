@@ -31,7 +31,7 @@ test('Verify requires real media tools and Windows runs the workspace cleanup re
   const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'verify.yml'), 'utf8');
   const verify = workflow.slice(workflow.indexOf('  verify:'), workflow.indexOf('  windows-launcher:'));
   assert.match(verify, /sudo apt-get install -y ffmpeg strace/);
-  assert.match(verify, /npm run update-ytdlp/);
+  assert.match(verify, /node scripts\/ci-reference-ytdlp\.cjs/);
   assert.match(verify, /LVOVD_TRACE_LOCAL_INPUT: '1'/);
   assert.match(verify, /run: npm run test:media/);
   assert.match(verify, /run: npm ci/);

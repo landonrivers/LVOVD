@@ -45,23 +45,34 @@
           "preview_source"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Generic and named extractors, malformed metadata, unsupported URLs and failed Preview retain actionable results."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify generic and named provider Preview through all four native webviews and the Windows portable review artifact."
     },
     {
       "id": "download.capabilities",
@@ -83,21 +94,31 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Capability-driven controls match v2.7 for missing codec fields, unavailable formats and protected sources."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Single-URL Video + Audio eligibility is exposed. Complete all other content modes and capability-dependent controls in 8D.2."
     },
     {
       "id": "download.artwork",
@@ -120,22 +141,32 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/artwork.rs",
+          "crates/lvovd-core/src/downloads.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/queue-ui.test.js",
           "test/history-store.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/artwork.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Untrusted artwork has no native authority; failed artwork leaves Preview usable and its URL stays out of persistent history."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Preview uses a bounded raster image. Restore queue artwork and exercise available and unavailable artwork through the native interface."
     },
     {
       "id": "download.content-av",
@@ -157,23 +188,34 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Separate streams merge; combined-only fallback preserves both tracks."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Collect and review all four native receipts, default profile decisions, saved stream validation and the separate permitted live outcome."
     },
     {
       "id": "download.content-video",
@@ -308,23 +350,33 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "crates/lvovd-core/src/downloads.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Test separate and combined formats; never promise a source offers H.264 when it does not."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify compatible combined and separate H.264/AAC formats and the default fallback in packaged and platform workflows."
     },
     {
       "id": "download.maximum",
@@ -347,21 +399,31 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "crates/lvovd-core/src/downloads.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Preserve VP9/AV1/Opus where source selection yields them; do not silently transcode to match editor defaults."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Automatic fallback uses the best qualifying streams. Restore explicit user selection and combinations with caps and other content modes."
     },
     {
       "id": "download.resolution",
@@ -826,22 +888,31 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/request-safety.test.js",
           "test/playlist-intake.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Run overlapping workflow requests and verify only one application-controlled acquisition owns the coordinator."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Preview and single-URL acquisition share one remote slot. Playlist queries and both handoffs must join it in 8D.3."
     },
     {
       "id": "download.pacing",
@@ -941,21 +1012,31 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/failure-classification.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Cover authentication, unavailable/protected/unsupported sources, missing formats/tools, disk/permission errors and unknown fallback."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Provider exits yield bounded, redacted diagnostics. Carry all released categories and recovery actions through advanced Download, History and editor handoffs."
     },
     {
       "id": "download.queue-admission",
@@ -978,22 +1059,32 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "src-tauri/src/download_destination.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/job-lifecycle.test.js",
           "test/queue-ui.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Later form changes do not change admitted work; Preview remains coordinated with the queue."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Single-URL jobs capture the reviewed filename, profile and displayed destination. This preview limits complete snapshots to 256 rows. Restore released admission through paged delivery and finish reviewed options in 8D.3."
     },
     {
       "id": "download.queue-cancel",
@@ -1015,22 +1106,31 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/job-lifecycle.test.js",
           "test/queue-ui.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Accepted cancellation cannot later become Ready or ordinary Failed; unrelated jobs survive."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Queued and active single-URL jobs support cancellation. Verify playlist items, courtesy waits and all postprocessing phases."
     },
     {
       "id": "download.progress",
@@ -1052,22 +1152,32 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/job-lifecycle.test.js",
           "test/queue-ui.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Reconnect gets a fresh snapshot; stale channels cannot overwrite another job or duplicate completion delivery."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Single-URL jobs expose live stages, percent, speed and ETA. Restore item/stream detail for all source choices and playlists."
     },
     {
       "id": "download.outputs",
@@ -1090,22 +1200,32 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/export.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/queue-ui.test.js",
           "test/job-lifecycle.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Multiple chapters/extras remain individually accessible; native delivery is confirmed only after saving."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "One validated video is saved automatically. Chapter and companion batches, partial saving and bulk actions remain."
     },
     {
       "id": "download.cleanup",
@@ -1127,22 +1247,31 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/temp-workspace.test.js",
           "test/job-lifecycle.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Expiry/revocation cannot delete exports or race open readers; cleanup errors remain recoverable."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Temporary provider work and terminal rows are session-owned. Complete expiry, cleanup-failure recovery and multi-output leases for all Download modes."
     },
     {
       "id": "handoff.url-edit",
@@ -1738,7 +1867,7 @@
           "cancel_editor"
         ]
       },
-      "status": "Verified",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -1768,53 +1897,8 @@
       "acceptance": [
         "Proxy failure/retry/cancellation leaves available cuts and final processing intact."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "The actual webview plays and seeks a Rust-owned AAC proxy for 24-bit WAV, then processes the original into independent outputs. Core tests cover proxy identity rejection, deadline/preemption, revocation and failed cleanup/retry."
-        }
-      ],
-      "remaining": ""
+      "evidence": [],
+      "remaining": "Repeat native interrupted-proxy preparation and Retry on the same selected file."
     },
     {
       "id": "media.audio-clock",
@@ -3734,7 +3818,7 @@
           "subscribe_collection"
         ]
       },
-      "status": "Verified",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/process.rs",
@@ -3774,53 +3858,8 @@
       "acceptance": [
         "Later edits do not alter queued jobs; cancellation confirms worker exit; failures do not discard unrelated results."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native sequential batch execution keeps immutable cuts/names after later edits and publishes independent results. Same-job queue/supervisor tests cover active/queued cancellation, expiry, prior successes and confirmed descendant exit."
-        }
-      ],
-      "remaining": ""
+      "evidence": [],
+      "remaining": "Revalidate delayed command replies, workbench replacement and cancelling the currently displayed job after the 8D.1 adapter change."
     },
     {
       "id": "media.results",
@@ -4133,7 +4172,7 @@
           "discard_workspace"
         ]
       },
-      "status": "Verified",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -4171,53 +4210,8 @@
       "acceptance": [
         "Delay success/error responses through cleanup and selection/workbench changes; removed entries/status must not revive."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Actual native removal revokes media and preserves the other selected file and user originals. Delayed success/error/cleanup responses across selection changes are exercised by native-adapter tests in the reference gate."
-        }
-      ],
-      "remaining": ""
+      "evidence": [],
+      "remaining": "Revalidate delayed command replies, workbench replacement and cancelling the currently displayed job after the 8D.1 adapter change."
     },
     {
       "id": "media.cleanup",
@@ -4442,7 +4436,7 @@
           "remove_collection"
         ]
       },
-      "status": "Verified",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -4472,53 +4466,8 @@
       "acceptance": [
         "Stale reopen cannot revive a removed/reopened collection; no editing sessions or queue restoration across process restarts."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native create_workbench reuses the existing workbench identity; the interface has no second-workbench creation/switcher. Scoped channel tests verify fresh resubscription and stale acknowledgements; cleanup-only adapter tests cannot reopen retired work."
-        }
-      ],
-      "remaining": ""
+      "evidence": [],
+      "remaining": "Revalidate delayed command replies, workbench replacement and cancelling the currently displayed job after the 8D.1 adapter change."
     },
     {
       "id": "media.reservations",
@@ -5087,22 +5036,32 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/ytdlp-isolation.test.js",
           "test/real/ytdlp-config.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Host/user config cannot add hidden options/plugins; selected trusted plugins still operate without inheriting other code."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Managed acquisition ignores ambient configuration and plugins. Verify controlled discovery and approved third-party tools/plugins in 8D.4."
     },
     {
       "id": "runtime.data-location",
@@ -5158,19 +5117,29 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "src-tauri/src/download_destination.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Later folder changes affect future jobs only; invalid/disconnected destinations fail before admission or expose save recovery."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Download captures the default or chosen folder and reviewed name. Apply the same admission contract to Local Media and multi-output batches."
     },
     {
       "id": "desktop.saving",
@@ -5192,19 +5161,29 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/export.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Test originals/no-ops, collisions, disk exhaustion, disconnected drives and interrupted writes; retry without reacquisition/re-encoding."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Single-URL downloads use no-overwrite publication and save retry. Complete automatic multi-output and Local Media saving."
     },
     {
       "id": "desktop.export-actions",
@@ -5228,19 +5207,29 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads.rs",
+          "src-tauri/src/export_actions.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Missing/moved exports remain honest; history/workspace deletion never deletes user files."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Open File and Show in Folder take a saved job identity. Save Copy, a durable catalog and bulk companion-file handling remain."
     },
     {
       "id": "desktop.history-import",
@@ -5294,19 +5283,28 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/tests/downloads.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Verify 1280x720 and 960x640 plus display scaling in actual webviews; retain concise functional copy, not roadmap/marketing filler."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Download opens first. Local Media and Settings are accessible. Restore History and complete keyboard, scaling and narrow-layout acceptance for all controls."
     },
     {
       "id": "desktop.settings",
@@ -5328,19 +5326,28 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "src-tauri/src/download_destination.rs"
+        ],
+        "native": [
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [],
-        "rust": [],
-        "native": []
+        "rust": [
+          "src-tauri/src/download_destination.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Restart retains settings/history/export catalog but does not restore editing projects or running queues."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "The output folder is remembered. Other settings, custom tools and application-update preferences remain."
     },
     {
       "id": "desktop.shutdown",
@@ -5362,39 +5369,28 @@
       "status": "Missing",
       "implementation": {
         "rust": [
-          "crates/lvovd-core/src/process.rs",
-          "src-tauri/src/main.rs",
-          "crates/lvovd-core/src/processing_operation.rs",
-          "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue.rs",
-          "crates/lvovd-core/src/workbenches.rs"
+          "crates/lvovd-core/src/downloads.rs",
+          "src-tauri/src/main.rs"
         ],
         "native": [
-          "src-tauri/src/workbench_commands.rs",
-          "src-tauri/src/main.rs",
-          "desktop/native.js"
+          "desktop/downloads.js",
+          "src-tauri/src/download_commands.rs"
         ]
       },
       "tests": {
         "reference": [],
         "rust": [
-          "crates/lvovd-core/tests/worker_ownership.rs",
-          "crates/lvovd-core/src/processing_operation/tests.rs",
-          "crates/lvovd-core/src/assets.rs",
-          "crates/lvovd-core/src/owned_file.rs",
-          "crates/lvovd-core/src/processing_queue/tests.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/tests/downloads.rs"
         ],
         "native": [
-          "desktop/test/native.cjs"
+          "desktop/test/download.cjs"
         ]
       },
       "acceptance": [
         "Confirm worker/read exit before owned cleanup; crash manifests allow only owned stale-session cleanup."
       ],
       "evidence": [],
-      "remaining": "The native host creates one processing owner and queue and drains workbenches, workers and sources on close. Native regression tests include processed results and discarded collections. Unsaved editor/result quit UX and complete workflow shutdown acceptance remain outstanding."
+      "remaining": "Active Download, prepared save failures and Local Media work participate in shutdown. Complete unsaved draft and result handling in 8E."
     },
     {
       "id": "desktop.packages",
@@ -5415,8 +5411,12 @@
       },
       "status": "Missing",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "src-tauri/src/evergreen.rs"
+        ],
+        "native": [
+          "scripts/package-windows.ps1"
+        ]
       },
       "tests": {
         "reference": [],
@@ -5427,7 +5427,7 @@
         "Clean-machine/offline/Unicode/scaling checks on all supported OS baselines; Evergreen prerequisite behavior and no production Node backend/test driver."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "8D.1 builds a Windows x64 portable review archive. Finish clean-machine reviews, the installer, both DMGs and the Linux AppImage at supported OS baselines in 8F."
     },
     {
       "id": "desktop.updates",

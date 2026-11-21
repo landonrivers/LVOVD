@@ -619,11 +619,13 @@
     $('#processing-cancel-all').hidden = !jobs.some(job => ['queued', 'starting', 'running', 'cancelling'].includes(job.status));
     $('#processing-apply-all').disabled = !profile || discarding;
     const preview = $('#processing-prepare-preview');
-    preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url) || (!previewError && snapshot?.editor?.status !== 'failed');
+    const interrupted = snapshot?.editor?.status === 'cancelled';
+    preview.hidden = !snapshot?.editor?.eligible || Boolean(snapshot?.playback?.url) || (!previewError && !interrupted && snapshot?.editor?.status !== 'failed');
     preview.disabled = busy || processingElsewhere();
     $('#processing-preview-note').textContent = !snapshot?.inspection ? 'Source preparation must finish before preview or processing.' : !snapshot.inspection.video && !snapshot.editor?.eligible ? 'Audio timing is unavailable; review supported output settings.'
       : !snapshot?.editor?.eligible ? 'Video preview and cuts are unavailable for this source. Review the supported output settings.'
         : previewRequest || snapshot?.editor?.status === 'preparing' ? 'Preparing playback from the selected original file…'
+          : interrupted ? 'Playback preparation was interrupted. Retry playback when processing finishes.'
           : !snapshot?.playback?.url && processingElsewhere() ? 'Playback will prepare after the current processing finishes.'
           : previewError ? `${previewError} You can still review processing settings or retry playback.` : '';
     $('#conversion-cleanup').hidden = !state.cleanupPending && !snapshot?.outputCleanup?.blocked;
@@ -1084,7 +1086,8 @@
     button.addEventListener('click', async () => {
       const token = generation; button.disabled = true;
       try {
-        const data = await post(endpoint, endpoint.includes('/queue/') ? { collectionId, ...(button === cancel ? { workspaceId } : {}) } : { workspaceId });
+        const selected = button === cancel ? { workspaceId, ...(transport ? { jobId: currentJob()?.id } : {}) } : {};
+        const data = await post(endpoint, endpoint.includes('/queue/') ? { collectionId, ...selected } : { workspaceId });
         if (data.collection || data.id === collectionId) acceptCollection(data.collection || data);
         else if (token === generation) accept(data.workspace);
       }

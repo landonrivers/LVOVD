@@ -2,10 +2,11 @@
 
 process.env.YTDLP_PATH = process.platform === 'win32' ? 'C:\\fake\\yt-dlp.exe' : '/tmp/fake-yt-dlp';
 process.env.HOST = '127.0.0.1';
-process.env.PORT = String(45000 + process.pid % 10000);
+process.env.PORT = '0';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('./helpers/loopback-server');
 const http = require('node:http');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -14,7 +15,7 @@ const { mediaWorkspaces } = require('../app-server');
 const { server } = require('../server');
 const { normalizeMediaInspection } = require('../media-inspection');
 
-const port = Number(process.env.PORT);
+let port;
 const inspection = normalizeMediaInspection({ format: { format_name: 'mov,mp4,m4a', start_time: '0', duration: '5', tags: { major_brand: 'isom' } }, streams: [
   { index: 0, codec_type: 'video', codec_name: 'h264', width: 160, height: 90, pix_fmt: 'yuv420p', sample_aspect_ratio: '1:1', avg_frame_rate: '20/1', start_time: '0', duration: '5' },
   { index: 1, codec_type: 'audio', codec_name: 'aac', channels: 1, channel_layout: 'mono', sample_rate: '48000', bit_rate: '64000', start_time: '0', duration: '5' }
@@ -24,7 +25,7 @@ const originalInspect = mediaWorkspaces.inspectAsset, originalCapabilities = med
 test.before(async () => {
   mediaWorkspaces.inspectAsset = async () => structuredClone(inspection);
   mediaWorkspaces.discoverCapabilities = async () => ({ available: true, encoders: new Set(['libx264', 'aac']), decoders: new Set(['h264', 'aac']), muxers: new Set(['mp4', 'null']) });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  port = await listenLoopback(server);
 });
 test.beforeEach(() => mediaWorkspaces.clearAll());
 test.after(async () => {

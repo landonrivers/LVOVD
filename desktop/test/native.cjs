@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { environment } = require('../../scripts/desktop.cjs');
+const { downloadScenario, startProvider } = require('./download.cjs');
 const root = path.resolve(__dirname, '../..');
 const resultDir = path.join(root, 'desktop/test-results');
 fs.mkdirSync(resultDir, { recursive: true });
@@ -41,12 +42,18 @@ async function waitForDriver(port, child) {
   }
   throw new Error('Native driver did not become ready');
 }
-async function scenario(file, index) {
+async function scenario(file, index, provider) {
   const port = 4455 + index, log = fs.openSync(path.join(resultDir, `native-${index}.log`), 'w');
   // Exercise the same tool discovery as a direct executable launch, without the
   // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
   const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file,
     LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1', LVOVD_DESKTOP_TEST_SAVE_FOLDER: resultDir };
+  const config = fs.mkdtempSync(path.join(resultDir, 'native-config-'));
+  directEnv.LVOVD_DESKTOP_TEST_CONFIG = config;
+  const destination = path.join(config, 'Downloads');
+  fs.mkdirSync(destination);
+  directEnv.LVOVD_DESKTOP_TEST_DOWNLOAD_FOLDER = destination;
+  if (index === 3) directEnv.LVOVD_DESKTOP_TEST_INTERRUPT_PROXY = '1';
   for (const key of ['FFPROBE', 'FFMPEG', 'NODE', 'YTDLP']) delete directEnv['LVOVD_DESKTOP_' + key];
   const child = spawn(path.join(root, 'target/debug/lvovd' + (process.platform === 'win32' ? '.exe' : '')), [], {
     cwd: resultDir, env: directEnv, windowsHide: true, stdio: ['ignore', log, log]
@@ -59,8 +66,18 @@ async function scenario(file, index) {
     browser = await remote({ hostname: '127.0.0.1', port, logLevel: 'error', connectionRetryCount: 0, capabilities: { browserName: 'wry' } });
     await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Desktop ·'), { timeout: 15000 });
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
+    assert.equal(await browser.$('#desktop-download').isDisplayed(), true, 'Download must be the initial application view');
+    if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir);
+    await browser.$('#nav-local').click();
     await browser.execute(() => { window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(e.message)); window.addEventListener('unhandledrejection',e=>window.__errors.push(String(e.reason))); });
     await browser.$('#media-choose-button').click();
+    if (index === 3) {
+      const retry = browser.$('#processing-prepare-preview');
+      await browser.waitUntil(async () => (await retry.isDisplayed()) && (await retry.isEnabled()), {timeout:15000, timeoutMsg:'Retry playback must be reachable after interrupting the selected proxy'});
+      const selected = await browser.$('#processing-file-list').getValue();
+      await retry.click();
+      assert.equal(await browser.$('#processing-file-list').getValue(), selected);
+    }
     await browser.waitUntil(async () => browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').readyState >= 1), { timeout: 25000, timeoutMsg: 'Native media did not load metadata' });
     // WebKit honors preload=metadata strictly; decoded frames require playback.
     await browser.execute(() => { const p = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])'); p.muted = true; p.play(); });
@@ -284,4 +301,9 @@ async function scenario(file, index) {
 async function expectEmptyFiles(browser) {
   await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 0, { timeout: 10000 });
 }
-(async () => { await scenario(video, 0); await scenario(audio, 1); await scenario(tailIndex, 2); await scenario(wave, 3); })().catch(error => { console.error(error); process.exitCode = 1; });
+(async () => {
+  const provider = await startProvider(video);
+  try { await scenario(video, 0, provider); }
+  finally { await provider.close(); }
+  await scenario(audio, 1); await scenario(tailIndex, 2); await scenario(wave, 3);
+})().catch(error => { console.error(error); process.exitCode = 1; });

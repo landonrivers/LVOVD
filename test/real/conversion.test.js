@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { dropAudioPackets, assertAudioPacketGap } = require('../helpers/audio-packet-gap');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -128,8 +129,10 @@ for (const [name, origin, codec, videoCodec = 'libx264'] of [['encoded', 0, 'pcm
   test(`${name} video conversion preserves delayed audio, an internal gap, and an early audio endpoint`, async t => {
     const input = path.join(root, `timing-${name}.mkv`);
     ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=96x64:rate=20:duration=5', '-f', 'lavfi', '-i', 'sine=frequency=700:sample_rate=48000:duration=3',
-      '-filter_complex', '[1:a]aselect=not(between(t\\,1\\,1.5)),asetpts=PTS+0.5/TB[a]',
-      '-map', '0:v', '-map', '[a]', '-c:v', videoCodec, '-c:a', codec, '-output_ts_offset', String(origin), input]);
+      '-filter_complex', '[1:a]asetpts=PTS+0.5/TB[a]',
+      '-map', '0:v', '-map', '[a]', '-c:v', videoCodec, '-c:a', codec, ...dropAudioPackets(1.5, 2, codec === 'pcm_s16le' ? 480 : undefined),
+      '-output_ts_offset', String(origin), input]);
+    assertAudioPacketGap(input, origin + 1.5, origin + 2);
     const context = await intake(t, input);
     const original = context.workspace.inspection;
     const raw = probe(input, ['-show_format', '-show_streams', '-show_frames']);
@@ -219,7 +222,8 @@ test('odd source dimensions are minimally padded without losing source pixels', 
 test('MP3 extraction preserves a timestamp gap in the selected source audio', async t => {
   const input = path.join(root, 'mp3-gap.mkv');
   ffmpeg(['-f', 'lavfi', '-i', 'sine=frequency=700:sample_rate=48000:duration=3',
-    '-af', 'aselect=not(between(t\\,1\\,1.5))', '-c:a', 'libmp3lame', '-q:a', '0', input]);
+    '-c:a', 'libmp3lame', '-q:a', '0', ...dropAudioPackets(1, 1.5), input]);
+  assertAudioPacketGap(input, 1, 1.5);
   const output = await convert(await intake(t, input), 'mp3');
   const samples = pcm(output.file);
   assert.ok(rms(samples, 0.1, 0.4) > 0.05);

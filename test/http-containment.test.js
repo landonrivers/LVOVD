@@ -2,10 +2,11 @@
 
 process.env.YTDLP_PATH = process.platform === 'win32' ? 'C:\\fake\\yt-dlp.exe' : '/tmp/fake-yt-dlp';
 process.env.HOST = '127.0.0.1';
-process.env.PORT = String(32000 + (process.pid % 10000));
+process.env.PORT = '0';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('./helpers/loopback-server');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const http = require('node:http');
@@ -16,22 +17,12 @@ const { PassThrough } = require('node:stream');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
-const PORT = Number(process.env.PORT);
+let port;
 const app = require('../app-server');
 const { server } = require('../server');
 
-test.before(async () => { await listen(); });
+test.before(async () => { port = await listenLoopback(server); });
 test.after(async () => { await closeServer(); });
-
-function listen() {
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(PORT, '127.0.0.1', () => {
-      server.off('error', reject);
-      resolve();
-    });
-  });
-}
 
 function closeServer() {
   return new Promise((resolve) => {
@@ -44,11 +35,11 @@ function request(pathname, { headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: '127.0.0.1',
-      port: PORT,
+      port,
       path: pathname,
       method: 'GET',
       headers: {
-        Host: `127.0.0.1:${PORT}`,
+        Host: `127.0.0.1:${port}`,
         ...headers
       }
     }, (res) => {
@@ -64,9 +55,17 @@ function request(pathname, { headers = {} } = {}) {
   });
 }
 
+test('an OS-assigned listener binds Host and Origin to its actual loopback port', async () => {
+  const other = port === 65535 ? port - 1 : port + 1;
+  const origin = `http://127.0.0.1:${port}`;
+  assert.equal((await request('/not-found', { headers: { Origin: origin } })).status, 404);
+  assert.equal((await request('/not-found', { headers: { Host: `127.0.0.1:${other}`, Origin: origin } })).status, 403);
+  assert.equal((await request('/not-found', { headers: { Origin: `http://127.0.0.1:${other}` } })).status, 403);
+});
+
 function rawRequest(text) {
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection(PORT, '127.0.0.1');
+    const socket = net.createConnection(port, '127.0.0.1');
     let response = '';
     socket.setEncoding('utf8');
     socket.on('connect', () => socket.end(text));
@@ -92,7 +91,7 @@ test('app-server cannot be started as an alternate unsecured listener', () => {
 
 test('the authoritative wrapper contains malformed request URL failures and keeps serving', async () => {
   const response = await rawRequest(
-    `GET http://[bad HTTP/1.1\r\nHost: 127.0.0.1:${PORT}\r\nConnection: close\r\n\r\n`
+    `GET http://[bad HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
   );
   assert.match(response, /^HTTP\/1\.1 400 /);
   assert.match(response, /Invalid request URL/);

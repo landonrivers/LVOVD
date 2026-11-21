@@ -49,14 +49,15 @@ impl Tools {
 
     pub async fn health(&self, cancel: &CancellationToken) -> Health {
         let (ffmpeg, ffprobe, ytdlp, provider_runtime) = tokio::join!(
-            probe(&self.ffmpeg, &["-version"], cancel),
-            probe(&self.ffprobe, &["-version"], cancel),
+            probe(&self.ffmpeg, &["-version"], cancel, false),
+            probe(&self.ffprobe, &["-version"], cancel, false),
             probe(
                 &self.ytdlp,
                 &["--ignore-config", "--no-plugin-dirs", "--version"],
-                cancel
+                cancel,
+                true
             ),
-            probe(&self.node, &["--version"], cancel)
+            probe(&self.node, &["--version"], cancel, false)
         );
         Health {
             backend: "rust",
@@ -69,15 +70,27 @@ impl Tools {
     }
 }
 
-async fn probe(path: &Path, arguments: &[&str], cancel: &CancellationToken) -> ToolStatus {
-    let result: Result<_> = process::run(
-        path,
-        &arguments.iter().map(Into::into).collect::<Vec<_>>(),
-        Duration::from_secs(3),
-        16 * 1024,
-        cancel,
-    )
-    .await;
+async fn probe(
+    path: &Path,
+    arguments: &[&str],
+    cancel: &CancellationToken,
+    provider: bool,
+) -> ToolStatus {
+    let args = arguments.iter().map(Into::into).collect::<Vec<_>>();
+    let deadline = Duration::from_secs(3);
+    let limit = 16 * 1024;
+    let result: Result<_> = if provider {
+        process::provider_version(process::Request {
+            executable: path,
+            args: &args,
+            deadline,
+            diagnostic_limit: limit,
+            cancel,
+        })
+        .await
+    } else {
+        process::run(path, &args, deadline, limit, cancel).await
+    };
     match result {
         Ok(output) => {
             let text = if output.stdout.is_empty() {

@@ -6,7 +6,9 @@ You're here because you don't trust any of those browser extensions or sketchy s
 
 ![LVOVD in use](example.png)  
 
-LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring local files into the workbench, and **let your own computer do the work**.
+**Windows desktop preview:** extract the complete 8D.1 review ZIP and open `lvovd.exe`. It opens to **Download** and can save a single Video + Audio result. [Desktop instructions](docs/desktop-first-download.md) · [ZIP verification](docs/windows-portable-review.md)
+
+The released v2.7 application is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring local files into the workbench, and **let your own computer do the work**. The Quick Start below covers that release. [v2.7.0](https://github.com/landonrivers/LVOVD/releases/tag/v2.7.0)
 
 > Use LVOVD only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 
@@ -317,7 +319,7 @@ Read [the development contract](docs/development-contract.md) and [contributor s
 
 The [v3.0 feature parity register](docs/v3-feature-parity.md) tracks the complete v2.7 migration, including Download extras, subtitles, chapters, SponsorBlock and custom yt-dlp/plugins. Missing functionality blocks the desktop release. The standalone window replaces browser/LAN hosting; ordinary Download remains independent of the editor.
 
-The v3.0 Rust/Tauri desktop migration is being delivered in separate stages on `staging/v3-desktop`; `master` stays on the released application until the full migration is accepted. The current native preview provides one multi-file Local Media workbench, trimming, waveforms, processing, result playback and Save/Save All. Its 8C workflow has passed native gates on Windows, Linux and both Mac architectures. URL downloading remains required 8D work; this is **not the completed v3.0 release**. Linux playback uses an application-owned GStreamer source with private, bounded reads from Rust. See [desktop foundation setup and native acceptance evidence](docs/desktop-foundation.md) and [accepted 8B policy and ownership checkpoint](docs/desktop-media-policies.md), followed by [8C Local Media implementation and acceptance](docs/desktop-local-media.md). Build with `npm run build:desktop`, then open `target/debug/lvovd.exe` on Windows. The executable starts directly; no batch file is required. The existing `npm start` and `Start-LVOVD-Windows.bat` browser workflow remains available during migration.
+The desktop migration targets `staging/v3-desktop`. The [first standalone downloader](docs/desktop-first-download.md) opens to Download and saves a single Video + Audio result to the displayed folder. [Local Media](docs/desktop-local-media.md) supports multiple files, trimming, waveforms, processing, playback and saving in the same window. See the [roadmap](ROADMAP.md#8-native-acquisition-editing-and-distribution) for the available native controls and remaining release gates. For development, build with `npm run build:desktop` and open `target/debug/lvovd.exe` directly. On `master`, `npm start` and `Start-LVOVD-Windows.bat` launch the released browser downloader.
 
 ```bash
 git clone https://github.com/landonrivers/LVOVD.git

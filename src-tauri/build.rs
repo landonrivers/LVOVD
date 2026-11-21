@@ -20,6 +20,17 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "desktop_handshake",
+            "set_local_drop_target",
+            "download_destination",
+            "choose_download_destination",
+            "preview_download",
+            "start_download",
+            "cancel_download",
+            "retry_download_save",
+            "open_download",
+            "reveal_download",
+            "subscribe_downloads",
+            "acknowledge_downloads",
             "prepare_editor",
             "save_result",
             "save_results",

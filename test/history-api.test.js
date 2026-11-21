@@ -8,26 +8,17 @@ const DATA_DIR = path.join(os.tmpdir(), `lvovd-history-api-${process.pid}-${Date
 process.env.LVOVD_DATA_DIR = DATA_DIR;
 process.env.YTDLP_PATH = process.platform === 'win32' ? 'C:\\fake\\yt-dlp.exe' : '/tmp/fake-yt-dlp';
 process.env.HOST = '127.0.0.1';
-process.env.PORT = String(35000 + (process.pid % 10000));
+process.env.PORT = '0';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('./helpers/loopback-server');
 const http = require('node:http');
 
 const { HISTORY_SCHEMA_VERSION, historyStore } = require('../download-history');
 const { server } = require('../server');
 
-const PORT = Number(process.env.PORT);
-
-function listen() {
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(PORT, '127.0.0.1', () => {
-      server.off('error', reject);
-      resolve();
-    });
-  });
-}
+let port;
 
 function closeServer() {
   return new Promise((resolve) => {
@@ -40,10 +31,10 @@ function request(pathname, { method = 'GET' } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: '127.0.0.1',
-      port: PORT,
+      port,
       path: pathname,
       method,
-      headers: { Host: `127.0.0.1:${PORT}` }
+      headers: { Host: `127.0.0.1:${port}` }
     }, (res) => {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
@@ -75,7 +66,7 @@ function entry(id, finishedAt) {
 
 test.before(async () => {
   await fsp.rm(DATA_DIR, { recursive: true, force: true });
-  await listen();
+  port = await listenLoopback(server);
 });
 
 test.after(async () => {
