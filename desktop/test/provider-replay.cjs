@@ -13,14 +13,15 @@ const captions = {
   '/fallback.srt': 'Automatic French',
 };
 const categories = [
-  ['sponsor', 'Sponsor', 0, 1.5],
-  ['filler', 'Filler', 2, 2.5],
-  ['hook', 'Hook', 3, 3.5],
-  ['selfpromo', 'Promotion', 4, 4.5],
-  ['intro', 'Intro', 5, 5.5],
-  ['preview', 'Preview', 6, 6.5],
-  ['interaction', 'Interaction', 7, 7.5],
-  ['music_offtopic', 'Non-Music', 8, 8.5],
+  // yt-dlp folds subsecond chapters into their neighbors.
+  ['sponsor', 'Sponsor', 0, 1.25],
+  ['filler', 'Filler', 1.25, 2.5],
+  ['hook', 'Hook', 2.5, 3.75],
+  ['selfpromo', 'Promotion', 3.75, 5],
+  ['intro', 'Intro', 5, 6.25],
+  ['preview', 'Preview', 6.25, 7.5],
+  ['interaction', 'Interaction', 7.5, 8.75],
+  ['music_offtopic', 'Non-Music', 8.75, 10],
   ['outro', 'Endcards', 10, 20],
 ];
 
