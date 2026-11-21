@@ -106,7 +106,7 @@ try {
         $details.fixtureDownload = $true
     }
     if (!$viewer.CloseMainWindow() -or !$viewer.WaitForExit(30000)) { throw 'The application did not close normally.' }
-    $details | ConvertTo-Json | Set-Content -Encoding utf8 "$out/receipt.json"
+    $details | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 "$out/receipt.json"
 } finally {
     if (!$viewer.HasExited) { $viewer.Kill($true); $viewer.WaitForExit() }
     $viewer.Dispose()

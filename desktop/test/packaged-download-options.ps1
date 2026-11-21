@@ -184,7 +184,9 @@ try {
             }
             $file=Save-Selection 1
             $facts=Probe $file
-            if (($facts.streams.codec_type | Sort-Object) -join ',' -ne 'audio,video') {throw 'Missing saved audio or video stream.'}
+            # MP4 may carry a chapter data track alongside the audio and video.
+            if (@($facts.streams | Where-Object codec_type -eq 'audio').Count -ne 1 -or
+                @($facts.streams | Where-Object codec_type -eq 'video').Count -ne 1) {throw 'Missing saved audio or video stream.'}
             $duration=[double]::Parse($facts.format.duration,[cultureinfo]::InvariantCulture)
             $marked=@($facts.chapters | Where-Object {$_.tags.title -match 'SponsorBlock|Endcards|Outro'})
             if ($mode -eq 'Off') {

@@ -802,8 +802,53 @@
       "acceptance": [
         "Reject missing/stale chapters and playlist chapter selection; save each resulting file."
       ],
-      "evidence": [],
-      "remaining": "Windows review ZIP saved nonadjacent chapters. Await four-platform native receipts for interval identity, reference order and stale chapter rejection."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444483",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444453",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444437",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444667",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        }
+      ],
+      "remaining": "Confirm chapter selection remains unavailable for playlists when playlist selection is integrated in 8D.3."
     },
     {
       "id": "download.thumbnail-extra",
@@ -944,8 +989,53 @@
       "acceptance": [
         "Test all subtitle modes, unavailable languages, automatic fallback and multiple companion outputs."
       ],
-      "evidence": [],
-      "remaining": "Windows review ZIP saved both selected creator languages. Live packaged checks distinguished creator and automatic English and confirmed creator precedence. Automatic fallback and other platform receipts remain outstanding."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444483",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444453",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444437",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444667",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+        }
+      ],
+      "remaining": "The Windows review ZIP also passed creator-only, automatic-only, creator precedence and automatic fallback on a live source. Native evidence for those automatic-track cases on Linux and both macOS architectures is outstanding."
     },
     {
       "id": "download.sponsorblock",
@@ -994,7 +1084,7 @@
         "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
       ],
       "evidence": [],
-      "remaining": "Exercise eligible Mark and Remove selections through all four native webviews. The offline provider test checks saved chapters, removed duration and zero service requests for Off."
+      "remaining": "The Windows review ZIP passed Off, Mark and Remove against an independently confirmed outro. The offline fixture counted zero service requests for Off. Repeat native mode and category coverage on Linux and both macOS architectures and record repeatable Windows CI evidence for the selected categories."
     },
     {
       "id": "download.playlists",

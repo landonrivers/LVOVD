@@ -34,3 +34,16 @@ The desktop Download view now builds its content, format, resolution, chapter, c
 Each chapter uses a private directory. Only requested file types can be published. Each saved file has its own receipt for Open File and Show in Folder. If saving fails partway, Retry Save continues with the first unpublished file. The chosen folder applies to the remaining outputs.
 
 The Rust tests compare provider flags against the released JavaScript policy and probe actual conversions from compressed audio. An offline provider fixture exercises separate streams, a custom range, ordered chapters, original audio, both caption sources, JPG and JSON. A loopback SponsorBlock fixture counts requests and FFprobe checks the marked chapters and shortened output. The native fixtures exercise metadata-only acquisition, a video with a JSON companion, and a generated DASH URL. The DASH workflow selects exact streams, downloads source audio and each audio conversion, and checks the saved codecs with FFprobe. The [feature register](v3-feature-parity.md) lists outstanding evidence for each capability. Playlist selection and editor handoffs are scheduled for 8D.3. History reuse is scheduled for 8D.4.
+
+### Packaged Download checks
+
+On Windows 10 x64 (build 19045), the [review ZIP from PR head `b7ed452`](https://github.com/landonrivers/LVOVD/actions/runs/44875649464/artifacts/14695684777) had SHA-256 `c18a5fe382f754a9bfb0f1142d2503e3281c575ae95950e072a31ac29e49d48d`. After verifying the ZIP and its file manifest, the test launched the extracted `lvovd.exe` and selected the options in its native window. The bundled FFmpeg and FFprobe independently inspected the files saved in the selected destination.
+
+| Selection in Download | Observation on saved output |
+|---|---|
+| Chapters 1 and 3 of a three-chapter fixture | Two separate H.264/AAC MP4s carried the correct chapter numbers. Their durations and decoded frame colors matched the two-second opening and four-second ending. The middle chapter produced no file. |
+| English and French creator subtitles, Extras Only | Two SRT companions contained their respective language cues at the expected times. A separate request for an unavailable language ended in Failed and saved nothing. |
+| Creator, Automatic, and both on a live source | Five SRT exports had a single SubRip stream and timed text. When both sources offered English, the combined choice matched the creator captions. For a language offered only as automatic, the combined choice matched the automatic captions. |
+| SponsorBlock Off, Mark, and Remove on the same live source | All three MP4s fully decoded with video and audio. Off had no SponsorBlock marker. Mark preserved duration and placed the outro at the independently checked bounds. Remove shortened playback by the approximately 124-second interval within one second and left no outro marker. The offline request-count test separately checks that Off sends zero SponsorBlock requests. |
+
+The Windows package test uses `desktop/test/packaged-download-options.ps1`. CI repeats the synthetic chapter and caption cases. Live source identifiers, captions and media stay outside the repository. The platform receipts and remaining acceptance cases are tracked per capability in the [parity register](v3-feature-parity.md).
