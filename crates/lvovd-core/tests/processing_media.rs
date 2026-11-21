@@ -369,11 +369,11 @@ async fn supported_layouts_preserve_channels_and_reject_opus_side_surround() {
 async fn video_source(root: &Path, gaps: bool) -> PathBuf {
     let path = root.join("shifted.mkv");
     let filters = if gaps {
-        "[0:v]select='not(between(t,0.8,1.0))',setpts=PTS+3/TB[v];[1:a]aselect='not(between(t,0.5,0.7))',asetpts=PTS+3.2/TB[a]"
+        "[0:v]select='not(between(t,0.8,1.0))',setpts=PTS+3/TB[v];[1:a]asetpts=PTS+3.2/TB[a]"
     } else {
         "[0:v]setpts=PTS+3/TB[v];[1:a]asetpts=PTS+3.2/TB[a]"
     };
-    run([
+    let mut args: Vec<OsString> = [
         "-hide_banner",
         "-v",
         "error",
@@ -405,9 +405,56 @@ async fn video_source(root: &Path, gaps: bool) -> PathBuf {
     ]
     .map(OsString::from)
     .into_iter()
-    .chain([path.as_os_str().into()])
-    .collect())
-    .await;
+    .collect();
+    if gaps {
+        // Keep the signal continuous until muxing. An encoder can otherwise
+        // close the gap between input frames before Matroska receives them.
+        args.extend(
+            [
+                "-bsf:a",
+                "pcm_rechunk=n=480:p=0,noise=drop='gte(pts*tb,3.7)*lt(pts*tb,3.9)'",
+            ]
+            .map(Into::into),
+        );
+    }
+    args.push(path.as_os_str().into());
+    run(args).await;
+    if gaps {
+        let mut args = [
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_packets",
+            "-show_entries",
+            "packet=pts_time",
+            "-of",
+            "csv=p=0",
+        ]
+        .map(Into::into)
+        .to_vec();
+        args.push(path.as_os_str().into());
+        let probe = process::run(
+            &tool("FFPROBE"),
+            &args,
+            Duration::from_secs(15),
+            65536,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let times: Vec<f64> = std::str::from_utf8(&probe.stdout)
+            .unwrap()
+            .lines()
+            .map(|s| s.trim().parse().unwrap())
+            .collect();
+        assert!(
+            times
+                .windows(2)
+                .any(|t| (t[0] - 3.69).abs() < 0.012 && (t[1] - 3.9).abs() < 0.012),
+            "source must contain the muxed 200 ms audio gap"
+        );
+    }
     path
 }
 #[tokio::test]

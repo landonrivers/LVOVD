@@ -15,10 +15,16 @@ fn message(text: &str, style: u32) -> i32 {
 fn installed() -> bool {
     // The stable runtime reports four numeric components. Preview browser
     // channels append a suffix and cannot satisfy the Evergreen prerequisite.
-    tauri::webview_version().is_ok_and(|version| {
-        let parts: Vec<_> = version.split('.').collect();
-        parts.len() == 4 && parts.iter().all(|part| part.parse::<u32>().is_ok())
-    })
+    tauri::webview_version().is_ok_and(|version| stable_version(&version))
+}
+
+fn stable_version(version: &str) -> bool {
+    let parts: Vec<_> = version.split('.').collect();
+    parts.len() == 4
+        && parts[0].parse::<u32>().is_ok_and(|major| major > 0)
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 fn install() -> Result<(), &'static str> {
@@ -89,6 +95,26 @@ pub fn ready() -> bool {
         Err(error) => {
             message(error, MB_ICONERROR);
             false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stable_version;
+
+    #[test]
+    fn requires_a_stable_installed_runtime_version() {
+        assert!(stable_version("152.0.4567.8"));
+        for value in [
+            "",
+            "0.0.0.0",
+            "152.0",
+            "152..1234.1",
+            "152.0.1234.1 beta",
+            "152.0.1234.1 dev",
+        ] {
+            assert!(!stable_version(value));
         }
     }
 }

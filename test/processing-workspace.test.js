@@ -87,6 +87,17 @@ async function setup(t) {
   return { manager, workspace, control, capabilities, request, review, process };
 }
 
+test('review during playback preparation keeps output choices available and leaves execution admission guarded', async t => {
+  const { manager, workspace, request, review } = await setup(t);
+  workspace.status = 'proxying'; workspace.activeOperation = 'proxying';
+  const body = await review(request());
+  assert.ok(body.planKey);
+  await assert.rejects(manager.processing.start(body), /not ready|busy|already active/i);
+  workspace.activeOperation = null; workspace.status = 'ready';
+  await manager.processing.start(body);
+  assert.equal(workspace.conversion.output.assetId, workspace.sourceAssetId);
+});
+
 test('complete default processing aliases the original with immutable revision/provenance and no process or duplicate file', async t => {
   const { manager, workspace, control, request, review } = await setup(t);
   const before = await fsp.readdir(workspace.tempDir), body = await review(request());

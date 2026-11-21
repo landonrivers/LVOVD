@@ -44,7 +44,10 @@ class ProcessingOperations {
 
   async plan(body) {
     const intent = requestIntent(body);
-    const input = this.manager.originalSource(intent.workspaceId, intent.sourceAssetId);
+    // Reviewing uses the inspected original. A separate playback proxy may be
+    // prepared while tool capabilities are being discovered for this draft.
+    const original = () => this.manager.originalSource(intent.workspaceId, intent.sourceAssetId, { reviewDuringProxy: true });
+    const input = original();
     let plan = this.build(input, intent, input.workspace.processingCapabilities);
     const intentKey = hash({ sourceAssetId: intent.sourceAssetId, inspectionKey: plan.inspectionKey,
       editPlan: plan.editPlan, settings: plan.settings, revision: intent.draftRevision });
@@ -61,7 +64,7 @@ class ProcessingOperations {
       try { capabilities = await this.manager.discoverCapabilities(); }
       catch { capabilities = { available: false }; }
       this.checkReview(input.workspace, intent.draftRevision, intentKey);
-      const current = this.manager.originalSource(intent.workspaceId, intent.sourceAssetId);
+      const current = original();
       if (hash(current.workspace.inspection) !== plan.inspectionKey) throw requestError('The source inspection changed. Review again.', 409);
       input.workspace.processingCapabilities = capabilities;
       plan = this.build(current, intent, capabilities);

@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { dropAudioPackets, assertAudioPacketGap } = require('../helpers/audio-packet-gap');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -167,7 +168,8 @@ test('audio-only shifted starts exclude unrelated tracks and preserve cuts on th
 
 test('timestamp gaps remain silent in lossless audio trimming', async t => {
   const name = 'gapped-audio.mkv';
-  ffmpeg(['-i', path.join(root, 's24le.wav'), '-af', "aselect='not(between(t,0.4,0.7))'", '-c:a', 'pcm_s24le', path.join(root, name)]);
+  ffmpeg(['-i', path.join(root, 's24le.wav'), '-c:a', 'pcm_s24le', ...dropAudioPackets(0.4, 0.7, 441), path.join(root, name)]);
+  assertAudioPacketGap(path.join(root, name), 0.4, 0.7);
   const { manager, workspace } = await intake(t, name);
   const source = ffmpeg(['-i', path.join(root, name), '-af', 'aresample=async=1:first_pts=0:min_hard_comp=0.001,apad=whole_dur=2,atrim=end=2', '-c:a', 'pcm_s24le', '-f', 's24le', 'pipe:1']);
   const output = await processFile(manager, workspace, { container: 'flac' });

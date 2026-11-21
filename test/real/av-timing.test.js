@@ -3,6 +3,7 @@
 // Required real-tool regressions. No providers, binary fixtures, or tool skips.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { dropAudioPackets, assertAudioPacketGap } = require('../helpers/audio-packet-gap');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -66,11 +67,13 @@ async function fixture(t, options = {}) {
   args.push('-map', '0:v', '-vf', `geq=lum='32+32*floor(T)':cb=128:cr=128${videoGap ? ",select='lt(t,1)+gte(t,1.5)'" : ''}`,
     '-fps_mode:v', 'passthrough', '-c:v', compressed ? 'libx264' : 'ffv1');
   if (compressed) args.push('-bf', '0', '-pix_fmt', 'yuv420p');
-  if (audio) args.push('-map', '1:a', '-af', `atrim=start=${delay}:end=${audioEnd}${gap ? ",aselect='lt(t,2)+gte(t,2.5)'" : ''}`,
+  if (audio) args.push('-map', '1:a', '-af', `atrim=start=${delay}:end=${audioEnd}`,
     '-c:a', compressed ? 'aac' : 'pcm_s16le');
+  if (gap) args.push(...dropAudioPackets(2, 2.5, compressed ? undefined : 480));
   if (extension === 'ts') args.push('-mpegts_copyts', '1', '-muxdelay', '0');
   args.push('-output_ts_offset', String(offset), file);
   run('ffmpeg', args);
+  if (gap) assertAudioPacketGap(file, offset + 2, offset + 2.5);
 
   // Inspect actual generated timestamps, including codec priming, before
   // deriving expected output. The lossless fixture has exact 10 ms audio blocks.

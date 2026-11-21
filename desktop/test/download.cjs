@@ -88,6 +88,12 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   assert.equal(await browser.$(saved + ' [data-action="open"]').isDisplayed(), true);
   assert.equal(await browser.$(saved + ' [data-action="reveal"]').isDisplayed(), true);
   await browser.saveScreenshot(path.join(evidence, 'download-saved-' + process.platform + '.png'));
+  const exported = path.join(destination, outputs[0]);
+  fs.renameSync(exported, exported + '.moved');
+  try {
+    await browser.$(saved + ' [data-action="reveal"]').click();
+    await wait(async () => /moved|removed/i.test(await browser.$(saved + ' [role="status"]').getText()), 'Moved exports must report that their receipt no longer resolves');
+  } finally { fs.renameSync(exported + '.moved', exported); }
   await preview();
   provider.hold();
   await browser.$('#download-start').click();

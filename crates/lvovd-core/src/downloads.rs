@@ -534,11 +534,14 @@ impl Downloads {
         };
         let seal = Seal::capture(&path).map_err(|_| invalid())?;
         let media = inspection::inspect(&self.tools.ffprobe, &path, cancel).await?;
-        let mut video = media.streams.iter().filter(|s| s.kind == "video");
-        let mut audio = media.streams.iter().filter(|s| s.kind == "audio");
-        if !media.format.split(',').any(|s| s == "mp4")
-            || !video.any(|s| profile != Profile::Compatible || s.codec.as_deref() == Some("h264"))
-            || !audio.any(|s| profile != Profile::Compatible || s.codec.as_deref() == Some("aac"))
+        let media = media.media.ok_or_else(invalid)?;
+        // An attached cover picture is not the requested video, and the MOV
+        // family demuxer name alone does not identify the MP4 container.
+        let tracks = media.video.zip(media.audio).ok_or_else(invalid)?;
+        if media.container.kind != "mp4"
+            || (profile == Profile::Compatible
+                && (tracks.0.codec.as_deref() != Some("h264")
+                    || tracks.1.codec.as_deref() != Some("aac")))
         {
             return Err(invalid());
         }
@@ -703,7 +706,10 @@ impl Downloads {
         match tokio::fs::remove_dir_all(self.root.path()).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(_) => Err(AppError::new("DOWNLOAD_CLEANUP","Temporary download files are still in use. Close programs using them and retry closing.")),
+            Err(_) => Err(AppError::new(
+                "DOWNLOAD_CLEANUP",
+                "Temporary download files are still in use. Close programs using them and retry closing.",
+            )),
         }
     }
 }

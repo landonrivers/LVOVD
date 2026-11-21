@@ -4,9 +4,9 @@ This staging milestone starts at the [8C merge](https://github.com/landonrivers/
 
 ## Using the preview
 
-1. Extract the complete portable package and open `lvovd.exe`. Keep the tools and prerequisites beside it. On Windows the native window uses Evergreen WebView2.
-2. In **Download**, paste the media URL and select **Preview**. Check the source, suggested filename, profile and folder. On first launch the folder is the operating system's Downloads folder. **Change Folder** chooses a different destination for future jobs.
-3. Start the download. The queue shows acquisition, processing and saving. A completed save offers **Open File** and **Show in Folder**. If saving fails, choose an available folder and use **Retry Save** while the prepared file is retained. Existing filenames get a numbered suffix.
+1. Extract the complete portable package and open `lvovd.exe`. Keep the tools and prerequisites beside it. On Windows the native window uses Evergreen WebView2. [Package contents and verification](windows-portable-review.md)
+2. In **Download**, paste the media URL and select **Preview**. Check the source, suggested filename, profile and folder. On first launch LVOVD uses the system Downloads folder if it exists. **Choose folder** selects a destination when the default is unavailable or you want to change it.
+3. Select **Download Video**. The queue shows acquisition, processing and saving. A completed save offers **Open File** and **Show in Folder**. If saving fails, choose an available folder and use **Retry Save** while the prepared file is retained. Existing filenames get a numbered suffix.
 
 This preview covers the default single-URL Video + Audio path. Remaining source choices, companions and chapters, playlists, editor handoffs, History and custom provider management have their own acceptance milestones. The [v2.7 release](https://github.com/landonrivers/LVOVD/releases/tag/v2.7.0) remains available for those workflows.
 
@@ -15,6 +15,10 @@ This preview covers the default single-URL Video + Audio path. Remaining source 
 JavaScript submits a URL once for Preview. Rust validates the URL, supervises yt-dlp, normalizes its metadata and returns an opaque preview ID. The Download command takes that ID and the native destination ID. Rust captures the source choice, output name and folder when the job enters the queue. A later folder change cannot redirect it. The privileged window renders provider text literally. Optional network artwork is bounded, checked and re-encoded as a small JPEG in Rust.
 
 The worker shares the remote acquisition slot with Preview. Subscribers receive the latest revision through a Tauri channel. Closing a view does not own or stop a job. Rust validates the prepared output and keeps it available during saving. Publishing a completed temporary file avoids overwriting a user's existing file. Open and reveal accept a saved job identity. The backend checks the saved file before handing it to the OS.
+
+Some direct video URLs expose a visual format or media container but omit codec metadata. The desktop can attempt the reviewed single-video download in that case. FFprobe must confirm the resulting file has both audio and video before LVOVD publishes it. A restriction, missing stream or unavailable source produces an error.
+
+This review build returns a complete queue snapshot and admits up to 256 rows. Saved, failed and cancelled rows expire after one hour. A failed save retains its file for retry or confirmed shutdown. Admission reports a full queue without evicting existing work. 8D.3 must deliver paged snapshots before claiming released queue parity.
 
 ## Acceptance evidence
 

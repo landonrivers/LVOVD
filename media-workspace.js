@@ -957,12 +957,14 @@ class MediaWorkspaceManager {
     }
   }
 
-  originalSource(workspaceId, sourceAssetId) {
+  originalSource(workspaceId, sourceAssetId, { reviewDuringProxy = false } = {}) {
     const workspace = this.get(workspaceId);
     if (!workspace) throw workspaceRequestError('Local media workspace not found or expired.', 404);
     const asset = workspace.assets.get(sourceAssetId);
     if (!asset || asset.id !== workspace.sourceAssetId || asset.role !== 'source') throw workspaceRequestError('This operation requires the workspace’s current original source asset.', 409);
-    if (workspace.status !== 'ready' || !workspace.inspection || workspace.cleanupRecord) throw workspaceRequestError('The original source is not ready.', 409);
+    const preparingPlayback = reviewDuringProxy && workspace.status === 'proxying'
+      && workspace.activeOperation === 'proxying' && !workspace.cancelRequested;
+    if ((workspace.status !== 'ready' && !preparingPlayback) || !workspace.inspection || workspace.cleanupRecord) throw workspaceRequestError('The original source is not ready.', 409);
     return { workspace, asset };
   }
 

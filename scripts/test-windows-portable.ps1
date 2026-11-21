@@ -23,8 +23,30 @@ $limits.UseShellExecute = $false
 $limits.Environment['PATH'] = "$env:SystemRoot\System32;$env:SystemRoot"
 foreach ($key in @($limits.Environment.Keys | Where-Object { $_ -like 'LVOVD_*' -or $_ -like 'WEBVIEW2_*' -or $_ -in 'NODE_OPTIONS','NODE_PATH','PYTHONPATH','PYTHONHOME','CARGO_HOME','RUSTUP_HOME' })) { [void]$limits.Environment.Remove($key) }
 $viewer = [Diagnostics.Process]::Start($limits)
-$details = [ordered]@{ commit = $manifest.commit; workingTreeModified = $manifest.workingTreeModified; profile = $manifest.profile; archiveSha256 = $sha; os = [Environment]::OSVersion.VersionString; nativeWindow = $false; applicationTcpListeners = $null; fixtureDownload = $false }
+$details = [ordered]@{ commit = $manifest.commit; pullRequestHead = $manifest.pullRequestHead; workingTreeModified = $manifest.workingTreeModified; profile = $manifest.profile; target = $manifest.target; archiveSha256 = $sha; os = [Environment]::OSVersion.VersionString; nativeWindow = $false; applicationTcpListeners = $null; fixtureDownload = $false; toolVersions = [ordered]@{} }
 try {
+    $probes = [ordered]@{ 'ffmpeg' = @('-version'); 'ffprobe' = @('-version'); 'node' = @('--version'); 'yt-dlp' = @('--ignore-config','--no-plugin-dirs','--version') }
+    foreach ($name in $probes.Keys) {
+        $probe = [Diagnostics.ProcessStartInfo]::new("$scratch/tools/$name.exe")
+        $probe.UseShellExecute = $false
+        $probe.WorkingDirectory = $out
+        $probe.RedirectStandardOutput = $true
+        $probe.RedirectStandardError = $true
+        $probe.Environment.Clear()
+        foreach ($key in $limits.Environment.Keys) { $probe.Environment[$key] = $limits.Environment[$key] }
+        foreach ($argument in $probes[$name]) { $probe.ArgumentList.Add($argument) }
+        $tool = [Diagnostics.Process]::Start($probe)
+        try {
+            $output = $tool.StandardOutput.ReadToEndAsync()
+            $diagnostic = $tool.StandardError.ReadToEndAsync()
+            if (!$tool.WaitForExit(15000) -or $tool.ExitCode -ne 0) { throw "The packaged $name version probe failed." }
+            $details.toolVersions[$name] = ($output.Result -split '\r?\n')[0]
+            [void]$diagnostic.Result
+        } finally {
+            if (!$tool.HasExited) { $tool.Kill($true) }
+            $tool.Dispose()
+        }
+    }
     $deadline = [DateTime]::UtcNow.AddSeconds(45)
     do {
         Start-Sleep -Milliseconds 250

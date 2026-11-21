@@ -8,12 +8,21 @@ const { environment } = require('./desktop.cjs');
 // Never emit Cargo's local paths or include the optional test driver.
 const destination = process.argv[2];
 const { cargo, env } = environment();
-const result = spawnSync(cargo, ['metadata', '--locked', '--offline', '--format-version', '1', '--filter-platform', 'x86_64-pc-windows-msvc'], { env, encoding: 'utf8', maxBuffer: 48 * 1024 * 1024 });
-if (result.status !== 0) throw new Error(result.stderr || 'Could not read the locked dependency graph.');
+const result = spawnSync(cargo, ['metadata', '--locked', '--offline', '--format-version', '1', '--filter-platform', 'x86_64-pc-windows-msvc'], { cwd: path.resolve(__dirname, '..'), env, encoding: 'utf8', maxBuffer: 48 * 1024 * 1024 });
+if (result.status !== 0) throw new Error(result.error?.message || result.stderr || 'Could not read the locked dependency graph.');
 const data = JSON.parse(result.stdout);
 const nodes = new Map(data.resolve.nodes.map(node => [node.id, node]));
 const host = data.packages.find(pkg => pkg.name === 'lvovd-desktop');
 const included = new Set();
+// These registry archives omit the workspace-root license. The checked-in texts
+// correspond to the upstream revisions recorded in their .cargo_vcs_info.json.
+const omitted = {
+  'alloc-stdlib': 'rust-alloc-BSD.txt',
+  selectors: 'MPL-2.0.txt',
+  'webview2-com': 'webview2-rs-MIT.txt',
+  'webview2-com-macros': 'webview2-rs-MIT.txt',
+  'webview2-com-sys': 'webview2-rs-MIT.txt'
+};
 function visit(id) {
   if (included.has(id)) return;
   included.add(id);
@@ -31,9 +40,14 @@ for (const pkg of data.packages.filter(pkg => pkg.source && included.has(pkg.id)
   if (pkg.license_file) licenseFiles.add(pkg.license_file);
   for (const name of licenseFiles) {
     const source = path.resolve(directory, name);
-    if (!source.startsWith(directory + path.sep) || !fs.statSync(source).isFile()) continue;
+    if (!source.startsWith(directory + path.sep) || !fs.lstatSync(source).isFile()) continue;
     fs.mkdirSync(licenseDir, { recursive: true });
     fs.copyFileSync(source, path.join(licenseDir, path.basename(name)));
+  }
+  if (!fs.existsSync(licenseDir)) {
+    if (!omitted[pkg.name]) throw new Error('Missing upstream license notice for ' + pkg.name + ' ' + pkg.version);
+    fs.mkdirSync(licenseDir, { recursive: true });
+    fs.copyFileSync(path.resolve(__dirname, '../distribution/licenses', omitted[pkg.name]), path.join(licenseDir, 'LICENSE'));
   }
   inventory.push({ name: pkg.name, version: pkg.version, license: pkg.license, source: 'https://crates.io/crates/' + pkg.name + '/' + pkg.version });
 }

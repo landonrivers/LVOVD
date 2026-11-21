@@ -430,11 +430,65 @@ mod tests {
                 "metadata {info}"
             );
         }
-        assert_eq!(
-            COMPATIBLE,
-            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=h264]+bestaudio[acodec^=aac]/best[vcodec^=avc1][acodec^=mp4a]/best[vcodec^=h264][acodec^=aac]"
+    }
+    #[tokio::test]
+    async fn same_metadata_yields_released_source_names_capabilities_and_selector_order() {
+        use crate::process::{self, CancellationToken};
+        use std::{path::PathBuf, time::Duration};
+        let node = PathBuf::from(
+            std::env::var_os("LVOVD_DESKTOP_NODE").expect("explicit fixture Node path"),
         );
-        assert_eq!(MAXIMUM, "bestvideo+bestaudio/best");
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let cases = manifest.join("tests/fixtures/download-sources.json");
+        let dir = tempfile::tempdir().unwrap();
+        let script = r#"
+            process.env.LVOVD_DATA_DIR = process.argv[3];
+            const ref = require(process.argv[1]);
+            const cases = require(process.argv[2]);
+            const outputs = cases.map(({info}) => {
+                const {media,source} = ref.capabilitySummary(info,'https://example.org/watch/1');
+                const profile = media.compatibleAv ? 'compatible' : 'maximum';
+                return {source:source.name,eligible:media.video && (media.audio || media.directMedia),
+                    selector:ref.formatSelector(ref.normalizeOptions({content:'av',profile}))};
+            });
+            process.stdout.write(JSON.stringify(outputs));
+        "#;
+        let output = process::run(
+            &node,
+            &[
+                "-e".into(),
+                script.into(),
+                manifest.join("../../app-server.js").into_os_string(),
+                cases.clone().into_os_string(),
+                dir.path().into(),
+            ],
+            Duration::from_secs(15),
+            64 * 1024,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+        let cases: Vec<Value> = serde_json::from_slice(&std::fs::read(cases).unwrap()).unwrap();
+        assert_eq!(expected.len(), cases.len());
+        let url = validate_url("https://example.org/watch/1").unwrap();
+        for (fixture, want) in cases.iter().zip(expected) {
+            let (review, _) =
+                metadata(&serde_json::to_vec(&fixture["info"]).unwrap(), &url).unwrap();
+            assert_eq!(want["source"], review.source, "{}", fixture["id"]);
+            assert_eq!(want["eligible"], review.can_download, "{}", fixture["id"]);
+            let args = acquire_args(
+                &Tools::bundled(dir.path()),
+                &url,
+                review.profile,
+                dir.path(),
+            )
+            .unwrap();
+            let selector = args.windows(2).find(|w| w[0] == "--format").unwrap()[1]
+                .to_str()
+                .unwrap();
+            assert_eq!(want["selector"], selector, "{}", fixture["id"]);
+        }
     }
     #[test]
     fn source_paths_and_provider_options_cannot_be_injected_by_metadata_or_urls() {

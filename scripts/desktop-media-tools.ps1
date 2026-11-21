@@ -44,6 +44,11 @@ if ($LASTEXITCODE) { throw 'Cannot inspect encoder capabilities.' }
 foreach ($required in 'libx264','aac','libmp3lame','libopus','flac','pcm_s24le') {
     if (!($encoders -match "\s$required\s")) { throw "The media build is missing the $required encoder." }
 }
+$muxers = & "$tools/ffmpeg$suffix" -hide_banner -muxers
+if ($LASTEXITCODE) { throw 'Cannot inspect muxer capabilities.' }
+foreach ($required in 'mp4','mov','matroska','ipod','mp3','ogg','flac','wav') {
+    if (!($muxers -match "\s$required\s")) { throw "The media build is missing the $required muxer." }
+}
 if ($IncludeSources) {
     $sources = Join-Path $Destination sources
     $notices = Join-Path $Destination notices

@@ -6,7 +6,9 @@ You're here because you don't trust any of those browser extensions or sketchy s
 
 ![LVOVD in use](example.png)  
 
-LVOVD is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring local files into the workbench, and **let your own computer do the work**.
+**Windows desktop preview:** extract the complete 8D.1 review ZIP and open `lvovd.exe`. It opens to **Download** and can save a single Video + Audio result. [Desktop instructions](docs/desktop-first-download.md) · [ZIP verification](docs/windows-portable-review.md)
+
+The released v2.7 application is a local browser UI for **yt-dlp + FFmpeg**. Paste a media URL to download it, or bring local files into the workbench, and **let your own computer do the work**. The Quick Start below covers that release. [v2.7.0](https://github.com/landonrivers/LVOVD/releases/tag/v2.7.0)
 
 > Use LVOVD only for media you own, public-domain material, or content you otherwise have permission to download. Respect the source service's terms and applicable copyright law.
 

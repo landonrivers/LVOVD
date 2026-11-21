@@ -1084,7 +1084,7 @@
         "Later form changes do not change admitted work; Preview remains coordinated with the queue."
       ],
       "evidence": [],
-      "remaining": "Single-URL jobs capture the reviewed filename, profile and displayed destination. Complete reviewed options and bounded delivery of large queues in 8D.3."
+      "remaining": "Single-URL jobs capture the reviewed filename, profile and displayed destination. This preview limits complete snapshots to 256 rows. Restore released admission through paged delivery and finish reviewed options in 8D.3."
     },
     {
       "id": "download.queue-cancel",

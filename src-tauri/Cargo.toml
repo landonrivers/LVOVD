@@ -28,7 +28,7 @@ uuid.workspace = true
 tempfile.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-gio = "0.18"
+gio = "=0.18.4"
 
 [target.'cfg(windows)'.dependencies]
 sha2 = "=0.10.9"

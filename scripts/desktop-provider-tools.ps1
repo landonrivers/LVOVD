@@ -60,6 +60,9 @@ if ($IncludeEvergreen) {
     $source = Get-PinnedFile "$ytBase/yt-dlp.tar.gz" "$($pins.ytdlp.version)-yt-dlp.tar.gz" $pins.ytdlp.sourceSha256 25000000
     New-Item -ItemType Directory -Force "$Destination/sources" | Out-Null
     Copy-Item -LiteralPath $source -Destination "$Destination/sources/yt-dlp-$($pins.ytdlp.version).tar.gz"
+    & tar -xf $source -C $cache yt-dlp/LICENSE
+    if ($LASTEXITCODE) { throw 'Missing yt-dlp project license.' }
+    Copy-Item -LiteralPath "$cache/yt-dlp/LICENSE" -Destination "$notices/yt-dlp-LICENSE.txt"
     $licenseZip = Get-PinnedFile "$ytBase/yt-dlp_win.zip" 'yt-dlp_win.zip' $pins.ytdlp.windowsLicenseArchiveSha256 100000000
     & tar -xf $licenseZip -C $cache _internal/THIRD_PARTY_LICENSES.txt
     if ($LASTEXITCODE) { throw 'Missing yt-dlp third-party notices.' }

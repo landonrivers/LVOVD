@@ -121,6 +121,8 @@ jobs:
         run: node scripts/desktop.cjs build
       - name: Build and check Windows portable review ZIP
         if: runner.os == 'Windows'
+        env:
+          LVOVD_REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: pwsh
         run: ./scripts/package-windows.ps1
       - name: Exercise extracted ZIP without development tools
