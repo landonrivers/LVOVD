@@ -213,7 +213,8 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/downloads.rs",
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -261,7 +262,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -307,7 +309,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -353,7 +356,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -404,7 +408,8 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/downloads.rs",
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -501,7 +506,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -590,7 +596,8 @@
           "test/manual-source-format.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -634,7 +641,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -723,7 +731,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -768,7 +777,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -812,7 +822,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -856,7 +867,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -904,7 +916,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -912,7 +925,7 @@
         "Test all subtitle modes, unavailable languages, automatic fallback and multiple companion outputs."
       ],
       "evidence": [],
-      "remaining": "Verify creator and automatic captions, language fallback and multiple saved tracks with real provider fixtures."
+      "remaining": "Verify language fallback and selection through all four native webviews. The offline provider fixture saves both creator and automatic tracks."
     },
     {
       "id": "download.sponsorblock",
@@ -950,7 +963,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/src/downloads/tests.rs"
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": []
       },
@@ -958,7 +972,7 @@
         "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
       ],
       "evidence": [],
-      "remaining": "Verify actual marked/removed sections with controlled SponsorBlock data; Off must make no service request."
+      "remaining": "Exercise eligible Mark and Remove selections through all four native webviews. The offline provider test checks saved chapters, removed duration and zero service requests for Off."
     },
     {
       "id": "download.playlists",

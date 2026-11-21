@@ -103,8 +103,12 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   provider.release();
   assert.equal(fs.readdirSync(destination).length, 2, 'Cancelled work published an extra file');
   await preview();
-  await browser.$('#dl-content').selectByAttribute('value','extras');
-  assert.equal(await browser.$('#download-start').isEnabled(), false);
+  await browser.execute(()=>{
+    const mode=document.getElementById('dl-content');
+    mode.value='extras'; mode.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await wait(async()=>await browser.$('#download-start').getText()==='Download Extras','Content selection did not change to Extras Only');
+  assert.equal(await browser.execute(()=>document.getElementById('download-start').disabled), true);
   await browser.$('#dl-metadata').click();
   await browser.$('#download-start').click();
   await wait(async () => fs.readdirSync(destination).some(name=>name.endsWith('.info.json')), 'Extras Only did not publish metadata');
@@ -116,8 +120,8 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   await browser.$('#dl-metadata').click();
   await browser.$('#download-start').click();
   await wait(async () => (await browser.$$('#download-jobs li[data-status="saved"]')).length===3, 'Media and companion save did not complete');
-  const picker=await browser.$('#download-jobs li:last-child select');
-  const names=await picker.$$('option').map(option=>option.getText());
+  const names=await browser.execute(()=>Array.from(
+    document.querySelector('#download-jobs li:last-child select').options,option=>option.textContent));
   assert.equal(names.length,2);
   assert.ok(names[0].endsWith('.mp4') && names[1].endsWith('.info.json'));
   for(const name of names) assert.ok(fs.statSync(path.join(destination,name)).size>0);

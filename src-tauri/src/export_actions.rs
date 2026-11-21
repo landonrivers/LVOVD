@@ -11,7 +11,7 @@ pub(crate) fn show(path: &Path, reveal: bool) -> Result<()> {
             if reveal {
                 "Could not show the saved file in its folder."
             } else {
-                "Could not open this video. Use Show in Folder to choose a player."
+                "Could not open this file. Use Show in Folder to choose an application."
             },
         ))
     }

@@ -18,6 +18,7 @@ pub(crate) fn save_copy_checked(
     current()?;
     publish(
         destination,
+        None,
         |temp, current| {
             let mut offset = 0;
             while offset < result.descriptor().size {
@@ -45,6 +46,7 @@ pub(crate) fn save_download(
     source: &Path,
     seal: &crate::owned_file::Seal,
     destination: &Path,
+    suffix: &str,
     check_directory: impl Fn() -> Result<()>,
 ) -> Result<(PathBuf, crate::owned_file::Seal)> {
     check_directory()?;
@@ -52,6 +54,7 @@ pub(crate) fn save_download(
     let mut source_file = File::open(source).map_err(|_| save_error())?;
     publish(
         destination,
+        Some(suffix),
         |temp, _| {
             let mut buffer = vec![0; 1024 * 1024];
             loop {
@@ -72,6 +75,7 @@ pub(crate) fn save_download(
 
 fn publish<C: FnMut() -> Result<()>>(
     destination: &Path,
+    suffix: Option<&str>,
     write_bytes: impl FnOnce(&mut File, &mut C) -> Result<()>,
     mut current: C,
 ) -> Result<(PathBuf, crate::owned_file::Seal)> {
@@ -80,11 +84,16 @@ fn publish<C: FnMut() -> Result<()>>(
         .parent()
         .filter(|p| p.is_absolute())
         .ok_or_else(error)?;
-    let stem = destination.file_stem().ok_or_else(error)?.to_string_lossy();
-    let extension = destination
-        .extension()
-        .map(|s| format!(".{}", s.to_string_lossy()))
+    let name = destination.file_name().ok_or_else(error)?.to_string_lossy();
+    let extension = suffix
+        .map(|s| format!(".{s}"))
+        .or_else(|| {
+            destination
+                .extension()
+                .map(|s| format!(".{}", s.to_string_lossy()))
+        })
         .unwrap_or_default();
+    let stem = name.strip_suffix(&extension).ok_or_else(error)?;
     let mut temp = tempfile::Builder::new()
         .prefix(".lvovd-save-")
         .tempfile_in(parent)

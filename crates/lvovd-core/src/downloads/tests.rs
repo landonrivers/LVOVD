@@ -19,6 +19,96 @@ fn reviewed_options_fixture() -> DownloadPreview {
 }
 
 #[tokio::test]
+async fn interrupted_companion_save_resumes_at_first_unpublished_file() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = Downloads::new(root.path(), Tools::bundled(root.path())).unwrap();
+    let prepared = Arc::new(tempfile::tempdir().unwrap());
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let mut files = Vec::new();
+    for suffix in ["mp4", "info.json"] {
+        let name = format!("Fixture.{suffix}");
+        let path = prepared.path().join(&name);
+        std::fs::write(&path, b"fixture").unwrap();
+        files.push(PreparedFile {
+            seal: Seal::capture(&path).unwrap(),
+            path,
+            name,
+            suffix: suffix.into(),
+        });
+    }
+    let blocked = prepared.path().join("held.json");
+    let companion = files[1].path.clone();
+    std::fs::rename(&companion, &blocked).unwrap();
+    let result = Arc::new(Prepared {
+        _directory: prepared,
+        files,
+    });
+    let preview = reviewed_options_fixture();
+    let job_id = Uuid::new_v4();
+    let directory_id = destination_id(first.path()).unwrap();
+    owner.state.lock().unwrap().jobs.push(Job {
+        view: DownloadJob {
+            job_id,
+            title: preview.title.clone(),
+            filename: preview.filename.clone(),
+            destination: first.path().display().to_string(),
+            status: Saving,
+            progress: None,
+            error: None,
+            saved_name: None,
+            saved_files: vec![],
+        },
+        url: provider::validate_url("https://example.invalid/fixture").unwrap(),
+        plan: DownloadOptions::default().plan(&preview).unwrap(),
+        destination: first.path().into(),
+        directory_id,
+        cancel: CancellationToken::new(),
+        prepared: Some(result.clone()),
+        exported: vec![],
+        updated: Instant::now(),
+    });
+    owner
+        .save(job_id, result, first.path().into(), directory_id)
+        .await;
+    assert_eq!(owner.snapshot().jobs[0].status, SaveFailed);
+    assert_eq!(
+        owner.exported_file(job_id, 0).unwrap(),
+        first.path().join("Fixture.mp4")
+    );
+    std::fs::rename(blocked, companion).unwrap();
+    std::fs::write(second.path().join("Fixture.info.json"), "existing").unwrap();
+    let mut rx = owner.subscribe();
+    owner.retry_save(job_id, second.path().into()).unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        rx.wait_for(|s| s.jobs[0].status == Saved),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        owner.exported_file(job_id, 1).unwrap(),
+        second.path().join("Fixture (1).info.json")
+    );
+    assert!(!second.path().join("Fixture.mp4").exists());
+    assert_eq!(
+        std::fs::read(second.path().join("Fixture.info.json")).unwrap(),
+        b"existing"
+    );
+    let snapshot = owner.snapshot();
+    assert_eq!(
+        snapshot.jobs[0].saved_files[0].folder,
+        first.path().display().to_string()
+    );
+    assert_eq!(
+        snapshot.jobs[0].saved_files[1].folder,
+        second.path().display().to_string()
+    );
+    owner.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn single_video_arguments_match_released_options() {
     let dir = tempfile::tempdir().unwrap();
     let node = PathBuf::from(std::env::var_os("LVOVD_DESKTOP_NODE").unwrap());
@@ -47,6 +137,16 @@ async fn single_video_arguments_match_released_options() {
                 true.into()
             };
             actual.insert(flag.into(), value);
+        }
+        if !plan.options.format_ids.is_empty() {
+            let ids = case["expected"]["--format"].as_str().unwrap();
+            let literal = ids
+                .split('+')
+                .map(|id| format!("all[format_id={id}]"))
+                .collect::<Vec<_>>()
+                .join("+");
+            assert_eq!(actual["--format"], literal);
+            actual.insert("--format".into(), ids.into());
         }
         assert_eq!(
             serde_json::Value::Object(actual),

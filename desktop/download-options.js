@@ -90,16 +90,23 @@ globalThis.LVOVDDownloadOptions = function (notify) {
 
     checks('chapters',c.chapters.map(ch=>[ch.index,(ch.index+1)+'. '+ch.title]));
     checks('categories',Object.entries({sponsor:'Sponsor',intro:'Intro',outro:'Outro',selfpromo:'Self-promotion',interaction:'Interaction reminder',preview:'Preview',filler:'Filler',music_offtopic:'Non-music section',hook:'Hook'}));
-    for(const [key,kind] of [['combined','combined'],['video','video'],['stream','audio']]) {
-      list(key,c.formats.filter(f=>f.selectable && f.kind===kind).map(f=>[f.id,[f.id,f.ext,f.height && f.height+'p',f.fps && f.fps+' fps',
-        f.video!=='none' && f.video,f.audio!=='none' && f.audio,f.kbps && f.kbps+' kbps',f.bytes && (f.approximate?'≈':'')+(f.bytes/1048576).toFixed(1)+' MiB'].filter(Boolean).join(' · ')]));
+    function formatLabel(f) {
+      const resolution = f.width && f.height ? f.width+' × '+f.height : f.height && f.height+'p';
+      return [f.kind==='unknown'?'Stream layout unknown':f.kind, resolution, f.ext, f.fps && f.fps+' fps',
+        f.video!=='none' && f.video, f.audio!=='none' && f.audio, f.channels && f.channels+' ch',
+        f.sampleRate && f.sampleRate+' Hz', f.kbps && f.kbps+' kbps',
+        f.bytes && (f.approximate?'approx. ':'')+(f.bytes/1048576).toFixed(1)+' MiB', f.note, f.id].filter(Boolean).join(' · ');
     }
-    el('evidence').replaceChildren(...c.formats.map(f=>{
+    for (const [key,kind] of [['combined','combined'],['video','video'],['stream','audio']]) {
+      list(key,c.formats.filter(f=>f.selectable && f.kind===kind).map(f=>[f.id,formatLabel(f)]));
+    }
+    const evidence = c.formats.map(f=>{
       const item=document.createElement('li');
-      item.textContent=[f.id,f.kind==='unknown'?'Stream layout unknown':f.kind,f.ext,f.height && f.height+'p',f.fps && f.fps+' fps',
-        f.video!=='none' && f.video,f.audio!=='none' && f.audio,f.kbps && f.kbps+' kbps',f.bytes && (f.approximate?'approx. ':'')+(f.bytes/1048576).toFixed(1)+' MiB'].filter(Boolean).join(' · ');
+      item.textContent=formatLabel(f);
       return item;
-    }));
+    });
+    el('evidence').replaceChildren(...evidence);
+    el('format-count').textContent=c.totalFormats>c.formats.length ? 'Showing '+c.formats.length+' of '+c.totalFormats+' formats.' : '';
     el('thumbnail').disabled=!c.thumbnail; el('subs').disabled=!c.manualLanguages.length && !c.autoLanguages.length;
     el('submode').options[1].disabled=!c.manualLanguages.length; el('submode').options[2].disabled=!c.autoLanguages.length;
     el('range').options[2].disabled=!c.chapters.length;
@@ -107,10 +114,12 @@ globalThis.LVOVDDownloadOptions = function (notify) {
     updateMode(); refresh();
   }
   form.addEventListener('submit',event=>event.preventDefault());
-  form.addEventListener('input',event=>{
+  function changed(event) {
     if (!preview?.choices?.available) return;
     if(event.target===el('content')) updateMode();
     refresh(); notify();
-  });
+  }
+  form.addEventListener('change',changed);
+  form.addEventListener('input',event=>{ if(event.target.type==='text') changed(event); });
   return {read,valid,reset};
 };

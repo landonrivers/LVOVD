@@ -17,6 +17,7 @@ pub(super) struct PreparedFile {
     pub path: PathBuf,
     pub name: String,
     pub seal: Seal,
+    pub suffix: String,
 }
 fn invalid() -> AppError {
     AppError::new(
@@ -76,6 +77,7 @@ pub(super) async fn collect(
             files.push(PreparedFile {
                 path,
                 name: format!("{prefix}.{suffix}"),
+                suffix: suffix.to_owned(),
                 seal,
             });
         } else {
@@ -197,6 +199,7 @@ pub(super) async fn collect(
         PreparedFile {
             path,
             name: format!("{stem}.{ext}"),
+            suffix: ext,
             seal,
         },
     );

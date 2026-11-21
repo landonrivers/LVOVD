@@ -1,5 +1,7 @@
 //! Rust owns the reviewed source, worker, temporary result and saved-file receipt.
 mod artwork;
+#[cfg(test)]
+mod fixture_tests;
 mod options;
 mod outputs;
 mod provider;
@@ -80,6 +82,12 @@ pub enum DownloadStatus {
 use DownloadStatus::*;
 
 #[derive(Clone, Debug, Serialize)]
+pub struct SavedFile {
+    pub name: String,
+    pub folder: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadJob {
     pub job_id: Uuid,
@@ -90,7 +98,7 @@ pub struct DownloadJob {
     pub progress: Option<DownloadProgress>,
     pub error: Option<String>,
     pub saved_name: Option<String>,
-    pub saved_files: Vec<String>,
+    pub saved_files: Vec<SavedFile>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -519,7 +527,14 @@ impl Downloads {
                 .await?;
             let (fresh, _) = provider::metadata(&output.stdout, &url)?;
             let reviewed = plan.options.clone().plan(&fresh)?;
-            if reviewed.sections != plan.sections || reviewed.selector != plan.selector {
+            if reviewed.sections != plan.sections
+                || reviewed.selector != plan.selector
+                || !reviewed
+                    .selected
+                    .iter()
+                    .zip(&plan.selected)
+                    .all(|(a, b)| a.same_stream(b))
+            {
                 return Err(AppError::new(
                     "PREVIEW_CHANGED",
                     "The selected chapters or source formats changed. Preview the source again.",
@@ -608,15 +623,21 @@ impl Downloads {
         for index in already_saved..result.files.len() {
             let result = result.clone();
             let target = target.join(&result.files[index].name);
-            let receipt=tokio::task::spawn_blocking(move || {
-                let item=&result.files[index];
-                export::save_download(&item.path,&item.seal,&target,|| {
-                    if target.parent().and_then(|p|destination_id(p).ok())!=Some(directory_id) {
-                        return Err(AppError::new("DESTINATION_CHANGED","The output folder changed or disconnected. Choose a folder and retry saving."));
+            let receipt = tokio::task::spawn_blocking(move || {
+                let item = &result.files[index];
+                export::save_download(&item.path, &item.seal, &target, &item.suffix, || {
+                    if target.parent().and_then(|p| destination_id(p).ok()) != Some(directory_id) {
+                        return Err(AppError::new(
+                            "DESTINATION_CHANGED",
+                            "The output folder changed or disconnected. Choose a folder and retry saving.",
+                        ));
                     }
                     Ok(())
                 })
-            }).await.map_err(|_|AppError::new("SAVE_FAILED","Saving was interrupted. Retry saving the remaining files.")).and_then(|r|r);
+            })
+            .await
+            .map_err(|_| AppError::new("SAVE_FAILED", "Saving was interrupted. Retry saving the remaining files."))
+            .and_then(|receipt| receipt);
             match receipt {
                 Ok((path, seal)) => self.update(id, |job| {
                     let name = path
@@ -627,7 +648,10 @@ impl Downloads {
                     if job.exported.is_empty() {
                         job.view.saved_name = Some(name.clone());
                     }
-                    job.view.saved_files.push(name);
+                    job.view.saved_files.push(SavedFile {
+                        name,
+                        folder: job.view.destination.clone(),
+                    });
                     job.exported.push((path, seal));
                 }),
                 Err(err) => {

@@ -120,6 +120,10 @@ pub struct Format {
     pub video: String,
     pub audio: String,
     pub height: Option<u32>,
+    pub width: Option<u32>,
+    pub note: String,
+    pub channels: Option<u32>,
+    pub sample_rate: Option<u32>,
     pub fps: Option<f64>,
     pub kbps: Option<f64>,
     pub bytes: Option<u64>,
@@ -141,6 +145,7 @@ pub struct Choices {
     pub available: bool,
     pub compatible_video: bool,
     pub formats: Vec<Format>,
+    pub total_formats: usize,
     pub heights: BTreeSet<u32>,
     pub compatible_heights: BTreeSet<u32>,
     pub video_heights: BTreeSet<u32>,
@@ -150,6 +155,17 @@ pub struct Choices {
     pub manual_languages: Vec<String>,
     pub auto_languages: Vec<String>,
     pub sponsor: bool,
+}
+impl Format {
+    pub(super) fn same_stream(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.kind == other.kind
+            && self.video == other.video
+            && self.audio == other.audio
+            && self.ext == other.ext
+            && self.height == other.height
+            && self.fps == other.fps
+    }
 }
 fn label(v: &Value) -> String {
     v.as_str()
@@ -170,7 +186,8 @@ fn languages(v: &Value) -> Vec<String> {
         .flatten()
         .map(|(k, _)| k)
         .filter(|k| {
-            k.len() <= 80
+            k.as_str() != "live_chat"
+                && k.len() <= 80
                 && !k.is_empty()
                 && k.as_bytes()
                     .iter()
@@ -209,12 +226,15 @@ impl Choices {
                 continue;
             }
             let known = |s: &str| !matches!(s, "none" | "" | "na");
-            let height = f["height"]
-                .as_u64()
-                .and_then(|n| u32::try_from(n).ok())
-                .filter(|n| (144..=8640).contains(n));
+            let positive = |key: &str| super::provider::number(&f[key]).filter(|n| *n > 0.);
+            let integer = |key: &str| {
+                positive(key)
+                    .filter(|n| n.fract() == 0. && *n <= u32::MAX as f64)
+                    .map(|n| n as u32)
+            };
+            let height = integer("height");
             let h264 = video.starts_with("avc1") || video.starts_with("h264");
-            if let Some(h) = height {
+            if let Some(h) = height.filter(|h| (144..=8640).contains(h)) {
                 if video != "none" {
                     result.heights.insert(h);
                 }
@@ -228,6 +248,9 @@ impl Choices {
                     }
                 }
             }
+            let note = label(&f["format_note"]);
+            let description = format!("{note} {}", label(&f["resolution"])).to_lowercase();
+            let unknown = |s: &str| matches!(s, "" | "na");
             let kind = match (known(&video), known(&audio)) {
                 (true, true) => "combined",
                 (true, false) if audio == "none" => {
@@ -239,6 +262,12 @@ impl Choices {
                 (false, true) if video == "none" => {
                     result.audio = true;
                     "audio"
+                }
+                _ if description.contains("audio only") && unknown(&video) && audio != "none" => {
+                    "audio"
+                }
+                _ if description.contains("video only") && unknown(&audio) && video != "none" => {
+                    "video"
                 }
                 _ if known(&video) || known(&audio) || super::provider::visual_evidence(f) => {
                     "unknown"
@@ -264,7 +293,11 @@ impl Choices {
                 video,
                 audio,
                 height,
-                fps: f["fps"].as_f64(),
+                width: integer("width"),
+                note,
+                channels: integer("audio_channels"),
+                sample_rate: integer("asr"),
+                fps: positive("fps"),
                 kbps: f["tbr"]
                     .as_f64()
                     .or(f["abr"].as_f64())
@@ -272,6 +305,13 @@ impl Choices {
                 bytes: f["filesize"].as_u64().or(f["filesize_approx"].as_u64()),
                 approximate: !f["filesize"].is_number(),
             });
+        }
+        let mut counts = std::collections::HashMap::new();
+        for f in &result.formats {
+            *counts.entry(f.id.clone()).or_insert(0usize) += 1;
+        }
+        for f in &mut result.formats {
+            f.selectable &= counts[&f.id] == 1;
         }
         result.formats.sort_by_key(|f| {
             (
@@ -286,6 +326,7 @@ impl Choices {
                 f.id.clone(),
             )
         });
+        result.total_formats = result.formats.len();
         result.formats.truncate(100);
         result.chapters = info["chapters"]
             .as_array()
@@ -325,6 +366,7 @@ pub(super) struct Plan {
     pub selector: Option<String>,
     pub sections: Vec<Section>,
     pub stem: String,
+    pub selected: Vec<Format>,
 }
 impl DownloadOptions {
     pub(super) fn plan(self, preview: &DownloadPreview) -> Result<Plan> {
@@ -371,7 +413,7 @@ impl DownloadOptions {
         if let Some(sub) = &self.subtitles
             && (sub.languages.is_empty()
                 || sub.languages.len() > 80
-                || !pattern!(r"^[A-Za-z0-9.*,_-]+$").is_match(&sub.languages)
+                || sub.languages.chars().any(char::is_control)
                 || match sub.mode {
                     SubtitleMode::Manual => c.manual_languages.is_empty(),
                     SubtitleMode::Auto => c.auto_languages.is_empty(),
@@ -417,7 +459,14 @@ impl DownloadOptions {
                     ));
                 }
             }
-            Some(self.format_ids.join("+"))
+            // Bare IDs such as "best", "all" and "mp4" have special meaning in yt-dlp.
+            Some(
+                self.format_ids
+                    .iter()
+                    .map(|id| format!("all[format_id={id}]"))
+                    .collect::<Vec<_>>()
+                    .join("+"),
+            )
         };
         let sections = match &self.range {
             Range::Full => vec![Section {
@@ -457,7 +506,14 @@ impl DownloadOptions {
                 ));
             }
         };
+        let selected = self
+            .format_ids
+            .iter()
+            .filter_map(|id| c.formats.iter().find(|f| f.id == *id))
+            .cloned()
+            .collect();
         Ok(Plan {
+            selected,
             options: self,
             profile,
             selector,

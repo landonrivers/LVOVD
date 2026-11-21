@@ -126,6 +126,7 @@
     }
     row.files = child(actions,'select');
     row.files.setAttribute('aria-label','Saved output');
+    row.files.addEventListener('change',()=>{ row.path.textContent=row.files.selectedOptions[0]?.dataset.path || ''; });
     return row;
   }
   function render(snapshot) {
@@ -152,8 +153,11 @@
       const files = job.savedFiles || [];
       while(row.files.options.length<files.length) {
         const index=row.files.options.length;
-        row.files.add(new Option(files[index],String(index)));
+        const file=files[index], option=new Option(file.name,String(index));
+        option.dataset.path=file.name+' · '+file.folder;
+        row.files.add(option);
       }
+      if (files.length) row.path.textContent=row.files.selectedOptions[0]?.dataset.path || '';
       row.files.hidden=files.length<2;
       row.open.hidden = row.reveal.hidden = job.status !== 'saved' && !files.length;
       row.retry.disabled = !destination || choosing || row.pending;

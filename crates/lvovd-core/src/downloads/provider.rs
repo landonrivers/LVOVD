@@ -112,7 +112,7 @@ fn codec(v: &Value) -> Option<String> {
         .map(|s| s.to_ascii_lowercase())
         .filter(|s| s != "na")
 }
-fn number(v: &Value) -> Option<f64> {
+pub(super) fn number(v: &Value) -> Option<f64> {
     v.as_f64()
         .or_else(|| v.as_str()?.parse().ok())
         .filter(|v| v.is_finite())
@@ -249,6 +249,7 @@ pub(super) fn metadata(bytes: &[u8], url: &Url) -> Result<(DownloadPreview, Opti
     {
         Some("Choose a completed recording. Live or upcoming media cannot be downloaded here.")
     } else if info["has_drm"] == true
+        || formats.iter().all(|f| f["has_drm"] == true)
         || matches!(
             info["availability"].as_str(),
             Some("private" | "premium_only" | "subscriber_only" | "needs_auth" | "unavailable")
