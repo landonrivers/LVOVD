@@ -77,10 +77,39 @@ jobs:
       - name: macOS media build prerequisites
         if: runner.os == 'macOS'
         run: brew install nasm automake autoconf libtool pkgconf
+      - name: Identify the media build inputs
+        if: runner.os != 'Linux'
+        id: media-key
+        shell: pwsh
+        env:
+          MEDIA_RECIPE: ${{ hashFiles('distribution/media-tools/**', 'scripts/desktop-media-tools.ps1') }}
+        run: |
+          "key=desktop-media-v1-${{ matrix.os }}-${{ runner.arch }}-$env:ImageVersion-$env:MEDIA_RECIPE" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      - name: Restore media compiler outputs and source archives
+        if: runner.os != 'Linux'
+        id: media-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          key: ${{ steps.media-key.outputs.key }}
+          path: |
+            outputs/portable-inputs/binary-cache
+            outputs/portable-inputs/vcpkg/downloads/*.tar.gz
+            outputs/portable-inputs/vcpkg/downloads/*.tar.xz
+            outputs/portable-inputs/vcpkg/downloads/*.tar.bz2
       - name: Build locked Windows and macOS media tools
         if: runner.os != 'Linux'
         shell: pwsh
         run: ./scripts/desktop-media-tools.ps1 -IncludeSources:($IsWindows)
+      - name: Save verified media build inputs for this image and recipe
+        if: runner.os != 'Linux' && steps.media-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          key: ${{ steps.media-key.outputs.key }}
+          path: |
+            outputs/portable-inputs/binary-cache
+            outputs/portable-inputs/vcpkg/downloads/*.tar.gz
+            outputs/portable-inputs/vcpkg/downloads/*.tar.xz
+            outputs/portable-inputs/vcpkg/downloads/*.tar.bz2
       - name: Stage verified yt-dlp and provider runtime before core and webview tests
         shell: pwsh
         run: |

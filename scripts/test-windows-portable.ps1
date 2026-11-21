@@ -17,6 +17,28 @@ foreach ($file in $manifest.files) {
     if ((Get-Item -LiteralPath $path).Length -ne $file.size -or (Get-FileHash -LiteralPath $path).Hash -ne $file.sha256) { throw "Package integrity failure for $($file.path)." }
 }
 if (Get-Process -Name lvovd -ErrorAction SilentlyContinue) { throw 'Close the existing LVOVD window before testing its single-instance launch.' }
+if ($Download) {
+    if (!$env:GITHUB_ACTIONS) { throw 'Use an isolated Actions account for the fixture saved in Downloads.' }
+    # Fresh hosted images can expose the standard Known Folder before its
+    # backing directory exists. Create it for this test user before app launch.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PortableTestFolders {
+    [DllImport("shell32.dll")]
+    private static extern int SHGetKnownFolderPath(ref Guid id, uint flags, IntPtr token, out IntPtr path);
+    public static string Downloads() {
+        Guid id = new Guid("374DE290-123F-4565-9164-39C4925E467B");
+        IntPtr path;
+        Marshal.ThrowExceptionForHR(SHGetKnownFolderPath(ref id, 0x8000, IntPtr.Zero, out path));
+        try { return Marshal.PtrToStringUni(path); }
+        finally { Marshal.FreeCoTaskMem(path); }
+    }
+}
+'@
+    $downloadDirectory = [PortableTestFolders]::Downloads()
+    if (!(Test-Path -LiteralPath $downloadDirectory -PathType Container)) { throw 'Cannot prepare the runner Downloads folder.' }
+}
 $limits = [Diagnostics.ProcessStartInfo]::new("$scratch/lvovd.exe")
 $limits.WorkingDirectory = $out
 $limits.UseShellExecute = $false
@@ -59,10 +81,9 @@ try {
     $details.applicationTcpListeners = $listeners.Count
     if ($listeners.Count) { throw 'The packaged host opened a TCP listener.' }
     if ($Download) {
-        if (!$env:GITHUB_ACTIONS) { throw 'Run the automated Download check in an isolated Actions user account with a dedicated Downloads folder.' }
         # Windows PowerShell provides the Windows UI Automation assemblies. Drive
         # the real accessibility tree. No debugger or test controls enter LVOVD.
-        & powershell.exe -NoProfile -NonInteractive -File "$PSScriptRoot/windows-portable-download.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Working "$out"
+        & powershell.exe -NoProfile -NonInteractive -File "$PSScriptRoot/windows-portable-download.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Working "$out" -Destination $downloadDirectory
         if ($LASTEXITCODE) { throw 'Packaged Download acceptance failed.' }
         $details.fixtureDownload = $true
     }

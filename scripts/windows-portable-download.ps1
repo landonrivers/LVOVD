@@ -1,7 +1,7 @@
 # CI-only accessibility test of the unmodified release-profile ZIP. The fixture
 # server belongs to the test harness and is never included in the application.
 [CmdletBinding()]
-param([Parameter(Mandatory)][int]$AppPid,[Parameter(Mandatory)][string]$Tools,[Parameter(Mandatory)][string]$Working)
+param([Parameter(Mandatory)][int]$AppPid,[Parameter(Mandatory)][string]$Tools,[Parameter(Mandatory)][string]$Working,[Parameter(Mandatory)][string]$Destination)
 $ErrorActionPreference = 'Stop'
 if (!$env:GITHUB_ACTIONS) { throw 'Use an isolated Actions runner with a dedicated Downloads folder.' }
 Add-Type -AssemblyName UIAutomationClient
@@ -31,9 +31,7 @@ try {
         if ($server.HasExited -or [DateTime]::UtcNow -gt $deadline) { throw 'Controlled provider did not start.' }
         Start-Sleep -Milliseconds 100
     }
-    $downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
-    if (!$downloads) { throw 'Could not locate the runner Downloads folder.' }
-    $before = @(Get-ChildItem -LiteralPath $downloads -File -ErrorAction SilentlyContinue | ForEach-Object FullName)
+    $before = @(Get-ChildItem -LiteralPath $Destination -File | ForEach-Object FullName)
     $window = [Windows.Automation.AutomationElement]::FromHandle((Get-Process -Id $AppPid).MainWindowHandle)
     $url = (Get-Content -Raw -LiteralPath $ready | ConvertFrom-Json).url
     $input = Wait-Element $window 'Video URL' ([Windows.Automation.ControlType]::Edit) 40
@@ -43,7 +41,7 @@ try {
         $button.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
     }
     [void](Wait-Element $window 'Open File' ([Windows.Automation.ControlType]::Button) 90)
-    $saved = @(Get-ChildItem -LiteralPath $downloads -File -Filter '*.mp4' | Where-Object { $before -notcontains $_.FullName })
+    $saved = @(Get-ChildItem -LiteralPath $Destination -File -Filter '*.mp4' | Where-Object { $before -notcontains $_.FullName })
     if ($saved.Count -ne 1) { throw 'Expected one new video in the captured output folder.' }
     $streams = & "$Tools/ffprobe.exe" -v error -show_entries stream=codec_type -of json $saved[0].FullName
     if ($LASTEXITCODE) { throw 'FFprobe could not inspect the saved file.' }

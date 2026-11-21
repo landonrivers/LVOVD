@@ -34,7 +34,15 @@ if ($IsWindows) {
     & "$registry/bootstrap-vcpkg.sh" -disableMetrics
 }
 if ($LASTEXITCODE) { throw 'Could not bootstrap the pinned build tool.' }
-& "$registry/vcpkg$suffix" install "--x-manifest-root=$recipe" "--overlay-triplets=$recipe/triplets" "--triplet=$triplet" "--x-install-root=$install" --no-binarycaching --disable-metrics
+$binarySource = '--no-binarycaching'
+if ($env:GITHUB_ACTIONS) {
+    # Use only this job's ABI-keyed cache. Local and fresh builds compile the
+    # locked sources. Distribution still verifies the actual source archives.
+    $binaries = "$cache/binary-cache"
+    New-Item -ItemType Directory -Force $binaries | Out-Null
+    $binarySource = "--binarysource=clear;files,$binaries,readwrite"
+}
+& "$registry/vcpkg$suffix" install "--x-manifest-root=$recipe" "--overlay-triplets=$recipe/triplets" "--triplet=$triplet" "--x-install-root=$install" $binarySource --disable-metrics
 if ($LASTEXITCODE) { throw 'Could not build the pinned media tools.' }
 foreach ($tool in 'ffmpeg','ffprobe') { Copy-Item -LiteralPath "$install/$triplet/tools/ffmpeg/$tool$suffix" -Destination $tools }
 $version = & "$tools/ffmpeg$suffix" -version
