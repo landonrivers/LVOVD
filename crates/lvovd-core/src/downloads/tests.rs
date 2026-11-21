@@ -1,5 +1,156 @@
 use super::*;
 
+fn reviewed_options_fixture() -> DownloadPreview {
+    let info = serde_json::json!({
+        "title":"Synthetic fixture","extractor":"youtube","thumbnail":"https://example.invalid/image",
+        "formats":[
+            {"format_id":"c","url":"https://example.invalid/c","vcodec":"avc1","acodec":"mp4a","height":720},
+            {"format_id":"v","url":"https://example.invalid/v","vcodec":"avc1","acodec":"none","height":720},
+            {"format_id":"a","url":"https://example.invalid/a","vcodec":"none","acodec":"mp4a"}],
+        "subtitles":{"fr":[]},"automatic_captions":{"en":[]},
+        "chapters":[{"start_time":0,"end_time":8},{"start_time":8,"end_time":13}]
+    });
+    provider::metadata(
+        &serde_json::to_vec(&info).unwrap(),
+        &provider::validate_url("https://example.invalid/fixture").unwrap(),
+    )
+    .unwrap()
+    .0
+}
+
+#[tokio::test]
+async fn single_video_arguments_match_released_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let node = PathBuf::from(std::env::var_os("LVOVD_DESKTOP_NODE").unwrap());
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/download-options.cjs");
+    let run = crate::process::run(
+        &node,
+        &[fixture.into(), dir.path().into()],
+        Duration::from_secs(30),
+        128 * 1024,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    let cases: Vec<serde_json::Value> = serde_json::from_slice(&run.stdout).unwrap();
+    let preview = reviewed_options_fixture();
+    for case in cases {
+        let opts: DownloadOptions = serde_json::from_value(case["native"].clone()).unwrap();
+        let plan = opts.plan(&preview).unwrap();
+        let args = plan.provider_args(&plan.sections[0]);
+        let mut actual = serde_json::Map::new();
+        let mut args = args.iter().map(|s| s.to_str().unwrap()).peekable();
+        while let Some(flag) = args.next() {
+            let value = if args.peek().is_some_and(|s| !s.starts_with("--")) {
+                args.next().unwrap().into()
+            } else {
+                true.into()
+            };
+            actual.insert(flag.into(), value);
+        }
+        assert_eq!(
+            serde_json::Value::Object(actual),
+            case["expected"],
+            "{}",
+            case["native"]
+        );
+    }
+    for invalid in [
+        serde_json::json!({"formatIds":["missing"]}),
+        serde_json::json!({"formatIds":["a","v"]}),
+        serde_json::json!({"formatIds":["bestvideo+bestaudio"]}),
+        serde_json::json!({"content":"extras"}),
+        serde_json::json!({"range":{"type":"chapters","indexes":[8]}}),
+        serde_json::json!({"range":{"type":"custom","start":4,"end":3}}),
+    ] {
+        assert!(
+            serde_json::from_value::<DownloadOptions>(invalid)
+                .unwrap()
+                .plan(&preview)
+                .is_err()
+        );
+    }
+}
+
+#[tokio::test]
+async fn download_audio_outputs_start_from_compressed_source_and_use_released_encoders() {
+    let dir = Arc::new(tempfile::tempdir().unwrap());
+    let mut tools = Tools::bundled(dir.path());
+    tools.ffmpeg = std::env::var_os("LVOVD_DESKTOP_FFMPEG").unwrap().into();
+    tools.ffprobe = std::env::var_os("LVOVD_DESKTOP_FFPROBE").unwrap().into();
+    let supervisor = Supervisor::default();
+    let cancel = CancellationToken::new();
+    let input = dir.path().join("fixture.m4a");
+    let mut args: Vec<std::ffi::OsString> = [
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=duration=0.6",
+        "-c:a",
+        "aac",
+    ]
+    .map(Into::into)
+    .into();
+    args.push(input.as_os_str().into());
+    supervisor
+        .run_owned(
+            &tools.ffmpeg,
+            &args,
+            Duration::from_secs(30),
+            65536,
+            &cancel,
+            dir.clone(),
+        )
+        .await
+        .unwrap();
+    let preview = reviewed_options_fixture();
+    for (format, extension, codec) in [
+        ("source", "m4a", "aac"),
+        ("m4a", "m4a", "aac"),
+        ("mp3", "mp3", "mp3"),
+        ("opus", "opus", "opus"),
+        ("flac", "flac", "flac"),
+        ("wav", "wav", "pcm_s16le"),
+    ] {
+        let task = dir.path().join(format);
+        std::fs::create_dir(&task).unwrap();
+        std::fs::copy(&input, task.join("media.m4a")).unwrap();
+        let plan = serde_json::from_value::<DownloadOptions>(
+            serde_json::json!({"content":"audio","audioFormat":format}),
+        )
+        .unwrap()
+        .plan(&preview)
+        .unwrap();
+        let files = outputs::collect(
+            &tools,
+            &supervisor,
+            &plan,
+            &plan.sections[0],
+            &task,
+            dir.clone(),
+            &cancel,
+        )
+        .await
+        .unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].name, format!("Synthetic fixture.{extension}"));
+        if format == "source" {
+            assert_eq!(
+                std::fs::read(&files[0].path).unwrap(),
+                std::fs::read(&input).unwrap()
+            );
+        }
+        let inspected = crate::inspection::inspect(&tools.ffprobe, &files[0].path, &cancel)
+            .await
+            .unwrap();
+        assert_eq!(inspected.streams[0].codec.as_deref(), Some(codec));
+    }
+}
+
 #[tokio::test]
 async fn concurrent_admission_is_bounded_and_keeps_active_receipts_and_unsaved_jobs() {
     let root = tempfile::tempdir().unwrap();

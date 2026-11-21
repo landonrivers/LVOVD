@@ -11,9 +11,10 @@
   let ready = false, choosing = false, submitting = false, previewing = false;
   let destination = null, preview = null, previewGeneration = 0, revision = -1;
 
+  const options = globalThis.LVOVDDownloadOptions(controls);
   function controls() {
     previewButton.disabled = !ready || previewing || !url.value.trim();
-    start.disabled = !ready || choosing || submitting || !destination || !preview?.canDownload;
+    start.disabled = !ready || choosing || submitting || !destination || !(preview && (preview.choices ? options.valid() : preview.canDownload));
     for (const button of folders) button.disabled = !ready || choosing;
     for (const id of ['settings-folder', 'download-folder']) el(id).textContent = destination?.path || 'Choose a folder';
     for (const row of rows.values()) row.retry.disabled = !destination || choosing || row.pending;
@@ -37,14 +38,15 @@
     el('download-preview').hidden = false;
     el('download-title').textContent = value.title;
     el('download-facts').textContent = [value.source, Number.isFinite(value.duration) ? time(value.duration) : 'Duration unknown',
-      value.profile === 'compatible' ? 'Compatible MP4' : 'Maximum Quality'].filter(Boolean).join(' · ');
+      value.choices ? '' : value.profile === 'compatible' ? 'Compatible MP4' : 'Maximum Quality'].filter(Boolean).join(' · ');
     el('download-filename').textContent = value.canDownload ? value.filename : '';
+    options.reset(value);
     const artwork = el('download-artwork');
     const hasArt = typeof value.artwork === 'string' && /^data:image\/(?:jpeg|png|webp);base64,/.test(value.artwork);
     artwork.hidden = !hasArt;
     if (hasArt) artwork.src = value.artwork;
     else artwork.removeAttribute('src');
-    message.textContent = value.message || (destination ? '' : 'Choose an output folder to download this video.');
+    message.textContent = (value.choices?.available ? '' : value.message) || (destination ? '' : 'Choose an output folder to download this video.');
   }
   url.addEventListener('input', resetPreview);
   el('download-form').addEventListener('submit', async event => {
@@ -80,7 +82,7 @@
     const generation = previewGeneration;
     submitting = true; controls();
     try {
-      const snapshot = await native.call('start_download', { request: { previewId: preview.previewId, destinationId: destination.id } });
+      const snapshot = await native.call('start_download', { request: { previewId: preview.previewId, destinationId: destination.id, ...(preview.choices ? {options:options.read()} : {}) } });
       render(snapshot);
       if (generation === previewGeneration) {
         resetPreview(); url.value = ''; message.textContent = 'Added to the download queue.'; url.focus();
@@ -114,6 +116,7 @@
         row.pending = true; button.disabled = true; row.note.textContent = '';
         try {
           const request = { jobId: id };
+          if (['open','reveal'].includes(key) && row.files.options.length>1) request.index=row.files.selectedIndex;
           if (key === 'retry') request.destinationId = destination.id;
           const result = await native.call(command, { request });
           if (result) render(result);
@@ -121,6 +124,8 @@
         finally { row.pending = false; button.disabled = false; controls(); }
       });
     }
+    row.files = child(actions,'select');
+    row.files.setAttribute('aria-label','Saved output');
     return row;
   }
   function render(snapshot) {
@@ -144,7 +149,13 @@
       row.failure.textContent = typeof job.error === 'string' ? job.error : job.error?.message || '';
       row.cancel.hidden = !['queued', 'downloading', 'processing'].includes(job.status);
       row.retry.hidden = job.status !== 'saveFailed';
-      row.open.hidden = row.reveal.hidden = job.status !== 'saved';
+      const files = job.savedFiles || [];
+      while(row.files.options.length<files.length) {
+        const index=row.files.options.length;
+        row.files.add(new Option(files[index],String(index)));
+      }
+      row.files.hidden=files.length<2;
+      row.open.hidden = row.reveal.hidden = job.status !== 'saved' && !files.length;
       row.retry.disabled = !destination || choosing || row.pending;
     }
     for (const [id, row] of rows) if (!seen.has(id)) { row.li.remove(); rows.delete(id); }

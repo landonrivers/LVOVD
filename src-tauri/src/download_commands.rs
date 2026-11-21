@@ -19,6 +19,8 @@ pub(crate) struct PreviewRequest {
 pub(crate) struct StartRequest {
     preview_id: Uuid,
     destination_id: Uuid,
+    #[serde(default)]
+    options: lvovd_core::downloads::DownloadOptions,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -192,9 +194,11 @@ pub(crate) async fn start_download(
 ) -> Result<DownloadSnapshot> {
     let folder = state.destinations.capture(request.destination_id)?;
     let owner = state.downloads.clone();
-    tauri::async_runtime::spawn_blocking(move || owner.enqueue(request.preview_id, folder))
-        .await
-        .map_err(|_| AppError::new("DOWNLOAD_START", "Could not add the download. Try again."))?
+    tauri::async_runtime::spawn_blocking(move || {
+        owner.enqueue_options(request.preview_id, folder, request.options)
+    })
+    .await
+    .map_err(|_| AppError::new("DOWNLOAD_START", "Could not add the download. Try again."))?
 }
 #[tauri::command]
 pub(crate) async fn cancel_download(
@@ -214,24 +218,31 @@ pub(crate) async fn retry_download_save(
         .await
         .map_err(|_| AppError::new("SAVE_FAILED", "Could not restart saving. Try again."))?
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ExportRequest {
+    job_id: Uuid,
+    #[serde(default)]
+    index: usize,
+}
 #[tauri::command]
 pub(crate) async fn open_download(
     state: State<'_, AppState>,
-    request: DownloadJobRequest,
+    request: ExportRequest,
 ) -> Result<()> {
-    export_action(&state, request.job_id, false).await
+    export_action(&state, request.job_id, request.index, false).await
 }
 #[tauri::command]
 pub(crate) async fn reveal_download(
     state: State<'_, AppState>,
-    request: DownloadJobRequest,
+    request: ExportRequest,
 ) -> Result<()> {
-    export_action(&state, request.job_id, true).await
+    export_action(&state, request.job_id, request.index, true).await
 }
-async fn export_action(state: &AppState, job: Uuid, reveal: bool) -> Result<()> {
+async fn export_action(state: &AppState, job: Uuid, index: usize, reveal: bool) -> Result<()> {
     let owner = state.downloads.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        crate::export_actions::show(&owner.exported_path(job)?, reveal)
+        crate::export_actions::show(&owner.exported_file(job, index)?, reveal)
     })
     .await
     .map_err(|_| AppError::new("EXPORT_OPEN", "Could not open the saved file."))?

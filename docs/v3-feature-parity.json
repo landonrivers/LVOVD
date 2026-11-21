@@ -92,15 +92,18 @@
           "preview_source"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -108,7 +111,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -118,7 +122,7 @@
         "Capability-driven controls match v2.7 for missing codec fields, unavailable formats and protected sources."
       ],
       "evidence": [],
-      "remaining": "Single-URL Video + Audio eligibility is exposed. Complete all other content modes and capability-dependent controls in 8D.2."
+      "remaining": "Verify mixed, incomplete and restricted provider metadata in packaged applications."
     },
     {
       "id": "download.artwork",
@@ -193,11 +197,14 @@
         "rust": [
           "crates/lvovd-core/src/downloads.rs",
           "crates/lvovd-core/src/downloads/provider.rs",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -205,7 +212,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -215,7 +223,7 @@
         "Separate streams merge; combined-only fallback preserves both tracks."
       ],
       "evidence": [],
-      "remaining": "Collect and review all four native receipts, default profile decisions, saved stream validation and the separate permitted live outcome."
+      "remaining": "Exercise combined and separate streams with companions in packaged webviews."
     },
     {
       "id": "download.content-video",
@@ -237,23 +245,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Only the selected video stream is returned; unavailable video-only choices remain unavailable."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify actual video-only exports and unavailable source choices on all four targets."
     },
     {
       "id": "download.content-audio",
@@ -275,23 +291,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Only audio is acquired/converted; format choice does not change automatic acquisition."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify the complete audio-only workflow through each packaged webview."
     },
     {
       "id": "download.content-extras",
@@ -313,23 +337,33 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "No media is acquired; require an extra and clear inactive range/SponsorBlock/manual-selection semantics."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Exercise Extras Only with captions and artwork on all four targets. Metadata-only has a controlled native scenario."
     },
     {
       "id": "download.compatible",
@@ -354,11 +388,14 @@
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
-          "crates/lvovd-core/src/downloads.rs"
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -366,7 +403,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -376,7 +414,7 @@
         "Test separate and combined formats; never promise a source offers H.264 when it does not."
       ],
       "evidence": [],
-      "remaining": "Verify compatible combined and separate H.264/AAC formats and the default fallback in packaged and platform workflows."
+      "remaining": "Compare selected-profile downloads with compatible separate and combined streams in packaged apps."
     },
     {
       "id": "download.maximum",
@@ -397,15 +435,18 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
-          "crates/lvovd-core/src/downloads.rs"
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -413,7 +454,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -423,7 +465,7 @@
         "Preserve VP9/AV1/Opus where source selection yields them; do not silently transcode to match editor defaults."
       ],
       "evidence": [],
-      "remaining": "Automatic fallback uses the best qualifying streams. Restore explicit user selection and combinations with caps and other content modes."
+      "remaining": "Verify VP9/AV1 and Opus remain intact when remuxing in packaged apps."
     },
     {
       "id": "download.resolution",
@@ -443,23 +485,31 @@
           "review_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Current supported heights, absent formats and audio/extras mode normalization match the reference."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify selected caps with a multiresolution source through each native webview."
     },
     {
       "id": "download.format-inspection",
@@ -479,23 +529,31 @@
           "preview_source"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/format-explorer.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Missing facts remain unknown; oversized or URL-like labels are bounded/scrubbed."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Compare all displayed facts, unknowns and truncation against the released format list."
     },
     {
       "id": "download.manual-formats",
@@ -516,23 +574,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/manual-source-format.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reject stale IDs, invalid roles and selector expressions; never substitute a different format."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Exercise stale and separate-format selections against changing provider metadata on all platforms."
     },
     {
       "id": "download.source-audio",
@@ -552,23 +618,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Preserve source bytes where no merge/remux is needed and do not invoke an audio encoder."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Acquire and save original audio via each native webview; generated tests compare prepared bytes."
     },
     {
       "id": "download.audio-conversion",
@@ -588,23 +662,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Compare acquisition arguments across outputs and decoded output properties; compressed-source Download FLAC must not inherit the Local Media rejection."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify all five conversions from URL through native saving across platforms."
     },
     {
       "id": "download.custom-range",
@@ -625,23 +707,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reject invalid bounds and playlist ranges; compare section arguments and output naming with v2.7."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Compare actual section boundaries and file naming with released downloads in packaged workflows."
     },
     {
       "id": "download.chapters",
@@ -662,23 +752,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reject missing/stale chapters and playlist chapter selection; save each resulting file."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify chapter ordering, changing metadata, exported streams and per-file actions in packaged workflows."
     },
     {
       "id": "download.thumbnail-extra",
@@ -698,23 +796,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Test absent artwork, thumbnail acquisition rejection and saving the companion file."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify JPG conversion and provider failures with the native UI."
     },
     {
       "id": "download.metadata-extra",
@@ -734,23 +840,33 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Save JSON separately, classify it as metadata and preserve selected extras through queue/history."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify individual sidecar receipts through each native webview; History reuse remains in 8D.4."
     },
     {
       "id": "download.subtitles",
@@ -772,23 +888,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Test all subtitle modes, unavailable languages, automatic fallback and multiple companion outputs."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify creator and automatic captions, language fallback and multiple saved tracks with real provider fixtures."
     },
     {
       "id": "download.sponsorblock",
@@ -810,23 +934,31 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify actual marked/removed sections with controlled SponsorBlock data; Off must make no service request."
     },
     {
       "id": "download.playlists",

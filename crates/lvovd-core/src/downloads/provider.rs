@@ -5,9 +5,6 @@ use std::{ffi::OsString, path::Path};
 use url::Url;
 use uuid::Uuid;
 
-const COMPATIBLE: &str = "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=h264]+bestaudio[acodec^=aac]/best[vcodec^=avc1][acodec^=mp4a]/best[vcodec^=h264][acodec^=aac]";
-const MAXIMUM: &str = "bestvideo+bestaudio/best";
-
 pub(super) fn validate_url(input: &str) -> Result<Url> {
     let invalid = || AppError::new("INVALID_URL", "Enter a complete HTTP or HTTPS media URL.");
     let input = input.trim();
@@ -81,17 +78,18 @@ pub(super) fn preview_args(tools: &Tools, url: &Url) -> Result<Vec<OsString>> {
 pub(super) fn acquire_args(
     tools: &Tools,
     url: &Url,
-    profile: Profile,
+    plan: &super::options::Plan,
+    section: &super::options::Section,
     directory: &Path,
 ) -> Result<Vec<OsString>> {
     let mut args = args(tools)?;
     args.extend(["--no-playlist", "--playlist-end", "1", "--match-filter", "!is_live & !has_drm",
         "--newline", "--progress", "--progress-delta", "0.25", "--no-simulate", "--quiet",
         "--progress-template", "download:LVOVD|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
-        "--progress-template", "postprocess:LVOVD_POST", "--format",
-        match profile { Profile::Compatible => COMPATIBLE, Profile::Maximum => MAXIMUM },
-        "--merge-output-format", "mp4", "--remux-video", "mp4", "--paths",
+        "--progress-template", "postprocess:LVOVD_POST",
     ].map(Into::into));
+    args.extend(plan.provider_args(section));
+    args.push("--paths".into());
     // Provider metadata never decides the path to write or publish.
     args.push(directory.as_os_str().into());
     args.extend(["--output", "media.%(ext)s", "--", url.as_str()].map(Into::into));
@@ -120,7 +118,7 @@ fn number(v: &Value) -> Option<f64> {
         .filter(|v| v.is_finite())
 }
 
-fn visual_evidence(format: &Value) -> bool {
+pub(super) fn visual_evidence(format: &Value) -> bool {
     if format["url"]
         .as_str()
         .or(format["manifest_url"].as_str())
@@ -237,7 +235,9 @@ pub(super) fn metadata(bytes: &[u8], url: &Url) -> Result<(DownloadPreview, Opti
     } else {
         Profile::Maximum
     };
-    let message = if info["entries"].is_array()
+    let mut choices = super::options::Choices::from_info(&info, formats);
+    choices.av = possible_audio && possible_video;
+    let restriction = if info["entries"].is_array()
         || matches!(info["_type"].as_str(), Some("playlist" | "multi_video"))
     {
         Some("Choose a single media URL. Playlist downloads are unavailable in this build.")
@@ -255,8 +255,14 @@ pub(super) fn metadata(bytes: &[u8], url: &Url) -> Result<(DownloadPreview, Opti
         )
     {
         Some("This source is protected or requires access. Choose publicly available media.")
-    } else if !possible_audio || !possible_video {
-        Some("This source does not offer the Video + Audio output available in this build.")
+    } else {
+        None
+    };
+    choices.available = restriction.is_none();
+    let message = if restriction.is_some() {
+        restriction
+    } else if !choices.av {
+        Some("This source does not offer Video + Audio. Choose another content mode.")
     } else {
         None
     };
@@ -301,6 +307,7 @@ pub(super) fn metadata(bytes: &[u8], url: &Url) -> Result<(DownloadPreview, Opti
             preview_id: Uuid::new_v4(),
             filename: filename(&title, info["id"].as_str()),
             title,
+            choices,
             source,
             profile,
             duration: number(&info["duration"]).filter(|n| n.is_finite() && *n >= 0.0),
@@ -477,15 +484,8 @@ mod tests {
                 metadata(&serde_json::to_vec(&fixture["info"]).unwrap(), &url).unwrap();
             assert_eq!(want["source"], review.source, "{}", fixture["id"]);
             assert_eq!(want["eligible"], review.can_download, "{}", fixture["id"]);
-            let args = acquire_args(
-                &Tools::bundled(dir.path()),
-                &url,
-                review.profile,
-                dir.path(),
-            )
-            .unwrap();
-            let selector = args.windows(2).find(|w| w[0] == "--format").unwrap()[1]
-                .to_str()
+            let selector = super::super::DownloadOptions::default()
+                .auto_selector(review.profile)
                 .unwrap();
             assert_eq!(want["selector"], selector, "{}", fixture["id"]);
         }
@@ -495,7 +495,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let tools = Tools::bundled(dir.path());
         let url = validate_url("https://example.org/watch?token=test&format=abc").unwrap();
-        let args = acquire_args(&tools, &url, Profile::Compatible, dir.path()).unwrap();
+        let (preview, _) = metadata(br#"{"vcodec":"avc1","acodec":"aac"}"#, &url).unwrap();
+        let plan = super::super::DownloadOptions::default()
+            .plan(&preview)
+            .unwrap();
+        let args = acquire_args(&tools, &url, &plan, &plan.sections[0], dir.path()).unwrap();
         let preview = preview_args(&tools, &url).unwrap();
         for args in [args, preview] {
             assert!(args.ends_with(&["--".into(), url.as_str().into()]));

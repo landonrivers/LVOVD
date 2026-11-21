@@ -25,3 +25,12 @@ This review build returns a complete queue snapshot and admits up to 256 rows. S
 The controlled test uses generated video and audio served by a fixture and the real provider tools. The fixture server supplies source media only. The released desktop program handles application operations through native commands. Tests cover initial Download navigation, reviewed source and destination, cancellation, interrupted saving, retry and name collisions. The Local Media regression scenarios exercise a delayed removal response after a change of workbench and retrying interrupted playback on the same selection.
 
 Record the exact Windows package checksum, OS, bundled tools, controlled test outcome and separate live-provider outcome on its review PR. Keep source URLs, media titles, filenames and user profile paths out of public receipts. Development webviews, mocked commands and locally built artifacts each have a different evidentiary scope. Clean-machine acceptance requires the extracted CI artifact. Four-platform verification and remaining capabilities are tracked in the [parity register](v3-feature-parity.md).
+
+
+## 8D.2 single-video options
+
+The desktop Download view now builds its content, format, resolution, chapter, caption and SponsorBlock choices from the current Preview. Rust captures a typed plan and the selected destination at admission. Exact streams and chapter selections require a fresh metadata check before acquisition. Video modes remux to MP4. Source Audio keeps its acquired bytes. M4A, MP3, Opus, FLAC and WAV run the released Download conversion policy on the acquired audio.
+
+Each chapter uses a private directory. Only requested file types can be published. Each saved file has its own receipt for Open File and Show in Folder. If saving fails partway, Retry Save continues with the first unpublished file. The chosen folder applies to the remaining outputs.
+
+The Rust tests compare provider flags against the released JavaScript policy and probe actual conversions from compressed audio. The native fixture exercises metadata-only acquisition and a video with a JSON companion. The [feature register](v3-feature-parity.md) lists outstanding evidence for each capability. Playlist selection and editor handoffs are scheduled for 8D.3. History reuse is scheduled for 8D.4.

@@ -34,30 +34,30 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 49 Missing, 0 Ported, 8 Integrated, 30 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 33 Missing, 0 Ported, 24 Integrated, 30 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
 | `download.preview` | URL Preview | Download | 8D | Integrated |
-| `download.capabilities` | Source capabilities | Download | 8D | Missing |
+| `download.capabilities` | Source capabilities | Download | 8D | Integrated |
 | `download.artwork` | Preview artwork | Download / queue | 8D | Missing |
 | `download.content-av` | Video + Audio | Download | 8D | Integrated |
-| `download.content-video` | Video Only | Download | 8D | Missing |
-| `download.content-audio` | Audio Only | Download | 8D | Missing |
-| `download.content-extras` | Extras Only | Download | 8D | Missing |
+| `download.content-video` | Video Only | Download | 8D | Integrated |
+| `download.content-audio` | Audio Only | Download | 8D | Integrated |
+| `download.content-extras` | Extras Only | Download | 8D | Integrated |
 | `download.compatible` | Compatible MP4 | Download | 8D | Integrated |
-| `download.maximum` | Maximum Quality | Download | 8D | Missing |
-| `download.resolution` | Resolution cap | Download | 8D | Missing |
-| `download.format-inspection` | Source Formats details | Download / Source Formats | 8D | Missing |
-| `download.manual-formats` | Manual source selection | Download / Source Formats | 8D | Missing |
-| `download.source-audio` | Source Audio | Download | 8D | Missing |
-| `download.audio-conversion` | Download audio formats | Download | 8D | Missing |
-| `download.custom-range` | Custom time range | Download / Time range & chapters | 8D | Missing |
-| `download.chapters` | Selected chapters | Download / Time range & chapters | 8D | Missing |
-| `download.thumbnail-extra` | Thumbnail extra | Download / Extras | 8D | Missing |
-| `download.metadata-extra` | Metadata JSON extra | Download / Extras | 8D | Missing |
-| `download.subtitles` | Subtitles and captions | Download / Extras | 8D | Missing |
-| `download.sponsorblock` | SponsorBlock | Download / SponsorBlock | 8D | Missing |
+| `download.maximum` | Maximum Quality | Download | 8D | Integrated |
+| `download.resolution` | Resolution cap | Download | 8D | Integrated |
+| `download.format-inspection` | Source Formats details | Download / Source Formats | 8D | Integrated |
+| `download.manual-formats` | Manual source selection | Download / Source Formats | 8D | Integrated |
+| `download.source-audio` | Source Audio | Download | 8D | Integrated |
+| `download.audio-conversion` | Download audio formats | Download | 8D | Integrated |
+| `download.custom-range` | Custom time range | Download / Time range & chapters | 8D | Integrated |
+| `download.chapters` | Selected chapters | Download / Time range & chapters | 8D | Integrated |
+| `download.thumbnail-extra` | Thumbnail extra | Download / Extras | 8D | Integrated |
+| `download.metadata-extra` | Metadata JSON extra | Download / Extras | 8D | Integrated |
+| `download.subtitles` | Subtitles and captions | Download / Extras | 8D | Integrated |
+| `download.sponsorblock` | SponsorBlock | Download / SponsorBlock | 8D | Integrated |
 | `download.playlists` | Playlist selection | Download / Playlist | 8D | Missing |
 | `download.coordination` | Source-request coordination | Download / Local Media intake | 8D | Missing |
 | `download.pacing` | Playlist acquisition pauses | Download / Playlist import | 8D | Missing |

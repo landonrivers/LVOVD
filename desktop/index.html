@@ -7,7 +7,7 @@
   <script src="native.js" defer></script><script src="workspace-transport.js" defer></script>
   <script src="edit-plan.js" defer></script><script src="audio-waveform.js" defer></script><script src="media-editor.js" defer></script>
   <script src="conversion-inspector.js" defer></script><script src="processing-profile.js" defer></script><script src="local-workspace.js" defer></script>
-  <script src="app.js" defer></script><script src="downloads.js" defer></script>
+  <script src="app.js" defer></script><script src="download-options.js" defer></script><script src="downloads.js" defer></script>
 </head><body>
 <header class="desktop-header">
   <h1>LVOVD <small>Desktop preview</small></h1>
@@ -25,12 +25,40 @@
       <label for="download-url">Video URL</label>
       <div class="download-toolbar"><input type="url" id="download-url" placeholder="https://…" required autocomplete="off" spellcheck="false"><button class="button" id="download-preview-button" disabled>Preview</button></div>
     </form>
-    <p class="help">This preview supports Video + Audio from individual URLs.</p>
     <div class="download-destination"><strong>Save to</strong> <span id="download-folder">Choose a folder</span> <button type="button" class="text-button" id="download-choose-folder" disabled>Choose folder</button></div>
     <p id="download-message" role="status" aria-live="polite"></p>
     <section id="download-preview" class="download-card" hidden>
       <img id="download-artwork" alt="" hidden>
-      <div><h3 id="download-title"></h3><p id="download-facts"></p><p id="download-filename"></p>
+      <div><h3 id="download-title"></h3><p id="download-facts"></p><form id="download-options">
+        <label>Content <select id="dl-content"><option value="av">Video + Audio</option><option value="video">Video Only</option><option value="audio">Audio Only</option><option value="extras">Extras Only</option></select></label>
+        <label>Video profile <select id="dl-profile"><option value="compatible">Compatible MP4</option><option value="maximum">Maximum Quality</option></select></label>
+        <label>Maximum resolution <select id="dl-height"></select></label>
+        <label>Audio format <select id="dl-audio"><option value="m4a">M4A / AAC</option><option value="source">Source Audio</option><option value="mp3">MP3</option><option value="opus">Opus</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
+        <details id="dl-formats"><summary>Source Formats</summary>
+          <label>Selection <select id="dl-selection"></select></label>
+          <ul id="dl-evidence"></ul>
+          <label>Combined format <select id="dl-combined"></select></label>
+          <label>Video format <select id="dl-video"></select></label>
+          <label>Audio source <select id="dl-stream"></select></label>
+        </details>
+        <details id="dl-times"><summary>Time range and chapters</summary>
+          <label>Range <select id="dl-range"><option value="full">Full media</option><option value="custom">Custom range</option><option value="chapters">Selected chapters</option></select></label>
+          <label>Start time <input id="dl-start" value="0:00" placeholder="0:00"></label>
+          <label>End time <input id="dl-end" placeholder="1:30"></label>
+          <div id="dl-chapters"></div>
+        </details>
+        <details id="dl-extras"><summary>Extras</summary>
+          <label><input id="dl-thumbnail" type="checkbox"> JPG thumbnail</label>
+          <label><input id="dl-metadata" type="checkbox"> Metadata JSON</label>
+          <label><input id="dl-subs" type="checkbox"> Subtitles and captions</label>
+          <label>Caption source <select id="dl-submode"><option value="both">Creator and automatic</option><option value="manual">Creator subtitles</option><option value="auto">Automatic captions</option></select></label>
+          <label>Languages <input id="dl-langs" value="en" list="dl-languages"></label><datalist id="dl-languages"></datalist>
+        </details>
+        <details id="dl-sponsors"><summary>SponsorBlock</summary>
+          <label>Segments <select id="dl-sponsor"><option value="off">Off</option><option value="mark">Mark</option><option value="remove">Remove</option></select></label>
+          <div id="dl-categories"></div>
+        </details></form>
+        <p id="download-filename"></p>
       <button type="button" class="button" id="download-start" disabled>Download Video</button></div>
     </section>
     <section id="download-queue" aria-labelledby="download-queue-heading" hidden>

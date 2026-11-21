@@ -57,3 +57,11 @@ html { height:100%; overflow:hidden; } .processing-finish > .local-media-actions
 .processing-preview .editor-player video { height:180px; max-height:180px; }
 
 .sr-only { top:0; left:0; } .local-workbench > *, #processing-finish { position:relative; }
+
+#download-options { display:grid; gap:6px; margin:8px 0; }
+#download-options label { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; margin:3px 8px 3px 0; }
+#download-options select { max-width:100%; min-width:0; }
+#download-options details { min-width:0; }
+#download-options summary { cursor:pointer; }
+#download-options [hidden] { display:none; }
+.download-card > div { min-width:0; }
