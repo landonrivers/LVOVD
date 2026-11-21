@@ -315,6 +315,7 @@ impl Downloads {
                             diagnostic_limit: 20 * 1024 * 1024,
                             cancel: &self.cancel,
                         },
+                        self.root.path(),
                         permit,
                     )
                     .await?;
@@ -498,6 +499,7 @@ impl Downloads {
                     diagnostic_limit: 256 * 1024,
                     cancel,
                 },
+                dir.path(),
                 move |bytes| {
                     lines.feed(bytes, |progress| {
                         manager.update(id, |j| {

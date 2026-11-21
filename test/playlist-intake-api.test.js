@@ -1,8 +1,9 @@
 'use strict';
 process.env.YTDLP_PATH = process.platform === 'win32' ? 'C:\\fake\\yt-dlp.exe' : '/tmp/fake-yt-dlp';
-process.env.HOST = '127.0.0.1'; process.env.PORT = String(45000 + process.pid % 10000);
+process.env.HOST = '127.0.0.1'; process.env.PORT = '0';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { listenLoopback } = require('./helpers/loopback-server');
 const http = require('node:http');
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
@@ -11,7 +12,7 @@ const { EventEmitter } = require('node:events');
 const { PassThrough } = require('node:stream');
 const app = require('../app-server');
 const { server } = require('../server');
-const port = Number(process.env.PORT);
+let port;
 function call(route, body, headers = {}, method = 'POST') {
   const bytes = body == null ? null : Buffer.from(JSON.stringify(body));
   return new Promise((resolve, reject) => {
@@ -22,7 +23,7 @@ function call(route, body, headers = {}, method = 'POST') {
   });
 }
 function gate() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
-test.before(async () => { await new Promise(resolve => server.listen(port, '127.0.0.1', resolve)); });
+test.before(async () => { port = await listenLoopback(server); });
 test.after(async () => { await app.mediaWorkspaces.clearAll(); await new Promise(resolve => server.close(resolve)); });
 test.beforeEach(() => app.mediaWorkspaces.clearAll());
 

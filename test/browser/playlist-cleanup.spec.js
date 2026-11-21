@@ -7,6 +7,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { playlistSource } = require('../helpers/playlist-source');
 const { managedBinaryPath } = require('../../ytdlp-manager');
+const { listenLoopback } = require('../helpers/loopback-server');
 const childProcess = require('node:child_process');
 const originalSpawn = childProcess.spawn;
 let sourceSpawns = 0;
@@ -21,7 +22,7 @@ async function exact(page, id, value) { await page.locator('#' + id).fill(value)
 test.beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), 'lvovd-playlist-cleanup-')); fixture = await playlistSource(root);
   process.env.YTDLP_PATH = managedBinaryPath(); process.env.LVOVD_DATA_DIR = path.join(root, 'history');
-  process.env.HOST = '127.0.0.1'; process.env.PORT = String(45000 + process.pid % 10000);
+  process.env.HOST = '127.0.0.1'; process.env.PORT = '0';
   childProcess.spawn = (command, ...args) => { if (command === process.env.YTDLP_PATH && !args[0]?.includes('--version')) sourceSpawns++; return originalSpawn(command, ...args); };
   app = require('../../app-server'); ({ server } = require('../../server'));
   const manager = app.mediaWorkspaces; manager.tempDir = root; manager.maxBytes = 1000000;
@@ -37,8 +38,8 @@ test.beforeAll(async () => {
     if (blocked.has(path.resolve(file))) throw Object.assign(new Error('Synthetic owned-directory deletion failure'), { code: 'EACCES' });
     return fs.rm(file, options);
   } };
-  await new Promise(resolve => server.listen(Number(process.env.PORT), '127.0.0.1', resolve));
-  base = `http://127.0.0.1:${process.env.PORT}`;
+  const port = await listenLoopback(server);
+  base = `http://127.0.0.1:${port}`;
 });
 test.beforeEach(async ({ page }) => {
   test.setTimeout(90000); fixture.requests.length = 0; sourceSpawns = 0; app.mediaWorkspaces.cleanupRetryDelaysMs = [];

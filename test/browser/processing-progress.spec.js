@@ -8,6 +8,7 @@ const http = require('node:http');
 const { once } = require('node:events');
 const { execFileSync } = require('node:child_process');
 const { managedBinaryPath } = require('../../ytdlp-manager');
+const { listenLoopback } = require('../helpers/loopback-server');
 let root, app, server, base;
 const connections = [];
 const state = page => page.evaluate(() => window.LVOVDLocalWorkspace.collectionState());
@@ -17,7 +18,7 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 test.beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), 'lvovd-browser-progress-'));
   process.env.YTDLP_PATH = managedBinaryPath(); process.env.LVOVD_DATA_DIR = path.join(root, 'history');
-  process.env.HOST = '127.0.0.1'; process.env.PORT = String(45000 + process.pid % 10000);
+  process.env.HOST = '127.0.0.1'; process.env.PORT = '0';
   app = require('../../app-server');
   // Playwright reuses this worker/module after the owned cleanup harness. Its
   // old temporary root has been removed; start this fixture with a fresh root.
@@ -48,8 +49,8 @@ test.beforeAll(async () => {
     }
     handler(req, res);
   });
-  await new Promise(resolve => server.listen(Number(process.env.PORT), '127.0.0.1', resolve));
-  base = `http://127.0.0.1:${process.env.PORT}`;
+  const port = await listenLoopback(server);
+  base = `http://127.0.0.1:${port}`;
   for (const [name, tone] of [['first', 500], ['second', 900]]) {
     media('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=96x64:rate=10:duration=3',
       '-f', 'lavfi', '-i', `sine=frequency=${tone}:sample_rate=48000:duration=3`, '-c:v', 'libx264', '-c:a', 'aac', path.join(root, name + '.mp4')]);

@@ -51,13 +51,13 @@ function parseAuthority(value, protocol = 'http:') {
   }
 }
 
-function isAllowedHostHeader(hostHeader) {
+function isAllowedHostHeader(hostHeader, expectedPort = PORT) {
   const authority = parseAuthority(hostHeader);
   if (!authority) return false;
-  return configuredAllowedHosts().has(authority.hostname) && authority.port === String(PORT);
+  return configuredAllowedHosts().has(authority.hostname) && authority.port === String(expectedPort);
 }
 
-function isAllowedOrigin(originHeader) {
+function isAllowedOrigin(originHeader, expectedPort = PORT) {
   if (!originHeader) return true;
   if (originHeader === 'null') return false;
 
@@ -66,7 +66,7 @@ function isAllowedOrigin(originHeader) {
     if (!['http:', 'https:'].includes(parsed.protocol)) return false;
     const hostname = normalizeHostname(parsed.hostname);
     const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
-    return configuredAllowedHosts().has(hostname) && port === String(PORT);
+    return configuredAllowedHosts().has(hostname) && port === String(expectedPort);
   } catch {
     return false;
   }
@@ -126,7 +126,8 @@ function handleApplicationError(res, error) {
 const server = http.createServer((req, res) => {
   applySecurityHeaders(res);
 
-  if (!isAllowedHostHeader(req.headers.host)) {
+  const expectedPort = PORT === 0 ? req.socket.localPort : PORT;
+  if (!isAllowedHostHeader(req.headers.host, expectedPort)) {
     return rejectRequest(res, 403, 'LVOVD rejected an unexpected Host header.');
   }
 
@@ -134,7 +135,7 @@ const server = http.createServer((req, res) => {
     return rejectRequest(res, 403, 'LVOVD rejected a cross-site browser request.');
   }
 
-  if (!isAllowedOrigin(req.headers.origin)) {
+  if (!isAllowedOrigin(req.headers.origin, expectedPort)) {
     return rejectRequest(res, 403, 'LVOVD rejected an unexpected request origin.');
   }
 
@@ -172,7 +173,7 @@ async function startServer() {
   }
 
   server.listen(PORT, HOST, () => {
-    console.log(`LVOVD running at http://${HOST}:${PORT}`);
+    console.log(`LVOVD running at http://${HOST}:${server.address().port}`);
     console.log(`Node ${process.version}`);
     console.log('Local request hardening is enabled (Host, Origin, Fetch Metadata, CSP, anti-framing).');
     if (WILDCARD_HOSTS.has(normalizeHostname(HOST)) && !process.env.LVOVD_ALLOWED_HOSTS) {
