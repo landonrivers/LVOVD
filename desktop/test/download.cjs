@@ -8,16 +8,23 @@ const { spawnSync } = require('node:child_process');
 // Serve only this generated fixture. Blocking an acquisition GET after Preview lets
 // the native workflow deterministically exercise a disconnected folder and cancellation.
 async function startProvider(video, ffmpeg) {
-  const dash = fs.mkdtempSync(path.join(require('node:os').tmpdir(),'lvovd-dash-'));
-  const manifest = path.join(dash,'fixture.mpd');
-  const generated = spawnSync(ffmpeg,['-nostdin','-hide_banner','-loglevel','error','-i',path.resolve(video),'-t','3',
-    '-map','0:v:0','-map','0:a:0','-c','copy','-f','dash','fixture.mpd'],{cwd:dash,encoding:'utf8',timeout:30000,windowsHide:true});
-  assert.equal(generated.status,0,generated.stderr);
-  const assets = new Map(fs.readdirSync(dash).map(name=>['/dash/'+name,path.join(dash,name)]));
+  // The extracted-ZIP harness serves a single prepared MP4 without build tools.
+  const assets = new Map([['/fixture.mp4',video]]);
+  let dash;
+  if (ffmpeg) {
+    dash = fs.mkdtempSync(path.join(require('node:os').tmpdir(),'lvovd-dash-'));
+    const generated = spawnSync(ffmpeg,['-nostdin','-hide_banner','-loglevel','error','-i',path.resolve(video),'-t','3',
+      '-map','0:v:0','-map','0:a:0','-c','copy','-f','dash','fixture.mpd'],{cwd:dash,encoding:'utf8',timeout:30000,windowsHide:true});
+    if (generated.status!==0) {
+      fs.rmSync(dash,{recursive:true,force:true});
+      throw new Error(generated.error?.message || generated.stderr);
+    }
+    for (const name of fs.readdirSync(dash)) assets.set('/dash/'+name,path.join(dash,name));
+  }
   let hold = false, gets = 0;
   const waiting = new Set();
   const server = http.createServer((request, response) => {
-    const file = request.url === '/fixture.mp4' ? video : assets.get(request.url);
+    const file = assets.get(request.url);
     if (!file || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(404).end(); return;
     }
@@ -26,7 +33,7 @@ async function startProvider(video, ffmpeg) {
     const start = range ? Number(range[1]) : 0;
     const end = range?.[2] ? Math.min(bytes - 1, Number(range[2])) : bytes - 1;
     if (start > end) { response.writeHead(416).end(); return; }
-    const headers = { 'Content-Type': file===manifest?'application/dash+xml':'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
+    const headers = { 'Content-Type': request.url==='/dash/fixture.mpd'?'application/dash+xml':'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
     if (range) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + bytes;
     const send = () => {
       if (response.destroyed) return;
@@ -45,14 +52,14 @@ async function startProvider(video, ffmpeg) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   return {
     url: 'http://127.0.0.1:' + server.address().port + '/fixture.mp4',
-    dash: 'http://127.0.0.1:' + server.address().port + '/dash/fixture.mpd',
+    dash: dash && 'http://127.0.0.1:' + server.address().port + '/dash/fixture.mpd',
     hold() { hold = true; },
     held() { return waiting.size; },
     gets() { return gets; },
     release() { hold = false; for (const send of waiting) send(); waiting.clear(); },
     async close() {
       this.release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
-      fs.rmSync(dash,{recursive:true,force:true});
+      if (dash) fs.rmSync(dash,{recursive:true,force:true});
     }
   };
 }
