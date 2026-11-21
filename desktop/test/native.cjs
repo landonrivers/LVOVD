@@ -302,7 +302,7 @@ async function expectEmptyFiles(browser) {
   await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 0, { timeout: 10000 });
 }
 (async () => {
-  const provider = await startProvider(video);
+  const provider = await startProvider(video, ffmpeg);
   try { await scenario(video, 0, provider); }
   finally { await provider.close(); }
   await scenario(audio, 1); await scenario(tailIndex, 2); await scenario(wave, 3);

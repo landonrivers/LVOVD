@@ -7,25 +7,32 @@ const { spawnSync } = require('node:child_process');
 
 // Serve only this generated fixture. Blocking an acquisition GET after Preview lets
 // the native workflow deterministically exercise a disconnected folder and cancellation.
-async function startProvider(video) {
-  const bytes = fs.statSync(video).size;
+async function startProvider(video, ffmpeg) {
+  const dash = fs.mkdtempSync(path.join(require('node:os').tmpdir(),'lvovd-dash-'));
+  const manifest = path.join(dash,'fixture.mpd');
+  const generated = spawnSync(ffmpeg,['-nostdin','-hide_banner','-loglevel','error','-i',path.resolve(video),'-t','3',
+    '-map','0:v:0','-map','0:a:0','-c','copy','-f','dash','fixture.mpd'],{cwd:dash,encoding:'utf8',timeout:30000,windowsHide:true});
+  assert.equal(generated.status,0,generated.stderr);
+  const assets = new Map(fs.readdirSync(dash).map(name=>['/dash/'+name,path.join(dash,name)]));
   let hold = false, gets = 0;
   const waiting = new Set();
   const server = http.createServer((request, response) => {
-    if (request.url !== '/fixture.mp4' || !['GET', 'HEAD'].includes(request.method)) {
+    const file = request.url === '/fixture.mp4' ? video : assets.get(request.url);
+    if (!file || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(404).end(); return;
     }
+    const bytes=fs.statSync(file).size;
     const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.range || '');
     const start = range ? Number(range[1]) : 0;
     const end = range?.[2] ? Math.min(bytes - 1, Number(range[2])) : bytes - 1;
     if (start > end) { response.writeHead(416).end(); return; }
-    const headers = { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
+    const headers = { 'Content-Type': file===manifest?'application/dash+xml':'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
     if (range) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + bytes;
     const send = () => {
       if (response.destroyed) return;
       response.writeHead(range ? 206 : 200, headers);
       if (request.method === 'HEAD') { response.end(); return; }
-      const stream = fs.createReadStream(video, { start, end });
+      const stream = fs.createReadStream(file, { start, end });
       response.once('close', () => stream.destroy());
       stream.on('error', () => response.destroy()).pipe(response);
     };
@@ -38,18 +45,22 @@ async function startProvider(video) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   return {
     url: 'http://127.0.0.1:' + server.address().port + '/fixture.mp4',
+    dash: 'http://127.0.0.1:' + server.address().port + '/dash/fixture.mpd',
     hold() { hold = true; },
     held() { return waiting.size; },
     gets() { return gets; },
     release() { hold = false; for (const send of waiting) send(); waiting.clear(); },
-    async close() { this.release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    async close() {
+      this.release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+      fs.rmSync(dash,{recursive:true,force:true});
+    }
   };
 }
 
 async function downloadScenario(browser, provider, destination, ffprobe, evidence) {
   const wait = (test, message) => browser.waitUntil(test, { timeout: 60000, timeoutMsg: message });
-  async function preview() {
-    await browser.$('#download-url').setValue(provider.url);
+  async function preview(url=provider.url) {
+    await browser.$('#download-url').setValue(url);
     await browser.$('#download-preview-button').click();
     await wait(async () => (await browser.$('#download-preview').isDisplayed()), 'yt-dlp returned no single-media Preview');
   }
@@ -125,6 +136,35 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   assert.equal(names.length,2);
   assert.ok(names[0].endsWith('.mp4') && names[1].endsWith('.info.json'));
   for(const name of names) assert.ok(fs.statSync(path.join(destination,name)).size>0);
+  const choose = (id,value)=>browser.execute((id,value)=>{
+    const select=document.getElementById(id);
+    select.value=value; select.dispatchEvent(new Event('change',{bubbles:true}));
+    return select.value;
+  },id,value);
+  const modes = [
+    ...Object.entries({source:'aac',m4a:'aac',mp3:'mp3',opus:'opus',flac:'flac',wav:'pcm_s16le'})
+      .map(([format,codec])=>({content:'audio',selection:'audio',format,expected:[codec]})),
+    {content:'video',selection:'video',expected:['h264']},
+    {content:'av',selection:'separate',expected:['aac','h264']},
+    {content:'av',selection:'automatic',expected:['aac','h264']}
+  ];
+  for (const {content,selection,format,expected} of modes) {
+    await preview(provider.dash);
+    assert.equal(await choose('dl-content',content),content);
+    assert.equal(await choose('dl-selection',selection),selection);
+    if(format) assert.equal(await choose('dl-audio',format),format);
+    if(selection==='automatic') {
+      assert.equal(await choose('dl-profile','maximum'),'maximum');
+      assert.equal(await choose('dl-height','360'),'360');
+    }
+    const count=(await browser.$$('#download-jobs li[data-status="saved"]')).length;
+    await browser.$('#download-start').click();
+    await wait(async ()=>(await browser.$$('#download-jobs li[data-status="saved"]')).length===count+1,'Exact '+content+' selection did not save');
+    const name=await browser.execute(()=>document.querySelector('#download-jobs li:last-child select option').textContent);
+    const probe=spawnSync(ffprobe,['-v','error','-show_entries','stream=codec_name','-of','json',path.join(destination,name)],{encoding:'utf8',timeout:15000,windowsHide:true});
+    assert.equal(probe.status,0,probe.stderr);
+    assert.deepEqual(JSON.parse(probe.stdout).streams.map(stream=>stream.codec_name).sort(),expected);
+  }
 }
 
 module.exports = { downloadScenario, startProvider };

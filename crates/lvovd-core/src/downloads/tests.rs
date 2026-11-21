@@ -142,7 +142,7 @@ async fn single_video_arguments_match_released_options() {
             let ids = case["expected"]["--format"].as_str().unwrap();
             let literal = ids
                 .split('+')
-                .map(|id| format!("all[format_id={id}]"))
+                .map(|id| format!("all[format_id='{id}']"))
                 .collect::<Vec<_>>()
                 .join("+");
             assert_eq!(actual["--format"], literal);

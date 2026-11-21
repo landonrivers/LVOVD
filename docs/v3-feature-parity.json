@@ -265,7 +265,9 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Only the selected video stream is returned; unavailable video-only choices remain unavailable."
@@ -312,7 +314,9 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Only audio is acquired/converted; format choice does not change automatic acquisition."
@@ -509,7 +513,9 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Current supported heights, absent formats and audio/extras mode normalization match the reference."
@@ -553,7 +559,9 @@
         "rust": [
           "crates/lvovd-core/src/downloads/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Missing facts remain unknown; oversized or URL-like labels are bounded/scrubbed."
@@ -599,7 +607,9 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Reject stale IDs, invalid roles and selector expressions; never substitute a different format."
@@ -644,7 +654,9 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Preserve source bytes where no merge/remux is needed and do not invoke an audio encoder."
@@ -688,7 +700,9 @@
         "rust": [
           "crates/lvovd-core/src/downloads/tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Compare acquisition arguments across outputs and decoded output properties; compressed-source Download FLAC must not inherit the Local Media rejection."

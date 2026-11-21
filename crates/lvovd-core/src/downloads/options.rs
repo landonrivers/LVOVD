@@ -463,7 +463,7 @@ impl DownloadOptions {
             Some(
                 self.format_ids
                     .iter()
-                    .map(|id| format!("all[format_id={id}]"))
+                    .map(|id| format!("all[format_id='{id}']"))
                     .collect::<Vec<_>>()
                     .join("+"),
             )
