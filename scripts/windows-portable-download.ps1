@@ -47,6 +47,8 @@ try {
     if ($LASTEXITCODE) { throw 'FFprobe could not inspect the saved file.' }
     $types = (($streams | Out-String | ConvertFrom-Json).streams.codec_type | Sort-Object) -join ','
     if ($types -ne 'audio,video') { throw 'The saved file must contain playable audio and video.' }
+    & "$Tools/ffmpeg.exe" -nostdin -v error -xerror -protocol_whitelist file -i $saved[0].FullName -map 0:v:0 -map 0:a:0 -f null -
+    if ($LASTEXITCODE) { throw 'The packaged media tool could not decode the saved video and audio completely.' }
 } finally {
     if (!$server.HasExited) { $server.Kill(); $server.WaitForExit() }
 }

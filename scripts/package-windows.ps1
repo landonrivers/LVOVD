@@ -4,6 +4,17 @@ param()
 $ErrorActionPreference = 'Stop'
 if (!$IsWindows -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') { throw 'Build the Windows x64 review package on Windows x64.' }
 $root = (Resolve-Path "$PSScriptRoot/..").Path
+$commit = (& git -C $root rev-parse HEAD).Trim()
+if ($LASTEXITCODE) { throw 'Could not identify the source commit.' }
+function Get-SourceChanges {
+    $changes = @(& git -C $root status --porcelain)
+    if ($LASTEXITCODE) { throw 'Could not check the source revision.' }
+    if ($env:GITHUB_ACTIONS -and $changes.Count) {
+        throw "The review package requires clean CI sources. Changed paths: $($changes -join ', ')"
+    }
+    return $changes
+}
+$startedDirty = [bool](Get-SourceChanges)
 $out = "$root/outputs/windows-portable"
 $payload = "$out/build-$([Guid]::NewGuid())"
 New-Item -ItemType Directory -Force $payload | Out-Null
@@ -30,9 +41,9 @@ Copy-Item -LiteralPath "$root/LICENSE","$root/NOTICE","$root/distribution/provid
 Copy-Item -LiteralPath "$root/Cargo.lock" -Destination "$payload/notices"
 & node "$PSScriptRoot/desktop-inventory.cjs" "$payload/notices"
 if ($LASTEXITCODE) { throw 'Could not record shipped Rust dependencies.' }
-$commit = (& git -C $root rev-parse HEAD).Trim()
-if ($LASTEXITCODE) { throw 'Could not identify the source commit.' }
-$dirty = [bool](& git -C $root status --porcelain)
+$endingCommit = (& git -C $root rev-parse HEAD).Trim()
+if ($LASTEXITCODE) { throw 'Could not verify the source revision.' }
+$dirty = $startedDirty -or ($endingCommit -ne $commit) -or [bool](Get-SourceChanges)
 if ($env:GITHUB_ACTIONS -and $dirty) { throw 'The review package must be built from a clean source revision in CI.' }
 $entries = foreach ($file in Get-ChildItem -File -Recurse -LiteralPath $payload | Sort-Object FullName) {
     [ordered]@{ path = [IO.Path]::GetRelativePath($payload,$file.FullName).Replace('\','/'); size = $file.Length; sha256 = (Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant() }

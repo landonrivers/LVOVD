@@ -148,15 +148,29 @@ jobs:
         run: xvfb-run -a dbus-run-session -- npm run test:desktop:native
       - name: Build without test controls
         run: node scripts/desktop.cjs build
+      - name: Check out only committed sources for the Windows review ZIP
+        if: runner.os == 'Windows'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: outputs/portable-revision
+          persist-credentials: false
       - name: Build and check Windows portable review ZIP
         if: runner.os == 'Windows'
         env:
           LVOVD_REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: pwsh
-        run: ./scripts/package-windows.ps1
+        working-directory: outputs/portable-revision
+        run: |
+          # Only share the verified media sources, ABI cache and pinned downloads.
+          # Generated files from the debug build and UI tests stay in the first checkout.
+          New-Item -ItemType Directory -Path outputs | Out-Null
+          New-Item -ItemType Junction -Path outputs/portable-inputs -Target "$env:GITHUB_WORKSPACE/outputs/portable-inputs" | Out-Null
+          ./scripts/package-windows.ps1
       - name: Exercise extracted ZIP without development tools
         if: runner.os == 'Windows'
         shell: pwsh
+        working-directory: outputs/portable-revision
         run: ./scripts/test-windows-portable.ps1 -Download
       - name: Attach Windows review ZIP and verification receipt
         if: runner.os == 'Windows'
@@ -164,9 +178,9 @@ jobs:
         with:
           name: LVOVD-Windows-x64-review
           path: |
-            outputs/windows-portable/LVOVD-Windows-x64-review.zip
-            outputs/windows-portable/LVOVD-Windows-x64-review.zip.sha256
-            outputs/windows-portable/receipt.json
+            outputs/portable-revision/outputs/windows-portable/LVOVD-Windows-x64-review.zip
+            outputs/portable-revision/outputs/windows-portable/LVOVD-Windows-x64-review.zip.sha256
+            outputs/portable-revision/outputs/windows-portable/receipt.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

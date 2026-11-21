@@ -46,6 +46,20 @@ $limits.Environment['PATH'] = "$env:SystemRoot\System32;$env:SystemRoot"
 foreach ($key in @($limits.Environment.Keys | Where-Object { $_ -like 'LVOVD_*' -or $_ -like 'WEBVIEW2_*' -or $_ -in 'NODE_OPTIONS','NODE_PATH','PYTHONPATH','PYTHONHOME','CARGO_HOME','RUSTUP_HOME' })) { [void]$limits.Environment.Remove($key) }
 $viewer = [Diagnostics.Process]::Start($limits)
 $details = [ordered]@{ commit = $manifest.commit; pullRequestHead = $manifest.pullRequestHead; workingTreeModified = $manifest.workingTreeModified; profile = $manifest.profile; target = $manifest.target; archiveSha256 = $sha; os = [Environment]::OSVersion.VersionString; nativeWindow = $false; applicationTcpListeners = $null; fixtureDownload = $false; toolVersions = [ordered]@{} }
+function Assert-NoApplicationListener([int]$HostPid) {
+    $tree = [Collections.Generic.HashSet[uint32]]::new()
+    [void]$tree.Add([uint32]$HostPid)
+    $all = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId)
+    do {
+        $oldCount = $tree.Count
+        foreach ($process in $all) {
+            if ($tree.Contains([uint32]$process.ParentProcessId)) { [void]$tree.Add([uint32]$process.ProcessId) }
+        }
+    } until ($oldCount -eq $tree.Count)
+    if (Get-NetTCPConnection -State Listen | Where-Object { $tree.Contains([uint32]$_.OwningProcess) }) {
+        throw 'The packaged application or a child process opened a TCP listener.'
+    }
+}
 try {
     $probes = [ordered]@{ 'ffmpeg' = @('-version'); 'ffprobe' = @('-version'); 'node' = @('--version'); 'yt-dlp' = @('--ignore-config','--no-plugin-dirs','--version') }
     foreach ($name in $probes.Keys) {
@@ -77,14 +91,14 @@ try {
     } until (($viewer.MainWindowHandle -ne 0 -and $viewer.MainWindowTitle -eq 'LVOVD') -or [DateTime]::UtcNow -gt $deadline)
     if ($viewer.MainWindowHandle -eq 0 -or $viewer.MainWindowTitle -ne 'LVOVD') { throw 'The native LVOVD window did not open.' }
     $details.nativeWindow = $true
-    $listeners = @(Get-NetTCPConnection -State Listen | Where-Object OwningProcess -eq $viewer.Id)
-    $details.applicationTcpListeners = $listeners.Count
-    if ($listeners.Count) { throw 'The packaged host opened a TCP listener.' }
+    Assert-NoApplicationListener $viewer.Id
+    $details.applicationTcpListeners = 0
     if ($Download) {
         # Windows PowerShell provides the Windows UI Automation assemblies. Drive
         # the real accessibility tree. No debugger or test controls enter LVOVD.
         & powershell.exe -NoProfile -NonInteractive -File "$PSScriptRoot/windows-portable-download.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Working "$out" -Destination $downloadDirectory
         if ($LASTEXITCODE) { throw 'Packaged Download acceptance failed.' }
+        Assert-NoApplicationListener $viewer.Id
         $details.fixtureDownload = $true
     }
     if (!$viewer.CloseMainWindow() -or !$viewer.WaitForExit(30000)) { throw 'The application did not close normally.' }

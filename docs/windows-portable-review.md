@@ -13,7 +13,7 @@ Use PowerShell 7 on a Windows x64 workstation with Git, Node 24, the repository 
 ./scripts/test-windows-portable.ps1
 ```
 
-The ZIP, hash and direct-launch receipt are under `outputs/windows-portable`. The smoke test checks every included file, opens the extracted program with a system-only PATH from another working directory, checks for the named window and an application TCP listener, then closes the window normally. The Actions job additionally drives the release window via Windows accessibility, previews and downloads a synthetic HTTP fixture, and checks the saved audio and video streams using the packaged FFprobe. The fixture server runs in the test harness. The release executable contains no test driver.
+The ZIP, hash and direct-launch receipt are under `outputs/windows-portable`. The smoke test checks every included file, opens the extracted program with a system-only PATH from another working directory, confirms that its window opens and that its process tree has zero TCP listeners, then closes the window normally. Actions builds the release from a fresh checkout of the tested revision. It drives the release window through Windows accessibility, previews and downloads a synthetic HTTP fixture, inspects the saved streams with the packaged FFprobe, and fully decodes the saved audio and video with the packaged FFmpeg. The fixture server runs in the test harness.
 
 ## What goes into the ZIP
 
