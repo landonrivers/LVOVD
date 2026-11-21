@@ -8,8 +8,8 @@
     if (value.protocolVersion !== 1) throw new Error('The desktop interface and backend versions do not match.');
     return value;
   });
-  function projection(value) {
-    if (!value) return null;
+  function projection(value, epoch) {
+    if (!value || connection !== epoch || value.workbenchId !== active) return null;
     if (current?.workbenchId === value.workbenchId && (value.revision < current.revision || value.queueRevision < current.queueRevision)) value = current;
     else { current = value; revision++; }
     const jobs = value.jobs.map(job => { const failure = job.failure?.workspaceFailure || job.failure; return { ...job, workspaceId: job.sourceId, message: job.failure?.message, failure: failure && { ...failure, explanation: failure.explanation || job.failure.message } }; });
@@ -38,9 +38,13 @@
   };
   async function perform(path, body, method, query) {
     await ready;
+    const epoch = connection;
     if (path === '/api/processing/collection') {
-      const result = await native.call('create_workbench'); active = result.workbenchId;
-      return { collection: projection(result) };
+      const result = await native.call('create_workbench');
+      if (epoch !== connection) throw new Error('The active workbench changed.');
+      if (active !== result.workbenchId) current = null;
+      active = result.workbenchId;
+      return { collection: projection(result, epoch) };
     }
     if (path === '/api/processing/collections') {
       const entries = await native.call('list_workbenches');
@@ -54,24 +58,25 @@
     }
     if (path === '/api/processing/queue') {
       return { collection: projection(await native.call('queue_processing', { request: { workbenchId: body.collectionId,
-        entries: body.entries.map(e => ({ sourceId: e.sourceAssetId, key: e.planKey, acknowledgements: e.acknowledgedWarnings || [] })) } })) };
+        entries: body.entries.map(e => ({ sourceId: e.sourceAssetId, key: e.planKey, acknowledgements: e.acknowledgedWarnings || [] })) } }), epoch) };
     }
     if (path === '/api/processing/queue/cancel') {
-      const job = body.workspaceId && current?.jobs.find(j => j.sourceId === body.workspaceId);
+      if (active !== body.collectionId) throw new Error('The active workbench changed.');
+      const job = body.workspaceId && current?.jobs.find(j => j.sourceId === body.workspaceId
+        && j.id === body.jobId && ['queued', 'running', 'cancelling'].includes(j.status));
       if (body.workspaceId && !job) throw new Error('This processing job has finished or expired.');
-      return { collection: projection(await native.call('cancel_processing', { request: { workbenchId: body.collectionId, jobId: job?.id || null } })) };
+      return { collection: projection(await native.call('cancel_processing', { request: { workbenchId: body.collectionId, jobId: job?.id || null } }), epoch) };
     }
     if (path === '/api/workspace' && method === 'DELETE') {
       const result = await native.call('remove_source', { request: scoped(query.get('workspace')) });
-      projection(result);
       return { cleanup: { status: result.cleanup.includes(query.get('workspace')) ? 'pending' : 'complete' } };
     }
     if (path === '/api/processing/cleanup' || path === '/api/conversion/cleanup') {
       const result = await native.call('cleanup_workbench', { request: { workbenchId: body.collectionId || active } });
-      return { collection: result?.workbenchId === active ? projection(result) : null };
+      return { collection: projection(result, epoch) };
     }
     if (path === '/api/processing/collection/remove') {
-      return { collection: projection(await native.call('discard_workbench', { request: { workbenchId: body.collectionId } })) };
+      return { collection: projection(await native.call('discard_workbench', { request: { workbenchId: body.collectionId } }), epoch) };
     }
     if (path === '/api/workspace/editor' || path === '/api/workspace/waveform') {
       const sourceId = body.sourceAssetId || query.get('sourceAssetId'), workspaceId = body.workspaceId || query.get('workspaceId');
@@ -79,8 +84,10 @@
       if (method === 'DELETE') { await native.call('cancel_waveform', { request: { ...scoped(sourceId), operationId: body.operationId } }); return {}; }
       if (method === 'GET') return native.call('waveform_window', { request: { ...scoped(sourceId), operationId: query.get('operationId'),
         startSeconds: Number(query.get('startSeconds')), endSeconds: Number(query.get('endSeconds')), points: Number(query.get('points')) } });
-      const collection = projection(await native.call(path.endsWith('/editor') ? 'prepare_editor' : 'prepare_waveform', { request: scoped(sourceId) }));
-      return { workspace: collection.workspaces.find(w => w.id === sourceId) };
+      const collection = projection(await native.call(path.endsWith('/editor') ? 'prepare_editor' : 'prepare_waveform', { request: scoped(sourceId) }), epoch);
+      const workspace = collection?.workspaces.find(w => w.id === sourceId);
+      if (!workspace) throw new Error('The selected file is no longer available.');
+      return { workspace };
     }
     throw new Error('This operation is not available in the desktop application yet.');
   }
@@ -98,8 +105,21 @@
       }
     },
     async subscribe(id, accept, expired) {
-      active = id; connection++;
-      return native.subscribe(id, value => value ? accept(projection(value)) : expired());
+      if (active !== id) current = null;
+      active = id;
+      const epoch = ++connection;
+      return native.subscribe(id, value => {
+        if (connection !== epoch || active !== id) return;
+        if (!value) {
+          current = null;
+          active = null;
+          connection++;
+          expired();
+          return;
+        }
+        const collection = projection(value, epoch);
+        if (collection) accept(collection);
+      });
     },
     async pick(id) { return native.call('pick_source', { request: { workbenchId: id } }); },
     async save(output) {

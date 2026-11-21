@@ -35,6 +35,7 @@ async function setup(page, bridge = true, retired = false) {
           return { connectionId: ++connection, snapshot: state(fixture.active) };
         }
         if (command === 'acknowledge_workbench') return;
+        if (command === 'set_local_drop_target') return;
         if (command === 'runtime_health') return Object.fromEntries(['ffmpeg', 'ffprobe', 'ytdlp', 'providerRuntime'].map(key => [key, { installed: true, version: 'test' }]));
         if (command === 'pick_source') return new Promise(resolve => { fixture.resolvePick = i => resolve({ sources: [fixture.sources[i]], failure: null }); });
         if (command === 'remove_source') return new Promise((resolve, reject) => {
@@ -42,6 +43,18 @@ async function setup(page, bridge = true, retired = false) {
           fixture.resolveRemoval = () => resolve(state(args.request.workbenchId, 2, [1], [fixture.sources[0].assetId]));
         });
         if (command === 'cancel_editor') return;
+        if (command === 'cancel_processing') {
+          fixture.cancelledJob = args.request;
+          return state(args.request.workbenchId, 5);
+        }
+        if (command === 'prepare_editor') {
+          fixture.previewAttempts = (fixture.previewAttempts || 0) + 1;
+          return new Promise(resolve => { fixture.ackPreview = () => resolve({
+            ...state(args.request.workbenchId, fixture.previewAttempts, [0]),
+            editors: [{sourceId: ids[0], eligible: true, durationSeconds: 2}],
+            previews: [{sourceAssetId: ids[0], status: 'preparing'}]
+          }); });
+        }
         if (command === 'save_result') return new Promise(resolve => { fixture.resolveSave = resolve; });
         if (command === 'cleanup_workbench') return new Promise(resolve => { fixture.resolveCleanup = () => { fixture.retired=false; resolve(null); }; });
         throw new Error('Unexpected command: ' + command);
@@ -52,6 +65,7 @@ async function setup(page, bridge = true, retired = false) {
   await page.addScriptTag({ path: path.join(root, 'workspace-transport.js') });
   for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
   await page.addScriptTag({ path: path.join(root, 'app.js') });
+  await page.locator('#nav-local').click();
   if (bridge) await page.waitForFunction(() => window.fixture.channels.length > 0);
   page.on('dialog', dialog => dialog.accept());
 }
@@ -134,4 +148,44 @@ test('retired native work is cleanup only and its late reply cannot replace the 
   await page.evaluate(() => window.fixture.snapshot(2,[0,1]));
   await expect(page.locator('#local-media-name')).toHaveText('Synthetic 2');
   await expect(page.locator('#processing-file-list option')).toHaveCount(2);
+});
+
+test('a delayed removal cannot redirect Cancel Selected after the workbench changes', async ({ page }) => {
+  await setup(page);
+  const result = await page.evaluate(async ids => {
+    const t = window.LVOVDWorkspaceTransport, f = window.fixture;
+    const remove = t.request('/api/workspace?workspace=' + ids[0], {method: 'DELETE'});
+    while (!f.resolveRemoval) await new Promise(resolve => setTimeout(resolve, 0));
+    const close = await t.subscribe(f.otherId, () => {}, () => {});
+    f.snapshot(4, [2], [], null, {jobs: [{id: ids[1], sourceId: ids[2], status: 'running'}]});
+    f.resolveRemoval();
+    await remove;
+    const response = await t.request('/api/processing/queue/cancel', {method: 'POST',
+      body: JSON.stringify({collectionId: f.otherId, workspaceId: ids[2], jobId: ids[1]})});
+    close();
+    return {ok: response.ok, request: f.cancelledJob, owner: f.otherId};
+  }, ids);
+  expect(result.ok).toBe(true);
+  expect(result.request).toEqual({workbenchId: result.owner, jobId: ids[1]});
+});
+
+test('interrupted playback preparation can be retried on the selected file', async ({ page }) => {
+  await setup(page);
+  await page.evaluate(ids => {
+    const f = window.fixture;
+    f.sources[0].inspection.media = {durationSeconds: 2, container: {kind: 'wav'}, audio: {codec: 'pcm_s16le', channels: 1, sampleRate: 48000}};
+    f.eligible = {editors: [{sourceId: ids[0], eligible: true, durationSeconds: 2}]};
+    f.snapshot(1, [0], [], null, f.eligible);
+  }, ids);
+  await page.waitForFunction(() => window.fixture.previewAttempts === 1);
+  await page.evaluate(ids => {
+    const f = window.fixture;
+    f.ackPreview();
+    f.snapshot(3, [0], [], null, {...f.eligible, previews: [{sourceAssetId: ids[0], status: 'cancelled'}]});
+  }, ids);
+  const retry = page.locator('#processing-prepare-preview');
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await page.waitForFunction(() => window.fixture.previewAttempts === 2);
+  await expect(page.locator('#processing-file-list')).toHaveValue(ids[0]);
 });

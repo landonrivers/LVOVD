@@ -11,6 +11,7 @@ pub mod assets;
 pub mod audio_policy;
 pub mod capabilities;
 mod cleanup_retry;
+pub mod downloads;
 pub mod edit_plan;
 pub mod export;
 pub mod inspection;

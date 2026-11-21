@@ -10,7 +10,7 @@ LVOVD exists as a practical local alternative to ad-heavy, tracking-heavy online
 
 The long-term product can grow beyond downloading into a small local media compatibility toolkit, but source acquisition, local editing, and local conversion should remain understandable as distinct jobs rather than becoming one opaque media pipeline.
 
-## Current baseline
+## Released browser baseline (v2.7)
 
 **v2.7.0 local audio checkpoint:** adds standalone Opus/FLAC/WAV processing, audio-only trimming on the selected stream’s zero-based timeline, a combined waveform overview, and Opus/FLAC encoding inside MKV. FLAC/WAV preserve proven precision automatically; FLAC cannot reduce floating-point or greater-than-24-bit precision and suggests WAV instead. Preview and waveform assets remain temporary and never become processing inputs. Roadmap #7 remains incomplete: further video codecs, images, hardware encoding, and richer track/metadata controls are deferred.
 
@@ -18,7 +18,7 @@ The long-term product can grow beyond downloading into a small local media compa
 
 **v2.6.0 release checkpoint:** the accepted Roadmap 7A–7D3 work now forms the public Local Media workbench baseline: inspection, original-source cuts plus conversion/compression, independent local files, sequential batch processing, selected playlist intake, compact processed results, Download All, and session-local reopening/cleanup recovery. Landon completed manual acceptance of the final results workflow. This release does not mark all of Roadmap #7 complete; the later codec, image, hardware, track/metadata, and packaging work below remains deferred. See [v2.6.0 release notes](docs/releases/v2.6.0.md).
 
-LVOVD currently provides:
+The released browser application provides the following workflows. Desktop availability is tracked separately under milestone 8.
 
 - metadata-driven Preview and capability discovery;
 - Video + Audio, Video Only, Audio Only, and Extras Only workflows;
@@ -180,11 +180,9 @@ This feature should remain clearly separate from source acquisition: changing th
 
 **Next functional slices:** H.265/HEVC, VP9, AV1, and appropriate editing codecs such as ProRes remain future codec adapters. Images, hardware encoding, broader metadata/track controls, and desktop packaging are deferred. Roadmap #7 is not complete. 7B/7C remain the implementation history of the infrastructure and compatible APIs; their former navigation is superseded by the unified workbench.
 
-## Major milestone — Easier desktop distribution
+## Major milestone — Standalone video downloader
 
-Reduce setup friction so normal users do not need to understand the runtime stack.
-
-### 8. Packaged desktop distribution
+### 8. Native acquisition, editing and distribution
 
 The accepted v3.0 direction replaces the Node application backend with Rust, retains the JavaScript interface, and uses Tauri native commands/channels plus an owned-media protocol. Production will have no localhost application server. Windows uses Evergreen WebView2; Windows, macOS and Linux are all required launch targets.
 
@@ -196,7 +194,18 @@ Each stage targets `staging/v3-desktop`. Keep incomplete desktop work off `maste
 
 **All released functionality is required.** The [feature parity register](docs/v3-feature-parity.md) maps the v2.7 baseline to native locations, stages, tests and platform evidence. Extras Only, companion files, subtitles/languages, chapters, SponsorBlock, custom yt-dlp and extractor plugins all remain required in 8D. Download audio conversions retain their separate released policy. Native launch replaces browser/LAN hosting as the sole approved access-mode exception; no other missing media capability may be silently deferred. Stable v3.0 requires every register entry to be Verified as well as packaged-platform/security acceptance.
 
-8A's native playback gate passes on Windows, Ubuntu 22.04, and both macOS architectures, and PR #52 is merged into staging. Linux uses an application-owned GStreamer source and private, bounded reads from Rust; see the stage document for exact evidence and limits. This is a development preview, not a completed desktop release. [8B is accepted into staging](docs/desktop-media-policies.md) through PR #53, with policy, inspection, capability discovery, reviewed plans, arguments and output validation compared against shared reference fixtures. Rust supervision and unified source/result ownership have generated-media and lifecycle regressions. [8C Local Media implementation and acceptance](docs/desktop-local-media.md) is complete for review in PR #54, with one active multi-file workbench, the reused editor, owned previews/waveforms, immutable batch processing, result playback and collision-safe Save/Save All. Windows, Linux and both macOS native gates pass; receipts are recorded in that stage document. The PR is unmerged, and no Download workflow is claimed. Bundled tools, native export handling, remembered settings/history, signed application updates and Windows portable rollback remain required before v3.0 publication. Node remains only as yt-dlp's provider-script helper. The existing browser application remains the working reference during migration. Roadmap #7 stays incomplete.
+The foundations are merged into staging. [8A](docs/desktop-foundation.md) proves native launch and playback. [8B](docs/desktop-media-policies.md) ports media policy, ownership and worker supervision. [8C](docs/desktop-local-media.md) integrates one multi-file workbench, editing, batch processing and saving. The [8C merge](https://github.com/landonrivers/LVOVD/pull/54) is the starting point for Download.
+
+| Next stage | User workflow | Evidence required |
+|---|---|---|
+| 8D.1 | Open `lvovd.exe`, paste one URL, Preview, download Video + Audio, and find the saved video. Use the system Downloads folder on first launch and remember changes. | A release-profile Windows portable ZIP, tool inventory and checksum. Test the extracted package with a controlled direct-media URL and separately with an authorized YouTube video. Verify streams, playback, cancellation, collisions and save retry. [First download](docs/desktop-first-download.md) |
+| 8D.2 | Select the released content modes, source formats, conversions, ranges, chapters, captions, companions and SponsorBlock options. | Compare actual outputs, reviewed names and media streams with the v2.7 fixtures. |
+| 8D.3 | Select playlist items, follow or cancel the queue, edit one acquired source, or add selected videos to Local Media. | Exercise both handoffs against the shared acquisition coordinator, pacing, stop-on-rejection, reservations and cleanup. |
+| 8D.4 | Reuse History, manage saved outputs and update or explicitly trust provider tools/plugins. | Verify all terminal states, partial saves, history faults, one-time legacy import, release checksums and replacement while jobs are active. |
+| 8E | Use Download, Local Media, History and Settings in a compact, keyboard-accessible application. | Validate persistence, crash cleanup and coordinated quit with unsaved work. Cut over the development browser harness to the Rust core. |
+| 8F | Install, launch and update the finished application on every supported OS. | Validate Windows installer/portable ZIP, Intel/Apple Silicon DMGs and Linux AppImage on minimum supported systems, with component notices, advisory checks, signed updates and portable rollback. |
+
+The parity register distinguishes native implementation from four-platform workflow verification. Packaged-machine acceptance records the exact artifact and prerequisites used. Green development builds cannot establish clean-machine delivery. Roadmap #7 remains incomplete.
 
 ### Mobile / phone use — exploratory
 

@@ -403,11 +403,33 @@ pub(crate) async fn prepare_editor(
     state: State<'_, AppState>,
     request: SourceRequest,
 ) -> Result<Snapshot> {
-    state.workbenches.prepare_analysis(
+    let snapshot = state.workbenches.prepare_analysis(
         request.workbench_id,
         request.source_id,
         lvovd_core::analysis::Kind::Preview,
-    )
+    )?;
+    #[cfg(feature = "test-driver")]
+    {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+        // Interrupt the first real proxy after admission, before replying. This exercises
+        // the same cancellation and recovery path without depending on encoder speed.
+        if std::env::var_os("LVOVD_DESKTOP_TEST_INTERRUPT_PROXY").is_some()
+            && let Some(proxy) = snapshot.previews.iter().find(|p| {
+                p.source_asset_id == request.source_id
+                    && matches!(p.status, "waiting" | "preparing")
+            })
+            && !INTERRUPTED.swap(true, Ordering::Relaxed)
+        {
+            state.workbenches.cancel_analysis(
+                request.workbench_id,
+                request.source_id,
+                lvovd_core::analysis::Kind::Preview,
+                proxy.operation_id,
+            )?;
+        }
+    }
+    Ok(snapshot)
 }
 #[tauri::command]
 pub(crate) async fn prepare_waveform(

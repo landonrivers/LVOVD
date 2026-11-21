@@ -5,6 +5,25 @@ body { margin:0; padding:12px 16px; height:100vh; min-height:0; display:flex; fl
 h1 { font:26px Georgia,serif; color:#e8d9b8; } h1 small { font:12px system-ui; color:#afa99d; }
 .notice { margin:0; padding:7px 10px; border:1px solid #55472e; color:#e0cba5; background:#241f17; }
 main { flex:1; min-height:0; overflow:hidden; }
+.desktop-local { height:100%; min-height:0; display:flex; flex-direction:column; }
+.desktop-header nav { display:flex; gap:4px; }
+.desktop-header nav button { padding:7px 12px; background:transparent; border:1px solid transparent; color:#d3c8b4; border-radius:4px; font:inherit; cursor:pointer; }
+.desktop-header nav button[aria-current] { border-color:#998053; background:#302c21; color:#fff4d9; }
+.download-view { height:100%; overflow:auto; padding:clamp(12px,3vw,32px); margin:auto; max-width:900px; box-sizing:border-box; }
+.download-view h2 { margin:0 0 18px; color:#e8d9b8; font:28px Georgia,serif; }
+.download-view h3 { margin:12px 0 6px; }
+.download-view label { display:block; margin-bottom:5px; font-weight:bold; }
+.download-toolbar,.download-destination,.download-card,.download-job-actions { display:flex; align-items:center; gap:10px; }
+.download-toolbar input { flex:1; min-width:0; }
+.download-destination { margin-top:12px; flex-wrap:wrap; }
+.download-destination span,.download-jobs li p,#download-title,#download-filename { overflow-wrap:anywhere; }
+.download-card,.download-jobs li { background:#1b211d; padding:12px; border:1px solid #485342; border-radius:6px; }
+.download-card img { width:112px; max-height:88px; object-fit:contain; }
+.download-jobs { list-style:none; padding:0; display:grid; gap:8px; }
+.download-jobs p,.download-card p { margin:5px 0; }
+.download-job-actions { flex-wrap:wrap; }
+#download-message:empty,#settings-message:empty { display:none; }
+@media(max-width:700px) { .desktop-header { flex-wrap:wrap; } .desktop-header nav { order:3; width:100%; } .desktop-header nav button { flex:1; } }
 .media-workspace-panel { margin:0; padding:0; border:0; height:100%; display:flex; flex-direction:column; }
 .workspace-heading { display:none; }
 #local-media-ready { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; overflow:hidden; }

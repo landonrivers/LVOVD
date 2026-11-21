@@ -36,6 +36,8 @@ pub struct Progress {
 type Consumer = Box<dyn FnMut(&[u8]) -> Result<()> + Send>;
 enum Capture {
     All,
+    Provider,
+    ProviderStream(Consumer),
     Progress(tokio::sync::watch::Sender<Progress>),
     Stream(Consumer),
 }
@@ -58,6 +60,28 @@ impl Default for Supervisor {
     }
 }
 impl Supervisor {
+    /// Provider stderr is classified into fixed recovery messages; never return
+    /// the original diagnostic, which can contain signed URLs and credentials.
+    pub(crate) async fn run_provider_owned<G: Send + 'static>(
+        &self,
+        request: Request<'_>,
+        ownership: G,
+    ) -> Result<Output> {
+        self.supervise(request, Capture::Provider, ownership).await
+    }
+    pub(crate) async fn run_provider_stream_owned<G: Send + 'static>(
+        &self,
+        request: Request<'_>,
+        consume: impl FnMut(&[u8]) -> Result<()> + Send + 'static,
+        ownership: G,
+    ) -> Result<Output> {
+        self.supervise(
+            request,
+            Capture::ProviderStream(Box::new(consume)),
+            ownership,
+        )
+        .await
+    }
     /// Consume bounded chunks without accumulating decoded media in memory.
     /// The consumer enforces its inspected-duration byte ceiling.
     pub async fn run_stream_owned<G: Send + 'static>(
@@ -334,12 +358,13 @@ async fn run_inner(
     let stdout = child.stdout.take().expect("piped stdout");
     let stderr = child.stderr.take().expect("piped stderr");
     let captured = AtomicUsize::new(0);
+    let provider = matches!(capture, Capture::Provider | Capture::ProviderStream(_));
     let result = tokio::select! {
         biased;
         _ = cancel.cancelled() => Err(AppError::new("CANCELLED", "Operation cancelled.")),
         result = tokio::time::timeout(deadline, async {
             let (stdout, stderr, status) = tokio::try_join!(
-                async {match capture {Capture::All=>read_bounded(stdout,limit,&captured).await,Capture::Progress(progress)=>read_progress(stdout,progress).await,Capture::Stream(consume)=>read_stream(stdout,consume).await}}, read_bounded(stderr, limit, &captured),
+                async {match capture {Capture::All|Capture::Provider=>read_bounded(stdout,limit,&captured).await,Capture::Progress(progress)=>read_progress(stdout,progress).await,Capture::Stream(consume)|Capture::ProviderStream(consume)=>read_stream(stdout,consume).await}}, read_bounded(stderr, limit, &captured),
                 async {
                     let status=child.wait().await;
                     // Retire descendants before waiting for inherited pipes.
@@ -347,7 +372,9 @@ async fn run_inner(
                     status.map_err(|_| AppError::new("TOOL_EXIT", "Could not confirm tool exit."))
                 }
             )?;
-            if !status.success() { return Err(AppError::new("TOOL_FAILED", "The tool rejected this operation.")); }
+            if !status.success() {
+                return Err(if provider { crate::downloads::provider_error(&stderr) } else { AppError::new("TOOL_FAILED", "The tool rejected this operation.") });
+            }
             Ok(Output { stdout, stderr })
         }) => result.unwrap_or_else(|_| Err(AppError::new("TOOL_TIMEOUT", "The tool exceeded its time limit.")))
     };

@@ -1,6 +1,20 @@
 'use strict';
 (async function() {
   const native = globalThis.LVOVDNative, byId = id => document.getElementById(id);
+  let changeDropTarget = Promise.resolve();
+  for (const button of document.querySelectorAll('.desktop-header nav button')) {
+    button.addEventListener('click', () => {
+      // A file dropped onto Download or Settings must not start an invisible import.
+      changeDropTarget = changeDropTarget.then(() => native.call('set_local_drop_target', { enabled: button.id === 'nav-local' }))
+        .catch(error => { byId('workspace-status').textContent = error.message; });
+      for (const view of document.querySelectorAll('.desktop-header nav button')) {
+        const selected = view === button;
+        byId(view.getAttribute('aria-controls')).hidden = !selected;
+        if (selected) view.setAttribute('aria-current', 'page');
+        else view.removeAttribute('aria-current');
+      }
+    });
+  }
   const cleanup = byId('workspace-recovery');
   cleanup.setAttribute('aria-label', 'Temporary file cleanup');
   cleanup.querySelector('strong').textContent = 'Temporary file cleanup';

@@ -49,7 +49,7 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-22.04, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -74,13 +74,21 @@ jobs:
       - name: Build verified Linux media tools
         if: runner.os == 'Linux'
         run: bash scripts/ci-ffmpeg-linux.sh
-      - name: macOS media tools
+      - name: macOS media build prerequisites
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
-      - name: Windows media tools
-        if: runner.os == 'Windows'
+        run: brew install nasm automake autoconf libtool pkgconf
+      - name: Build locked Windows and macOS media tools
+        if: runner.os != 'Linux'
         shell: pwsh
-        run: choco install ffmpeg --no-progress -y
+        run: ./scripts/desktop-media-tools.ps1 -IncludeSources:($IsWindows)
+      - name: Stage verified yt-dlp and provider runtime before core and webview tests
+        shell: pwsh
+        run: |
+          ./scripts/desktop-provider-tools.ps1
+          $tools = Join-Path $env:GITHUB_WORKSPACE 'outputs/native-tools/tools'
+          $tools | Out-File -FilePath $env:GITHUB_PATH -Append
+          $yt = Join-Path $tools $(if ($IsWindows) { 'yt-dlp.exe' } else { 'yt-dlp' })
+          "LVOVD_DESKTOP_YTDLP=$yt" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Resolve pinned Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
@@ -111,6 +119,26 @@ jobs:
         run: xvfb-run -a dbus-run-session -- npm run test:desktop:native
       - name: Build without test controls
         run: node scripts/desktop.cjs build
+      - name: Build and check Windows portable review ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - name: Exercise extracted ZIP without development tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-windows-portable.ps1 -Download
+      - name: Attach Windows review ZIP and verification receipt
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: LVOVD-Windows-x64-review
+          path: |
+            outputs/windows-portable/LVOVD-Windows-x64-review.zip
+            outputs/windows-portable/LVOVD-Windows-x64-review.zip.sha256
+            outputs/windows-portable/receipt.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

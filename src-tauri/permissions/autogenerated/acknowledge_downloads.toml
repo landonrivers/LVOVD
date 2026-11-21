@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acknowledge-downloads"
+description = "Enables the acknowledge_downloads command without any pre-configured scope."
+commands.allow = ["acknowledge_downloads"]
+
+[[permission]]
+identifier = "deny-acknowledge-downloads"
+description = "Denies the acknowledge_downloads command without any pre-configured scope."
+commands.deny = ["acknowledge_downloads"]

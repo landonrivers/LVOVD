@@ -1,0 +1,26 @@
+{
+  "node": {
+    "version": "24.22.3",
+    "archives": {
+      "win32-x64": ["win-x64.zip", "e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f"],
+      "linux-x64": ["linux-x64.tar.xz", "4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb"],
+      "darwin-x64": ["darwin-x64.tar.gz", "977614af0504c81045e7fd85596dbca0e5f951b96681516dadafedcca8c447f7"],
+      "darwin-arm64": ["darwin-arm64.tar.gz", "ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd"]
+    }
+  },
+  "ytdlp": {
+    "version": "2026.11.20.232656",
+    "archives": {
+      "win32": ["yt-dlp.exe", "28c48c8fb5d1e6914ef3d139a9aae365dfacc6f3a84f5cb013de1a4492646224"],
+      "linux": ["yt-dlp_linux", "176f4e776bbade709984ec685417d51470ebfcdf625d0d730f34d69fe5b6d17c"],
+      "darwin": ["yt-dlp_macos", "f25156c8d49091cf90b1fbf58d61da72d1d8841cdd5ab4987ea7dd5c0483ae47"]
+    },
+    "sourceSha256": "9774c5ee37e06d5077f117e98565f33ac0f076ac92ff68f47f012a1395ecd8ee",
+    "windowsLicenseArchiveSha256": "f22e860af455dd33ec77933eeb95d6fffeee3984e53008ef79f778796acd82b3"
+  },
+  "evergreen": {
+    "url": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/63f7af19-5d22-43ab-af18-239a7b23b84c/MicrosoftEdgeWebView2RuntimeInstallerX64.exe",
+    "sha256": "47bc51387aff95c1275ce38cfbbb5fbab99b43b33214049877bbcdbcc7a970d5",
+    "bytes": 294099168
+  }
+}

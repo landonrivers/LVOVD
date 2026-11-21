@@ -15,6 +15,23 @@ fn changed() -> AppError {
         "The owned media changed or is unavailable. Remove the entry and choose the file again.",
     )
 }
+/// Native folders may be moved, replaced or disconnected between selection
+/// and publication. Compare their filesystem identity across that interval.
+pub(crate) fn directory_identity(path: &Path) -> Result<(u64, u64)> {
+    let mut options = File::options();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+        options.custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+    }
+    let file = options.open(path).map_err(|_| changed())?;
+    if !file.metadata().map_err(|_| changed())?.is_dir() {
+        return Err(changed());
+    }
+    Ok(identity(&file)?.0)
+}
 impl Seal {
     pub(crate) fn capture(path: &Path) -> Result<Self> {
         let entry = std::fs::symlink_metadata(path).map_err(|_| changed())?;
