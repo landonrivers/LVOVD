@@ -6,6 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { environment } = require('../../scripts/desktop.cjs');
 const { downloadScenario, startProvider } = require('./download.cjs');
+const replay = require('./provider-replay.cjs');
 const root = path.resolve(__dirname, '../..');
 const resultDir = path.join(root, 'desktop/test-results');
 fs.mkdirSync(resultDir, { recursive: true });
@@ -42,7 +43,7 @@ async function waitForDriver(port, child) {
   }
   throw new Error('Native driver did not become ready');
 }
-async function scenario(file, index, provider) {
+async function scenario(file, index, provider, providerReplay) {
   const port = 4455 + index, log = fs.openSync(path.join(resultDir, `native-${index}.log`), 'w');
   // Exercise the same tool discovery as a direct executable launch, without the
   // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
@@ -55,6 +56,10 @@ async function scenario(file, index, provider) {
   directEnv.LVOVD_DESKTOP_TEST_DOWNLOAD_FOLDER = destination;
   if (index === 3) directEnv.LVOVD_DESKTOP_TEST_INTERRUPT_PROXY = '1';
   for (const key of ['FFPROBE', 'FFMPEG', 'NODE', 'YTDLP']) delete directEnv['LVOVD_DESKTOP_' + key];
+  if (providerReplay) {
+    fs.writeFileSync(path.join(config, 'source.info.json'), JSON.stringify(providerReplay.info));
+    directEnv.LVOVD_DESKTOP_TEST_PROVIDER_PORT = String(providerReplay.port);
+  }
   const child = spawn(path.join(root, 'target/debug/lvovd' + (process.platform === 'win32' ? '.exe' : '')), [], {
     cwd: resultDir, env: directEnv, windowsHide: true, stdio: ['ignore', log, log]
   });
@@ -68,6 +73,7 @@ async function scenario(file, index, provider) {
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
     assert.equal(await browser.$('#desktop-download').isDisplayed(), true, 'Download must be the initial application view');
     if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir, ffmpeg);
+    if (providerReplay) await replay.verify(browser, providerReplay, destination, env.LVOVD_DESKTOP_FFPROBE);
     await browser.$('#nav-local').click();
     await browser.execute(() => { window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(e.message)); window.addEventListener('unhandledrejection',e=>window.__errors.push(String(e.reason))); });
     await browser.$('#media-choose-button').click();
@@ -303,7 +309,12 @@ async function expectEmptyFiles(browser) {
 }
 (async () => {
   const provider = await startProvider(video, ffmpeg);
-  try { await scenario(video, 0, provider); }
+  try {
+    await scenario(video, 0, provider);
+    const fixture = await replay.start(provider.url);
+    try { await scenario(audio, 1, undefined, fixture); }
+    finally { await fixture.close(); }
+  }
   finally { await provider.close(); }
-  await scenario(audio, 1); await scenario(tailIndex, 2); await scenario(wave, 3);
+  await scenario(tailIndex, 2); await scenario(wave, 3);
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory)][string]$Tools,
     [Parameter(Mandatory)][string]$Destination,
     [Parameter(Mandatory)][string]$Receipt,
-    [ValidateSet('Fixture','Captions','SponsorBlock')][string]$Scenario='Fixture'
+    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock')][string]$Scenario='Fixture'
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -143,18 +143,20 @@ try {
         Set-Captions 'Creator and automatic' 'zz'
         [void](Save-Selection 0)
         $evidence.unavailableLanguage='Failed without publication'
-    } elseif ($Scenario -eq 'Captions') {
+    } elseif ($Scenario -in 'Captions','AutomaticCaptions') {
         $url=$env:LVOVD_QA_CAPTION_URL
-        if (!$url) {throw 'Set LVOVD_QA_CAPTION_URL to a permitted source with creator and automatic English tracks.'}
-        foreach ($mode in 'Creator subtitles','Automatic captions','Creator and automatic') {
-            Preview $url
-            Set-Captions $mode 'en'
-            $file=Save-Selection 1
-            $cues=Read-Caption $file
-            if ($mode -eq 'Creator subtitles') {$creator=$cues}
-            if ($mode -eq 'Automatic captions' -and $cues -ceq $creator) {throw 'Fixture did not distinguish the two caption sources.'}
-            if ($mode -eq 'Creator and automatic' -and $cues -cne $creator) {throw 'Both mode did not prefer the creator track.'}
-            Record-File $mode $file
+        if (!$url) {throw 'Set LVOVD_QA_CAPTION_URL to a maintainer-owned source with the required caption tracks.'}
+        if ($Scenario -eq 'Captions') {
+            foreach ($mode in 'Creator subtitles','Automatic captions','Creator and automatic') {
+                Preview $url
+                Set-Captions $mode 'en'
+                $file=Save-Selection 1
+                $cues=Read-Caption $file
+                if ($mode -eq 'Creator subtitles') {$creator=$cues}
+                if ($mode -eq 'Automatic captions' -and $cues -ceq $creator) {throw 'Fixture did not distinguish the two caption sources.'}
+                if ($mode -eq 'Creator and automatic' -and $cues -cne $creator) {throw 'Both mode did not prefer the creator track.'}
+                Record-File $mode $file
+            }
         }
         $language=$env:LVOVD_QA_AUTO_LANGUAGE
         if (!$language) {throw 'Set LVOVD_QA_AUTO_LANGUAGE to a reviewed language offered only as automatic captions.'}
@@ -169,7 +171,7 @@ try {
         }
     } else {
         $url=$env:LVOVD_QA_SPONSOR_URL
-        if (!$url) {throw 'Set LVOVD_QA_SPONSOR_URL to a permitted source with a known outro.'}
+        if (!$url) {throw 'Set LVOVD_QA_SPONSOR_URL to a maintainer-owned source with a known outro.'}
         $segmentStart=[double]::Parse($env:LVOVD_QA_SEGMENT_START,[cultureinfo]::InvariantCulture)
         $segmentEnd=[double]::Parse($env:LVOVD_QA_SEGMENT_END,[cultureinfo]::InvariantCulture)
         if ($segmentEnd -le $segmentStart) {throw 'Expected independently confirmed segment bounds.'}

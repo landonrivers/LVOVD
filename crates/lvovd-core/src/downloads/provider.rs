@@ -58,6 +58,25 @@ fn args(tools: &Tools) -> Result<Vec<OsString>> {
     Ok(args)
 }
 
+fn append_source(args: &mut Vec<OsString>, url: &Url) {
+    // Only the native test driver can replay a generated extractor result.
+    #[cfg(all(debug_assertions, feature = "native-test-fixtures"))]
+    if let (Ok(port), Some(config)) = (
+        std::env::var("LVOVD_DESKTOP_TEST_PROVIDER_PORT"),
+        std::env::var_os("LVOVD_DESKTOP_TEST_CONFIG"),
+    ) && let Ok(port) = port.parse::<u16>()
+        && url.as_str() == format!("http://127.0.0.1:{port}/source")
+    {
+        let info = Path::new(&config).join("source.info.json");
+        args.push("--load-info-json".into());
+        args.push(info.into_os_string());
+        args.push("--sponsorblock-api".into());
+        args.push(url.origin().ascii_serialization().into());
+        return;
+    }
+    args.extend(["--", url.as_str()].map(OsString::from));
+}
+
 pub(super) fn preview_args(tools: &Tools, url: &Url) -> Result<Vec<OsString>> {
     let mut args = args(tools)?;
     args.extend(
@@ -67,11 +86,10 @@ pub(super) fn preview_args(tools: &Tools, url: &Url) -> Result<Vec<OsString>> {
             "--flat-playlist",
             "--playlist-end",
             "1",
-            "--",
-            url.as_str(),
         ]
         .map(Into::into),
     );
+    append_source(&mut args, url);
     Ok(args)
 }
 
@@ -92,7 +110,8 @@ pub(super) fn acquire_args(
     args.push("--paths".into());
     // Provider metadata never decides the path to write or publish.
     args.push(directory.as_os_str().into());
-    args.extend(["--output", "media.%(ext)s", "--", url.as_str()].map(Into::into));
+    args.extend(["--output", "media.%(ext)s"].map(OsString::from));
+    append_source(&mut args, url);
     Ok(args)
 }
 

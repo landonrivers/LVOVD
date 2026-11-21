@@ -983,6 +983,7 @@
         ],
         "native": [
           "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
           "desktop/test/packaged-download-options.ps1"
         ]
       },
@@ -1077,6 +1078,8 @@
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
           "desktop/test/packaged-download-options.ps1"
         ]
       },
