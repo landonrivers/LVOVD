@@ -64,7 +64,7 @@ async function startProvider(video, ffmpeg) {
   };
 }
 
-async function downloadScenario(browser, provider, destination, ffprobe, evidence) {
+async function downloadScenario(browser, provider, destination, ffprobe, evidence, ffmpeg) {
   const wait = (test, message) => browser.waitUntil(test, { timeout: 60000, timeoutMsg: message });
   async function preview(url=provider.url) {
     await browser.$('#download-url').setValue(url);
@@ -172,6 +172,48 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
     assert.equal(probe.status,0,probe.stderr);
     assert.deepEqual(JSON.parse(probe.stdout).streams.map(stream=>stream.codec_name).sort(),expected);
   }
+  const advanced = require('./chapter-caption-fixture.cjs');
+  const fixture = await advanced.start(ffmpeg);
+  try {
+    async function finish(status) {
+      const before = (await browser.$$('#download-jobs li')).length;
+      await browser.$('#download-start').click();
+      await wait(async () => (await browser.$$('#download-jobs li')).length===before+1 &&
+        await browser.$('#download-jobs li:last-child').getAttribute('data-status')===status,
+      'New download did not finish as '+status);
+      return browser.execute(()=>Array.from(document.querySelectorAll('#download-jobs li:last-child select option'),o=>o.textContent));
+    }
+    async function selectChapters(url) {
+      await preview(url);
+      await browser.$('#dl-times summary').click();
+      await choose('dl-range','chapters');
+      await browser.$('#dl-chapters input[value="2"]').click();
+      await browser.$('#dl-chapters input[value="0"]').click();
+    }
+    await selectChapters(fixture.chapters);
+    const files = await finish('saved');
+    advanced.verifyChapters(files.map(name=>path.join(destination,name)),ffmpeg,ffprobe);
+    const prior = fs.readdirSync(destination).sort();
+    await selectChapters(fixture.changing);
+    fixture.change();
+    await finish('failed');
+    assert.match(await browser.$('#download-jobs li:last-child').getText(),/chapter.*preview/i);
+    assert.deepEqual(fs.readdirSync(destination).sort(),prior);
+    await preview(fixture.captions);
+    await choose('dl-content','extras');
+    await browser.$('#dl-subs').click();
+    await choose('dl-submode','manual');
+    await browser.$('#dl-langs').setValue('en,fr');
+    const tracks=await finish('saved');
+    advanced.verifyCaptions(tracks.map(name=>path.join(destination,name)));
+    const beforeMissing=fs.readdirSync(destination).sort();
+    await preview(fixture.captions);
+    await choose('dl-content','extras');
+    await browser.$('#dl-subs').click();
+    await browser.$('#dl-langs').setValue('zz');
+    await finish('failed');
+    assert.deepEqual(fs.readdirSync(destination).sort(),beforeMissing);
+  } finally { await fixture.close(); }
 }
 
 module.exports = { downloadScenario, startProvider };

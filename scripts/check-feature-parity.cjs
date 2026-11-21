@@ -20,7 +20,7 @@ const repoPath = value => text(value) && /^[a-zA-Z0-9_./-]+$/.test(value)
   && !value.startsWith('/') && value.split('/').every(part => part && part !== '.' && part !== '..');
 const testPath = (value, kind) => kind === 'reference' ? /^test\/.+\.(?:test|spec)\.js$/.test(value)
   : kind === 'rust' ? /^crates\/.+\.rs$/.test(value) || /^src-tauri\/.+\.rs$/.test(value)
-    : /^(?:desktop\/test\/|test\/native\/).+\.(?:cjs|js|ts|rs)$/.test(value);
+    : /^(?:desktop\/test\/|test\/native\/).+\.(?:cjs|js|ts|rs|ps1)$/.test(value);
 
 function validateRegister(data, { read = file => fs.readFileSync(path.join(ROOT, file), 'utf8'), previous, release = false } = {}) {
   const errors = [];

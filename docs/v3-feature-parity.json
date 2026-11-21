@@ -794,13 +794,16 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Reject missing/stale chapters and playlist chapter selection; save each resulting file."
       ],
       "evidence": [],
-      "remaining": "Verify chapter ordering, changing metadata, exported streams and per-file actions in packaged workflows."
+      "remaining": "Windows review ZIP saved nonadjacent chapters. Await four-platform native receipts for interval identity, reference order and stale chapter rejection."
     },
     {
       "id": "download.thumbnail-extra",
@@ -933,13 +936,16 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Test all subtitle modes, unavailable languages, automatic fallback and multiple companion outputs."
       ],
       "evidence": [],
-      "remaining": "Verify language fallback and selection through all four native webviews. The offline provider fixture saves both creator and automatic tracks."
+      "remaining": "Windows review ZIP saved both selected creator languages. Live packaged checks distinguished creator and automatic English and confirmed creator precedence. Automatic fallback and other platform receipts remain outstanding."
     },
     {
       "id": "download.sponsorblock",
@@ -980,7 +986,9 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
