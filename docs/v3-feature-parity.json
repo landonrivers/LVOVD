@@ -344,7 +344,7 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/options.rs",
@@ -372,8 +372,53 @@
       "acceptance": [
         "No media is acquired; require an extra and clear inactive range/SponsorBlock/manual-selection semantics."
       ],
-      "evidence": [],
-      "remaining": "The Windows package saved only the chosen companion files on a live source. Collect native receipts for zero media reads and clearing inactive media settings."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257444",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257518",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257468",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257506",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.compatible",
@@ -870,7 +915,7 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/options.rs",
@@ -898,8 +943,57 @@
       "acceptance": [
         "Test absent artwork, thumbnail acquisition rejection and saving the companion file."
       ],
-      "evidence": [],
-      "remaining": "The Windows package saved decodable JPEGs on a live source. Collect native receipts for conversion, unavailable artwork and rejected acquisition."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257444",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257518",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257468",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257506",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.metadata-extra",
@@ -947,8 +1041,53 @@
       "acceptance": [
         "Save JSON separately, classify it as metadata and preserve selected extras through queue/history."
       ],
-      "evidence": [],
-      "remaining": "The Windows package saved independently readable metadata with the reviewed source identity. Native receipts and History reuse in 8D.4 remain outstanding."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257444",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257518",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257468",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257506",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        }
+      ],
+      "remaining": "History reuse of the captured metadata selection remains in 8D.4."
     },
     {
       "id": "download.subtitles",
