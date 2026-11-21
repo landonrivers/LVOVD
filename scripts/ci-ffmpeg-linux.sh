@@ -14,7 +14,7 @@ if [[ ! -x "$prefix/bin/ffmpeg" || ! -x "$prefix/bin/ffprobe" ]]; then
   tar -xJf "$archive" --directory "$build_dir"
   cd "$build_dir/ffmpeg-$version"
   ./configure --prefix="$prefix" --disable-debug --disable-doc --disable-ffplay \
-    --disable-autodetect --enable-gpl --enable-libx264 --enable-libopus --enable-libmp3lame
+    --disable-autodetect --enable-zlib --enable-gpl --enable-libx264 --enable-libopus --enable-libmp3lame
   make -j "$(nproc)"
   make install
 fi
