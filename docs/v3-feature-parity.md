@@ -15,7 +15,7 @@ The only approved access-mode exception is **standalone access**: the applicatio
 
 Each receipt records platform, full commit, `native-workflow` kind, passed result, repository Actions run/job URL, mapped test files and a description of the actual scenario. A reviewer must inspect those receipts and determine whether tests cover the behavior. The validator checks completeness and references; it cannot prove that a linked test exercises the claim or that a remote run passed. Reopen a capability's status when relevant behavior changes; historical evidence is not permission to skip current CI or packaged acceptance.
 
-Ported entries describe core policies with linked Rust tests. Integrated entries identify workflows connected to the native interface; their remaining platform acceptance is explicit. Download remains missing until 8D. [8A's native playback evidence](desktop-foundation.md) and [8B's accepted checkpoint](desktop-media-policies.md) remain useful supporting evidence, not substitutes for complete workflows.
+Ported entries describe core policies with linked Rust tests. Integrated entries identify workflows connected to the native interface and list their remaining acceptance cases. Stage 8D verifies Download one capability at a time. Its [single-video evidence](desktop-first-download.md#packaged-download-checks) covers the packaged Windows live checks and the scope of the generated provider tests.
 
 ## Maintaining the register
 
@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 33 Missing, 0 Ported, 24 Integrated, 30 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 33 Missing, 0 Ported, 22 Integrated, 32 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -56,8 +56,8 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.chapters` | Selected chapters | Download / Time range & chapters | 8D | Integrated |
 | `download.thumbnail-extra` | Thumbnail extra | Download / Extras | 8D | Integrated |
 | `download.metadata-extra` | Metadata JSON extra | Download / Extras | 8D | Integrated |
-| `download.subtitles` | Subtitles and captions | Download / Extras | 8D | Integrated |
-| `download.sponsorblock` | SponsorBlock | Download / SponsorBlock | 8D | Integrated |
+| `download.subtitles` | Subtitles and captions | Download / Extras | 8D | Verified |
+| `download.sponsorblock` | SponsorBlock | Download / SponsorBlock | 8D | Verified |
 | `download.playlists` | Playlist selection | Download / Playlist | 8D | Missing |
 | `download.coordination` | Source-request coordination | Download / Local Media intake | 8D | Missing |
 | `download.pacing` | Playlist acquisition pauses | Download / Playlist import | 8D | Missing |

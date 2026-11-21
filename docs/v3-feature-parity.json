@@ -962,7 +962,7 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/options.rs",
@@ -993,50 +993,54 @@
       "evidence": [
         {
           "platform": "windows-x64",
-          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444483",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059609",
           "tests": [
-            "desktop/test/download.cjs"
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
           ],
-          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
         },
         {
           "platform": "linux-x64",
-          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444453",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059564",
           "tests": [
-            "desktop/test/download.cjs"
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
           ],
-          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
         },
         {
           "platform": "macos-arm64",
-          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444437",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059611",
           "tests": [
-            "desktop/test/download.cjs"
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
           ],
-          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
         },
         {
           "platform": "macos-x64",
-          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444667",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059586",
           "tests": [
-            "desktop/test/download.cjs"
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
           ],
-          "notes": "Two creator languages produced separately named SRTs with the expected cue text and timing. An unavailable language failed without publishing any file."
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
         }
       ],
-      "remaining": "The Windows review ZIP also passed creator-only, automatic-only, creator precedence and automatic fallback on a live source. Native evidence for those automatic-track cases on Linux and both macOS architectures is outstanding."
+      "remaining": ""
     },
     {
       "id": "download.sponsorblock",
@@ -1058,7 +1062,7 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/options.rs",
@@ -1086,8 +1090,57 @@
       "acceptance": [
         "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
       ],
-      "evidence": [],
-      "remaining": "The Windows review ZIP passed Off, Mark and Remove against an independently confirmed outro. The offline fixture counted zero service requests for Off. Repeat native mode and category coverage on Linux and both macOS architectures and record repeatable Windows CI evidence for the selected categories."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059609",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059564",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059611",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059586",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.playlists",
