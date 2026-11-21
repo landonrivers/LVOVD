@@ -6,13 +6,17 @@ compile_error!("The test driver is forbidden in release builds.");
 mod development;
 #[cfg(target_os = "linux")]
 mod linux_playback;
+mod workbench_commands;
+use workbench_commands::*;
 
 use lvovd_core::{
     AppError, Result,
-    assets::{Assets, Removal, Source},
+    assets::Assets,
+    processing_operation::{Limits, Processing},
     tools::Tools,
+    workbenches::{Intake, Workbenches},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{
     path::PathBuf,
     sync::{
@@ -20,25 +24,13 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use tauri::{Manager, State, ipc::Channel};
+use tauri::{Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-use uuid::Uuid;
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Snapshot {
-    revision: u64,
-    sources: Vec<Source>,
-    cleanup: Vec<Uuid>,
-}
-struct Subscriptions {
-    revision: u64,
-    channel: Option<Channel<Snapshot>>,
-}
 struct AppState {
     #[cfg(target_os = "linux")]
     playback: lvovd_core::playback::Broker,
     assets: Arc<Assets>,
+    workbenches: Workbenches,
     tools: Tools,
     subscriptions: Mutex<Subscriptions>,
     closing: AtomicBool,
@@ -56,18 +48,15 @@ impl AppState {
         // Health probes share cancellation with intake. Keep the host alive until
         // their process guards have reaped the tools as well.
         let _health = self.health_admission.lock().await;
-        self.assets.shutdown().await
+        // Saving owns its result lease until its destination file is closed.
+        let _picker = self.picker_admission.lock().await;
+        self.workbenches.shutdown().await
     }
     fn publish(&self) {
-        let mut sub = self.subscriptions.lock().unwrap();
-        sub.revision += 1;
-        if let Some(channel) = &sub.channel {
-            let _ = channel.send(Snapshot {
-                revision: sub.revision,
-                sources: self.assets.list(),
-                cleanup: self.assets.pending_cleanup(),
-            });
-        }
+        self.subscriptions
+            .lock()
+            .unwrap()
+            .publish(&self.workbenches);
     }
 }
 
@@ -79,21 +68,18 @@ struct Handshake {
     stage: &'static str,
     backend: &'static str,
     webview_version: String,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct AssetRequest {
-    asset_id: Uuid,
+    connection_generation: u32,
 }
 
 #[tauri::command]
-fn desktop_handshake() -> Handshake {
+fn desktop_handshake(state: State<'_, AppState>) -> Handshake {
     Handshake {
         protocol_version: lvovd_core::PROTOCOL_VERSION,
         app_version: env!("CARGO_PKG_VERSION"),
-        stage: "8A: native intake and playback",
+        stage: "8C: workbench integration",
         backend: "rust",
         webview_version: tauri::webview_version().unwrap_or_else(|_| "Unknown".into()),
+        connection_generation: state.subscriptions.lock().unwrap().generation(),
     }
 }
 #[tauri::command]
@@ -105,12 +91,12 @@ async fn runtime_health(state: State<'_, AppState>) -> Result<lvovd_core::tools:
     Ok(state.tools.health(&state.assets.cancellation()).await)
 }
 #[tauri::command]
-fn subscribe_sources(state: State<'_, AppState>, channel: Channel<Snapshot>) {
-    state.subscriptions.lock().unwrap().channel = Some(channel);
-    state.publish();
-}
-#[tauri::command]
-async fn pick_source(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Option<Source>> {
+async fn pick_source(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: WorkbenchRequest,
+) -> Result<Option<Intake>> {
+    state.workbenches.touch(request.workbench_id)?;
     let _admission = state
         .picker_admission
         .try_lock()
@@ -120,9 +106,10 @@ async fn pick_source(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
         return Err(AppError::new("CLOSING", "The application is closing."));
     }
     #[cfg(feature = "test-driver")]
-    let selected = std::env::var_os("LVOVD_DESKTOP_TEST_FILE").map(PathBuf::from);
+    let selected =
+        std::env::var_os("LVOVD_DESKTOP_TEST_FILE").map(|path| vec![PathBuf::from(path)]);
     #[cfg(not(feature = "test-driver"))]
-    let selected: Option<PathBuf> = None;
+    let selected: Option<Vec<PathBuf>> = None;
     let selected = if selected.is_some() {
         selected
     } else {
@@ -130,7 +117,7 @@ async fn pick_source(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
         app.dialog()
             .file()
             .set_title("Choose local media")
-            .pick_file(move |file| {
+            .pick_files(move |file| {
                 let _ = sender.send(file);
             });
         tokio::select! {
@@ -139,26 +126,18 @@ async fn pick_source(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
             result = receiver => result,
         }
             .map_err(|_| AppError::new("PICKER_CLOSED", "The file picker closed."))?
-            .map(|file| {
-                file.into_path()
-                    .map_err(|_| AppError::new("PICKER_PATH", "Choose a local file."))
-            })
+            .map(|files| files.into_iter().map(|file| file.into_path()
+                    .map_err(|_| AppError::new("PICKER_PATH", "Choose local files."))).collect::<Result<Vec<_>>>())
             .transpose()?
     };
     match selected {
-        Some(path) => {
-            let result = state.assets.import(&path, &state.tools.ffprobe).await;
+        Some(paths) => {
+            let result = state.workbenches.import(request.workbench_id, paths).await;
             state.publish();
             result.map(Some)
         }
         None => Ok(None),
     }
-}
-#[tauri::command]
-async fn remove_source(state: State<'_, AppState>, request: AssetRequest) -> Result<Removal> {
-    let result = state.assets.remove(request.asset_id);
-    state.publish();
-    result
 }
 #[tauri::command]
 async fn shutdown_desktop(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<()> {
@@ -190,7 +169,25 @@ fn main() {
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     builder
         .setup(move |app| {
-            let assets = Arc::new(Assets::new(&app.path().app_cache_dir()?.join("sessions"))?);
+            let parent = app.path().app_cache_dir()?.join("sessions");
+            let assets = Arc::new(Assets::new(&parent)?);
+            let tools = tools(app.handle())?;
+            let processing = Processing::new(
+                (*assets).clone(),
+                &parent,
+                tools.ffmpeg.clone(),
+                tools.ffprobe.clone(),
+                Limits {
+                    maximum_bytes: lvovd_core::assets::MAX_SOURCE_BYTES,
+                    worker_deadline: std::time::Duration::from_secs(24 * 60 * 60),
+                },
+            )?;
+            let workbenches = Workbenches::new(
+                (*assets).clone(),
+                processing,
+                tools.ffmpeg.clone(),
+                tools.ffprobe.clone(),
+            );
             #[cfg(target_os = "linux")]
             let playback = {
                 let handle = app.handle().clone();
@@ -199,7 +196,7 @@ fn main() {
                     lvovd_core::playback::Broker::start(
                         listener,
                         playback_environment.token,
-                        assets.clone(),
+                        Arc::new(workbenches.clone()),
                         Arc::new(move || {
                             if let Some(state) = handle.try_state::<AppState>() {
                                 state.publish();
@@ -217,14 +214,26 @@ fn main() {
                     assets.cancellation(),
                 ),
                 assets,
-                tools: tools(app.handle())?,
-                subscriptions: Mutex::new(Subscriptions {
-                    revision: 0,
-                    channel: None,
-                }),
+                workbenches,
+                tools,
+                subscriptions: Mutex::new(Subscriptions::default()),
                 closing: AtomicBool::new(false),
                 health_admission: tokio::sync::Mutex::new(()),
                 picker_admission: tokio::sync::Mutex::new(()),
+            });
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(250));
+                loop {
+                    interval.tick().await;
+                    let state = handle.state::<AppState>();
+                    if state.assets.cancellation().is_cancelled() {
+                        break;
+                    }
+                    state.workbenches.expire();
+                    let _ = state.workbenches.reconcile().await;
+                    state.publish();
+                }
             });
             tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .on_navigation(|url| lvovd_core::media::trusted_navigation(url.as_str()))
@@ -243,6 +252,7 @@ fn main() {
         .register_asynchronous_uri_scheme_protocol("lvovd-media", |context, request, responder| {
             let state = context.app_handle().state::<AppState>();
             let assets = state.assets.clone();
+            let library = Arc::new(state.workbenches.clone());
             let ticket = state.media_admission.admit();
             let Ok(ticket) = ticket else {
                 let error = ticket.err().unwrap();
@@ -294,7 +304,7 @@ fn main() {
                         request.headers().get("range"),
                         request.headers().get("origin")
                     );
-                    let response = lvovd_core::media::respond(&assets, request, &label);
+                    let response = lvovd_core::media::respond(&library, request, &label);
                     #[cfg(feature = "test-driver")]
                     eprintln!(
                         "Media protocol: {diagnostic} -> {} bytes={} content-range={:?}",
@@ -325,10 +335,23 @@ fn main() {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 let paths = paths.clone();
                 let app = window.app_handle().clone();
+                let (workbench, generation) = {
+                    let state = app.state::<AppState>();
+                    let subscription = state.subscriptions.lock().unwrap();
+                    (subscription.workbench(), subscription.generation())
+                };
                 tauri::async_runtime::spawn(async move {
                     let state = app.state::<AppState>();
-                    for path in paths {
-                        if let Err(error) = state.assets.import(&path, &state.tools.ffprobe).await {
+                    if let Some(id) = workbench {
+                        // Admitted failures belong to the workbench snapshot,
+                        // including after switching away and reopening it.
+                        let error = state.workbenches.import(id, paths).await.err();
+                        let still_selected = {
+                            let subscription = state.subscriptions.lock().unwrap();
+                            subscription.workbench() == Some(id)
+                                && subscription.generation() == generation
+                        };
+                        if let Some(error) = error.filter(|_| still_selected) {
                             app.dialog()
                                 .message(error.message)
                                 .title("Could not import media")
@@ -345,12 +368,12 @@ fn main() {
                 if state.closing.swap(true, Ordering::AcqRel) {
                     return;
                 }
-                let busy = state.assets.is_busy();
+                let busy = state.workbenches.busy();
                 tauri::async_runtime::spawn(async move {
                     let allow = if busy {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
                         app.dialog()
-                            .message("A file is still importing. Cancel it and quit?")
+                            .message("Media work is still running. Cancel it and quit?")
                             .title("Quit LVOVD")
                             .buttons(MessageDialogButtons::OkCancel)
                             .show(move |answer| {
@@ -376,9 +399,27 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            cancel_intake,
+            prepare_editor,
+            save_result,
+            save_results,
+            prepare_waveform,
+            cancel_editor,
+            cancel_waveform,
+            waveform_window,
             desktop_handshake,
             runtime_health,
-            subscribe_sources,
+            create_workbench,
+            list_workbenches,
+            subscribe_workbench,
+            acknowledge_workbench,
+            review_render,
+            review_conversion,
+            review_processing,
+            queue_processing,
+            cancel_processing,
+            discard_workbench,
+            cleanup_workbench,
             pick_source,
             remove_source,
             shutdown_desktop

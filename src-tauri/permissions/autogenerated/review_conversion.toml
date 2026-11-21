@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-review-conversion"
+description = "Enables the review_conversion command without any pre-configured scope."
+commands.allow = ["review_conversion"]
+
+[[permission]]
+identifier = "deny-review-conversion"
+description = "Denies the review_conversion command without any pre-configured scope."
+commands.deny = ["review_conversion"]

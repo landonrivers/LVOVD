@@ -2,6 +2,28 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Only the packaged main window may use the reviewed desktop operations.",
-  "windows": ["main"],
-  "permissions": ["allow-desktop-handshake", "allow-runtime-health", "allow-subscribe-sources", "allow-pick-source", "allow-remove-source", "allow-shutdown-desktop"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "allow-desktop-handshake",
+    "allow-runtime-health",
+    "allow-create-workbench",
+    "allow-list-workbenches",
+    "allow-subscribe-workbench",
+    "allow-acknowledge-workbench",
+    "allow-review-render", "allow-review-conversion", "allow-review-processing",
+    "allow-queue-processing",
+    "allow-cancel-processing",
+    "allow-discard-workbench",
+    "allow-cleanup-workbench",
+    "allow-cancel-intake", "allow-pick-source",
+    "allow-remove-source",
+    "allow-shutdown-desktop",
+    "allow-prepare-editor",
+    "allow-prepare-waveform",
+    "allow-cancel-editor", "allow-cancel-waveform",
+    "allow-waveform-window",
+    "allow-save-result", "allow-save-results"
+  ]
 }

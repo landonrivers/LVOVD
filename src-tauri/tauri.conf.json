@@ -6,7 +6,7 @@
   "build": { "frontendDist": "../desktop/dist" },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "label": "main", "create": false, "title": "LVOVD — desktop foundation", "width": 1280, "height": 800, "minWidth": 640, "minHeight": 480, "url": "index.html", "devtools": false }],
+    "windows": [{ "label": "main", "create": false, "title": "LVOVD", "width": 1280, "height": 800, "minWidth": 640, "minHeight": 480, "url": "index.html", "devtools": false }],
     "security": {
       "capabilities": ["main"],
       "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src lvovd-media: http://lvovd-media.localhost; connect-src ipc: http://ipc.localhost lvovd-media: http://lvovd-media.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'"

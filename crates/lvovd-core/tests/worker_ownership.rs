@@ -107,7 +107,7 @@ fn args(path: &Path, mode: &str) -> Vec<OsString> {
 }
 #[tokio::test]
 async fn every_exit_path_confirms_descendants_before_releasing_ownership() {
-    for mode in [
+    for (mode, streaming) in [
         "success",
         "failure",
         "limit",
@@ -115,7 +115,10 @@ async fn every_exit_path_confirms_descendants_before_releasing_ownership() {
         "cancel",
         "abort-waiter",
         "shutdown",
-    ] {
+    ]
+    .into_iter()
+    .flat_map(|mode| [(mode, false), (mode, true)])
+    {
         let root = tempfile::tempdir().unwrap();
         let marker = root.path().join("child.pid");
         let released = Arc::new(AtomicBool::new(false));
@@ -132,16 +135,44 @@ async fn every_exit_path_confirms_descendants_before_releasing_ownership() {
         let worker = supervisor.clone();
         let arguments = args(&marker, mode);
         let task = tokio::spawn(async move {
-            worker
-                .run_owned(
-                    &node(),
-                    &arguments,
-                    Duration::from_secs(if mode == "timeout" { 5 } else { 30 }),
-                    1024,
-                    &worker_cancel,
-                    owner,
-                )
-                .await
+            if streaming {
+                let mut bytes = 0;
+                worker
+                    .run_stream_owned(
+                        lvovd_core::process::Request {
+                            executable: &node(),
+                            args: &arguments,
+                            deadline: Duration::from_secs(if mode == "timeout" { 5 } else { 30 }),
+                            diagnostic_limit: 1024,
+                            cancel: &worker_cancel,
+                        },
+                        move |chunk| {
+                            assert!(chunk.len() <= 8192);
+                            bytes += chunk.len();
+                            if bytes > 1024 {
+                                Err(lvovd_core::AppError::new(
+                                    "TOOL_OUTPUT_LIMIT",
+                                    "Synthetic decoded-byte ceiling",
+                                ))
+                            } else {
+                                Ok(())
+                            }
+                        },
+                        owner,
+                    )
+                    .await
+            } else {
+                worker
+                    .run_owned(
+                        &node(),
+                        &arguments,
+                        Duration::from_secs(if mode == "timeout" { 5 } else { 30 }),
+                        1024,
+                        &worker_cancel,
+                        owner,
+                    )
+                    .await
+            }
         });
         let pid = ready(&marker).await;
         let child = Arc::new(Identity::new(pid));
@@ -167,7 +198,10 @@ async fn every_exit_path_confirms_descendants_before_releasing_ownership() {
             };
             match expected {
                 Some(code) => assert_eq!(result.unwrap_err().code, code, "{mode}"),
-                None => assert_eq!(result.unwrap().stdout, b"ok"),
+                None => assert_eq!(
+                    result.unwrap().stdout,
+                    if streaming { b"".as_slice() } else { b"ok" }
+                ),
             }
         }
         supervisor.shutdown().await.unwrap();

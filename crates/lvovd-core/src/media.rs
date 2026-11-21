@@ -3,6 +3,43 @@ use http::{Request, Response, StatusCode, header::*};
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// A transport can read owned originals, proxies and validated results through
+/// the same bounded interface. It cannot resolve paths or promote input roles.
+pub trait Reader: Send + Sync {
+    fn size(&self) -> u64;
+    fn mime(&self) -> Option<&str>;
+    fn cancellation(&self) -> crate::process::CancellationToken;
+    fn read(&self, offset: u64, count: usize) -> crate::Result<Vec<u8>>;
+}
+pub trait Library: Send + Sync {
+    fn media_lease(&self, id: Uuid) -> crate::Result<Arc<dyn Reader>>;
+    fn reader_finished(&self, _id: Uuid) {}
+}
+impl Reader for crate::assets::Asset {
+    fn size(&self) -> u64 {
+        self.source.size
+    }
+    fn mime(&self) -> Option<&str> {
+        self.source.inspection.mime.as_deref()
+    }
+    fn cancellation(&self) -> crate::process::CancellationToken {
+        self.cancellation()
+    }
+    fn read(&self, offset: u64, count: usize) -> crate::Result<Vec<u8>> {
+        self.read(offset, count)
+    }
+}
+impl Library for Assets {
+    fn media_lease(&self, id: Uuid) -> crate::Result<Arc<dyn Reader>> {
+        Ok(self.lease(id)?)
+    }
+    fn reader_finished(&self, id: Uuid) {
+        if self.pending_cleanup().contains(&id) {
+            let _ = self.remove(id);
+        }
+    }
+}
+
 pub const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 pub const ORIGINS: [&str; 2] = ["tauri://localhost", "http://tauri.localhost"];
 
@@ -55,7 +92,11 @@ pub fn range(header: &str, size: u64) -> Option<(u64, u64)> {
     Some((start, end.min(start.saturating_add(MAX_RESPONSE_BYTES - 1))))
 }
 
-pub fn respond(assets: &Arc<Assets>, request: Request<Vec<u8>>, window: &str) -> Response<Vec<u8>> {
+pub fn respond<L: Library + ?Sized>(
+    assets: &Arc<L>,
+    request: Request<Vec<u8>>,
+    window: &str,
+) -> Response<Vec<u8>> {
     if window != "main" {
         return empty(StatusCode::FORBIDDEN);
     }
@@ -80,18 +121,18 @@ pub fn respond(assets: &Arc<Assets>, request: Request<Vec<u8>>, window: &str) ->
         Some(id) => id,
         None => return empty(StatusCode::NOT_FOUND),
     };
-    let asset = match assets.lease(id) {
+    let asset = match assets.media_lease(id) {
         Ok(asset) => asset,
         Err(_) => return empty(StatusCode::GONE),
     };
-    let mime = match asset.source.inspection.mime.as_deref() {
+    let mime = match asset.mime() {
         Some(mime) => mime,
         None => return empty(StatusCode::UNSUPPORTED_MEDIA_TYPE),
     };
     if request.method() != "GET" && request.method() != "HEAD" {
         return empty(StatusCode::METHOD_NOT_ALLOWED);
     }
-    let size = asset.source.size;
+    let size = asset.size();
     let requested_range = request.headers().get(RANGE);
     let segment = match requested_range {
         Some(header) => header.to_str().ok().and_then(|header| range(header, size)),

@@ -56,7 +56,7 @@ fn stream<'a>(plan: &'a Value, role: &str) -> Option<&'a Value> {
 fn encoded(s: Option<&Value>) -> Option<&Value> {
     s.filter(|s| s["action"] == "encode")
 }
-fn local_input(args: &mut Vec<OsString>, inspection: &MediaInspection) -> Result<()> {
+pub(crate) fn local_input(args: &mut Vec<OsString>, inspection: &MediaInspection) -> Result<()> {
     let format = inspection
         .format_names
         .iter()

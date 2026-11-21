@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-editor"
+description = "Enables the cancel_editor command without any pre-configured scope."
+commands.allow = ["cancel_editor"]
+
+[[permission]]
+identifier = "deny-cancel-editor"
+description = "Denies the cancel_editor command without any pre-configured scope."
+commands.deny = ["cancel_editor"]

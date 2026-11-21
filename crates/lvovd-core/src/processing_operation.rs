@@ -78,9 +78,17 @@ pub struct ReviewRequest {
     pub settings: Option<Value>,
     pub edit_plan: Option<Value>,
 }
+#[derive(Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Admission {
+    pub source_id: Uuid,
+    pub key: String,
+    pub acknowledgements: Vec<String>,
+}
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Published {
+    pub role: String,
     pub result_id: Uuid,
     pub source_id: Uuid,
     pub draft_revision: u32,
@@ -95,9 +103,12 @@ pub struct Published {
 }
 enum Bytes {
     Original(Arc<Asset>),
+    Retained(Arc<Output>),
     Encoded {
         directory: PathBuf,
         file: Mutex<Option<File>>,
+        path: PathBuf,
+        seal: Seal,
     },
 }
 struct Output {
@@ -124,6 +135,7 @@ impl OutputLease {
         }
         match &self.0.bytes {
             Bytes::Original(source) => source.read(offset, count),
+            Bytes::Retained(output) => OutputLease(output.clone()).read(offset, count),
             Bytes::Encoded { file, .. } => {
                 let mut file = file.lock().unwrap();
                 let file = file
@@ -141,12 +153,15 @@ impl OutputLease {
     }
 }
 struct Review {
+    input: Option<Arc<Output>>,
+    role: &'static str,
     plan: ReviewedPlan,
     intent: String,
     revision: u32,
 }
 #[derive(Default)]
 struct Slot {
+    edited: Option<Arc<Output>>,
     review: Option<Review>,
     active: Option<(Uuid, CancellationToken)>,
     output: Option<Arc<Output>>,
@@ -165,6 +180,7 @@ struct Cleanup {
     // Retiring a published result has provenance only, never an input lease.
     _source: Option<Arc<Asset>>,
     failed: bool,
+    retry: crate::cleanup_retry::Retry,
 }
 struct State {
     id: Uuid,
@@ -185,6 +201,8 @@ pub struct Processing(Arc<State>);
 /// A single-use, immutable admitted operation. It cannot be deserialized or
 /// transferred to a different Processing owner; dropping it cancels admission.
 pub struct Prepared {
+    input: Option<Arc<Output>>,
+    role: &'static str,
     owner: Processing,
     source: Arc<Asset>,
     plan: ReviewedPlan,
@@ -205,6 +223,12 @@ impl Drop for Waiter {
     }
 }
 impl Prepared {
+    pub fn source_id(&self) -> Uuid {
+        self.source.source.asset_id
+    }
+    pub fn draft_revision(&self) -> u32 {
+        self.revision
+    }
     pub fn operation_id(&self) -> Uuid {
         self.operation_id
     }
@@ -278,12 +302,14 @@ impl Processing {
         capabilities: Option<Arc<Capabilities>>,
     ) -> Result<ReviewedPlan> {
         let owner = self.clone();
-        blocking(move || owner.review_sync(request, capabilities.as_deref())).await
+        blocking(move || owner.review_sync(request, capabilities.as_deref(), "processing-output"))
+            .await
     }
     fn review_sync(
         &self,
         request: ReviewRequest,
         capabilities: Option<&Capabilities>,
+        role: &'static str,
     ) -> Result<ReviewedPlan> {
         if request.draft_revision > i32::MAX as u32 {
             return Err(AppError::new(
@@ -305,8 +331,13 @@ impl Processing {
             },
             capabilities,
         )?;
+        let plan = if role == "edited-output" {
+            plan.owned_metadata(serde_json::json!({"operation":"render"}))
+        } else {
+            plan
+        };
         let intent = processing_plan::hash(
-            &serde_json::json!({"settings":plan.document()["settings"], "editPlan":plan.document()["editPlan"], "inspectionKey":plan.document()["inspectionKey"]}),
+            &serde_json::json!({"settings":plan.document()["settings"], "editPlan":plan.document()["editPlan"], "inspectionKey":plan.document()["inspectionKey"],"operation":plan.document()["operation"]}),
         );
         let mut registry = self.0.registry.lock().unwrap();
         if registry.closing {
@@ -321,6 +352,8 @@ impl Processing {
                 return Err(stale());
             }
             slot.review = Some(Review {
+                input: None,
+                role,
                 plan: plan.clone(),
                 intent,
                 revision: request.draft_revision,
@@ -334,17 +367,49 @@ impl Processing {
         key: String,
         acknowledgements: Vec<String>,
     ) -> Result<Prepared> {
-        let owner = self.clone();
-        blocking(move || owner.prepare_sync(source_id, &key, &acknowledgements)).await
+        Ok(self
+            .prepare_batch(vec![Admission {
+                source_id,
+                key,
+                acknowledgements,
+            }])
+            .await?
+            .pop()
+            .unwrap())
     }
-    fn prepare_sync(
-        &self,
-        source_id: Uuid,
-        key: &str,
-        acknowledgements: &[String],
-    ) -> Result<Prepared> {
-        let source = self.0.assets.lease(source_id)?;
-        source.processing_path()?;
+    pub async fn prepare_batch(&self, entries: Vec<Admission>) -> Result<Vec<Prepared>> {
+        let owner = self.clone();
+        blocking(move || owner.prepare_batch_sync(entries)).await
+    }
+    fn prepare_batch_sync(&self, entries: Vec<Admission>) -> Result<Vec<Prepared>> {
+        if entries.is_empty()
+            || entries.len() > 20
+            || entries.iter().any(|entry| {
+                entry.key.len() > 128
+                    || entry.acknowledgements.len() > 64
+                    || entry.acknowledgements.iter().any(|id| id.len() > 128)
+            })
+        {
+            return Err(AppError::new(
+                "PROCESSING_REQUEST",
+                "Submit a bounded list of reviewed files.",
+            ));
+        }
+        let mut seen = std::collections::HashSet::new();
+        let sources: Vec<_> = entries
+            .iter()
+            .map(|entry| {
+                if !seen.insert(entry.source_id) {
+                    return Err(AppError::new(
+                        "PROCESSING_REQUEST",
+                        "Submit each file only once.",
+                    ));
+                }
+                let source = self.0.assets.lease(entry.source_id)?;
+                source.processing_path()?;
+                Ok(source)
+            })
+            .collect::<Result<_>>()?;
         let mut registry = self.0.registry.lock().unwrap();
         if registry.closing {
             return Err(cancelled());
@@ -352,7 +417,7 @@ impl Processing {
         if registry
             .cleanup
             .values()
-            .any(|entry| entry.source_id == source_id)
+            .any(|entry| seen.contains(&entry.source_id))
         {
             return Err(cleanup_pending());
         }
@@ -361,54 +426,68 @@ impl Processing {
             .values()
             .filter(|s| s.active.is_some())
             .count()
-            >= 20
+            + entries.len()
+            > 20
         {
             return Err(AppError::new(
                 "PROCESSING_QUEUE_FULL",
                 "Wait for a queued file to finish before adding another.",
             ));
         }
-        self.0.assets.with_current(&source, || {
-            let slot = registry.slots.get_mut(&source_id).ok_or_else(stale)?;
-            if slot.active.is_some() {
-                return Err(AppError::new(
-                    "PROCESSING_BUSY",
-                    "This file already has a queued or running operation.",
-                ));
+        self.0.assets.with_current_batch(&sources, || {
+            // Validate the whole batch before reserving any slot. Reviews and
+            // membership cannot change between this check and its commit.
+            for entry in &entries {
+                let slot = registry.slots.get(&entry.source_id).ok_or_else(stale)?;
+                if slot.active.is_some() {
+                    return Err(AppError::new(
+                        "PROCESSING_BUSY",
+                        "This file already has a queued or running operation.",
+                    ));
+                }
+                let review = slot.review.as_ref().ok_or_else(stale)?;
+                if let Some(input) = &review.input {
+                    input.path()?;
+                }
+                review.plan.check_key(&entry.key)?;
+                let p = review.plan.document();
+                if !review.plan.is_executable() && p["status"] != "no-op" {
+                    return Err(AppError::new(
+                        "PROCESSING_UNAVAILABLE",
+                        p["message"]
+                            .as_str()
+                            .unwrap_or("This processing plan is unavailable."),
+                    ));
+                }
+                if p["warnings"].as_array().unwrap().iter().any(|w| {
+                    w["required"] == true && !entry.acknowledgements.iter().any(|id| w["id"] == *id)
+                }) {
+                    return Err(AppError::new(
+                        "PROCESSING_WARNINGS",
+                        "Acknowledge the reviewed omissions before processing.",
+                    ));
+                }
             }
-            let review = slot.review.as_ref().ok_or_else(stale)?;
-            review.plan.check_key(key)?;
-            let p = review.plan.document();
-            if !review.plan.is_executable() && p["status"] != "no-op" {
-                return Err(AppError::new(
-                    "PROCESSING_UNAVAILABLE",
-                    p["message"]
-                        .as_str()
-                        .unwrap_or("This processing plan is unavailable."),
-                ));
-            }
-            if p["warnings"]
-                .as_array()
-                .unwrap()
+            Ok(sources
                 .iter()
-                .any(|w| w["required"] == true && !acknowledgements.iter().any(|id| w["id"] == *id))
-            {
-                return Err(AppError::new(
-                    "PROCESSING_WARNINGS",
-                    "Acknowledge the reviewed omissions before processing.",
-                ));
-            }
-            let operation_id = Uuid::new_v4();
-            let cancel = source.cancellation().child_token();
-            slot.active = Some((operation_id, cancel.clone()));
-            Ok(Prepared {
-                owner: self.clone(),
-                source: source.clone(),
-                plan: review.plan.clone(),
-                revision: review.revision,
-                operation_id,
-                cancel,
-            })
+                .map(|source| {
+                    let slot = registry.slots.get_mut(&source.source.asset_id).unwrap();
+                    let review = slot.review.as_ref().unwrap();
+                    let operation_id = Uuid::new_v4();
+                    let cancel = source.cancellation().child_token();
+                    slot.active = Some((operation_id, cancel.clone()));
+                    Prepared {
+                        input: review.input.clone(),
+                        role: review.role,
+                        owner: self.clone(),
+                        source: source.clone(),
+                        plan: review.plan.clone(),
+                        revision: review.revision,
+                        operation_id,
+                        cancel,
+                    }
+                })
+                .collect())
         })?
     }
     pub fn cancel(&self, source_id: Uuid, operation_id: Uuid) -> bool {
@@ -461,6 +540,8 @@ impl Processing {
                 prepared.release_admission();
                 let cleanup_owner = owner.clone();
                 let _ = blocking(move || cleanup_owner.cleanup_sync(false)).await;
+                #[cfg(test)]
+                owner.0.hooks.before_retirement().await;
                 drop(prepared);
                 drop(execution);
                 let _ = send.send(result);
@@ -482,14 +563,14 @@ impl Processing {
         if job.plan.document()["status"] == "no-op" {
             return Ok(self.publish(
                 job,
-                Bytes::Original(job.source.clone()),
-                job.source.source.size,
-                job.source
-                    .source
-                    .inspection
-                    .media
-                    .clone()
-                    .ok_or_else(stale)?,
+                job.input.as_ref().map_or_else(
+                    || Bytes::Original(job.source.clone()),
+                    |input| Bytes::Retained(input.clone()),
+                ),
+                job.input
+                    .as_ref()
+                    .map_or(job.source.source.size, |input| input.descriptor.size),
+                job.inspection()?.clone(),
                 0,
                 None,
             )?);
@@ -516,6 +597,7 @@ impl Processing {
                         source_id,
                         _source: Some(source),
                         failed: false,
+                        retry: Default::default(),
                     },
                 );
                 Ok(directory)
@@ -531,22 +613,23 @@ impl Processing {
             let pass_log = directory.join("pass");
             let passes = job.plan.document()["passes"].as_u64().unwrap_or(1);
             for pass in 1..=passes {
+                progress.send_replace(Progress {
+                    pass: pass as u8,
+                    passes: passes as u8,
+                    attempt: attempts,
+                    ..Default::default()
+                });
                 self.check(job).await?;
                 let args = processing_command::arguments(
-                    job.source.processing_path()?,
+                    job.input_path()?,
                     &output,
-                    job.source
-                        .source
-                        .inspection
-                        .media
-                        .as_ref()
-                        .ok_or_else(stale)?,
+                    job.inspection()?,
                     &job.plan,
                     Attempt {
                         pass: (passes == 2).then_some(pass as u8),
                         pass_log_prefix: Some(&pass_log),
                         video_bitrate: bitrate,
-                        ..Default::default()
+                        conversion_max_bytes: Some(self.0.limits.maximum_bytes),
                     },
                 )?;
                 self.0
@@ -560,10 +643,11 @@ impl Processing {
                             cancel: &job.cancel,
                         },
                         progress.clone(),
-                        (job.source.clone(), self.0.root.clone()),
+                        (job.source.clone(), job.input.clone(), self.0.root.clone()),
                     )
                     .await?;
             }
+            progress.send_modify(|value| value.validating = true);
             self.check(job).await?;
             #[cfg(test)]
             self.0.hooks.after_encode(&output).await;
@@ -596,7 +680,7 @@ impl Processing {
                 }
                 SizeDecision::Accept => {
                     let directory_for_cleanup = directory.clone();
-                    let file = blocking(move || {
+                    let (file, final_seal, output) = blocking(move || {
                         // Pass logs are attempt data, not part of a ready result.
                         let entries = std::fs::read_dir(&directory_for_cleanup)
                             .map_err(|_| cleanup_pending())?;
@@ -616,7 +700,7 @@ impl Processing {
                             )
                         })?;
                         seal.check(&output).map_err(|_| invalid_output())?;
-                        Ok(file)
+                        Ok((file, seal, output))
                     })
                     .await?;
                     return Ok(self.publish(
@@ -624,6 +708,8 @@ impl Processing {
                         Bytes::Encoded {
                             directory,
                             file: Mutex::new(Some(file)),
+                            path: output,
+                            seal: final_seal,
                         },
                         metadata.len(),
                         actual,
@@ -639,7 +725,15 @@ impl Processing {
             return Err(cancelled());
         }
         let source = job.source.clone();
-        blocking(move || source.processing_path().map(|_| ())).await?;
+        let input = job.input.clone();
+        blocking(move || {
+            source.processing_path()?;
+            if let Some(input) = input {
+                input.path()?;
+            }
+            Ok(())
+        })
+        .await?;
         self.0.assets.with_current(&job.source, || ())?;
         if job.cancel.is_cancelled() {
             return Err(cancelled());
@@ -668,6 +762,7 @@ impl Processing {
         }
         self.0.assets.with_current(&job.source, || {
             let descriptor = Published {
+                role: job.role.into(),
                 result_id: Uuid::new_v4(),
                 source_id: job.source.source.asset_id,
                 draft_revision: job.revision,
@@ -675,7 +770,7 @@ impl Processing {
                     .as_str()
                     .unwrap_or(&job.source.source.name)
                     .into(),
-                no_op: matches!(bytes, Bytes::Original(_)),
+                no_op: job.plan.document()["status"] == "no-op",
                 size,
                 mime: if matches!(bytes, Bytes::Original(_)) {
                     job.source.source.inspection.mime.clone()
@@ -697,6 +792,16 @@ impl Processing {
                 bytes,
                 _root: self.0.root.clone(),
             });
+            if job.role == "edited-output"
+                && let Some(previous) = registry
+                    .slots
+                    .get_mut(&descriptor.source_id)
+                    .unwrap()
+                    .edited
+                    .replace(output.clone())
+            {
+                registry.retired.push(previous);
+            }
             if let Some(previous) = registry
                 .slots
                 .get_mut(&descriptor.source_id)
@@ -736,7 +841,7 @@ impl Processing {
         let output = registry
             .slots
             .values()
-            .filter_map(|s| s.output.as_ref())
+            .flat_map(|s| [s.output.as_ref(), s.edited.as_ref()].into_iter().flatten())
             .find(|o| o.descriptor.result_id == result_id)
             .ok_or_else(|| {
                 AppError::new("ASSET_GONE", "This result has expired or been replaced.")
@@ -767,7 +872,7 @@ impl Processing {
                 .unwrap()
                 .cleanup
                 .get(directory)
-                .is_some_and(|entry| entry.failed)
+                .is_some_and(|entry| entry.failed && !entry.retry.due())
         {
             return Err(cleanup_pending());
         }
@@ -790,6 +895,7 @@ impl Processing {
             Err(_) => {
                 if let Some(entry) = self.0.registry.lock().unwrap().cleanup.get_mut(directory) {
                     entry.failed = true;
+                    entry.retry.failed();
                 }
                 return Err(cleanup_pending());
             }
@@ -801,12 +907,20 @@ impl Processing {
         let owner = self.clone();
         blocking(move || owner.cleanup_sync(true)).await
     }
+    pub(crate) async fn reconcile_cleanup(&self) -> Result<()> {
+        let owner = self.clone();
+        blocking(move || owner.cleanup_sync(false)).await
+    }
     fn cleanup_sync(&self, retry_failed: bool) -> Result<()> {
         let mut registry = self.0.registry.lock().unwrap();
         let closing = registry.closing;
         let mut discarded = Vec::new();
         registry.slots.retain(|id, slot| {
             if closing || self.0.assets.lease(*id).is_err() {
+                slot.review = None;
+                if let Some(output) = slot.edited.take() {
+                    discarded.push(output);
+                }
                 if let Some(output) = slot.output.take() {
                     discarded.push(output);
                 }
@@ -816,13 +930,20 @@ impl Processing {
             }
         });
         registry.retired.extend(discarded);
+        let mut unique = std::collections::HashSet::new();
+        registry
+            .retired
+            .retain(|output| unique.insert(output.descriptor.result_id));
         let retired = std::mem::take(&mut registry.retired);
         for output in retired {
             if Arc::strong_count(&output) > 1 {
                 registry.retired.push(output);
                 continue;
             }
-            if let Bytes::Encoded { directory, file } = &output.bytes {
+            if let Bytes::Encoded {
+                directory, file, ..
+            } = &output.bytes
+            {
                 file.lock().unwrap().take();
                 // Failed deletion remains owned and blocks that source's next
                 // admission. An active reader alone does not block admission.
@@ -832,6 +953,7 @@ impl Processing {
                         source_id: output.descriptor.source_id,
                         _source: None,
                         failed: false,
+                        retry: Default::default(),
                     },
                 );
             }
@@ -864,6 +986,37 @@ impl Processing {
         let registry = self.0.registry.lock().unwrap();
         registry.cleanup.len() + registry.retired.len()
     }
+    pub fn source_cleanup_pending(&self, source: Uuid) -> bool {
+        self.0
+            .registry
+            .lock()
+            .unwrap()
+            .cleanup
+            .values()
+            .any(|c| c.source_id == source && c.failed)
+    }
+    pub fn revision(&self, source: Uuid) -> Option<u32> {
+        self.0
+            .registry
+            .lock()
+            .unwrap()
+            .slots
+            .get(&source)?
+            .review
+            .as_ref()
+            .map(|r| r.revision)
+    }
+    /// Retired workbench membership cannot release its reservation while a
+    /// worker, published output lease, or failed deletion still owns the source.
+    pub fn retains_source(&self, id: Uuid) -> bool {
+        let registry = self.0.registry.lock().unwrap();
+        registry.slots.contains_key(&id)
+            || registry
+                .retired
+                .iter()
+                .any(|output| output.descriptor.source_id == id)
+            || registry.cleanup.values().any(|entry| entry.source_id == id)
+    }
     pub async fn shutdown(&self) -> Result<()> {
         {
             let mut registry = self.0.registry.lock().unwrap();
@@ -893,6 +1046,8 @@ impl Processing {
         Ok(())
     }
 }
+mod legacy;
+pub use legacy::ConversionReview;
 #[cfg(test)]
 mod tests;
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {

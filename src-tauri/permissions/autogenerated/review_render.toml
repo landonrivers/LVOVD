@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-review-render"
+description = "Enables the review_render command without any pre-configured scope."
+commands.allow = ["review_render"]
+
+[[permission]]
+identifier = "deny-review-render"
+description = "Denies the review_render command without any pre-configured scope."
+commands.deny = ["review_render"]

@@ -19,6 +19,7 @@ function generate(name, args) {
 const video = generate('synthetic.mp4', ['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=20', '-f', 'lavfi', '-i', 'sine=frequency=500:duration=20', '-c:v', 'libx264', '-threads', '2', '-preset', 'ultrafast', '-b:v', '8M', '-minrate', '8M', '-maxrate', '8M', '-bufsize', '8M', '-x264-params', 'nal-hrd=cbr', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart']);
 assert.ok(fs.statSync(video).size > 8 * 1024 * 1024, 'video must exercise bounded range responses');
 const audio = generate('synthetic.m4a', ['-f', 'lavfi', '-i', 'sine=frequency=700:duration=4', '-c:a', 'aac']);
+const wave = generate('synthetic.wav', ['-f', 'lavfi', '-i', 'sine=frequency=900:sample_rate=44100:duration=4', '-c:a', 'pcm_s24le']);
 const tailIndex = generate('synthetic-tail-index.mp4', ['-i', video, '-c', 'copy']);
 if (process.platform === 'linux') {
   // A direct decode distinguishes missing codecs from custom-URI transport errors.
@@ -45,7 +46,7 @@ async function scenario(file, index) {
   // Exercise the same tool discovery as a direct executable launch, without the
   // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
   const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file,
-    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1' };
+    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1', LVOVD_DESKTOP_TEST_SAVE_FOLDER: resultDir };
   for (const key of ['FFPROBE', 'FFMPEG', 'NODE', 'YTDLP']) delete directEnv['LVOVD_DESKTOP_' + key];
   const child = spawn(path.join(root, 'target/debug/lvovd' + (process.platform === 'win32' ? '.exe' : '')), [], {
     cwd: resultDir, env: directEnv, windowsHide: true, stdio: ['ignore', log, log]
@@ -58,25 +59,28 @@ async function scenario(file, index) {
     browser = await remote({ hostname: '127.0.0.1', port, logLevel: 'error', connectionRetryCount: 0, capabilities: { browserName: 'wry' } });
     await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Desktop ·'), { timeout: 15000 });
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
-    await browser.$('#add-file').click();
-    await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 1), { timeout: 25000, timeoutMsg: 'Native media did not load metadata' });
+    await browser.execute(() => { window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(e.message)); window.addEventListener('unhandledrejection',e=>window.__errors.push(String(e.reason))); });
+    await browser.$('#media-choose-button').click();
+    await browser.waitUntil(async () => browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').readyState >= 1), { timeout: 25000, timeoutMsg: 'Native media did not load metadata' });
     // WebKit honors preload=metadata strictly; decoded frames require playback.
-    await browser.execute(() => { const p = document.getElementById('player'); p.muted = true; p.play(); });
-    await browser.waitUntil(async () => browser.execute(() => document.getElementById('player').readyState >= 2), { timeout: 15000, timeoutMsg: 'Native media did not decode for playback' });
-    await browser.execute(() => document.getElementById('player').pause());
-    const metadata = await browser.execute(() => ({ duration: document.getElementById('player').duration, url: document.getElementById('player').currentSrc }));
+    await browser.execute(() => { const p = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])'); p.muted = true; p.play(); });
+    await browser.waitUntil(async () => browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').readyState >= 2), { timeout: 15000, timeoutMsg: 'Native media did not decode for playback' });
+    await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').pause());
+    const metadata = await browser.execute(() => ({ duration: document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').duration, url: document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentSrc }));
     assert.ok(metadata.duration > 0); assert.match(metadata.url, /lvovd-media/);
     for (const target of [metadata.duration - 0.5, 0.25, metadata.duration / 2]) {
-      await browser.execute(t => { document.getElementById('player').currentTime = t; }, target);
-      await browser.waitUntil(async () => browser.execute(t => { const p = document.getElementById('player'); return !p.seeking && Math.abs(p.currentTime - t) < 0.15 && p.readyState >= 2; }, target), { timeout: 10000 });
+      await browser.execute(t => { document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime = t; }, target);
+      await browser.waitUntil(async () => browser.execute(t => { const p = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])'); return !p.seeking && Math.abs(p.currentTime - t) < 0.15 && p.readyState >= 2; }, target), { timeout: 10000 });
     }
-    await browser.execute(() => { const p = document.getElementById('player'); p.muted = true; p.play(); });
-    const before = await browser.execute(() => document.getElementById('player').currentTime);
-    await browser.waitUntil(async () => (await browser.execute(() => document.getElementById('player').currentTime)) > before + 0.15, { timeout: 10000 });
+    await browser.execute(() => { const p = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])'); p.muted = true; p.play(); });
+    const before = await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime);
+    await browser.waitUntil(async () => (await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime)) > before + 0.15, { timeout: 10000 });
     await browser.setWindowSize(1280, 720);
+    await browser.waitUntil(async () => browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), {timeout:2000}).catch(async error => { console.error(await browser.execute(() => ({width:innerWidth,height:innerHeight,scrollW:document.documentElement.scrollWidth,scrollH:document.documentElement.scrollHeight,outside:[...document.querySelectorAll("body *")].filter(e=>getComputedStyle(e).position==="absolute" && e.getBoundingClientRect().bottom>innerHeight).map(e=>({id:e.id,cls:e.className,rect:e.getBoundingClientRect().toJSON()})).slice(0,15)}))); throw error; });
     assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'desktop workflow must fit without outer-page scrolling');
     await browser.saveScreenshot(path.join(resultDir, `desktop-${process.platform}-${index}.png`));
     await browser.setWindowSize(960, 640);
+    await browser.waitUntil(async () => browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), {timeout:2000}).catch(async error => { console.error(await browser.execute(() => ({width:innerWidth,height:innerHeight,scrollW:document.documentElement.scrollWidth,scrollH:document.documentElement.scrollHeight}))); throw error; });
     assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'narrow workflow must fit without outer-page scrolling');
     await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
     // A second owned copy exercises selection changes while the first decoder
@@ -86,31 +90,165 @@ async function scenario(file, index) {
     // normal contention must wait instead of returning a fatal 429 to WebKit.
     // Linux's decoder uses the broker; these fetches still test its URI handler.
     await browser.execute(() => {
-      const url = document.getElementById('player').currentSrc;
+      const url = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentSrc;
       window.__rangeContention = Promise.all(Array.from({ length: 8 }, async () => {
         const response = await fetch(url, { headers: { Range: 'bytes=128-255' } });
         return { status: response.status, bytes: (await response.arrayBuffer()).byteLength };
       }));
     });
-    await browser.$('#add-file').click();
-    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 2, { timeout: 10000 });
+    await browser.$('#processing-add-files').click();
+    await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 2, { timeout: 10000 });
+    await browser.execute(() => { const list = document.getElementById('processing-file-list'); list.selectedIndex = 1; list.dispatchEvent(new Event('change', { bubbles: true })); });
     await browser.waitUntil(async () => browser.execute(previous => {
-      const player = document.getElementById('player');
+      const player = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])');
       return player.currentSrc !== previous && player.readyState >= 1;
     }, metadata.url), { timeout: 10000 });
     const burst = await browser.execute(async () => {
       const results = await window.__rangeContention; delete window.__rangeContention; return results;
     });
     assert.deepEqual(burst, Array.from({ length: 8 }, () => ({ status: 206, bytes: 128 })), 'read contention must not reject valid ranges');
-    await browser.$('#remove-file').click();
-    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 1, { timeout: 10000 });
+    await browser.execute(() => { window.confirm = () => true; });
+    await browser.$('#workspace-discard').click();
+    await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 1, { timeout: 10000 });
     await browser.waitUntil(async () => browser.execute(previous => {
-      const player = document.getElementById('player');
+      const player = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])');
       return player.currentSrc === previous && player.readyState >= 1;
     }, metadata.url), { timeout: 10000 });
-    await browser.$('#remove-file').click();
-    await browser.waitUntil(async () => (await browser.$$('#files option')).length === 0, { timeout: 10000 });
-    await browser.waitUntil(async () => (await browser.$$('#cleanup button')).length === 0, { timeout: 10000, timeoutMsg: 'The decoder did not release temporary media after removal' });
+    await browser.execute(() => { window.confirm = () => true; });
+    await browser.$('#workspace-discard').click();
+    await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 0, { timeout: 10000 });
+    await browser.waitUntil(async () => !(await browser.$('#workspace-retry-cleanup').isDisplayed()), { timeout: 10000, timeoutMsg: 'The decoder did not release temporary media after removal' });
+    // One native workbench is reopened idempotently; files share settings but
+    // retain independent cuts. Drive actual controls, not a command-only demo.
+    const identity = await browser.execute(async () => {
+      const id = window.LVOVDWorkspaceTransport.owner();
+      const opened = await window.__TAURI__.core.invoke('create_workbench');
+      return { id, opened: opened.workbenchId };
+    });
+    assert.equal(identity.id, identity.opened);
+    await browser.$('#media-choose-button').click();
+    await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 1, { timeout:15000 });
+    await browser.waitUntil(async () => (await browser.$('#conversion-plan-title').getText()).length > 0 && (await browser.$('#conversion-start').isEnabled()), {timeout:15000});
+    await browser.$('#conversion-start').click();
+    await browser.waitUntil(async () => browser.execute(() => !!window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.conversion?.output), {timeout:20000});
+    const result = await browser.execute(() => window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output);
+    assert.equal(result.noOp,true); assert.equal(result.size,fs.statSync(file).size);
+    await browser.$('#conversion-download').click();
+    await browser.waitUntil(async () => (await browser.$('[data-result="status"]').getText()).startsWith('Saved '), {timeout:15000});
+    const saved = (await browser.$('[data-result="status"]').getText()).slice(6);
+    assert.deepEqual(fs.readFileSync(path.join(resultDir,saved)),fs.readFileSync(file),'native no-op saving preserves bytes');
+    await browser.$('[data-result="edit"]').click();
+    const owner = await browser.execute(() => window.LVOVDWorkspaceTransport.owner());
+    const deniedSource = await browser.execute(async id => {
+      try { await window.__TAURI__.core.invoke('remove_source',{request:{workbenchId:'00000000-0000-4000-8000-000000000000',sourceId:id}}); return false; } catch { return true; }
+    }, result.sourceId);
+    assert.equal(deniedSource,true);
+    if (index === 1 || index === 3) {
+      await browser.waitUntil(async () => browser.execute(() => window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.waveform?.status === 'ready'), {timeout:20000});
+      assert.match(await browser.$('#audio-waveform-note').getText(), /overview/);
+    }
+    if (index === 2) {
+      await browser.execute(async ({sourceId,workbenchId}) => {
+        const invoke=(command,request)=>window.__TAURI__.core.invoke(command,{request});
+        const editPlan={version:1,keepRanges:[{startSeconds:0.25,endSeconds:1.25}]};
+        const review=await invoke('review_render',{workbenchId,sourceId,draftRevision:1,editPlan});
+        await invoke('queue_processing',{workbenchId,entries:[{sourceId,key:review.key,acknowledgements:[]}]});
+        window.__legacyEdit=editPlan;
+      },{sourceId:result.sourceId,workbenchId:owner});
+      await browser.waitUntil(async()=>browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.conversion.output?.role==='edited-output'),{timeout:20000});
+      await browser.execute(async ({sourceId,workbenchId})=>{
+        const inputAssetId=window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId;
+        const review=await window.__TAURI__.core.invoke('review_conversion',{request:{workbenchId,sourceId,inputAssetId,draftRevision:2,targetId:'m4a-aac',editPlan:window.__legacyEdit}});
+        await window.__TAURI__.core.invoke('queue_processing',{request:{workbenchId,entries:[{sourceId,key:review.key,acknowledgements:[]}]}});
+      },{sourceId:result.sourceId,workbenchId:owner});
+      await browser.waitUntil(async()=>browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0]?.workspace.conversion.output?.role==='converted-output'),{timeout:20000});
+      const converted=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output);
+      assert.equal(converted.inspection.video,null); assert.equal(converted.inspection.audio.codec,'aac');
+      assert.ok(Math.abs(converted.inspection.durationSeconds-1)<0.1);
+    }
+    if (index === 0 || index === 3) {
+      const field = async (id, value) => browser.execute((id, value) => { const input=document.getElementById(id); input.value=value; input.dispatchEvent(new Event('change',{bubbles:true})); },id,value);
+      await browser.execute(()=>document.getElementById('timeline-start-handle').focus());
+      await browser.keys('ArrowRight');
+      assert.equal(await browser.$('#editor-start-time').getValue(),'00:00:00.100');
+      await field('editor-start-time','00:00:00.000');
+      await field('editor-end-time','00:00:01.500');
+      await field('processing-filename-suffix','-native-cut');
+      await browser.$('#processing-add-files').click();
+      await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length===2,{timeout:15000});
+      await browser.execute(() => { const list=document.getElementById('processing-file-list');list.selectedIndex=1;list.dispatchEvent(new Event('change',{bubbles:true})); });
+      await field('editor-start-time','00:00:00.250'); await field('editor-end-time','00:00:01.750');
+      await field('cut-start-time','00:00:00.750'); await field('cut-end-time','00:00:01.000');
+      await browser.$('#remove-section').click();
+      await browser.waitUntil(async () => (await browser.$$('#removed-sections-list button')).length===1,{timeout:5000});
+      await browser.$('#removed-sections-list button').click();
+      assert.equal((await browser.$$('#removed-sections-list button')).length,0);
+      await field('cut-start-time','00:00:00.750'); await field('cut-end-time','00:00:01.000');
+      await browser.$('#remove-section').click();
+      await browser.$('#timeline-zoom-in').click();
+      assert.notEqual(await browser.$('#timeline-visible-label').getText(),'Showing full timeline');
+      await browser.$('#timeline-fit').click();
+      await browser.execute(() => { const list=document.getElementById('processing-file-list');list.selectedIndex=0;list.dispatchEvent(new Event('change',{bubbles:true})); });
+      assert.equal(await browser.$('#editor-end-time').getValue(),'00:00:01.500','per-file cut draft must survive selection');
+      await browser.$('#processing-process-all').click();
+      await browser.waitUntil(async () => (await browser.$('#processing-batch-submit')).isEnabled(),{timeout:15000});
+      await browser.$('#processing-batch-submit').click();
+      // Later edits cannot rewrite either captured queue ticket.
+      await field('editor-end-time','00:00:01.000');
+      await field('processing-filename-suffix','-later-draft');
+      await browser.waitUntil(async () => browser.execute(() => {
+        const entries=window.LVOVDLocalWorkspace.collectionState().entries;
+        return entries.length===2 && entries.every(e=>e.workspace.conversion.output && !e.workspace.conversion.output.noOp);
+      }),{timeout:40000});
+      const outputs=await browser.execute(() => window.LVOVDLocalWorkspace.collectionState().entries.map(e=>e.workspace.conversion.output));
+      assert.ok(outputs.every(output=>output.filename.includes('-native-cut')),'queued names must not change with later settings');
+      assert.ok(Math.abs(outputs[0].inspection.durationSeconds-1.5)<0.15);
+      assert.ok(Math.abs(outputs[1].inspection.durationSeconds-1.25)<0.15);
+      await (await browser.$$('[data-result="preview"]'))[0].click();
+      await browser.waitUntil(async () => browser.execute(()=>document.getElementById('result-player').readyState>=1),{timeout:15000});
+      await browser.$('#close-result').click();
+      await browser.$('#processing-download-all').click();
+      await browser.waitUntil(async () => (await browser.$('#processing-download-note').getText()).startsWith('Saved '),{timeout:15000});
+      assert.equal((await browser.$('#processing-download-note').getText()).match(/Saved /g).length,2);
+      if (index === 3) {
+        for (const [container,codec] of [['opus','opus'],['flac','flac'],['wav','pcm_s24le']]) {
+          const previous=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId);
+          await field('processing-container',container);
+          await browser.waitUntil(async()=>(await browser.$('#conversion-start').isEnabled()),{timeout:15000});
+          await browser.$('#conversion-start').click();
+          await browser.waitUntil(async()=>browser.execute(previous=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId!==previous,previous),{timeout:20000});
+          const actual=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.inspection.audio);
+          assert.equal(actual.codec,codec);assert.equal(actual.sampleRate,container==='opus'?48000:44100);
+        }
+      } else {
+        const previous=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId);
+        await field('processing-scale','fit');await field('processing-width','80');await field('processing-height','80');
+        await browser.$('input[name="processing-rate"][value="size"]').click();await field('processing-maximum-mb','0.15');
+        await field('processing-audio-codec','aac');await field('processing-audio-bitrate','32');
+        await browser.waitUntil(async()=>(await browser.$('#conversion-start').isEnabled()),{timeout:15000});
+        await browser.$('#conversion-start').click();
+        await browser.waitUntil(async()=>browser.execute(previous=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId!==previous,previous),{timeout:20000});
+        const output=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output);
+        assert.ok(output.size<=150000);assert.equal(output.inspection.video.width,80);assert.equal(output.inspection.video.height,44);assert.equal(output.review.passes,2);
+      }
+      assert.equal(await browser.execute(()=>document.documentElement.scrollHeight<=innerHeight && document.documentElement.scrollWidth<=innerWidth),true,'results must retain bounded page scrolling');
+      const untouched=await browser.execute(()=>({output:window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.conversion.output.assetId}));
+      await browser.$('#processing-reset').click();
+      assert.equal(await browser.$('#editor-start-time').getValue(),'00:00:00.000');
+      assert.equal(await browser.$('#editor-end-time').getValue(),index===0?'00:00:20.000':'00:00:04.000');
+      assert.equal(await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.conversion.output.assetId),untouched.output,'Reset File must retain other successful results');
+      await browser.saveScreenshot(path.join(resultDir,`results-${process.platform}-${index}.png`));
+      await browser.execute(() => { window.confirm=()=>true; });
+      await browser.$('#workspace-discard').click();
+      await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length===1,{timeout:10000});
+    }
+    await browser.execute(() => { window.confirm=()=>true; });
+    await browser.$('#workspace-discard').click();
+    await expectEmptyFiles(browser);
+    await browser.waitUntil(async () => browser.execute(async id => {
+      const snapshot = (await window.__TAURI__.core.invoke('list_workbenches')).find(e=>e.workbenchId===id);
+      return snapshot && !snapshot.cleanup.length;
+    }, owner), {timeout:15000});
     assert.equal(fs.existsSync(file), true, 'removal must not delete the selected original');
     const denied = await browser.execute(async path => {
       try { await window.__TAURI__.core.invoke('plugin:fs|read_file', { path }); return ''; } catch (error) { return String(error); }
@@ -120,7 +258,7 @@ async function scenario(file, index) {
       try { await window.__TAURI__.core.invoke('remove_source', { request: { assetId: '00000000-0000-4000-8000-000000000000', path: '/not-allowed' } }); return false; } catch { return true; }
     });
     assert.equal(shape, true, 'unknown command fields must be rejected');
-    console.log(`PASS ${process.platform}: ${path.basename(file)} native playback, seeking, removal, capabilities, narrow layout`);
+    console.log(`PASS ${process.platform}: ${path.basename(file)} native playback, seeking, single workbench, editor controls, owned processing and saving, removal, permissions, desktop/narrow layout`);
     await browser.execute(() => { setTimeout(() => window.__TAURI__.core.invoke('shutdown_desktop'), 100); });
     const timeout = new AbortController();
     try {
@@ -130,11 +268,12 @@ async function scenario(file, index) {
   } catch (error) {
     if (browser) {
       console.error('Native page diagnostics:', await browser.execute(() => {
-        const player = document.getElementById('player');
-        return { url: location.href, text: document.body?.innerText?.slice(0, 2000), media: { error: player?.error?.code, message: player?.error?.message, readyState: player?.readyState, networkState: player?.networkState } };
+        const player = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])');
+        return { errors: window.__errors, workspace: window.LVOVDLocalWorkspace?.collectionState(), url: location.href, text: document.body?.innerText?.slice(0, 2000), media: { error: player?.error?.code, message: player?.error?.message, readyState: player?.readyState, networkState: player?.networkState } };
       }).catch(() => 'unavailable'));
       await browser.saveScreenshot(path.join(resultDir, `failure-${process.platform}-${index}.png`)).catch(() => {});
     }
+    if (browser) console.error('Native owned state:', await browser.execute(async () => window.__TAURI__.core.invoke('list_workbenches')).catch(()=>null));
     console.error('Native process diagnostics:', fs.readFileSync(path.join(resultDir, `native-${index}.log`), 'utf8').slice(-8192));
     throw error;
   } finally {
@@ -142,4 +281,7 @@ async function scenario(file, index) {
     await closed; fs.closeSync(log);
   }
 }
-(async () => { await scenario(video, 0); await scenario(audio, 1); await scenario(tailIndex, 2); })().catch(error => { console.error(error); process.exitCode = 1; });
+async function expectEmptyFiles(browser) {
+  await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 0, { timeout: 10000 });
+}
+(async () => { await scenario(video, 0); await scenario(audio, 1); await scenario(tailIndex, 2); await scenario(wave, 3); })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -12,8 +12,17 @@ pub(super) struct Hooks {
     resume: tokio::sync::Notify,
     pub(super) fail_cleanup: AtomicBool,
     attempts: AtomicUsize,
+    pause_retirement: AtomicBool,
+    retirement_arrived: tokio::sync::Notify,
+    retirement_resume: tokio::sync::Notify,
 }
 impl Hooks {
+    pub(super) async fn before_retirement(&self) {
+        if self.pause_retirement.load(Ordering::Acquire) {
+            self.retirement_arrived.notify_one();
+            self.retirement_resume.notified().await;
+        }
+    }
     pub(super) async fn after_encode(&self, output: &Path) {
         self.attempts.fetch_add(1, Ordering::AcqRel);
         if let Some(mutate) = self.mutate.lock().unwrap().as_ref() {
@@ -185,6 +194,7 @@ async fn wait_for_idle(owner: &Processing) {
                 .values()
                 .all(|s| s.active.is_none())
                 && owner.pending_cleanup() == 0
+                && owner.0.operations.is_empty()
             {
                 break;
             }
@@ -501,6 +511,11 @@ async fn delayed_completion_removal_and_abandoned_waiters_cannot_publish() {
         assert!(!f.assets.remove(f.id).unwrap().cleanup_complete);
         assert_eq!(f.processing.pending_cleanup(), 1);
         if abandon {
+            f.processing
+                .0
+                .hooks
+                .pause_retirement
+                .store(true, Ordering::Release);
             running.abort();
         }
         f.processing.0.hooks.resume.notify_one();
@@ -508,6 +523,18 @@ async fn delayed_completion_removal_and_abandoned_waiters_cannot_publish() {
             assert!(running.await.unwrap().is_err());
         } else {
             assert!(running.await.unwrap_err().is_cancelled());
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                f.processing.0.hooks.retirement_arrived.notified(),
+            )
+            .await
+            .unwrap();
+            // Cleanup has finished, but the owned task still holds Prepared's
+            // final source lease. Registry idle alone cannot promise deletion.
+            assert_eq!(f.processing.pending_cleanup(), 0);
+            assert!(!f.assets.retry_pending_cleanup());
+            assert!(!f.processing.0.operations.is_empty());
+            f.processing.0.hooks.retirement_resume.notify_one();
         }
         wait_for_idle(&f.processing).await;
         assert!(f.processing.latest(f.id).is_none());

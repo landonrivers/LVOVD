@@ -2,6 +2,10 @@
 
 This contract records the accepted product and engineering commitments. It applies to human contributors and coding agents. [ROADMAP.md](../ROADMAP.md) tracks feature scope; [desktop-foundation.md](desktop-foundation.md) records current migration evidence; [CONTRIBUTING.md](../CONTRIBUTING.md) gives development and validation commands. Proposed remedies are not accepted facts or completed features.
 
+## Local Media workbench decision (2026-10-20)
+
+The user explicitly approved simplifying PR #54 to **one active workbench with multiple files**. Native launch/reconnection reuses that workbench; there is no New Workbench or workbench switcher. Keep twenty files, per-file cuts/drafts, shared output settings, immutable jobs and aggregate storage accounting. Removed/expired records may remain internally until workers/readers and failed cleanup release them; these are cleanup obligations, not additional editing workbenches. Same-session reconnection restores the active workbench. This replaces the earlier two-workbench presentation requirement without removing media processing options.
+
 ## Product purpose and interface
 
 LVOVD is a practical local media utility. Users should be able to identify the next action, understand what is happening, and recover from failures without knowing the implementation.

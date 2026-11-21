@@ -6,10 +6,13 @@ macro_rules! pattern {
         &*PATTERN
     }};
 }
+pub mod analysis;
 pub mod assets;
 pub mod audio_policy;
 pub mod capabilities;
+mod cleanup_retry;
 pub mod edit_plan;
+pub mod export;
 pub mod inspection;
 pub mod media;
 pub mod media_admission;
@@ -21,8 +24,11 @@ pub mod process;
 pub mod processing_command;
 pub mod processing_operation;
 pub mod processing_plan;
+pub mod processing_queue;
 pub mod processing_settings;
 pub mod tools;
+pub mod waveform;
+pub mod workbenches;
 
 use serde::Serialize;
 
