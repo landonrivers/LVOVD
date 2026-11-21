@@ -48,6 +48,8 @@ On Windows 10 x64 (build 19045), the [review ZIP from PR head `b7ed452`](https:/
 
 The Windows package test uses `desktop/test/packaged-download-options.ps1`. CI repeats the synthetic chapter and caption cases. Live source identifiers, captions and media stay outside the repository. The platform receipts and remaining acceptance cases are tracked per capability in the [parity register](v3-feature-parity.md).
 
+The same Windows review ZIP also exercised **Extras Only** on a maintainer-owned Short. Thumbnail alone saved one decodable JPEG. Metadata alone saved one `.info.json` with the expected video ID and the title shown in Preview. Selecting both produced the two companions in one job. The destination contained exactly the requested new files after each save.
+
 For live acceptance, use a video or playlist the maintainer owns and has supplied for testing. On the same verified Windows review ZIP, the `AutomaticCaptions` scenario saved two SRTs from a maintainer-owned Short that offered only automatic captions. FFprobe identified each as SubRip, and their timed cues matched between Automatic and the combined mode. The Short had no published skip segments. Use generated segments for repeatable Mark and Remove tests.
 
 In the native test build, real yt-dlp can read a generated extractor result from the test configuration folder for one exact loopback URL. That source offers distinct creator and automatic cues, generated media and a local SponsorBlock service. The app performs selection, processing and saving through its normal native commands. Tests read the exported subtitles, count requests and probe the marked intervals and removed duration. Release builds exclude the fixture input.

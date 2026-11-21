@@ -364,14 +364,16 @@
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
         "No media is acquired; require an extra and clear inactive range/SponsorBlock/manual-selection semantics."
       ],
       "evidence": [],
-      "remaining": "Exercise Extras Only with captions and artwork on all four targets. Metadata-only has a controlled native scenario."
+      "remaining": "The Windows package saved only the chosen companion files on a live source. Collect native receipts for zero media reads and clearing inactive media settings."
     },
     {
       "id": "download.compatible",
@@ -887,13 +889,17 @@
           "crates/lvovd-core/src/downloads/tests.rs",
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
-        "native": []
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Test absent artwork, thumbnail acquisition rejection and saving the companion file."
       ],
       "evidence": [],
-      "remaining": "Verify JPG conversion and provider failures with the native UI."
+      "remaining": "The Windows package saved decodable JPEGs on a live source. Collect native receipts for conversion, unavailable artwork and rejected acquisition."
     },
     {
       "id": "download.metadata-extra",
@@ -933,14 +939,16 @@
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
         "Save JSON separately, classify it as metadata and preserve selected extras through queue/history."
       ],
       "evidence": [],
-      "remaining": "Verify individual sidecar receipts through each native webview; History reuse remains in 8D.4."
+      "remaining": "The Windows package saved independently readable metadata with the reviewed source identity. Native receipts and History reuse in 8D.4 remain outstanding."
     },
     {
       "id": "download.subtitles",

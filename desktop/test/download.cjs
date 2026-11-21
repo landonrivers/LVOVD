@@ -75,6 +75,7 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   await wait(async () => (await browser.$('#download-folder').getText()) === destination, 'Native folder selection did not complete');
   await preview();
   assert.equal(await browser.$('#dl-sponsors').isDisplayed(), false, 'Generic sources are ineligible for SponsorBlock');
+  assert.equal(await browser.$('#dl-thumbnail').isEnabled(), false, 'A source without artwork cannot offer a thumbnail');
   const filename = await browser.$('#download-filename').getText();
   assert.ok(filename && path.basename(filename) === filename, 'Preview exposes the reviewed media filename');
   for (const [width, height] of [[1280, 720], [960, 640]]) {

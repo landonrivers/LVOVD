@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory)][string]$Tools,
     [Parameter(Mandatory)][string]$Destination,
     [Parameter(Mandatory)][string]$Receipt,
-    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock')][string]$Scenario='Fixture'
+    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock','Extras')][string]$Scenario='Fixture'
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -143,6 +143,35 @@ try {
         Set-Captions 'Creator and automatic' 'zz'
         [void](Save-Selection 0)
         $evidence.unavailableLanguage='Failed without publication'
+    } elseif ($Scenario -eq 'Extras') {
+        $url=$env:LVOVD_QA_EXTRAS_URL
+        $sourceId=$env:LVOVD_QA_EXTRAS_ID
+        if (!$url -or !$sourceId) {throw 'Provide a maintainer-owned URL and its expected video ID.'}
+        foreach ($choice in 'thumbnail','metadata','both') {
+            Preview $url
+            $title=(ById 'download-title').Current.Name
+            if (!$title) {throw 'Preview did not identify the source.'}
+            Select-Choice 'dl-content' 'Extras Only'
+            $wantImage=$choice -ne 'metadata'
+            $wantJson=$choice -ne 'thumbnail'
+            Check-Choice $ae::AutomationIdProperty 'dl-thumbnail' $wantImage
+            Check-Choice $ae::AutomationIdProperty 'dl-metadata' $wantJson
+            $files=@(Save-Selection ([int]$wantImage + [int]$wantJson))
+            $images=@($files | Where-Object { $_.EndsWith('.jpg') })
+            $jsonFiles=@($files | Where-Object { $_.EndsWith('.info.json') })
+            if ($images.Count -ne [int]$wantImage -or $jsonFiles.Count -ne [int]$wantJson) {throw 'Unexpected set of published companion files.'}
+            foreach ($file in $images) {
+                $facts=Probe $file
+                if ($facts.streams.Count -ne 1 -or $facts.streams[0].codec_name -ne 'mjpeg') {throw 'Expected one JPEG image.'}
+                & $ffmpeg -nostdin -v error -xerror -i $file -frames:v 1 -f null -
+                if ($LASTEXITCODE) {throw 'Saved thumbnail did not decode.'}
+            }
+            foreach ($file in $jsonFiles) {
+                $info=Get-Content -Raw -Encoding utf8 -LiteralPath $file | ConvertFrom-Json
+                if ($info.id -cne $sourceId -or $info.title -cne $title) {throw 'Saved metadata differed from the reviewed source.'}
+            }
+            foreach ($file in $files) {Record-File $choice $file}
+        }
     } elseif ($Scenario -in 'Captions','AutomaticCaptions') {
         $url=$env:LVOVD_QA_CAPTION_URL
         if (!$url) {throw 'Set LVOVD_QA_CAPTION_URL to a maintainer-owned source with the required caption tracks.'}

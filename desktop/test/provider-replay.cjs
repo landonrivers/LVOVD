@@ -25,12 +25,24 @@ const categories = [
   ['outro', 'Endcards', 10, 20],
 ];
 
-async function start(mediaUrl) {
+async function start(media, ffmpeg) {
   const requests = [];
+  const image = spawnSync(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=red:s=64x32',
+    '-frames:v', '1', '-threads', '1', '-c:v', 'png', '-f', 'image2pipe', 'pipe:1'], { timeout: 15000, windowsHide: true });
+  assert.equal(image.status, 0, image.error?.message || String(image.stderr));
+  let rejectImage = false;
+  let rejectedReads = 0;
   const endpoint = '/api/skipSegments/' + createHash('sha256').update(videoId).digest('hex').slice(0, 4);
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
-    if (Object.hasOwn(captions, url.pathname)) {
+    if (url.pathname === '/cover.png') {
+      if (rejectImage) {
+        rejectedReads++;
+        res.writeHead(403).end();
+      } else {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.stdout.length }).end(image.stdout);
+      }
+    } else if (Object.hasOwn(captions, url.pathname)) {
       res.writeHead(200, { 'Content-Type': 'application/x-subrip' });
       res.end('1\n00:00:00,000 --> 00:00:01,000\n' + captions[url.pathname] + '\n');
     } else if (url.pathname === endpoint && url.searchParams.get('service') === 'YouTube') {
@@ -59,18 +71,20 @@ async function start(mediaUrl) {
     const info = {
       id: videoId, title: 'Synthetic replay', extractor: 'youtube', extractor_key: 'Youtube',
       duration: 20, webpage_url: url,
-      formats: [{ url: mediaUrl, format_id: 'combined', ext: 'mp4', height: 360, vcodec: 'avc1', acodec: 'mp4a.40.2' }],
+      formats: [{ url: media.url, format_id: 'combined', ext: 'mp4', height: 360, vcodec: 'avc1', acodec: 'mp4a.40.2' }],
+      thumbnail: api + '/cover.png', thumbnails: [{ url: api + '/cover.png', ext: 'png' }],
       subtitles: { en: track('/creator.srt') },
       automatic_captions: { en: track('/automatic.srt'), fr: track('/fallback.srt') },
     };
-    return { url, port: server.address().port, info, requests, close };
+    return { url, port: server.address().port, info, requests, close, mediaReads: media.gets,
+      rejectImage: () => { rejectImage = true; }, rejectedReads: () => rejectedReads };
   } catch (error) {
     await close();
     throw error;
   }
 }
 
-async function verify(browser, fixture, destination, ffprobe) {
+async function verify(browser, fixture, destination, ffprobe, ffmpeg) {
   async function preview() {
     await browser.$('#download-url').setValue(fixture.url);
     await browser.$('#download-preview-button').click();
@@ -85,18 +99,54 @@ async function verify(browser, fixture, destination, ffprobe) {
     }, id, value);
     assert.equal(actual, value);
   }
-  async function save(description) {
+  async function save(description, expectedStatus = 'saved') {
     const before = (await browser.$$('#download-jobs li')).length;
     await browser.$('#download-start').click();
     const row = () => browser.$('#download-jobs li:last-child');
     await browser.waitUntil(async () => (await browser.$$('#download-jobs li')).length === before + 1 &&
       ['saved', 'failed', 'saveFailed', 'cancelled'].includes(await row().getAttribute('data-status')),
       { timeout: 90000, timeoutMsg: description + ' did not reach a terminal state' });
-    assert.equal(await row().getAttribute('data-status'), 'saved', description + ': ' + await row().getText());
+    assert.equal(await row().getAttribute('data-status'), expectedStatus, description + ': ' + await row().getText());
     return browser.execute(() => Array.from(document.querySelectorAll('#download-jobs li:last-child select option'), opt => opt.textContent));
   }
   await browser.$('#download-choose-folder').click();
   await browser.waitUntil(async () => await browser.$('#download-folder').getText() === destination);
+  for (const choices of [['thumbnail'], ['metadata'], ['thumbnail', 'metadata']]) {
+    await preview();
+    const reviewedTitle = await browser.$('#download-title').getText();
+    await select('dl-selection', 'combined');
+    await select('dl-range', 'custom');
+    await select('dl-sponsor', 'mark');
+    await select('dl-content', 'extras');
+    assert.equal(await browser.$('#download-start').isEnabled(), false);
+    for (const choice of choices) await browser.$('#dl-' + choice).click();
+    const existing = new Set(fs.readdirSync(destination));
+    const mediaReads = fixture.mediaReads();
+    const names = await save('Extras Only ' + choices.join(' and '));
+    assert.equal(fixture.mediaReads(), mediaReads, 'Extras Only read source media');
+    assert.equal(fixture.requests.length, 0, 'Inactive SponsorBlock option made a request');
+    assert.deepEqual(fs.readdirSync(destination).filter(name => !existing.has(name)).sort(), [...names].sort());
+    assert.equal(names.length, choices.length);
+    if (choices.includes('metadata')) {
+      const name = names.find(name => name.endsWith('.info.json'));
+      assert.ok(name, 'Missing metadata receipt');
+      const json = JSON.parse(fs.readFileSync(path.join(destination, name), 'utf8'));
+      assert.deepEqual([json.id, json.title, json.duration], [fixture.info.id, reviewedTitle, fixture.info.duration]);
+    }
+    if (choices.includes('thumbnail')) {
+      const name = names.find(name => name.endsWith('.jpg'));
+      assert.ok(name, 'Missing thumbnail receipt');
+      const file = path.join(destination, name);
+      const probe = spawnSync(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_name,width,height', '-of', 'json', file],
+        { encoding: 'utf8', timeout: 15000, windowsHide: true });
+      assert.equal(probe.status, 0, probe.stderr);
+      assert.deepEqual(JSON.parse(probe.stdout).streams, [{ codec_name: 'mjpeg', width: 64, height: 32 }]);
+      const pixel = spawnSync(ffmpeg, ['-v', 'error', '-xerror', '-i', file, '-vf', 'scale=1:1', '-frames:v', '1',
+        '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { timeout: 15000, windowsHide: true });
+      assert.equal(pixel.status, 0, String(pixel.stderr));
+      assert.ok(pixel.stdout.length === 3 && pixel.stdout[0] > 220 && pixel.stdout[1] < 30 && pixel.stdout[2] < 30);
+    }
+  }
   for (const [mode, expected] of [
     ['manual', { en: 'Creator English' }],
     ['auto', { en: 'Automatic English', fr: 'Automatic French' }],
@@ -154,5 +204,16 @@ async function verify(browser, fixture, destination, ffprobe) {
     assert.deepEqual(fixture.requests, expectedRequests);
   }
   console.log('PASS native Download: caption sources and fallback, SponsorBlock requests, marked intervals and removed duration');
+  await preview();
+  await select('dl-content', 'extras');
+  await browser.$('#dl-thumbnail').click();
+  const before = fs.readdirSync(destination).sort();
+  const reads = fixture.mediaReads();
+  fixture.rejectImage();
+  assert.deepEqual(await save('Rejected thumbnail', 'failed'), []);
+  assert.ok(fixture.rejectedReads() > 0);
+  assert.equal(fixture.mediaReads(), reads);
+  assert.deepEqual(fs.readdirSync(destination).sort(), before);
+  console.log('PASS native Extras Only: JPEG, source metadata, combined receipts, zero media reads and rejected artwork');
 }
 module.exports = { start, verify };
