@@ -102,6 +102,10 @@ try {
         & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario Fixture -Receipt $optionReceipt
         if ($LASTEXITCODE) { throw 'Packaged chapter and caption acceptance failed.' }
         $details.chapterAndCaptionOutputs = Get-Content -Raw -LiteralPath $optionReceipt | ConvertFrom-Json
+        $profileReceipt = Join-Path $out 'profile-receipt.json'
+        & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario Profiles -Receipt $profileReceipt
+        if ($LASTEXITCODE) { throw 'Packaged download profile comparison failed.' }
+        $details.profileOutputs = Get-Content -Raw -LiteralPath $profileReceipt | ConvertFrom-Json
         Assert-NoApplicationListener $viewer.Id
         $details.fixtureDownload = $true
     }

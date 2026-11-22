@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory)][string]$Tools,
     [Parameter(Mandatory)][string]$Destination,
     [Parameter(Mandatory)][string]$Receipt,
-    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock','Extras')][string]$Scenario='Fixture'
+    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock','Extras','Profiles')][string]$Scenario='Fixture'
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -112,7 +112,8 @@ function Read-Caption($File) {
 if (!(Test-Path -LiteralPath $Destination -PathType Container)) {throw 'A known existing output folder is required.'}
 $server=$null
 try {
-    if ($Scenario -eq 'Fixture') {
+    if ($Scenario -in 'Profiles','Fixture') {
+        if ($Scenario -eq 'Profiles') {$fixtureScript=Join-Path $PSScriptRoot 'profile-fixture.cjs'}
         $start=New-Object Diagnostics.ProcessStartInfo
         $start.FileName=(Get-Command node.exe).Source
         $start.Arguments='"{0}" serve "{1}"' -f $fixtureScript,$ffmpeg
@@ -122,8 +123,22 @@ try {
         $start.RedirectStandardOutput=$true
         $server=[Diagnostics.Process]::Start($start)
         $ready=$server.StandardOutput.ReadLineAsync()
-        if (!$ready.Wait(30000) -or !$ready.Result) {throw 'Chapter fixture did not start.'}
+        if (!$ready.Wait(30000) -or !$ready.Result) {throw 'Download fixture did not start.'}
         $urls=$ready.Result | ConvertFrom-Json
+    }
+    if ($Scenario -eq 'Profiles') {
+        for ($i=0;$i -lt $urls.Count;$i++) {
+            $case=$urls[$i]
+            Preview $case.url
+            $profile=if ($case.profile -eq 'compatible') {'Compatible MP4'} else {'Maximum Quality'}
+            Select-Choice 'dl-profile' $profile
+            if ($case.cap) { Select-Choice 'dl-height' "$($case.cap)p" }
+            $file=Save-Selection 1
+            & node.exe $fixtureScript verify $ffprobe $i $file
+            if ($LASTEXITCODE) {throw 'Saved streams differed from the expected profile selection.'}
+            Record-File "$($case.source) $profile $($case.cap) $($case.video) $($case.audio)" $file
+        }
+    } elseif ($Scenario -eq 'Fixture') {
         Preview $urls.chapters
         Open-Panel 'Time range and chapters'
         Select-Choice 'dl-range' 'Selected chapters'

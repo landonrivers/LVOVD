@@ -7,9 +7,9 @@ const { spawnSync } = require('node:child_process');
 
 // Serve only this generated fixture. Blocking an acquisition GET after Preview lets
 // the native workflow deterministically exercise a disconnected folder and cancellation.
-async function startProvider(video, ffmpeg) {
+async function startProvider(video, ffmpeg, extraAssets = []) {
   // The extracted-ZIP harness serves a single prepared MP4 without build tools.
-  const assets = new Map([['/fixture.mp4',video]]);
+  const assets = new Map([['/fixture.mp4',video], ...extraAssets]);
   let dash;
   if (ffmpeg) {
     dash = fs.mkdtempSync(path.join(require('node:os').tmpdir(),'lvovd-dash-'));
@@ -33,7 +33,8 @@ async function startProvider(video, ffmpeg) {
     const start = range ? Number(range[1]) : 0;
     const end = range?.[2] ? Math.min(bytes - 1, Number(range[2])) : bytes - 1;
     if (start > end) { response.writeHead(416).end(); return; }
-    const headers = { 'Content-Type': request.url==='/dash/fixture.mpd'?'application/dash+xml':'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
+    const type = request.url.endsWith('.mpd') ? 'application/dash+xml' : request.url.endsWith('.m4a') ? 'audio/mp4' : 'video/mp4';
+    const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
     if (range) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + bytes;
     const send = () => {
       if (response.destroyed) return;
@@ -174,17 +175,19 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
     assert.equal(probe.status,0,probe.stderr);
     assert.deepEqual(JSON.parse(probe.stdout).streams.map(stream=>stream.codec_name).sort(),expected);
   }
+  async function finish(status) {
+    const before = (await browser.$$('#download-jobs li')).length;
+    const row = () => browser.$('#download-jobs li:last-child');
+    await browser.$('#download-start').click();
+    await wait(async () => (await browser.$$('#download-jobs li')).length === before + 1 &&
+      ['saved', 'failed', 'saveFailed', 'cancelled'].includes(await row().getAttribute('data-status')),
+      'New download did not reach a terminal state');
+    assert.equal(await row().getAttribute('data-status'), status, await row().getText());
+    return browser.execute(() => Array.from(document.querySelectorAll('#download-jobs li:last-child select option'), o => o.textContent));
+  }
   const advanced = require('./chapter-caption-fixture.cjs');
   const fixture = await advanced.start(ffmpeg);
   try {
-    async function finish(status) {
-      const before = (await browser.$$('#download-jobs li')).length;
-      await browser.$('#download-start').click();
-      await wait(async () => (await browser.$$('#download-jobs li')).length===before+1 &&
-        await browser.$('#download-jobs li:last-child').getAttribute('data-status')===status,
-      'New download did not finish as '+status);
-      return browser.execute(()=>Array.from(document.querySelectorAll('#download-jobs li:last-child select option'),o=>o.textContent));
-    }
     async function selectChapters(url) {
       await preview(url);
       await browser.$('#dl-times summary').click();
@@ -216,6 +219,22 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
     await finish('failed');
     assert.deepEqual(fs.readdirSync(destination).sort(),beforeMissing);
   } finally { await fixture.close(); }
+  const profiles = require('./profile-fixture.cjs');
+  const competition = await profiles.start(ffmpeg);
+  try {
+    for (const scenario of competition.cases) {
+      await preview(scenario.url);
+      const modernOnly = scenario.source === 'modern';
+      assert.equal(await browser.$('#dl-profile').getValue(), modernOnly ? 'maximum' : 'compatible');
+      assert.equal(await browser.execute(() => document.querySelector('#dl-profile option[value="compatible"]').disabled), modernOnly);
+      assert.equal(await choose('dl-profile', scenario.profile), scenario.profile);
+      if (scenario.cap) assert.equal(await choose('dl-height', String(scenario.cap)), String(scenario.cap));
+      const names = await finish('saved');
+      assert.equal(names.length, 1);
+      profiles.verify(ffprobe, path.join(destination, names[0]), scenario);
+      console.log('PASS native profile:', scenario.source, scenario.profile, scenario.cap || 'uncapped', scenario.video, scenario.audio);
+    }
+  } finally { await competition.close(); }
 }
 
 module.exports = { downloadScenario, startProvider };

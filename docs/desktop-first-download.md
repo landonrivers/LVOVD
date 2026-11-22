@@ -57,3 +57,19 @@ For live acceptance, use a video or playlist the maintainer owns and has supplie
 In the native test build, real yt-dlp can read a generated extractor result from the test configuration folder for one exact loopback URL. That source offers distinct creator and automatic cues, generated media and a local SponsorBlock service. The app performs selection, processing and saving through its normal native commands. Tests read the exported subtitles, count requests and probe the marked intervals and removed duration. Release builds exclude the fixture input.
 
 At `ebafe08`, the [four native platform gates](https://github.com/landonrivers/LVOVD/actions/runs/44933999779) exercised all three caption choices and their language suggestions. The tests read each saved SRT to distinguish creator preference from automatic fallback. SponsorBlock Off sent zero segment requests. Mark preserved the selected intervals for a subset and for all nine categories. Remove requested only the outro and shortened the 20-second fixture to 10 seconds, preserving both audio and video.
+
+### Automatic profile selection
+
+The verified Windows review ZIP and the released v2.7 selector each downloaded seven MP4s from the same generated DASH sources. FFprobe compared both saved streams with the selected input tracks, including dimensions, codec configuration and the ordered SHA-256 hashes of every encoded packet.
+
+| Source offering | Profile | Height cap | Video saved | Audio saved |
+|---|---|---|---|---|
+| Separate streams | Compatible MP4 | Best available | 360p H.264 | AAC |
+| Separate streams | Maximum Quality | Best available | 1080p AV1 | Opus |
+| Separate streams | Maximum Quality | 720p | 720p VP9 | Opus |
+| Separate streams | Maximum Quality | 360p | 360p H.264 | Opus |
+| Combined files only | Compatible MP4 | Best available | 360p H.264 | AAC |
+| Combined files only | Maximum Quality | Best available | 1080p AV1 | Opus |
+| Only VP9 and Opus available | Maximum Quality | Best available | 720p VP9 | Opus |
+
+The profile fixture serves one-second generated tracks over loopback. Its generator is checked in beside the inputs so the test can exercise VP9 and AV1 remuxing on platforms that lack those encoders. Profile choice and resolution caps apply to the tracks available from each source.

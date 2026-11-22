@@ -463,7 +463,8 @@
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
@@ -514,7 +515,8 @@
           "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
@@ -561,7 +563,8 @@
           "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
