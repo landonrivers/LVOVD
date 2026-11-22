@@ -73,3 +73,5 @@ The verified Windows review ZIP and the released v2.7 selector each downloaded s
 | Only VP9 and Opus available | Maximum Quality | Best available | 720p VP9 | Opus |
 
 The profile fixture serves one-second generated tracks over loopback. Its generator is checked in beside the inputs so the test can exercise VP9 and AV1 remuxing on platforms that lack those encoders. Profile choice and resolution caps apply to the tracks available from each source.
+
+The [platform run at `9197d02`](https://github.com/landonrivers/LVOVD/actions/runs/45084520590) passed all seven cases on Windows x64, Linux x64 and both macOS architectures. The Windows job repeated them through the extracted release-profile ZIP. Preview disabled Compatible MP4 for the VP9/Opus-only source.

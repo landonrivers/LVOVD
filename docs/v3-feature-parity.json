@@ -439,7 +439,7 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
@@ -470,8 +470,54 @@
       "acceptance": [
         "Test separate and combined formats; never promise a source offers H.264 when it does not."
       ],
-      "evidence": [],
-      "remaining": "Compare selected-profile downloads with compatible separate and combined streams in packaged apps."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020404",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "On competing sources, Compatible MP4 saved 360p H.264/AAC from separate streams and from the combined-only fallback. Preview disabled Compatible when the source offered only VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks. The extracted release-profile ZIP also passed the seven downloads."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020416",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "On competing sources, Compatible MP4 saved 360p H.264/AAC from separate streams and from the combined-only fallback. Preview disabled Compatible when the source offered only VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020389",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "On competing sources, Compatible MP4 saved 360p H.264/AAC from separate streams and from the combined-only fallback. Preview disabled Compatible when the source offered only VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020373",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "On competing sources, Compatible MP4 saved 360p H.264/AAC from separate streams and from the combined-only fallback. Preview disabled Compatible when the source offered only VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.maximum",
@@ -492,7 +538,7 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
@@ -522,8 +568,54 @@
       "acceptance": [
         "Preserve VP9/AV1/Opus where source selection yields them; do not silently transcode to match editor defaults."
       ],
-      "evidence": [],
-      "remaining": "Verify VP9/AV1 and Opus remain intact when remuxing in packaged apps."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020404",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "Uncapped Maximum Quality saved the 1080p AV1/Opus pair from separate tracks and from the combined-only fallback. A 720p cap selected VP9/Opus, and a source offering only that pair also saved VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks. The extracted release-profile ZIP also passed the seven downloads."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020416",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Uncapped Maximum Quality saved the 1080p AV1/Opus pair from separate tracks and from the combined-only fallback. A 720p cap selected VP9/Opus, and a source offering only that pair also saved VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020389",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Uncapped Maximum Quality saved the 1080p AV1/Opus pair from separate tracks and from the combined-only fallback. A 720p cap selected VP9/Opus, and a source offering only that pair also saved VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020373",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Uncapped Maximum Quality saved the 1080p AV1/Opus pair from separate tracks and from the combined-only fallback. A 720p cap selected VP9/Opus, and a source offering only that pair also saved VP9/Opus. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.resolution",
@@ -570,8 +662,54 @@
       "acceptance": [
         "Current supported heights, absent formats and audio/extras mode normalization match the reference."
       ],
-      "evidence": [],
-      "remaining": "Verify selected caps with a multiresolution source through each native webview."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020404",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "With 360p H.264, 720p VP9 and 1080p AV1 competing, Maximum Quality at 720p and 360p saved the matching video representation while keeping Opus audio. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks. The extracted release-profile ZIP also passed the seven downloads."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020416",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "With 360p H.264, 720p VP9 and 1080p AV1 competing, Maximum Quality at 720p and 360p saved the matching video representation while keeping Opus audio. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020389",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "With 360p H.264, 720p VP9 and 1080p AV1 competing, Maximum Quality at 720p and 360p saved the matching video representation while keeping Opus audio. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "9197d026fee01eca107d1ec516fee4bc5e3fad9e",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45084520590/job/137400020373",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "With 360p H.264, 720p VP9 and 1080p AV1 competing, Maximum Quality at 720p and 360p saved the matching video representation while keeping Opus audio. FFprobe checked both saved streams against ordered SHA-256 packet hashes from the original generated tracks."
+        }
+      ],
+      "remaining": "Verify inactive cap handling across native audio and Extras Only transitions and the complete supported-height list."
     },
     {
       "id": "download.format-inspection",
