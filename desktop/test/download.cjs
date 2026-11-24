@@ -90,15 +90,27 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
     assert.ok(initial.scrollTop === 0 && initial.above <= 1 && initial.below <= 1,
       'Download Video is clipped before scrolling at ' + width + '×' + height + ': ' + JSON.stringify(initial));
   }
-  // Select the visible card face, then exercise keyboard navigation within each group.
+  async function moveRadio(from, arrow, to) {
+    // The embedded driver clicks and focuses the card face itself. Model keyboard
+    // entry separately so the arrow is delivered to the selected radio on every engine.
+    const entered = await browser.execute(id => {
+      const radio = document.getElementById(id);
+      radio.focus();
+      return document.activeElement === radio && radio.checked && !radio.disabled;
+    }, from);
+    assert.ok(entered, 'Could not focus selected radio ' + from);
+    await browser.keys(arrow);
+    assert.equal(await browser.execute(() => document.activeElement.id), to, arrow + ' must move radio focus');
+    assert.equal(await browser.$('#' + to).isSelected(), true, arrow + ' must select the focused radio');
+  }
   await browser.$('#dl-maximum-title').click();
   assert.equal(await browser.$('#dl-profile-maximum').isSelected(), true);
-  await browser.keys('ArrowLeft');
-  assert.equal(await browser.$('#dl-profile-compatible').isSelected(), true);
+  await moveRadio('dl-profile-maximum', 'ArrowLeft', 'dl-profile-compatible');
+  assert.equal(await browser.execute(() => document.getElementById('dl-height').selectedOptions[0].text), 'Best compatible resolution');
   await browser.$('label:has(#dl-content-audio)').click();
   assert.equal(await browser.$('#download-start').getText(), 'Download Audio');
   assert.equal(await browser.$('#dl-profile-cards').isDisplayed(), false);
-  await browser.keys('ArrowRight');
+  await moveRadio('dl-content-audio', 'ArrowRight', 'dl-content-extras');
   assert.equal(await browser.$('#download-start').getText(), 'Download Extras');
   await preview();
   assert.equal(await browser.$('#dl-height').isEnabled(), false, 'An unknown source height offers only uncapped Download');
