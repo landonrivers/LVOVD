@@ -40,6 +40,12 @@ function Open-Panel($Name) {
     } else {Invoke-Control $control}
 }
 function Select-Choice($Id,$Name) {
+    if ($Id -in 'dl-profile','dl-content') {
+        $values=@{'Compatible MP4'='compatible';'Maximum Quality'='maximum';'Video + Audio'='av';'Video Only'='video';'Audio Only'='audio';'Extras Only'='extras'}
+        $radio=ById "$Id-$($values[$Name])"
+        $radio.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        return
+    }
     $end=[DateTime]::UtcNow.AddSeconds(20)
     do {
         $select=ById $Id
@@ -60,10 +66,29 @@ function Check-Choice($Property,$Value,$Checked=$true) {
     $toggle=$control.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
     if (($toggle.Current.ToggleState -eq 'On') -ne $Checked) {$toggle.Toggle()}
 }
+function Assert-ResolutionMenu($Best,[int[]]$Heights) {
+    $expected=@($Best)+@($Heights | ForEach-Object {"Up to ${_}p"})
+    $select=ById 'dl-height'
+    $expand=$select.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
+    $options=[Windows.Automation.PropertyCondition]::new($ae::IsSelectionItemPatternAvailableProperty,$true)
+    $expand.Expand()
+    try {
+        $end=[DateTime]::UtcNow.AddSeconds(5)
+        do {
+            $actual=@($window.FindAll($scope,$options) | ForEach-Object {$_.Current.Name} |
+                Where-Object {$_ -match '^(Best (compatible|available) resolution|Up to [0-9]+p)$'})
+            if (($actual -join '|') -ceq ($expected -join '|')) {return}
+            Start-Sleep -Milliseconds 200
+        } while ([DateTime]::UtcNow -lt $end)
+        throw "Resolution menu offered [$($actual -join ', ')], expected [$($expected -join ', ')]."
+    } finally {
+        if ($expand.Current.ExpandCollapseState -eq 'Expanded') {$expand.Collapse()}
+    }
+}
 function Preview($Url) {
     Set-Text 'download-url' $Url
     Invoke-Control (ById 'download-preview-button')
-    [void](ById 'dl-content')
+    [void](ById 'dl-content-extras')
 }
 function Count-Named($Name) {
     $window.FindAll($scope,[Windows.Automation.PropertyCondition]::new($ae::NameProperty,$Name)).Count
@@ -127,16 +152,44 @@ try {
         $urls=$ready.Result | ConvertFrom-Json
     }
     if ($Scenario -eq 'Profiles') {
-        for ($i=0;$i -lt $urls.Count;$i++) {
-            $case=$urls[$i]
+        for ($i=0;$i -lt $urls.cases.Count;$i++) {
+            $case=$urls.cases[$i]
             Preview $case.url
             $profile=if ($case.profile -eq 'compatible') {'Compatible MP4'} else {'Maximum Quality'}
             Select-Choice 'dl-profile' $profile
-            if ($case.cap) { Select-Choice 'dl-height' "$($case.cap)p" }
+            if ($case.cap) { Select-Choice 'dl-height' "Up to $($case.cap)p" }
             $file=Save-Selection 1
             & node.exe $fixtureScript verify $ffprobe $i $file
             if ($LASTEXITCODE) {throw 'Saved streams differed from the expected profile selection.'}
             Record-File "$($case.source) $profile $($case.cap) $($case.video) $($case.audio)" $file
+        }
+        $compatible=@(8640,4320,2160,1440,540,480,360,240,144)
+        $maximum=@(8640,4320,2160,1440,1080,720,540,480,360,240,144)
+        Preview $urls.resolutions
+        Assert-ResolutionMenu 'Best compatible resolution' $compatible
+        Select-Choice 'dl-profile' 'Maximum Quality'
+        Assert-ResolutionMenu 'Best available resolution' $maximum
+        Select-Choice 'dl-content' 'Video Only'
+        Assert-ResolutionMenu 'Best available resolution' ($maximum -ne 1080)
+        Select-Choice 'dl-profile' 'Compatible MP4'
+        Assert-ResolutionMenu 'Best compatible resolution' $compatible
+        $evidence.resolutionMenus=@{compatible=$compatible;maximum=$maximum;videoOnlyMaximum=($maximum -ne 1080);videoOnlyCompatible=$compatible}
+        foreach ($content in 'Audio Only','Extras Only') {
+            Select-Choice 'dl-height' 'Up to 144p'
+            Select-Choice 'dl-content' $content
+            $height=Find-Control $window $ae::AutomationIdProperty 'dl-height'
+            if ($height -and $height.Current.IsEnabled) {throw "The resolution control stayed active in $content."}
+            if ($content -eq 'Audio Only') {Select-Choice 'dl-audio' 'Source Audio'}
+            else {Check-Choice $ae::AutomationIdProperty 'dl-metadata'}
+            $file=Save-Selection 1
+            if ($content -eq 'Audio Only') {
+                & node.exe $fixtureScript verify-audio $ffprobe $file
+                if ($LASTEXITCODE) {throw 'Source Audio did not preserve the expected Opus packets.'}
+                Preview $urls.resolutions
+            } elseif ($file -notlike '*.info.json' -or !(Get-Content -Raw -LiteralPath $file | ConvertFrom-Json).id) {
+                throw 'Extras Only did not publish the expected provider metadata.'
+            }
+            Record-File "144p to $content" $file
         }
     } elseif ($Scenario -eq 'Fixture') {
         Preview $urls.chapters
@@ -221,7 +274,7 @@ try {
         if ($segmentEnd -le $segmentStart) {throw 'Expected independently confirmed segment bounds.'}
         foreach ($mode in 'Off','Mark','Remove') {
             Preview $url
-            Select-Choice 'dl-height' '144p'
+            Select-Choice 'dl-height' 'Up to 144p'
             if ($mode -ne 'Off') {
                 Open-Panel 'SponsorBlock'
                 Select-Choice 'dl-sponsor' $mode

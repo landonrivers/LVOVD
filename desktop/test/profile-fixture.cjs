@@ -53,6 +53,18 @@ async function start(ffmpeg) {
     }
     const sources = { separate: Object.values(tracks), combined: [combine('avc', 'aac'), combine('av1', 'opus')],
       modern: [tracks.vp9, tracks.opus] };
+    // Short narrow tracks keep the extreme and nonstandard published heights cheap
+    // to test. Combined-only AV1 and video-only VP9 distinguish the four menus.
+    sources.resolutions = [...sources.combined, tracks.avc, tracks.vp9, tracks.aac, tracks.opus];
+    const heights = [144, 240, 480, 540, 1440, 2160, 4320, 8640];
+    const encoderArgs = ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'color=size=32x8640:rate=4'];
+    for (const height of heights) {
+      const file = 'height-' + height + '.mp4';
+      encoderArgs.push('-frames:v', '4', '-vf', 'scale=32:' + height, '-threads:v', '1', '-c:v', 'libx264', '-preset', 'ultrafast', file);
+      sources.resolutions.push({ file, codecs: 'avc1', width: 32, height });
+      assets.set('/' + file, path.join(dir, file));
+    }
+    execFileSync(ffmpeg, encoderArgs, { cwd: dir, timeout: 30000, windowsHide: true });
     for (const [name, formats] of Object.entries(sources)) {
       const file = name + '.mpd';
       fs.writeFileSync(path.join(dir, file), manifest(formats, dir));
@@ -60,6 +72,8 @@ async function start(ffmpeg) {
     }
     const provider = await startProvider(path.join(inputs, tracks.avc.file), undefined, assets);
     return {
+      unknownResolution: provider.url,
+      resolutions: new URL('resolutions.mpd', provider.url).href,
       cases: cases.map(c => ({ ...c, url: new URL(c.source + '.mpd', provider.url).href })),
       async close() { await provider.close(); fs.rmSync(dir, { recursive: true, force: true }); },
     };
@@ -89,16 +103,21 @@ function verify(ffprobe, file, scenario) {
     assert.deepEqual(actual.find(s => s.codec_type === kind), expected[0], 'Saved ' + kind + ' differs from ' + scenario[kind]);
   }
 }
-module.exports = { start, verify };
+function verifySourceAudio(ffprobe, file) {
+  assert.deepEqual(probe(ffprobe, file), probe(ffprobe, path.join(inputs, tracks.opus.file)));
+}
+module.exports = { start, verify, verifySourceAudio };
 
 if (require.main === module) {
   const [action, tool, index, file] = process.argv.slice(2);
   if (action === 'serve') {
     start(tool).then(fixture => {
-      process.stdout.write(JSON.stringify(fixture.cases) + '\n');
+      const { cases, resolutions, unknownResolution } = fixture;
+      process.stdout.write(JSON.stringify({ cases, resolutions, unknownResolution }) + '\n');
       process.stdin.resume();
       process.stdin.once('end', () => fixture.close());
     }).catch(error => { console.error(error); process.exitCode = 1; });
   } else if (action === 'verify') verify(tool, file, cases[Number(index)]);
+  else if (action === 'verify-audio') verifySourceAudio(tool, index);
   else throw new Error('Unknown fixture operation');
 }

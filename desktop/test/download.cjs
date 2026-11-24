@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { captureLayout } = require('./layout.cjs');
 
 // Serve only this generated fixture. Blocking an acquisition GET after Preview lets
 // the native workflow deterministically exercise a disconnected folder and cancellation.
@@ -74,16 +75,29 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   }
   await browser.$('#download-choose-folder').click();
   await wait(async () => (await browser.$('#download-folder').getText()) === destination, 'Native folder selection did not complete');
+  await preview(provider.dash);
+  for (const [width, height] of [[1280, 720], [960, 640]]) {
+    await captureLayout(browser, width, height, path.join(evidence, 'download-preview-' + width + '-' + process.platform + '.png'),
+      'desktop-download', ['nav-download', 'nav-local', 'nav-settings', 'download-url', 'download-preview-button',
+        'download-choose-folder', 'dl-content-av', 'dl-content-extras', 'dl-profile-compatible', 'dl-profile-maximum', 'download-start']);
+  }
+  // Select the visible card face, then exercise keyboard navigation within each group.
+  await browser.$('#dl-maximum-title').click();
+  assert.equal(await browser.$('#dl-profile-maximum').isSelected(), true);
+  await browser.keys('ArrowLeft');
+  assert.equal(await browser.$('#dl-profile-compatible').isSelected(), true);
+  await browser.$('label:has(#dl-content-audio)').click();
+  assert.equal(await browser.$('#download-start').getText(), 'Download Audio');
+  assert.equal(await browser.$('#dl-profile-cards').isDisplayed(), false);
+  await browser.keys('ArrowRight');
+  assert.equal(await browser.$('#download-start').getText(), 'Download Extras');
   await preview();
+  assert.equal(await browser.$('#dl-height').isEnabled(), false, 'An unknown source height offers only uncapped Download');
+  assert.equal(await browser.$('#dl-height').getValue(), '');
   assert.equal(await browser.$('#dl-sponsors').isDisplayed(), false, 'Generic sources are ineligible for SponsorBlock');
   assert.equal(await browser.$('#dl-thumbnail').isEnabled(), false, 'A source without artwork cannot offer a thumbnail');
   const filename = await browser.$('#download-filename').getText();
   assert.ok(filename && path.basename(filename) === filename, 'Preview exposes the reviewed media filename');
-  for (const [width, height] of [[1280, 720], [960, 640]]) {
-    await browser.setWindowSize(width, height);
-    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true);
-    await browser.saveScreenshot(path.join(evidence, 'download-preview-' + width + '-' + process.platform + '.png'));
-  }
   const collision = path.join(destination, filename);
   fs.writeFileSync(collision, 'prior export', { flag: 'wx' });
   provider.hold();
@@ -124,10 +138,7 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   provider.release();
   assert.equal(fs.readdirSync(destination).length, 2, 'Cancelled work published an extra file');
   await preview();
-  await browser.execute(()=>{
-    const mode=document.getElementById('dl-content');
-    mode.value='extras'; mode.dispatchEvent(new Event('change',{bubbles:true}));
-  });
+  await browser.$('#dl-content-extras').click();
   await wait(async()=>await browser.$('#download-start').getText()==='Download Extras','Content selection did not change to Extras Only');
   assert.equal(await browser.execute(()=>document.getElementById('download-start').disabled), true);
   await browser.$('#dl-metadata').click();
@@ -146,11 +157,18 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   assert.equal(names.length,2);
   assert.ok(names[0].endsWith('.mp4') && names[1].endsWith('.info.json'));
   for(const name of names) assert.ok(fs.statSync(path.join(destination,name)).size>0);
-  const choose = (id,value)=>browser.execute((id,value)=>{
+  async function choose(id, value) {
+    if (id === 'dl-content' || id === 'dl-profile') {
+      const radio = browser.$('#' + id + '-' + value);
+      await radio.click();
+      return await radio.isSelected() ? value : null;
+    }
+    return browser.execute((id,value)=>{
     const select=document.getElementById(id);
     select.value=value; select.dispatchEvent(new Event('change',{bubbles:true}));
     return select.value;
-  },id,value);
+    },id,value);
+  }
   const modes = [
     ...Object.entries({source:'aac',m4a:'aac',mp3:'mp3',opus:'opus',flac:'flac',wav:'pcm_s16le'})
       .map(([format,codec])=>({content:'audio',selection:'audio',format,expected:[codec]})),
@@ -225,8 +243,8 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
     for (const scenario of competition.cases) {
       await preview(scenario.url);
       const modernOnly = scenario.source === 'modern';
-      assert.equal(await browser.$('#dl-profile').getValue(), modernOnly ? 'maximum' : 'compatible');
-      assert.equal(await browser.execute(() => document.querySelector('#dl-profile option[value="compatible"]').disabled), modernOnly);
+      assert.equal(await browser.$('#dl-profile-' + (modernOnly ? 'maximum' : 'compatible')).isSelected(), true);
+      assert.equal(await browser.$('#dl-profile-compatible').isEnabled(), !modernOnly);
       assert.equal(await choose('dl-profile', scenario.profile), scenario.profile);
       if (scenario.cap) assert.equal(await choose('dl-height', String(scenario.cap)), String(scenario.cap));
       const names = await finish('saved');
@@ -234,6 +252,46 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
       profiles.verify(ffprobe, path.join(destination, names[0]), scenario);
       console.log('PASS native profile:', scenario.source, scenario.profile, scenario.cap || 'uncapped', scenario.video, scenario.audio);
     }
+    await preview(competition.resolutions);
+    const height = browser.$('#dl-height');
+    async function checkHeights(best, heights) {
+      const options = await browser.execute(() => Array.from(document.querySelector('#dl-height').options,
+        o => [o.value, o.textContent]));
+      assert.deepEqual(options, [['', best], ...heights.map(h => [String(h), 'Up to ' + h + 'p'])]);
+    }
+    const compatible = [8640,4320,2160,1440,540,480,360,240,144];
+    const maximum = [8640,4320,2160,1440,1080,720,540,480,360,240,144];
+    await checkHeights('Best compatible resolution', compatible);
+    assert.equal(await height.getValue(), '');
+    await choose('dl-profile', 'maximum');
+    await checkHeights('Best available resolution', maximum);
+    await choose('dl-height', '1080');
+    await choose('dl-content', 'video');
+    await checkHeights('Best available resolution', maximum.filter(h => h !== 1080));
+    assert.equal(await height.getValue(), '', 'The combined-only 1080p cap must reset in Video Only');
+    await choose('dl-height', '720');
+    await choose('dl-profile', 'compatible');
+    await checkHeights('Best compatible resolution', compatible);
+    assert.equal(await height.getValue(), '', 'The VP9-only 720p cap must reset in Compatible MP4');
+    for (const content of ['audio', 'extras']) {
+      await preview(competition.resolutions);
+      assert.equal(await choose('dl-height', '144'), '144');
+      await choose('dl-content', content);
+      assert.equal(await height.isDisplayed(), false);
+      assert.equal(await height.isEnabled(), false);
+      if (content === 'audio') await choose('dl-audio', 'source');
+      else await browser.$('#dl-metadata').click();
+      const before = new Set(fs.readdirSync(destination));
+      const [savedName] = await finish('saved');
+      assert.deepEqual(fs.readdirSync(destination).filter(name => !before.has(name)), [savedName]);
+      const file = path.join(destination, savedName);
+      if (content === 'audio') profiles.verifySourceAudio(ffprobe, file);
+      else {
+        assert.ok(savedName.endsWith('.info.json'));
+        assert.equal(typeof JSON.parse(fs.readFileSync(file, 'utf8')).id, 'string');
+      }
+    }
+    console.log('PASS native resolution menus from 144p to 8640p, capped video to source audio and metadata-only saves');
   } finally { await competition.close(); }
 }
 

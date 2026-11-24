@@ -9,8 +9,14 @@
   <script src="conversion-inspector.js" defer></script><script src="processing-profile.js" defer></script><script src="local-workspace.js" defer></script>
   <script src="app.js" defer></script><script src="download-options.js" defer></script><script src="downloads.js" defer></script>
 </head><body>
+<div class="manuscript-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 <header class="desktop-header">
-  <h1>LVOVD <small>Desktop preview</small></h1>
+  <div class="brand-row">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32"><path class="logo-ring" d="M6 3h20a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z"/><path class="logo-arrow" d="M15 7h2v11.2l3.8-3.8 1.4 1.4-6.2 6.2-6.2-6.2 1.4-1.4 3.8 3.8V7Zm-6 17h14v2H9v-2Z"/></svg>
+    </span>
+    <div><h1>LVOVD</h1><p class="brand-subtitle">Landon's Very Own Video Downloader</p></div>
+  </div>
   <nav aria-label="Workspace">
     <button type="button" id="nav-download" aria-controls="desktop-download" aria-current="page">Download</button>
     <button type="button" id="nav-local" aria-controls="desktop-local">Local Media</button>
@@ -20,18 +26,35 @@
 </header>
 <main>
   <section id="desktop-download" class="download-view" aria-labelledby="download-heading">
-    <h2 id="download-heading">Download</h2>
-    <form id="download-form">
-      <label for="download-url">Video URL</label>
-      <div class="download-toolbar"><input type="url" id="download-url" placeholder="https://…" required autocomplete="off" spellcheck="false"><button class="button" id="download-preview-button" disabled>Preview</button></div>
-    </form>
-    <div class="download-destination"><strong>Save to</strong> <span id="download-folder">Choose a folder</span> <button type="button" class="text-button" id="download-choose-folder" disabled>Choose folder</button></div>
+    <div class="lookup-panel">
+      <h2 id="download-heading">Download From Media URL</h2>
+      <form id="download-form">
+        <label class="sr-only" for="download-url">Video URL</label>
+        <div class="download-toolbar"><input type="url" id="download-url" placeholder="https://example.com/media/…" required autocomplete="off" spellcheck="false"><button class="button" id="download-preview-button" disabled>Preview</button></div>
+      </form>
+      <div class="download-destination"><strong>Save to</strong> <span id="download-folder">Choose a folder</span> <button type="button" class="text-button" id="download-choose-folder" disabled>Choose folder</button></div>
+    </div>
     <p id="download-message" role="status" aria-live="polite"></p>
     <section id="download-preview" class="download-card" hidden>
       <img id="download-artwork" alt="" hidden>
       <div><h3 id="download-title"></h3><p id="download-facts"></p><form id="download-options">
-        <label>Content <select id="dl-content"><option value="av">Video + Audio</option><option value="video">Video Only</option><option value="audio">Audio Only</option><option value="extras">Extras Only</option></select></label>
-        <label>Video profile <select id="dl-profile"><option value="compatible">Compatible MP4</option><option value="maximum">Maximum Quality</option></select></label>
+        <fieldset class="download-choices" id="dl-content-cards">
+          <legend>Content</legend>
+          <div class="download-choice-grid">
+            <label><input type="radio" id="dl-content-av" name="dl-content-card" value="av" checked>Video + Audio</label>
+            <label><input type="radio" id="dl-content-video" name="dl-content-card" value="video">Video Only</label>
+            <label><input type="radio" id="dl-content-audio" name="dl-content-card" value="audio">Audio Only</label>
+            <label><input type="radio" id="dl-content-extras" name="dl-content-card" value="extras" aria-describedby="dl-extras-description">Extras Only</label>
+          </div>
+          <p class="help" id="dl-extras-description" hidden>Subtitles, thumbnail, or metadata</p>
+        </fieldset>
+        <fieldset class="download-choices" id="dl-profile-cards">
+          <legend>Video format</legend>
+          <div class="download-choice-grid profile-choices">
+            <label><input type="radio" id="dl-profile-compatible" name="dl-profile-card" value="compatible" aria-labelledby="dl-compatible-title" aria-describedby="dl-compatible-description" checked><span id="dl-compatible-title">Compatible MP4</span><small id="dl-compatible-description">H.264 + AAC when available</small></label>
+            <label><input type="radio" id="dl-profile-maximum" name="dl-profile-card" value="maximum" aria-labelledby="dl-maximum-title" aria-describedby="dl-maximum-description"><span id="dl-maximum-title">Maximum Quality</span><small id="dl-maximum-description">Highest available source quality</small></label>
+          </div>
+        </fieldset>
         <label>Maximum resolution <select id="dl-height"></select></label>
         <label>Audio format <select id="dl-audio"><option value="m4a">M4A / AAC</option><option value="source">Source Audio</option><option value="mp3">MP3</option><option value="opus">Opus</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
         <details id="dl-formats"><summary>Source Formats</summary>

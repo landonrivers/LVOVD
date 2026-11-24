@@ -60,6 +60,17 @@ At `ebafe08`, the [four native platform gates](https://github.com/landonrivers/L
 
 ### Automatic profile selection
 
+The native window follows the web Download flow. Enter the URL, preview the source, then choose content, video format and maximum resolution. The content and profile cards use standard radio groups with clickable labels and arrow-key navigation. The chosen destination remains visible before Preview. The manuscript border surrounds Download, Local Media and Settings.
+
+The corner [artwork](../desktop/manuscript-corner.webp) was generated with ImageGen and scaled to a transparent 320-pixel WebP with FFmpeg. The four corners reuse this one asset.
+
+<details>
+<summary>Manuscript ornament prompt</summary>
+
+Create one isolated L-shaped upper-left corner ornament for a medieval illuminated manuscript border. A hand-inked hawthorn vine with dark oak-green acanthus leaves, three small crimson berry clusters, and slender burnished ochre-gold curlicues. Strong woodcut black outlines, flat pigment and fine hatch marks. Equal horizontal and vertical tapered arms grow from the upper-left corner narrowly along the top and left edges of a square. Keep the lower right three quarters completely transparent. Designed to be legible at a small screen size on warm parchment. No paper, text, letters, frame rules, background, shadow or UI.
+
+</details>
+
 The verified Windows review ZIP and the released v2.7 selector each downloaded seven MP4s from the same generated DASH sources. FFprobe compared both saved streams with the selected input tracks, including dimensions, codec configuration and the ordered SHA-256 hashes of every encoded packet.
 
 | Source offering | Profile | Height cap | Video saved | Audio saved |

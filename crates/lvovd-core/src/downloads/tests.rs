@@ -156,6 +156,8 @@ async fn single_video_arguments_match_released_options() {
         );
     }
     for invalid in [
+        serde_json::json!({"maxHeight":143}),
+        serde_json::json!({"maxHeight":8641}),
         serde_json::json!({"formatIds":["missing"]}),
         serde_json::json!({"formatIds":["a","v"]}),
         serde_json::json!({"formatIds":["bestvideo+bestaudio"]}),
@@ -170,6 +172,17 @@ async fn single_video_arguments_match_released_options() {
                 .is_err()
         );
     }
+}
+
+#[test]
+fn video_only_with_unknown_height_keeps_the_released_maximum_profile() {
+    let formats = vec![
+        serde_json::json!({"format_id":"v","url":"https://example.invalid/v","vcodec":"avc1","acodec":"none"}),
+    ];
+    let choices = options::Choices::from_info(&serde_json::json!({}), &formats);
+    assert!(choices.video);
+    assert!(!choices.compatible_video);
+    assert!(choices.video_heights.is_empty());
 }
 
 #[tokio::test]

@@ -255,8 +255,7 @@ impl Choices {
                 (true, true) => "combined",
                 (true, false) if audio == "none" => {
                     result.video = true;
-                    result.compatible_video |=
-                        video.starts_with("avc1") || video.starts_with("h264");
+                    result.compatible_video |= h264 && positive("height").is_some();
                     "video"
                 }
                 (false, true) if video == "none" => {

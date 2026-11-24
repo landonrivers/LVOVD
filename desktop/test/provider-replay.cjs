@@ -91,6 +91,12 @@ async function verify(browser, fixture, destination, ffprobe, ffmpeg) {
     await browser.waitUntil(() => browser.$('#download-preview').isDisplayed(), { timeout: 60000 });
   }
   async function select(id, value) {
+    if (id === 'dl-content') {
+      const radio = browser.$('#dl-content-' + value);
+      await radio.click();
+      assert.equal(await radio.isSelected(), true);
+      return;
+    }
     const actual = await browser.execute((id, value) => {
       const select = document.getElementById(id);
       select.value = value;

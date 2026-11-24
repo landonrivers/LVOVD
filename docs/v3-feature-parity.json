@@ -656,7 +656,8 @@
         ],
         "native": [
           "desktop/test/download.cjs",
-          "desktop/test/packaged-download-options.ps1"
+          "desktop/test/packaged-download-options.ps1",
+          "desktop/test/profile-fixture.cjs"
         ]
       },
       "acceptance": [
@@ -5889,6 +5890,8 @@
           "src-tauri/src/download_commands.rs"
         ],
         "native": [
+          "desktop/index.html",
+          "desktop/styles.css",
           "desktop/downloads.js",
           "src-tauri/src/download_commands.rs"
         ]
@@ -5899,14 +5902,16 @@
           "crates/lvovd-core/tests/downloads.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/native.cjs",
+          "desktop/test/layout.cjs"
         ]
       },
       "acceptance": [
         "Verify 1280x720 and 960x640 plus display scaling in actual webviews; retain concise functional copy, not roadmap/marketing filler."
       ],
       "evidence": [],
-      "remaining": "Download opens first. Local Media and Settings are accessible. Restore History and complete keyboard, scaling and narrow-layout acceptance for all controls."
+      "remaining": "Download opens first. Content and video profiles use labeled radio cards. Local Media and Settings share the manuscript frame. Restore History and complete keyboard, display-scaling and compact-layout acceptance across all workflows."
     },
     {
       "id": "desktop.settings",

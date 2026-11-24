@@ -6,6 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { environment } = require('../../scripts/desktop.cjs');
 const { downloadScenario, startProvider } = require('./download.cjs');
+const { captureLayout } = require('./layout.cjs');
 const replay = require('./provider-replay.cjs');
 const root = path.resolve(__dirname, '../..');
 const resultDir = path.join(root, 'desktop/test-results');
@@ -98,14 +99,10 @@ async function scenario(file, index, provider, providerReplay) {
     await browser.execute(() => { const p = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])'); p.muted = true; p.play(); });
     const before = await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime);
     await browser.waitUntil(async () => (await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime)) > before + 0.15, { timeout: 10000 });
-    await browser.setWindowSize(1280, 720);
-    await browser.waitUntil(async () => browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), {timeout:2000}).catch(async error => { console.error(await browser.execute(() => ({width:innerWidth,height:innerHeight,scrollW:document.documentElement.scrollWidth,scrollH:document.documentElement.scrollHeight,outside:[...document.querySelectorAll("body *")].filter(e=>getComputedStyle(e).position==="absolute" && e.getBoundingClientRect().bottom>innerHeight).map(e=>({id:e.id,cls:e.className,rect:e.getBoundingClientRect().toJSON()})).slice(0,15)}))); throw error; });
-    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'desktop workflow must fit without outer-page scrolling');
-    await browser.saveScreenshot(path.join(resultDir, `desktop-${process.platform}-${index}.png`));
-    await browser.setWindowSize(960, 640);
-    await browser.waitUntil(async () => browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), {timeout:2000}).catch(async error => { console.error(await browser.execute(() => ({width:innerWidth,height:innerHeight,scrollW:document.documentElement.scrollWidth,scrollH:document.documentElement.scrollHeight}))); throw error; });
-    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'narrow workflow must fit without outer-page scrolling');
-    await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
+    for (const [size, width, height] of [['desktop', 1280, 720], ['narrow', 960, 640]]) {
+      await captureLayout(browser, width, height, path.join(resultDir, `${size}-${process.platform}-${index}.png`),
+        'desktop-local', ['nav-download', 'nav-local', 'nav-settings', 'processing-add-files', 'processing-file-list']);
+    }
     // A second owned copy exercises selection changes while the first decoder
     // may still have queued reads. Removing it must preserve the other entry.
     // The test build holds these eight small reads for 1.5 seconds per batch.

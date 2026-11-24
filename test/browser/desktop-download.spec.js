@@ -21,12 +21,12 @@ test('single-media options follow the reviewed formats, chapter selection and co
   });
   const field=k=>page.locator('#dl-'+k);
   const read=()=>page.evaluate(()=>optionsForm.read());
-  await field('profile').selectOption('maximum');
+  await page.getByRole('radio', {name:'Maximum Quality'}).check();
   await field('height').selectOption('1080');
   expect((await read()).maxHeight).toBe(1080);
   await page.locator('#dl-formats summary').click();
   await field('selection').selectOption('separate');
-  expect((await read()).formatIds).toEqual(['v','a']);
+  expect(await read()).toMatchObject({formatIds:['v','a'],maxHeight:null});
   await page.locator('#dl-times summary').click();
   await field('range').selectOption('chapters');
   await page.getByLabel('2. Second').check();
@@ -35,15 +35,15 @@ test('single-media options follow the reviewed formats, chapter selection and co
   await field('sponsor').selectOption('remove');
   await page.getByLabel('Intro',{exact:true}).check();
   expect((await read()).sponsor).toEqual({mode:'remove',categories:['sponsor','intro']});
-  await field('content').selectOption('audio');
+  await page.getByRole('radio', {name:'Audio Only'}).check();
   await field('audio').selectOption('flac');
-  expect((await read()).audioFormat).toBe('flac');
-  await field('content').selectOption('extras');
+  expect(await read()).toMatchObject({audioFormat:'flac',maxHeight:null});
+  await page.getByRole('radio', {name:'Extras Only'}).check();
   await field('metadata').check();
   await field('subs').check();
   await field('submode').selectOption('manual');
   await field('langs').fill('fr');
-  expect(await read()).toMatchObject({content:'extras',formatIds:[],range:{type:'full'},metadata:true,
+  expect(await read()).toMatchObject({content:'extras',formatIds:[],maxHeight:null,range:{type:'full'},metadata:true,
     subtitles:{mode:'manual',languages:'fr'},sponsor:null});
 });
 

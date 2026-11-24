@@ -2,7 +2,8 @@
 globalThis.LVOVDDownloadOptions = function (notify) {
   const form = document.getElementById('download-options');
   const el = key => document.getElementById('dl-' + key);
-  const value = key => el(key).value;
+  const cards = key => form.elements.namedItem('dl-' + key + '-card');
+  const value = key => key === 'content' || key === 'profile' ? cards(key).value : el(key).value;
   const checked = key => el(key).checked;
   const selected = key => [...el(key).querySelectorAll('input:checked')].map(input => input.value);
   const show = (key, visible) => { el(key).closest('label').hidden = !visible; };
@@ -48,8 +49,8 @@ globalThis.LVOVDDownloadOptions = function (notify) {
     if (content==='audio' && value('stream')) modes.push(['audio','Exact audio format']);
     list('selection',modes);
     const compatible = content==='video' ? preview.choices.compatibleVideo : preview.profile==='compatible';
-    el('profile').options[0].disabled=!compatible;
-    if (!compatible) el('profile').value='maximum';
+    el('profile-compatible').disabled=!compatible;
+    if (!compatible) cards('profile').value='maximum';
     if (content==='extras') el('extras').open=true;
   }
   function refresh() {
@@ -57,9 +58,11 @@ globalThis.LVOVDDownloadOptions = function (notify) {
     const availableHeights = o.content==='video' ? (o.profile==='compatible' ? c.compatibleVideoHeights : c.videoHeights) :
       (o.profile==='compatible' ? c.compatibleHeights : c.heights);
     const previous=value('height');
-    list('height',[['','Best available'],...[...availableHeights].reverse().map(h=>[h,h+'p'])]);
+    const bestResolution=o.profile==='compatible' ? 'Best compatible resolution' : 'Best available resolution';
+    list('height',[['',bestResolution],...[...availableHeights].reverse().map(h=>[h,'Up to '+h+'p'])]);
     if ([...el('height').options].some(opt=>opt.value===previous)) el('height').value=previous;
-    show('profile',video && mode==='automatic'); show('height',video && mode==='automatic'); show('audio',o.content==='audio');
+    el('height').disabled=!video || mode!=='automatic' || !availableHeights.length;
+    el('profile-cards').hidden=!(video && mode==='automatic'); show('height',video && mode==='automatic'); show('audio',o.content==='audio');
     el('formats').hidden=o.content==='extras' || !c.formats.length;
     show('combined',mode==='combined'); show('video',['separate','video'].includes(mode)); show('stream',['separate','audio'].includes(mode));
     el('times').hidden=o.content==='extras'; show('start',o.range.type==='custom'); show('end',o.range.type==='custom');
@@ -85,8 +88,8 @@ globalThis.LVOVDDownloadOptions = function (notify) {
     if (form.hidden) return;
     form.reset();
     for(const details of form.querySelectorAll('details')) details.open=false;
-    for(const opt of el('content').options) opt.disabled=opt.value!=='extras' && !c[opt.value];
-    el('content').value=['av','video','audio'].find(key=>c[key]) || 'extras';
+    for(const card of cards('content')) card.disabled=card.value!=='extras' && !c[card.value];
+    cards('content').value=['av','video','audio'].find(key=>c[key]) || 'extras';
 
     checks('chapters',c.chapters.map(ch=>[ch.index,(ch.index+1)+'. '+ch.title]));
     checks('categories',Object.entries({sponsor:'Sponsor',intro:'Intro',outro:'Outro',selfpromo:'Self-promotion',interaction:'Interaction reminder',preview:'Preview',filler:'Filler',music_offtopic:'Non-music section',hook:'Hook'}));
@@ -110,13 +113,13 @@ globalThis.LVOVDDownloadOptions = function (notify) {
     el('thumbnail').disabled=!c.thumbnail; el('subs').disabled=!c.manualLanguages.length && !c.autoLanguages.length;
     el('submode').options[1].disabled=!c.manualLanguages.length; el('submode').options[2].disabled=!c.autoLanguages.length;
     el('range').options[2].disabled=!c.chapters.length;
-    el('profile').value=p.profile;
+    cards('profile').value=p.profile;
     updateMode(); refresh();
   }
   form.addEventListener('submit',event=>event.preventDefault());
   function changed(event) {
     if (!preview?.choices?.available) return;
-    if(event.target===el('content')) updateMode();
+    if(event.target.name==='dl-content-card') updateMode();
     refresh(); notify();
   }
   form.addEventListener('change',changed);
