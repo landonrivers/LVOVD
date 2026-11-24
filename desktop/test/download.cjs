@@ -80,6 +80,15 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
     await captureLayout(browser, width, height, path.join(evidence, 'download-preview-' + width + '-' + process.platform + '.png'),
       'desktop-download', ['nav-download', 'nav-local', 'nav-settings', 'download-url', 'download-preview-button',
         'download-choose-folder', 'dl-content-av', 'dl-content-extras', 'dl-profile-compatible', 'dl-profile-maximum', 'download-start']);
+    // The default, collapsed short-name fixture should show the entire primary action.
+    const initial = await browser.execute(() => {
+      const pane = document.getElementById('desktop-download');
+      const button = document.getElementById('download-start').getBoundingClientRect();
+      const { top, bottom } = pane.getBoundingClientRect();
+      return { scrollTop: pane.scrollTop, above: top - button.top, below: button.bottom - bottom };
+    });
+    assert.ok(initial.scrollTop === 0 && initial.above <= 1 && initial.below <= 1,
+      'Download Video is clipped before scrolling at ' + width + '×' + height + ': ' + JSON.stringify(initial));
   }
   // Select the visible card face, then exercise keyboard navigation within each group.
   await browser.$('#dl-maximum-title').click();

@@ -58,7 +58,7 @@ In the native test build, real yt-dlp can read a generated extractor result from
 
 At `ebafe08`, the [four native platform gates](https://github.com/landonrivers/LVOVD/actions/runs/44933999779) exercised all three caption choices and their language suggestions. The tests read each saved SRT to distinguish creator preference from automatic fallback. SponsorBlock Off sent zero segment requests. Mark preserved the selected intervals for a subset and for all nine categories. Remove requested only the outro and shortened the 20-second fixture to 10 seconds, preserving both audio and video.
 
-### Automatic profile selection
+### Desktop Download layout
 
 The native window follows the web Download flow. Enter the URL, preview the source, then choose content, video format and maximum resolution. The content and profile cards use standard radio groups with clickable labels and arrow-key navigation. The chosen destination remains visible before Preview. The manuscript border surrounds Download, Local Media and Settings.
 
@@ -70,6 +70,8 @@ The corner [artwork](../desktop/manuscript-corner.webp) was generated with Image
 Create one isolated L-shaped upper-left corner ornament for a medieval illuminated manuscript border. A hand-inked hawthorn vine with dark oak-green acanthus leaves, three small crimson berry clusters, and slender burnished ochre-gold curlicues. Strong woodcut black outlines, flat pigment and fine hatch marks. Equal horizontal and vertical tapered arms grow from the upper-left corner narrowly along the top and left edges of a square. Keep the lower right three quarters completely transparent. Designed to be legible at a small screen size on warm parchment. No paper, text, letters, frame rules, background, shadow or UI.
 
 </details>
+
+### Automatic profile selection
 
 The verified Windows review ZIP and the released v2.7 selector each downloaded seven MP4s from the same generated DASH sources. FFprobe compared both saved streams with the selected input tracks, including dimensions, codec configuration and the ordered SHA-256 hashes of every encoded packet.
 

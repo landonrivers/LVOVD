@@ -165,6 +165,9 @@ try {
         }
         $compatible=@(8640,4320,2160,1440,540,480,360,240,144)
         $maximum=@(8640,4320,2160,1440,1080,720,540,480,360,240,144)
+        Preview $urls.unknownResolution
+        $height=Find-Control $window $ae::AutomationIdProperty 'dl-height'
+        if (!$height -or $height.Current.IsEnabled) {throw 'Unknown source dimensions must disable the resolution menu.'}
         Preview $urls.resolutions
         Assert-ResolutionMenu 'Best compatible resolution' $compatible
         Select-Choice 'dl-profile' 'Maximum Quality'
