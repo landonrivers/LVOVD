@@ -69,21 +69,23 @@ function Check-Choice($Property,$Value,$Checked=$true) {
 function Assert-ResolutionMenu($Best,[int[]]$Heights) {
     $expected=@($Best)+@($Heights | ForEach-Object {"Up to ${_}p"})
     $select=ById 'dl-height'
+    $select.SetFocus()
     $expand=$select.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
-    $options=[Windows.Automation.PropertyCondition]::new($ae::IsSelectionItemPatternAvailableProperty,$true)
+    $listItems=[Windows.Automation.PropertyCondition]::new($ae::ControlTypeProperty,[Windows.Automation.ControlType]::ListItem)
     $expand.Expand()
-    try {
-        $end=[DateTime]::UtcNow.AddSeconds(5)
-        do {
-            $actual=@($window.FindAll($scope,$options) | ForEach-Object {$_.Current.Name} |
-                Where-Object {$_ -match '^(Best (compatible|available) resolution|Up to [0-9]+p)$'})
-            if (($actual -join '|') -ceq ($expected -join '|')) {return}
-            Start-Sleep -Milliseconds 200
-        } while ([DateTime]::UtcNow -lt $end)
+    $end=[DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $items=$select.FindAll($scope,$listItems)
+        $actual=@($items | ForEach-Object {$_.Current.Name})
+        if (($actual -join '|') -ceq ($expected -join '|')) {break}
+        Start-Sleep -Milliseconds 200
+    } while ([DateTime]::UtcNow -lt $end)
+    if (($actual -join '|') -cne ($expected -join '|')) {
         throw "Resolution menu offered [$($actual -join ', ')], expected [$($expected -join ', ')]."
-    } finally {
-        if ($expand.Current.ExpandCollapseState -eq 'Expanded') {$expand.Collapse()}
     }
+    # WebView2 exposes Collapse on the open HTML select but can reject it.
+    # Choose the uncapped option through the same list the user sees.
+    $items[0].GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
 }
 function Preview($Url) {
     Set-Text 'download-url' $Url

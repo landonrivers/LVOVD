@@ -1463,7 +1463,8 @@
         "native": []
       },
       "acceptance": [
-        "Reject invalid or oversized selections; do not probe every entry merely to display a flat Preview."
+        "Reject invalid or oversized selections; do not probe every entry merely to display a flat Preview.",
+        "With a flat playlist Preview, offer the released 2160p, 1440p, 1080p, 720p, 480p and 360p limits and honor the chosen limit for each selected item."
       ],
       "evidence": [],
       "remaining": "Rust operation and full native workflow are not implemented."
