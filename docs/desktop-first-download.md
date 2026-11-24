@@ -88,3 +88,7 @@ The verified Windows review ZIP and the released v2.7 selector each downloaded s
 The profile fixture serves one-second generated tracks over loopback. Its generator is checked in beside the inputs so the test can exercise VP9 and AV1 remuxing on platforms that lack those encoders. Profile choice and resolution caps apply to the tracks available from each source.
 
 The [platform run at `9197d02`](https://github.com/landonrivers/LVOVD/actions/runs/45084520590) passed all seven cases on Windows x64, Linux x64 and both macOS architectures. The Windows job repeated them through the extracted release-profile ZIP. Preview disabled Compatible MP4 for the VP9/Opus-only source.
+
+The resolution fixture advertises eleven distinct heights from 144p to 8640p. The options change when switching between profiles or between Video + Audio and Video Only. A direct source with unknown dimensions offers only the uncapped choice. Audio Only and Extras Only clear the cap from the request.
+
+A local run of the extracted Windows release build from `1265be5` verified all four menus and nine saved outputs. The seven video cases above matched the expected source packets. Switching away from a 144p cap saved the original Opus packets for Source Audio and a single JSON file for Extras Only. The ZIP SHA-256 was `b5af9f48ac635e2a0b2174219a98a41d8205caf01ec802e2002987311d1364dd`.

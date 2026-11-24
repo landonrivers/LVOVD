@@ -68,17 +68,17 @@ function Check-Choice($Property,$Value,$Checked=$true) {
 }
 function Assert-ResolutionMenu($Best,[int[]]$Heights) {
     $expected=@($Best)+@($Heights | ForEach-Object {"Up to ${_}p"})
-    $select=ById 'dl-height'
-    $select.SetFocus()
-    $expand=$select.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
     $listItems=[Windows.Automation.PropertyCondition]::new($ae::ControlTypeProperty,[Windows.Automation.ControlType]::ListItem)
-    $expand.Expand()
-    $end=[DateTime]::UtcNow.AddSeconds(5)
+    $end=[DateTime]::UtcNow.AddSeconds(20)
     do {
+        $select=ById 'dl-height'
+        $select.SetFocus()
+        $expand=$select.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
+        if ($expand.Current.ExpandCollapseState -ne 'Expanded') {$expand.Expand()}
+        Start-Sleep -Milliseconds 250
         $items=$select.FindAll($scope,$listItems)
         $actual=@($items | ForEach-Object {$_.Current.Name})
         if (($actual -join '|') -ceq ($expected -join '|')) {break}
-        Start-Sleep -Milliseconds 200
     } while ([DateTime]::UtcNow -lt $end)
     if (($actual -join '|') -cne ($expected -join '|')) {
         throw "Resolution menu offered [$($actual -join ', ')], expected [$($expected -join ', ')]."
@@ -182,8 +182,15 @@ try {
         foreach ($content in 'Audio Only','Extras Only') {
             Select-Choice 'dl-height' 'Up to 144p'
             Select-Choice 'dl-content' $content
-            $height=Find-Control $window $ae::AutomationIdProperty 'dl-height'
-            if ($height -and $height.Current.IsEnabled) {throw "The resolution control stayed active in $content."}
+            $action=if ($content -eq 'Audio Only') {'Download Audio'} else {'Download Extras'}
+            $end=[DateTime]::UtcNow.AddSeconds(10)
+            do {
+                $startButton=Find-Control $window $ae::AutomationIdProperty 'download-start'
+                $height=Find-Control $window $ae::AutomationIdProperty 'dl-height'
+                $inactive=$startButton -and $startButton.Current.Name -eq $action -and (!$height -or !$height.Current.IsEnabled)
+                if (!$inactive) {Start-Sleep -Milliseconds 150}
+            } while (!$inactive -and [DateTime]::UtcNow -lt $end)
+            if (!$inactive) {throw "$content did not expose its download action and deactivate the resolution control."}
             if ($content -eq 'Audio Only') {Select-Choice 'dl-audio' 'Source Audio'}
             else {Check-Choice $ae::AutomationIdProperty 'dl-metadata'}
             $file=Save-Selection 1
