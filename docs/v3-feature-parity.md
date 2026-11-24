@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 33 Missing, 0 Ported, 18 Integrated, 36 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 33 Missing, 0 Ported, 17 Integrated, 37 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -47,7 +47,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.content-extras` | Extras Only | Download | 8D | Verified |
 | `download.compatible` | Compatible MP4 | Download | 8D | Verified |
 | `download.maximum` | Maximum Quality | Download | 8D | Verified |
-| `download.resolution` | Resolution cap | Download | 8D | Integrated |
+| `download.resolution` | Resolution cap | Download | 8D | Verified |
 | `download.format-inspection` | Source Formats details | Download / Source Formats | 8D | Integrated |
 | `download.manual-formats` | Manual source selection | Download / Source Formats | 8D | Integrated |
 | `download.source-audio` | Source Audio | Download | 8D | Integrated |
