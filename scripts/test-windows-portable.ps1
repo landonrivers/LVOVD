@@ -39,10 +39,17 @@ public static class PortableTestFolders {
     $downloadDirectory = [PortableTestFolders]::Downloads()
     if (!(Test-Path -LiteralPath $downloadDirectory -PathType Container)) { throw 'Cannot prepare the runner Downloads folder.' }
 }
+$sessionParent = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'com.landonrivers.lvovd.preview/sessions'
+$beforeSessions = @(if (Test-Path -LiteralPath $sessionParent -PathType Container) {
+    Get-ChildItem -LiteralPath $sessionParent -Directory -Filter 'lvovd-desktop-*' | ForEach-Object Name
+})
+$toolTemp = New-Item -ItemType Directory -Path (Join-Path $out ('tool-temp-' + [guid]::NewGuid()))
 $limits = [Diagnostics.ProcessStartInfo]::new("$scratch/lvovd.exe")
 $limits.WorkingDirectory = $out
 $limits.UseShellExecute = $false
 $limits.Environment['PATH'] = "$env:SystemRoot\System32;$env:SystemRoot"
+$limits.Environment['TEMP'] = $toolTemp.FullName
+$limits.Environment['TMP'] = $toolTemp.FullName
 foreach ($key in @($limits.Environment.Keys | Where-Object { $_ -like 'LVOVD_*' -or $_ -like 'WEBVIEW2_*' -or $_ -in 'NODE_OPTIONS','NODE_PATH','PYTHONPATH','PYTHONHOME','CARGO_HOME','RUSTUP_HOME' })) { [void]$limits.Environment.Remove($key) }
 $viewer = [Diagnostics.Process]::Start($limits)
 $details = [ordered]@{ commit = $manifest.commit; pullRequestHead = $manifest.pullRequestHead; workingTreeModified = $manifest.workingTreeModified; profile = $manifest.profile; target = $manifest.target; archiveSha256 = $sha; os = [Environment]::OSVersion.VersionString; nativeWindow = $false; applicationTcpListeners = $null; fixtureDownload = $false; toolVersions = [ordered]@{} }
@@ -94,6 +101,8 @@ try {
     Assert-NoApplicationListener $viewer.Id
     $details.applicationTcpListeners = 0
     if ($Download) {
+        $session = @(Get-ChildItem -LiteralPath $sessionParent -Directory -Filter 'lvovd-desktop-*' | Where-Object { $_.Name -notin $beforeSessions })
+        if ($session.Count -ne 1) {throw 'Expected exactly one new media session from the packaged application.'}
         # Windows PowerShell provides the Windows UI Automation assemblies. Drive
         # the real accessibility tree. No debugger or test controls enter LVOVD.
         & powershell.exe -NoProfile -NonInteractive -File "$PSScriptRoot/windows-portable-download.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Working "$out" -Destination $downloadDirectory
@@ -108,7 +117,7 @@ try {
         if ($LASTEXITCODE) { throw 'Packaged download profile comparison failed.' }
         $details.profileOutputs = Get-Content -Raw -LiteralPath $profileReceipt | ConvertFrom-Json
         $editReceipt = Join-Path $out 'edit-source-receipt.json'
-        & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario EditSource -Receipt $editReceipt
+        & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario EditSource -AssetSession $session[0].FullName -Receipt $editReceipt
         if ($LASTEXITCODE) { throw 'Packaged Edit Source Video acceptance failed.' }
         $details.editSource = Get-Content -Raw -LiteralPath $editReceipt | ConvertFrom-Json
         Assert-NoApplicationListener $viewer.Id

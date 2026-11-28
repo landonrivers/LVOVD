@@ -5,6 +5,8 @@ param(
     [Parameter(Mandatory)][string]$Tools,
     [Parameter(Mandatory)][string]$Destination,
     [Parameter(Mandatory)][string]$Receipt,
+    [string]$AssetSession,
+    [switch]$SaveEditorCopy,
     [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock','Extras','Profiles','EditSource')][string]$Scenario='Fixture'
 )
 $ErrorActionPreference='Stop'
@@ -270,6 +272,11 @@ try {
             Record-File "144p to $content" $file
         }
     } elseif ($Scenario -eq 'EditSource') {
+        $session = Get-Item -LiteralPath $AssetSession
+        $sessionsRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'com.landonrivers.lvovd.preview\sessions'
+        if ($session.Parent.FullName -ne $sessionsRoot -or $session.Name -notlike 'lvovd-desktop-*' -or
+            ($session.Attributes -band [IO.FileAttributes]::ReparsePoint)) {throw 'Expected the asset session from this launch.'}
+        $beforeAssets = @(Get-ChildItem -LiteralPath $session.FullName -Directory | ForEach-Object Name)
         $case = @($urls.cases | Where-Object { $_.source -eq 'separate' -and $_.cap -eq 720 })
         if ($case.Count -ne 1) {throw 'Missing competing 720p edit-source fixture.'}
         $beforeExports = @(Get-ChildItem -LiteralPath $Destination -File | ForEach-Object FullName)
@@ -291,12 +298,27 @@ try {
         Open-Panel 'Media Details'
         $dimensions = '1280 ' + [char]0x00d7 + ' 720'
         foreach ($fact in 'VP9','Opus',$dimensions) {[void](Wait-Control $ae::NameProperty $fact)}
-        Invoke-Control (ById 'conversion-start')
-        $result = Save-EditorResult (Split-Path -Parent $Receipt)
+        $newAssets = @(Get-ChildItem -LiteralPath $session.FullName -Directory | Where-Object {
+            $_.Name -notin $beforeAssets -and $_.Name -match '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
+        })
+        if ($newAssets.Count -ne 1 -or ($newAssets[0].Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Expected one new owned source in this workbench.'
+        }
+        $original = Get-Item -LiteralPath (Join-Path $newAssets[0].FullName 'media.mkv')
+        if ($original.Attributes -band [IO.FileAttributes]::ReparsePoint) {throw 'Unexpected link in the fixture source.'}
         $chosen = [array]::IndexOf($urls.cases,$case[0])
-        & node.exe $fixtureScript verify-editor $ffprobe $chosen $result
-        if ($LASTEXITCODE) {throw 'The editor result did not preserve the selected full-length video and audio packets.'}
-        Record-File 'Edit Source Video, Maximum Quality, 720p' $result
+        & node.exe $fixtureScript verify-editor $ffprobe $chosen $original.FullName
+        if ($LASTEXITCODE) {throw 'The owned editor source did not preserve the selected full-length video and audio packets.'}
+        Record-File 'Owned editor original, Maximum Quality, 720p' $original.FullName
+        Invoke-Control (ById 'conversion-start')
+        if ((ById 'conversion-download').Current.Name -notlike 'Save MKV*') {throw 'No-op processing did not prepare the MKV result.'}
+        $evidence.preparedResult = 'MKV'
+        if ($SaveEditorCopy) {
+            $result = Save-EditorResult (Split-Path -Parent $Receipt)
+            & node.exe $fixtureScript verify-editor $ffprobe $chosen $result
+            if ($LASTEXITCODE) {throw 'The saved result did not preserve the selected full-length video and audio packets.'}
+            Record-File 'Saved editor original' $result
+        }
         $reads = Get-MediaReads $case[0].url
         if ($reads.'/vp9.mp4' -ne 1 -or $reads.'/opus.mp4' -ne 1 -or @($reads.PSObject.Properties).Count -ne 2) {
             throw "Expected exactly one GET for each selected track, observed $($reads | ConvertTo-Json -Compress)."
