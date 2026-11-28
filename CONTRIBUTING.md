@@ -26,7 +26,11 @@ LVOVD has no third-party Node runtime dependencies. Normal startup does not requ
 
 ## Validation
 
-Before submitting a change, run:
+During draft development, run the smallest local check that exercises the change. For a layout or copy edit, check the affected screen at desktop and narrow widths. For a media decision, run the specific policy or generated-media case. For a native handoff, exercise one representative acquisition in the app and count transfers. Bundle related fixes into a push after the focused check passes.
+
+Draft PRs targeting desktop staging run the parity contract on one Linux runner. Marking the PR ready for review runs the full reference suites and four native platform jobs. Further pushes to a ready PR repeat those gates. Use a local review ZIP when checking packaging during draft development. Reuse the same built executable while diagnosing test automation. When a hosted check fails, inspect its failed step before scheduling another run. An evidence-only follow-up on a draft can cite the already-tested application revision.
+
+For full reference validation before review, run:
 
 ```bash
 npm run check

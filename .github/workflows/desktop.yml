@@ -3,6 +3,7 @@ name: Desktop foundation
 on:
   pull_request:
     branches: [master, staging/v3-desktop]
+    types: [opened, reopened, synchronize, ready_for_review]
   push:
     branches: [master, staging/v3-desktop]
   workflow_dispatch:
@@ -44,6 +45,7 @@ jobs:
   native:
     name: Native playback (${{ matrix.os }})
     needs: parity
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     strategy:
       fail-fast: false
       matrix:

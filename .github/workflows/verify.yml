@@ -17,14 +17,18 @@ on:
       - reopened
       - synchronize
       - ready_for_review
-      - edited
 
 permissions:
   contents: read
 
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Verify
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -62,6 +66,7 @@ jobs:
 
   windows-launcher:
     name: Windows launcher and yt-dlp manager
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: windows-latest
     timeout-minutes: 10
 
