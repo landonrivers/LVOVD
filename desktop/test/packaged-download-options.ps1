@@ -134,7 +134,9 @@ function Get-MediaReads([uri]$Source) {
     Invoke-RestMethod -Uri $url -TimeoutSec 10 -MaximumRedirection 0
 }
 function Save-EditorResult($Directory) {
-    Invoke-Control (ById 'conversion-download')
+    $save = ById 'conversion-download'
+    if ($save.Current.Name -notlike 'Save MKV*') {throw 'The editor did not offer the merged MKV original.'}
+    Invoke-Control $save
     $condition = [Windows.Automation.AndCondition]::new(
         [Windows.Automation.PropertyCondition]::new($ae::NameProperty,'Save processed file'),
         [Windows.Automation.PropertyCondition]::new($ae::ProcessIdProperty,$AppPid))
@@ -177,14 +179,13 @@ public static class ReviewSaveDialog {
         $nameHost = Find-Control $dialog $ae::AutomationIdProperty 'FileNameControlHost'
         if ($nameHost) {
             $edit = Find-Control $nameHost $ae::ClassNameProperty 'Edit'
-            if ($edit -and $edit.Current.NativeWindowHandle) {$suggested = [ReviewSaveDialog]::FileName($edit.Current.NativeWindowHandle)}
+            if ($edit -and $edit.Current.NativeWindowHandle) {break}
         }
-        if (!$suggested) {Start-Sleep -Milliseconds 200}
-    } while (!$suggested -and [DateTime]::UtcNow -lt $end)
-    if (!$suggested) {throw 'Could not read the proposed filename in the native Save dialog.'}
-    $extension = [IO.Path]::GetExtension($suggested)
-    if ($extension -notin '.mp4','.mkv','.webm') {throw "Unexpected editor result extension: $extension"}
-    $target = Join-Path $Directory ('editor-source-' + [guid]::NewGuid() + $extension)
+        Start-Sleep -Milliseconds 200
+    } while ([DateTime]::UtcNow -lt $end)
+    if (!$edit -or !$edit.Current.NativeWindowHandle) {throw 'Could not locate the native filename input.'}
+    # Explorer can hide the extension in its proposed filename.
+    $target = Join-Path $Directory ('editor-source-' + [guid]::NewGuid() + '.mkv')
     [ReviewSaveDialog]::Save($dialog.Current.NativeWindowHandle,$edit.Current.NativeWindowHandle,$target)
     $end = [DateTime]::UtcNow.AddSeconds(30)
     while (!(Test-Path -LiteralPath $target -PathType Leaf)) {

@@ -86,8 +86,8 @@ function probe(ffprobe, file, editorSource = false) {
     'format=format_name:stream=index,codec_name,codec_type,width,height,extradata_hash:packet=stream_index,data_hash',
     '-show_data_hash', 'sha256', '-of', 'json', file], { encoding: 'utf8', timeout: 15000, windowsHide: true });
   const { format, streams, packets } = JSON.parse(data);
-  const containers = format.format_name.split(',');
-  assert.ok(containers.includes('mp4') || (editorSource && containers.includes('matroska')));
+  const expectedContainer = editorSource ? 'matroska' : 'mp4';
+  assert.ok(format.format_name.split(',').includes(expectedContainer), 'Expected ' + expectedContainer + ' container');
   return streams.map(({index, ...stream}) => {
     const hashes = packets.filter(p => p.stream_index === index).map(p => p.data_hash);
     assert.ok(hashes.length && hashes.every(hash => /^SHA256:[0-9a-f]{64}$/i.test(hash)));
@@ -96,7 +96,7 @@ function probe(ffprobe, file, editorSource = false) {
 }
 
 function verify(ffprobe, file, scenario, editorSource = false) {
-  if (!editorSource) assert.equal(path.extname(file), '.mp4');
+  assert.equal(path.extname(file), editorSource ? '.mkv' : '.mp4');
   const actual = probe(ffprobe, file, editorSource);
   assert.equal(actual.length, 2);
   for (const kind of ['video', 'audio']) {
