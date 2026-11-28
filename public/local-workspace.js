@@ -189,10 +189,21 @@
         row = $('#processing-result-template').content.firstElementChild.cloneNode(true); row.dataset.processingResult = id;
         row.parts = Object.fromEntries([...row.querySelectorAll('[data-result]')].map(element => [element.dataset.result, element]));
         row.parts.edit.addEventListener('click', () => {
+          const previousFocus = document.activeElement;
           selectEntry(id);
-          if (transport && !$('#media-editor').hidden) {
-            $('#editor-media-name').focus({ preventScroll: true });
-            $('#media-editor').scrollIntoView({ block: 'start', behavior: 'instant' });
+          if (transport) {
+            const owner = collectionId, selected = generation;
+            // Finish restoring the selected draft and let button activation
+            // finish assigning focus before moving it to the destination.
+            queueMicrotask(() => {
+              if (collectionId !== owner || generation !== selected || workspaceId !== id || !row.getClientRects().length) return;
+              const focused = document.activeElement;
+              if (focused !== previousFocus && focused !== row.parts.edit && focused !== document.body) return;
+              const visible = !$('#media-editor').hidden;
+              const target = visible ? $('#editor-media-name') : $('#processing-file-list');
+              target.focus({ preventScroll: true });
+              (visible ? $('#media-editor') : ready).scrollIntoView({ block: 'start', behavior: 'instant' });
+            });
             return;
           }
           $('#processing-file-list').focus({ preventScroll: true });

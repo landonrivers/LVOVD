@@ -239,14 +239,27 @@ async function scenario(file, index, provider, providerReplay) {
       const editResult = async (row, end) => {
         await (await browser.$$('[data-result="edit"]'))[row].click();
         assert.equal(await browser.$('#editor-end-time').getValue(), end);
-        assert.equal(await browser.execute(() => {
+        await browser.waitUntil(() => browser.execute(() => {
           const heading = document.getElementById('editor-media-name');
           const rect = heading.getBoundingClientRect();
           return document.activeElement === heading && rect.top >= 0 && rect.bottom <= innerHeight;
-        }), true, 'Edit source must bring the selected editor into view and focus its title');
+        }), {timeout:5000, timeoutMsg:'Edit source must bring the selected editor into view and focus its title'});
       };
       await editResult(1, '00:00:01.750');
       await editResult(0, '00:00:01.000');
+      if (index === 0) {
+        await browser.execute(() => {
+          document.querySelector('[data-result="edit"]').click();
+          document.getElementById('editor-start-time').focus();
+        });
+        assert.equal(await browser.execute(() => document.activeElement.id), 'editor-start-time');
+        await browser.execute(() => {
+          document.querySelector('[data-result="edit"]').click();
+          document.getElementById('nav-settings').click();
+        });
+        assert.equal(await browser.execute(() => document.activeElement.id), 'desktop-settings');
+        await browser.$('#nav-local').click();
+      }
       const saveSummary = browser.$('#processing-save-summary'), saveNote = browser.$('#processing-download-note');
       await browser.$('#processing-download-all').click();
       await browser.waitUntil(async () => (await saveSummary.getText()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
