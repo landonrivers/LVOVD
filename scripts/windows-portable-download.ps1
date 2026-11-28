@@ -36,10 +36,26 @@ try {
     $url = (Get-Content -Raw -LiteralPath $ready | ConvertFrom-Json).url
     $input = Wait-Element $window 'Video URL' ([Windows.Automation.ControlType]::Edit) 40
     $input.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($url)
-    foreach ($action in 'Preview','Download Video') {
-        $button = Wait-Element $window $action ([Windows.Automation.ControlType]::Button) 90
-        $button.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $buttonType = [Windows.Automation.ControlType]::Button
+    (Wait-Element $window 'Preview' $buttonType 90).GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $download = Wait-Element $window 'Download Video' $buttonType 90
+    $resize = $window.GetCurrentPattern([Windows.Automation.TransformPattern]::Pattern)
+    foreach ($size in @(@(1280,720), @(960,640))) {
+        $resize.Resize($size[0], $size[1])
+        $deadline = [DateTime]::UtcNow.AddSeconds(10)
+        do {
+            $frame = $window.Current.BoundingRectangle
+            $action = $download.Current.BoundingRectangle
+            $fits = !$action.IsEmpty -and $frame.Contains($action) -and !$download.Current.IsOffscreen
+            $sized = [Math]::Abs($frame.Width - $size[0]) -le 2 -and [Math]::Abs($frame.Height - $size[1]) -le 2
+            if ($fits -and $sized) {break}
+            Start-Sleep -Milliseconds 100
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if (!$fits -or !$sized) {throw "Packaged Download action outside requested window: frame=$frame, action=$action, requested=$size"}
+        [void](Wait-Element $window 'Choose Media Files' $buttonType 10)
+        Write-Host "PASS packaged main screen at $($size[0])x$($size[1])"
     }
+    $download.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
     [void](Wait-Element $window 'Open File' ([Windows.Automation.ControlType]::Button) 90)
     $saved = @(Get-ChildItem -LiteralPath $Destination -File -Filter '*.mp4' | Where-Object { $before -notcontains $_.FullName })
     if ($saved.Count -ne 1) { throw 'Expected one new video in the captured output folder.' }

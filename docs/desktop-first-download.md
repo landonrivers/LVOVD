@@ -60,7 +60,7 @@ At `ebafe08`, the [four native platform gates](https://github.com/landonrivers/L
 
 ### Desktop Download layout
 
-The native window follows the web Download flow. Enter the URL, preview the source, then choose content, video format and maximum resolution. The content and profile cards use standard radio groups with clickable labels and arrow-key navigation. The chosen destination remains visible before Preview. The manuscript border surrounds Download, Local Media and Settings.
+Download opens above the active queue and Local Media. The header shortcuts move to sections of the same scrolling screen. Settings is separate. Enter a URL, preview the source, then choose content, video format and resolution. Opening a disclosure leaves its heading in its column. The content and profile cards support clickable labels and arrow-key navigation. Starting a download keeps its preview available. Queue rows show the current stage, available speed and ETA, and a berry-red progress bar with a small berry at its leading edge. An unknown amount is shown without a percentage.
 
 The corner [artwork](../desktop/manuscript-corner.webp) was generated with ImageGen and scaled to a transparent 320-pixel WebP with FFmpeg. The four corners reuse this one asset.
 

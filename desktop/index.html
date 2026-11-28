@@ -5,6 +5,7 @@
   <title>LVOVD Desktop Preview</title>
   <link rel="stylesheet" href="reference.css"><link rel="stylesheet" href="styles.css">
   <script src="native.js" defer></script><script src="workspace-transport.js" defer></script>
+  <script src="progress-meter.js" defer></script>
   <script src="edit-plan.js" defer></script><script src="audio-waveform.js" defer></script><script src="media-editor.js" defer></script>
   <script src="conversion-inspector.js" defer></script><script src="processing-profile.js" defer></script><script src="local-workspace.js" defer></script>
   <script src="app.js" defer></script><script src="download-options.js" defer></script><script src="downloads.js" defer></script>
@@ -18,14 +19,14 @@
     <div><h1>LVOVD</h1><p class="brand-subtitle">Landon's Very Own Video Downloader</p></div>
   </div>
   <nav aria-label="Workspace">
-    <button type="button" id="nav-download" aria-controls="desktop-download" aria-current="page">Download</button>
+    <button type="button" id="nav-download" aria-controls="desktop-download" aria-current="location">Download</button>
     <button type="button" id="nav-local" aria-controls="desktop-local">Local Media</button>
     <button type="button" id="nav-settings" aria-controls="desktop-settings">Settings</button>
   </nav>
   <span id="connection" role="status">Connecting…</span>
 </header>
-<main>
-  <section id="desktop-download" class="download-view" aria-labelledby="download-heading">
+<main id="workspace-scroll">
+  <section id="desktop-download" class="download-view" aria-labelledby="download-heading" tabindex="-1">
     <div class="lookup-panel">
       <h2 id="download-heading">Download From Media URL</h2>
       <form id="download-form">
@@ -57,30 +58,36 @@
         </fieldset>
         <label>Maximum resolution <select id="dl-height"></select></label>
         <label>Audio format <select id="dl-audio"><option value="m4a">M4A / AAC</option><option value="source">Source Audio</option><option value="mp3">MP3</option><option value="opus">Opus</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
-        <details id="dl-formats"><summary>Source Formats</summary>
-          <label>Selection <select id="dl-selection"></select></label>
-          <p id="dl-format-count"></p><ul id="dl-evidence"></ul>
-          <label>Combined format <select id="dl-combined"></select></label>
-          <label>Video format <select id="dl-video"></select></label>
-          <label>Audio source <select id="dl-stream"></select></label>
-        </details>
-        <details id="dl-times"><summary>Time range and chapters</summary>
-          <label>Range <select id="dl-range"><option value="full">Full media</option><option value="custom">Custom range</option><option value="chapters">Selected chapters</option></select></label>
-          <label>Start time <input id="dl-start" value="0:00" placeholder="0:00"></label>
-          <label>End time <input id="dl-end" placeholder="1:30"></label>
-          <div id="dl-chapters"></div>
-        </details>
-        <details id="dl-extras"><summary>Extras</summary>
-          <label><input id="dl-thumbnail" type="checkbox"> JPG thumbnail</label>
-          <label><input id="dl-metadata" type="checkbox"> Metadata JSON</label>
-          <label><input id="dl-subs" type="checkbox"> Subtitles and captions</label>
-          <label>Caption source <select id="dl-submode"><option value="both">Creator and automatic</option><option value="manual">Creator subtitles</option><option value="auto">Automatic captions</option></select></label>
-          <label>Languages <input id="dl-langs" value="en" list="dl-languages"></label><datalist id="dl-languages"></datalist>
-        </details>
-        <details id="dl-sponsors"><summary>SponsorBlock</summary>
-          <label>Segments <select id="dl-sponsor"><option value="off">Off</option><option value="mark">Mark</option><option value="remove">Remove</option></select></label>
-          <div id="dl-categories"></div>
-        </details></form>
+        <div class="download-disclosures">
+          <div class="disclosure-column">
+            <details id="dl-formats"><summary>Source Formats</summary>
+              <label>Selection <select id="dl-selection"></select></label>
+              <p id="dl-format-count"></p><ul id="dl-evidence"></ul>
+              <label>Combined format <select id="dl-combined"></select></label>
+              <label>Video format <select id="dl-video"></select></label>
+              <label>Audio source <select id="dl-stream"></select></label>
+            </details>
+            <details id="dl-times"><summary>Time range and chapters</summary>
+              <label>Range <select id="dl-range"><option value="full">Full media</option><option value="custom">Custom range</option><option value="chapters">Selected chapters</option></select></label>
+              <label>Start time <input id="dl-start" value="0:00" placeholder="0:00"></label>
+              <label>End time <input id="dl-end" placeholder="1:30"></label>
+              <div id="dl-chapters"></div>
+            </details>
+          </div>
+          <div class="disclosure-column">
+            <details id="dl-extras"><summary>Extras</summary>
+              <label><input id="dl-thumbnail" type="checkbox"> JPG thumbnail</label>
+              <label><input id="dl-metadata" type="checkbox"> Metadata JSON</label>
+              <label><input id="dl-subs" type="checkbox"> Subtitles and captions</label>
+              <label>Caption source <select id="dl-submode"><option value="both">Creator and automatic</option><option value="manual">Creator subtitles</option><option value="auto">Automatic captions</option></select></label>
+              <label>Languages <input id="dl-langs" value="en" list="dl-languages"></label><datalist id="dl-languages"></datalist>
+            </details>
+            <details id="dl-sponsors"><summary>SponsorBlock</summary>
+              <label>Segments <select id="dl-sponsor"><option value="off">Off</option><option value="mark">Mark</option><option value="remove">Remove</option></select></label>
+              <div id="dl-categories"></div>
+            </details>
+          </div>
+        </div></form>
         <div class="download-delivery"><p id="download-filename"></p>
           <button type="button" class="button" id="download-start" disabled>Download Video</button>
         </div>
@@ -90,11 +97,11 @@
       <h3 id="download-queue-heading">Download queue</h3><ul id="download-jobs" class="download-jobs"></ul>
     </section>
   </section>
-  <section id="desktop-local" class="desktop-local" aria-label="Local Media" hidden>
+  <section id="desktop-local" class="desktop-local" aria-labelledby="media-workspace-title" tabindex="-1">
     <button id="native-intake-cancel" class="button secondary mini" hidden>Cancel adding files</button><p id="native-intake-status" role="status" hidden></p>
     <!-- local-media -->
   </section>
-  <section id="desktop-settings" class="download-view" aria-labelledby="settings-heading" hidden>
+  <section id="desktop-settings" class="download-view" aria-labelledby="settings-heading" tabindex="-1" hidden>
     <h2 id="settings-heading">Settings</h2><h3>Download folder</h3>
     <div class="download-destination"><span id="settings-folder">Choose a folder</span> <button type="button" class="text-button" id="settings-choose-folder" disabled>Choose folder</button></div>
     <p class="help">Queued downloads keep the folder selected when they were added.</p>

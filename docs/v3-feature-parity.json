@@ -1781,7 +1781,7 @@
         "Reconnect gets a fresh snapshot; stale channels cannot overwrite another job or duplicate completion delivery."
       ],
       "evidence": [],
-      "remaining": "Single-URL jobs expose live stages, percent, speed and ETA. Restore item/stream detail for all source choices and playlists."
+      "remaining": "Single-URL queue rows show the current stage, measured percentage and available speed/ETA. An unknown amount has no numeric percentage. Restore per-stream detail and playlist progress."
     },
     {
       "id": "download.outputs",
@@ -4484,7 +4484,7 @@
           "save_output"
         ]
       },
-      "status": "Verified",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -4499,7 +4499,8 @@
           "src-tauri/src/main.rs",
           "desktop/native.js",
           "desktop/workspace-transport.js",
-          "public/local-workspace.js"
+          "public/local-workspace.js",
+          "desktop/app.js"
         ]
       },
       "tests": {
@@ -4522,53 +4523,8 @@
       "acceptance": [
         "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
-        }
-      ],
-      "remaining": ""
+      "evidence": [],
+      "remaining": "Repeat native result playback, return-to-editor and scroll-position acceptance on the single-scroll main screen."
     },
     {
       "id": "media.bulk-save",
@@ -4587,7 +4543,7 @@
           "save_outputs"
         ]
       },
-      "status": "Verified",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
@@ -4615,53 +4571,8 @@
       "acceptance": [
         "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
-          "tests": [
-            "desktop/test/native.cjs"
-          ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
-        }
-      ],
-      "remaining": ""
+      "evidence": [],
+      "remaining": "Verify full and partial folder receipts, the selected destination and preservation of earlier exports in the native workflow."
     },
     {
       "id": "media.reset",
@@ -5817,7 +5728,9 @@
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "src-tauri/src/workbench_commands.rs",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -5826,14 +5739,15 @@
           "crates/lvovd-core/tests/downloads.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/native.cjs"
         ]
       },
       "acceptance": [
         "Missing/moved exports remain honest; history/workspace deletion never deletes user files."
       ],
       "evidence": [],
-      "remaining": "Open File and Show in Folder take a saved job identity. Save Copy, a durable catalog and bulk companion-file handling remain."
+      "remaining": "Download opens or reveals a saved job output. Local Media can open the destination from the latest successful or partial bulk save. Save Copy, a durable export catalog and bulk companion-file handling remain."
     },
     {
       "id": "desktop.history-import",
@@ -5894,7 +5808,8 @@
           "desktop/index.html",
           "desktop/styles.css",
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/app.js"
         ]
       },
       "tests": {
@@ -5911,61 +5826,8 @@
       "acceptance": [
         "Verify 1280x720 and 960x640 plus display scaling in actual webviews; retain concise functional copy, not roadmap/marketing filler."
       ],
-      "evidence": [
-        {
-          "platform": "windows-x64",
-          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891605",
-          "tests": [
-            "desktop/test/download.cjs",
-            "desktop/test/native.cjs",
-            "desktop/test/layout.cjs"
-          ],
-          "notes": "Download opened first. At 1280×720 and 960×640, the short generated preview displayed the full Download action before scrolling. Tests checked hit targets, content/profile label activation, focused radio arrow navigation, and the Local Media file and editor panes."
-        },
-        {
-          "platform": "linux-x64",
-          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891608",
-          "tests": [
-            "desktop/test/download.cjs",
-            "desktop/test/native.cjs",
-            "desktop/test/layout.cjs"
-          ],
-          "notes": "Download opened first. At 1280×720 and 960×640, the short generated preview displayed the full Download action before scrolling. Tests checked hit targets, content/profile label activation, focused radio arrow navigation, and the Local Media file and editor panes."
-        },
-        {
-          "platform": "macos-arm64",
-          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891555",
-          "tests": [
-            "desktop/test/download.cjs",
-            "desktop/test/native.cjs",
-            "desktop/test/layout.cjs"
-          ],
-          "notes": "Download opened first. At 1280×720 and 960×640, the short generated preview displayed the full Download action before scrolling. Tests checked hit targets, content/profile label activation, focused radio arrow navigation, and the Local Media file and editor panes."
-        },
-        {
-          "platform": "macos-x64",
-          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
-          "kind": "native-workflow",
-          "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891606",
-          "tests": [
-            "desktop/test/download.cjs",
-            "desktop/test/native.cjs",
-            "desktop/test/layout.cjs"
-          ],
-          "notes": "Download opened first. At 1280×720 and 960×640, the short generated preview displayed the full Download action before scrolling. Tests checked hit targets, content/profile label activation, focused radio arrow navigation, and the Local Media file and editor panes."
-        }
-      ],
-      "remaining": "Download opens first. Content and video profiles use labeled radio cards. Local Media and Settings share the manuscript frame. Restore History and complete keyboard, display-scaling and compact-layout acceptance across all workflows."
+      "evidence": [],
+      "remaining": "Download, its active queue and the Local Media editor share one scroll surface. Settings is separate. Integrate persistent History in 8D.4 and finish whole-application keyboard and scaling acceptance in 8E."
     },
     {
       "id": "desktop.settings",

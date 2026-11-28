@@ -112,7 +112,7 @@ input[type="radio"], input[type="checkbox"] { accent-color: #d81fff; }
 .progress-head > span { color: #b9b6c4; font-variant-numeric: tabular-nums; }
 .progress-track { position: relative; height: 8px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: #292833; }
 .progress-bar { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #ff003d, #d81fff); transition: width .2s ease; }
-.progress-bar.indeterminate { animation: progress-sweep 1.25s ease-in-out infinite alternate; }
+.progress-bar.indeterminate { width: 36%; animation: progress-sweep 1.25s ease-in-out infinite alternate; }
 @keyframes progress-sweep { from { transform: translateX(-80%); } to { transform: translateX(165%); } }
 .progress-copy { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 7px 14px; min-height: 18px; margin-top: 9px; font-size: 10px; color: #898793; font-variant-numeric: tabular-nums; }
 .stage-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,.055); }

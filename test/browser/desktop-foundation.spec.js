@@ -35,7 +35,6 @@ async function setup(page, bridge = true, retired = false) {
           return { connectionId: ++connection, snapshot: state(fixture.active) };
         }
         if (command === 'acknowledge_workbench') return;
-        if (command === 'set_local_drop_target') return;
         if (command === 'runtime_health') return Object.fromEntries(['ffmpeg', 'ffprobe', 'ytdlp', 'providerRuntime'].map(key => [key, { installed: true, version: 'test' }]));
         if (command === 'pick_source') return new Promise(resolve => { fixture.resolvePick = i => resolve({ sources: [fixture.sources[i]], failure: null }); });
         if (command === 'remove_source') return new Promise((resolve, reject) => {
@@ -63,13 +62,43 @@ async function setup(page, bridge = true, retired = false) {
   }, {ids,retired});
   await page.addScriptTag({ path: path.join(root, 'native.js') });
   await page.addScriptTag({ path: path.join(root, 'workspace-transport.js') });
-  for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
+  for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','progress-meter','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
   await page.addScriptTag({ path: path.join(root, 'app.js') });
   await page.locator('#nav-local').click();
   if (bridge) await page.waitForFunction(() => window.fixture.channels.length > 0);
   page.on('dialog', dialog => dialog.accept());
 }
 
+
+test.describe('native drop targeting', () => {
+  test.use({ deviceScaleFactor: 2, viewport: { width: 960, height: 640 } });
+  test('scales both axes and accepts only visible Local Media in the main workspace', async ({ page }) => {
+    await setup(page);
+    await page.addStyleTag({ path: path.join(root, 'dist/reference.css') });
+    await page.addStyleTag({ path: path.join(root, 'styles.css') });
+    const point = selector => page.locator(selector).evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return [(rect.x + rect.width / 2) * devicePixelRatio, (rect.y + rect.height / 2) * devicePixelRatio];
+    });
+    const dropAt = coords => page.evaluate(coords => LVOVDLocalDropAt(...coords), coords);
+    const zone = await point('#media-choose-button');
+    expect(await dropAt(zone)).toBe(true);
+    expect(await dropAt(await point('#download-url'))).toBe(false);
+    expect(await dropAt(await point('#nav-local'))).toBe(false);
+    expect(await dropAt([-1, zone[1]])).toBe(false);
+    expect(await dropAt([zone[0], -1])).toBe(false);
+    await page.evaluate(() => document.querySelector('#result-preview').showModal());
+    expect(await dropAt(zone)).toBe(false);
+    await page.evaluate(() => document.querySelector('#result-preview').close());
+    await page.locator('#nav-settings').click();
+    expect(await dropAt(zone)).toBe(false);
+    await page.evaluate(() => fixture.snapshot(1, [0]));
+    await page.locator('#nav-local').click();
+    await page.locator('#processing-file-list').scrollIntoViewIfNeeded();
+    expect(await page.locator('#workspace-scroll').evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+    expect(await dropAt(await point('#processing-file-list'))).toBe(true);
+  });
+});
 
 test('desktop picker acknowledgement waits for authoritative channel membership', async ({ page }) => {
   await setup(page);
@@ -80,6 +109,28 @@ test('desktop picker acknowledgement waits for authoritative channel membership'
   await expect(page.locator('#processing-file-list option')).toHaveCount(2);
   await expect(page.locator('#local-media-name')).toHaveText('Synthetic 1');
   await expect(page.locator('#new-workbench')).toHaveCount(0);
+});
+
+test('processing progress uses the captured two-pass duration and clears the value during validation', async ({ page }) => {
+  await setup(page);
+  await page.addStyleTag({path:path.join(root, 'styles.css')});
+  await page.evaluate(ids => {
+    const f = window.fixture;
+    f.sources[0].inspection.media = {durationSeconds: 20, container: {kind:'mp4'}, video: {codec:'h264', width:320, height:180}};
+    f.job = {id: ids[1], sourceId: ids[0], draftRevision: 1, status: 'running', durationSeconds: 10,
+      progress: {outTimeUs: 5000000, pass: 2, passes: 2, attempt: 1, validating: false}};
+    f.snapshot(1,[0],[],null,{jobs:[f.job]});
+  }, ids);
+  const track = page.getByRole('progressbar', {name:'File processing'});
+  await expect(track).toHaveAttribute('aria-valuenow', '75');
+  await expect(page.locator('#conversion-status')).toContainText('Pass 2 of 2 · Attempt 1 · 75%');
+  await page.evaluate(() => {
+    window.fixture.job.progress.validating = true;
+    window.fixture.snapshot(2,[0],[],null,{jobs:[window.fixture.job]});
+  });
+  await expect(track).toBeVisible();
+  await expect(track).not.toHaveAttribute('aria-valuenow', /.+/);
+  await expect(page.locator('#conversion-status')).toHaveText('Validating output…');
 });
 for (const outcome of ['success','error']) test(`desktop late removal ${outcome} cannot replace selection or restore cleanup`, async ({ page }) => {
   await setup(page);

@@ -6,7 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { environment } = require('../../scripts/desktop.cjs');
 const { downloadScenario, startProvider } = require('./download.cjs');
-const { captureLayout } = require('./layout.cjs');
+const { captureLayout, checkEditorFlow } = require('./layout.cjs');
 const replay = require('./provider-replay.cjs');
 const root = path.resolve(__dirname, '../..');
 const resultDir = path.join(root, 'desktop/test-results');
@@ -49,8 +49,11 @@ async function scenario(file, index, provider, providerReplay) {
   // Exercise the same tool discovery as a direct executable launch, without the
   // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
   const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file,
-    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1', LVOVD_DESKTOP_TEST_SAVE_FOLDER: resultDir };
+    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1' };
   const config = fs.mkdtempSync(path.join(resultDir, 'native-config-'));
+  const processedFolder = path.join(config, 'Saved results');
+  fs.mkdirSync(processedFolder);
+  directEnv.LVOVD_DESKTOP_TEST_SAVE_FOLDER = processedFolder;
   directEnv.LVOVD_DESKTOP_TEST_CONFIG = config;
   const destination = path.join(config, 'Downloads');
   fs.mkdirSync(destination);
@@ -101,7 +104,8 @@ async function scenario(file, index, provider, providerReplay) {
     await browser.waitUntil(async () => (await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime)) > before + 0.15, { timeout: 10000 });
     for (const [size, width, height] of [['desktop', 1280, 720], ['narrow', 960, 640]]) {
       await captureLayout(browser, width, height, path.join(resultDir, `${size}-${process.platform}-${index}.png`),
-        'desktop-local', ['nav-download', 'nav-local', 'nav-settings', 'processing-add-files', 'processing-file-list']);
+        'desktop-local', ['nav-download', 'nav-local', 'nav-settings', 'processing-add-files', 'processing-file-list', 'editor-end-time', 'conversion-start']);
+      await checkEditorFlow(browser);
     }
     // A second owned copy exercises selection changes while the first decoder
     // may still have queued reads. Removing it must preserve the other entry.
@@ -156,7 +160,7 @@ async function scenario(file, index, provider, providerReplay) {
     await browser.$('#conversion-download').click();
     await browser.waitUntil(async () => (await browser.$('[data-result="status"]').getText()).startsWith('Saved '), {timeout:15000});
     const saved = (await browser.$('[data-result="status"]').getText()).slice(6);
-    assert.deepEqual(fs.readFileSync(path.join(resultDir,saved)),fs.readFileSync(file),'native no-op saving preserves bytes');
+    assert.deepEqual(fs.readFileSync(path.join(processedFolder,saved)),fs.readFileSync(file),'native no-op saving preserves bytes');
     await browser.$('[data-result="edit"]').click();
     const owner = await browser.execute(() => window.LVOVDWorkspaceTransport.owner());
     const deniedSource = await browser.execute(async id => {
@@ -225,11 +229,82 @@ async function scenario(file, index, provider, providerReplay) {
       assert.ok(Math.abs(outputs[0].inspection.durationSeconds-1.5)<0.15);
       assert.ok(Math.abs(outputs[1].inspection.durationSeconds-1.25)<0.15);
       await (await browser.$$('[data-result="preview"]'))[0].click();
-      await browser.waitUntil(async () => browser.execute(()=>document.getElementById('result-player').readyState>=1),{timeout:15000});
+      await browser.waitUntil(async () => browser.execute(()=>document.getElementById('result-player').currentTime > 0.02),
+        {timeout:15000, timeoutMsg:'Preview result must start playing after one click'});
       await browser.$('#close-result').click();
+      await browser.waitUntil(async () => browser.execute(() => {
+        const player = document.getElementById('result-player');
+        return !document.getElementById('result-preview').open && player.paused && !player.hasAttribute('src');
+      }), {timeout:5000});
+      const editResult = async (row, end) => {
+        await (await browser.$$('[data-result="edit"]'))[row].click();
+        assert.equal(await browser.$('#editor-end-time').getValue(), end);
+        assert.equal(await browser.execute(() => {
+          const heading = document.getElementById('editor-media-name');
+          const rect = heading.getBoundingClientRect();
+          return document.activeElement === heading && rect.top >= 0 && rect.bottom <= innerHeight;
+        }), true, 'Edit source must bring the selected editor into view and focus its title');
+      };
+      await editResult(1, '00:00:01.750');
+      await editResult(0, '00:00:01.000');
+      const saveNote = browser.$('#processing-download-note');
       await browser.$('#processing-download-all').click();
-      await browser.waitUntil(async () => (await browser.$('#processing-download-note').getText()).startsWith('Saved '),{timeout:15000});
-      assert.equal((await browser.$('#processing-download-note').getText()).match(/Saved /g).length,2);
+      await browser.waitUntil(async () => (await saveNote.getText()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
+      const receipts = () => browser.execute(() => Array.from(document.querySelectorAll('#processing-saved-files li'), item => item.textContent));
+      const full = (await receipts()).map(description => {
+        assert.match(description, /^Saved /);
+        return fs.readFileSync(path.join(processedFolder, description.slice(6)));
+      });
+      assert.deepEqual(full.map(buffer => buffer.length), outputs.map(output => output.size));
+      assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
+      if (index === 0) {
+        const cancelPicker = path.join(config, 'cancel-save-picker');
+        fs.writeFileSync(cancelPicker, '', {flag:'wx'});
+        try {
+          await browser.$('#processing-download-all').click();
+          await browser.waitUntil(async () => (await saveNote.getText()).startsWith('Save cancelled.'), {timeout:5000});
+          assert.equal(await browser.$('#processing-open-folder').isDisplayed(), false);
+        } finally { fs.unlinkSync(cancelPicker); }
+        const beforePartial = fs.readdirSync(processedFolder);
+        const holdPicker = path.join(config, 'hold-save-picker');
+        fs.writeFileSync(holdPicker, '', {flag:'wx'});
+        try {
+          await browser.$('#processing-download-all').click();
+          await browser.waitUntil(() => fs.existsSync(path.join(config, 'save-picker-open')), {timeout:5000});
+          // Change the second output after the dialog captured both results.
+          await editResult(1, '00:00:01.750');
+          await browser.waitUntil(() => browser.$('#conversion-start').isEnabled(), {timeout:15000});
+          await browser.$('#conversion-start').click();
+          await browser.waitUntil(async () => browser.execute(previous => {
+            const current = window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.conversion.output?.assetId;
+            return Boolean(current && current !== previous);
+          }, outputs[1].assetId), {timeout:25000});
+        } finally { fs.unlinkSync(holdPicker); }
+        await browser.waitUntil(async () => (await saveNote.getText()) === `Saved 1 of 2 files to ${processedFolder}.`, {timeout:15000});
+        const partial = await receipts(), added = fs.readdirSync(processedFolder).filter(name => !beforePartial.includes(name));
+        assert.deepEqual(added, [partial[0].slice(6)]);
+        assert.deepEqual(fs.readFileSync(path.join(processedFolder, added[0])), full[0]);
+        assert.ok(partial[1].startsWith(outputs[1].filename + ' — '));
+        assert.equal(await browser.$('#processing-save-details').getAttribute('open') !== null, true);
+        assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
+        // Replace the selected directory temporarily. A receipt must never open the replacement.
+        const moved = processedFolder + '-moved';
+        fs.renameSync(processedFolder, moved);
+        try {
+          fs.mkdirSync(processedFolder);
+          await browser.$('#processing-open-folder').click();
+          await browser.waitUntil(async () => (await browser.$('#processing-folder-error').getText()).includes('replaced'), {timeout:5000});
+          assert.deepEqual(fs.readdirSync(processedFolder), []);
+        } finally {
+          fs.rmdirSync(processedFolder);
+          fs.renameSync(moved, processedFolder);
+        }
+        if (process.platform === 'win32') {
+          await browser.$('#processing-open-folder').click();
+          await browser.waitUntil(async () => (await browser.$('#processing-folder-error').getText()) === 'Opened folder.', {timeout:10000});
+        }
+        await editResult(0, '00:00:01.000');
+      }
       if (index === 3) {
         for (const [container,codec] of [['opus','opus'],['flac','flac'],['wav','pcm_s24le']]) {
           const previous=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId);

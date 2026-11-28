@@ -20,6 +20,7 @@
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let allDownloads = null;
+  let savedFolder = null;
   let uploadGeneration = 0;
   let removedCleanup = new Map(), cleanupBusy = false;
   let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
@@ -189,6 +190,11 @@
         row.parts = Object.fromEntries([...row.querySelectorAll('[data-result]')].map(element => [element.dataset.result, element]));
         row.parts.edit.addEventListener('click', () => {
           selectEntry(id);
+          if (transport && !$('#media-editor').hidden) {
+            $('#editor-media-name').focus({ preventScroll: true });
+            $('#media-editor').scrollIntoView({ block: 'start', behavior: 'instant' });
+            return;
+          }
           $('#processing-file-list').focus({ preventScroll: true });
           $('#local-media-ready').scrollIntoView({ block: 'start', behavior: 'instant' });
         });
@@ -238,7 +244,8 @@
     const all = $('#processing-download-all');
     all.hidden = live.size < 2;
     all.disabled = Boolean(allDownloads) || discarding || completed !== live.size || downloads !== completed || queued > 0 || running > 0;
-    all.textContent = allDownloads ? `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…` : `${transport ? 'Save' : 'Download'} All (${downloads})`;
+    if (allDownloads) all.textContent = transport ? 'Saving…' : `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…`;
+    else all.textContent = `${transport ? 'Save' : 'Download'} All (${downloads})`;
   }
   function describeProcessingResult(output, currentRevision) {
     if (!output) return {};
@@ -279,6 +286,22 @@
     $('#processing-results-title').focus({ preventScroll: true });
     $('#processing-results').scrollIntoView({ block: 'start', behavior: 'instant' });
   }
+  function clearSaveReceipt() {
+    savedFolder = null;
+    $('#processing-save-receipt').hidden = true;
+    $('#processing-saved-files').replaceChildren();
+    $('#processing-folder-error').textContent = '';
+  }
+  $('#processing-open-folder').addEventListener('click', async () => {
+    const folder = savedFolder;
+    if (!folder || folder.owner !== collectionId) return;
+    $('#processing-folder-error').textContent = '';
+    try {
+      await transport.openFolder(folder.owner, folder.id);
+      if (savedFolder === folder) $('#processing-folder-error').textContent = 'Opened folder.';
+    }
+    catch (error) { if (savedFolder === folder) $('#processing-folder-error').textContent = error.message; }
+  });
   $('#processing-download-all').addEventListener('click', async () => {
     // Recheck the current authoritative results at the user's click. Never
     // substitute a previous output for a failed/cancelled/latest pending job.
@@ -289,12 +312,29 @@
       return output?.downloadUrl ? [{ id, assetId: output.assetId, planKey: output.planKey, url: output.downloadUrl, filename: output.filename }] : [];
     });
     if (transport) {
-      const owner = collectionId, note = $('#processing-download-note'); note.hidden = false; note.textContent = 'Saving…';
-      allDownloads = { outputs, index: 0 }; renderProcessingResults();
-      try { const result = await transport.saveAll(outputs);
-        if (owner === collectionId) note.textContent = result ? result.files.map(file => file.saved ? `Saved ${file.filename}` : `${file.filename}: ${file.error}`).join(' · ') : 'Save cancelled. Prepared results remain available.';
-      } catch (error) { if (owner === collectionId) note.textContent = error.message; }
-      finally { allDownloads = null; renderProcessingResults(); }
+      const run = { collectionId, outputs }, note = $('#processing-download-note');
+      allDownloads = run; clearSaveReceipt(); renderProcessingResults();
+      note.hidden = false; note.textContent = 'Saving…';
+      try {
+        const result = await transport.saveAll(outputs);
+        if (allDownloads !== run || collectionId !== run.collectionId) return;
+        if (!result) { note.textContent = 'Save cancelled. Prepared results remain available.'; return; }
+        const saved = result.files.filter(file => file.saved).length;
+        note.textContent = `Saved ${saved} of ${result.files.length} files to ${result.folder}.`;
+        $('#processing-saved-files').replaceChildren(...result.files.map(file => {
+          const item = document.createElement('li');
+          item.textContent = file.saved ? `Saved ${file.filename}` : `${file.filename} — ${file.error}`;
+          return item;
+        }));
+        savedFolder = result.receiptId ? { owner: run.collectionId, id: result.receiptId } : null;
+        $('#processing-open-folder').hidden = !savedFolder;
+        $('#processing-save-details').open = saved !== result.files.length;
+        $('#processing-save-receipt').hidden = false;
+      } catch (error) {
+        if (allDownloads === run) note.textContent = `Save failed. ${error.message}`;
+      } finally {
+        if (allDownloads === run) { allDownloads = null; renderProcessingResults(); }
+      }
       return;
     }
     // Existing protected download endpoints own their readers. No new media
@@ -578,6 +618,7 @@
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = !upload; $('#workspace-failure').hidden = true;
     clearTimeout(allDownloads?.timer); allDownloads = null;
+    clearSaveReceipt();
     $('#processing-results-list').replaceChildren(); $('#processing-download-note').hidden = true; $('#conversion-warnings').replaceChildren();
     settingsForm.reset(); message(text); renderFiles(); publish();
   }
@@ -632,15 +673,15 @@
     $('#conversion-cleanup').disabled = busy;
     $('#output-cleanup-status').textContent = snapshot?.outputCleanup?.message || (state.cleanupPending ? 'Temporary output cleanup needs a retry.' : '');
     $('#conversion-progress').hidden = !['running', 'validating', 'cancelling'].includes(state.status);
-    const bar = $('#conversion-progress-bar'); bar.classList.toggle('indeterminate', state.percent == null);
-    bar.style.width = `${state.percent == null ? 36 : Math.max(0, Math.min(100, state.percent))}%`;
+    root.LVOVDProgress($('#conversion-progress-bar'), state.percent);
     const phases = { preparing: 'Preparing', analyzing: 'Analyzing', 'pass-1': 'Pass 1', 'pass-2': 'Pass 2', encoding: 'Encoding', validating: 'Validating', retrying: 'Fitting the size target' };
     const phaseProgress = state.status === 'running' && Number.isFinite(state.phasePercent)
       ? `${Math.floor(state.phasePercent)}% of this phase${Number.isFinite(state.percent) ? ` · about ${Math.floor(state.percent)}% overall` : ' · overall progress indeterminate'}` : null;
     const queueJob = currentJob();
     const queueMessage = queueJob?.status === 'queued' ? `Queued · Draft ${queueJob.draftRevision}` : queueJob?.status === 'starting' ? `Starting · Draft ${queueJob.draftRevision}`
       : queueJob?.status === 'cancelled' ? `Cancelled · Draft ${queueJob.draftRevision}` : queueJob?.status === 'failed' ? queueJob.message : null;
-    $('#conversion-status').textContent = [queueMessage, phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
+    const nativePercent = transport && Number.isFinite(state.percent) ? Math.floor(state.percent) + '%' : null;
+    $('#conversion-status').textContent = [queueMessage, phases[state.phase], state.message, phaseProgress || nativePercent, state.failure?.explanation, state.failure?.help,
       state.cleanupPending ? 'Some temporary attempt files remain. Retry cleanup or Remove File.' : null].filter(Boolean).join(' · ');
     const submitted = current?.submitted, newer = submitted && submitted.draftRevision !== current.draftRevision;
     $('#processing-draft-status').textContent = current ? [
@@ -660,8 +701,7 @@
     progress.hidden = data.status === 'ready' && !upload;
     if (!upload) {
       $('#workspace-progress-label').textContent = data.message || 'Preparing local media…';
-      const bar = $('#workspace-progress-bar'); bar.classList.toggle('indeterminate', data.percent == null);
-      bar.style.width = `${data.percent == null ? 36 : Math.max(0, Math.min(100, data.percent))}%`;
+      root.LVOVDProgress($('#workspace-progress-bar'), data.percent);
     }
     $('#workspace-failure').hidden = data.status !== 'error';
     if (data.status === 'error') {
@@ -758,6 +798,7 @@
     if (!file || upload) return;
     const uploadToken = uploadGeneration;
     if (!workspaceId) intake.hidden = true; progress.hidden = false;
+    root.LVOVDProgress($('#workspace-progress-bar'), null);
     try { await ensureCollection(); } catch (error) {
       if (uploadToken !== uploadGeneration) return;
       pendingUploads = []; starting = false; progress.hidden = true; if (!workspaceId) intake.hidden = false;
@@ -772,7 +813,7 @@
     xhr.upload.onprogress = event => {
       if (upload !== xhr) return;
       $('#workspace-progress-label').textContent = `Copying ${file.name.slice(0, 255)} · ${facts.formatBytes(event.loaded)} / ${facts.formatBytes(file.size)}`;
-      $('#workspace-progress-bar').style.width = `${Math.min(100, event.loaded / file.size * 100)}%`;
+      root.LVOVDProgress($('#workspace-progress-bar'), event.loaded / file.size * 100);
     };
     function finish(text) {
       if (upload !== xhr) return;

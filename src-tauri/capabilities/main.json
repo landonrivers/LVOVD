@@ -7,7 +7,6 @@
   ],
   "permissions": [
     "allow-desktop-handshake",
-    "allow-set-local-drop-target",
     "allow-download-destination",
     "allow-choose-download-destination",
     "allow-preview-download",
@@ -35,6 +34,6 @@
     "allow-prepare-waveform",
     "allow-cancel-editor", "allow-cancel-waveform",
     "allow-waveform-window",
-    "allow-save-result", "allow-save-results"
+    "allow-save-result", "allow-save-results", "allow-open-result-folder"
   ]
 }

@@ -1,20 +1,38 @@
 'use strict';
 (async function() {
   const native = globalThis.LVOVDNative, byId = id => document.getElementById(id);
-  let changeDropTarget = Promise.resolve();
-  for (const button of document.querySelectorAll('.desktop-header nav button')) {
+  const viewport = byId('workspace-scroll'), download = byId('desktop-download');
+  const local = byId('desktop-local'), settings = byId('desktop-settings');
+  const nav = document.querySelectorAll('.desktop-header nav button');
+  function markSection(id) {
+    for (const button of nav) {
+      if (button.getAttribute('aria-controls') === id) button.setAttribute('aria-current', 'location');
+      else button.removeAttribute('aria-current');
+    }
+  }
+  for (const button of nav) {
     button.addEventListener('click', () => {
-      // A file dropped onto Download or Settings must not start an invisible import.
-      changeDropTarget = changeDropTarget.then(() => native.call('set_local_drop_target', { enabled: button.id === 'nav-local' }))
-        .catch(error => { byId('workspace-status').textContent = error.message; });
-      for (const view of document.querySelectorAll('.desktop-header nav button')) {
-        const selected = view === button;
-        byId(view.getAttribute('aria-controls')).hidden = !selected;
-        if (selected) view.setAttribute('aria-current', 'page');
-        else view.removeAttribute('aria-current');
-      }
+      const section = byId(button.getAttribute('aria-controls'));
+      download.hidden = local.hidden = section === settings;
+      settings.hidden = section !== settings;
+      section.focus({ preventScroll: true });
+      section.scrollIntoView({ block: 'start' });
+      markSection(section.id);
     });
   }
+  viewport.addEventListener('scroll', () => {
+    if (settings.hidden) {
+      const atLocal = local.getBoundingClientRect().top <= viewport.getBoundingClientRect().top + 1
+        || (viewport.scrollTop > 0 && viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 1);
+      markSection(atLocal ? local.id : download.id);
+    }
+  }, { passive: true });
+  // Called for an OS drop. Rust owns the paths and sends only the physical point.
+  globalThis.LVOVDLocalDropAt = (x, y) => {
+    if (local.hidden || !Number.isFinite(x) || !Number.isFinite(y) || document.querySelector('dialog[open]')) return false;
+    const target = document.elementFromPoint(x / devicePixelRatio, y / devicePixelRatio);
+    return local.contains(target);
+  };
   const cleanup = byId('workspace-recovery');
   cleanup.setAttribute('aria-label', 'Temporary file cleanup');
   cleanup.querySelector('strong').textContent = 'Temporary file cleanup';
@@ -34,12 +52,30 @@
     catch(error) { byId('native-intake-status').textContent = error.message; }
   };
   const preview = byId('result-preview'), player = byId('result-player');
+  let previewGeneration = 0;
   document.addEventListener('lvovd:preview-result', event => {
-    player.pause(); player.src = event.detail.url; byId('result-name').textContent = event.detail.name; byId('result-status').textContent = ''; preview.showModal();
+    const generation = ++previewGeneration;
+    player.pause();
+    player.src = event.detail.url;
+    byId('result-name').textContent = event.detail.name;
+    byId('result-status').textContent = '';
+    if (!preview.open) preview.showModal();
+    player.play().catch(error => {
+      if (generation === previewGeneration && preview.open && error.name === 'NotAllowedError') {
+        byId('result-status').textContent = 'Press Play to start the preview.';
+      }
+    });
   });
-  const close = () => { player.pause(); player.removeAttribute('src'); player.load(); };
-  byId('close-result').onclick = () => preview.close(); preview.addEventListener('close', close);
-  player.addEventListener('error', () => { byId('result-status').textContent = 'This result cannot play in the preview. Save it to open in another player.'; });
+  byId('close-result').onclick = () => preview.close();
+  preview.addEventListener('close', () => {
+    if (preview.open) return;
+    ++previewGeneration;
+    player.pause(); player.removeAttribute('src'); player.load();
+  });
+  player.addEventListener('playing', () => { byId('result-status').textContent = ''; });
+  player.addEventListener('error', () => {
+    if (preview.open && player.error) byId('result-status').textContent = 'This result cannot play in the preview. Save it to open in another player.';
+  });
   try { const info = await globalThis.LVOVDWorkspaceTransport.ready;
     byId('connection').textContent = 'Desktop · ' + info.appVersion;
     byId('runtime-detail').textContent = 'Backend: Rust · Webview: ' + info.webviewVersion;

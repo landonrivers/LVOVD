@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { captureLayout } = require('./layout.cjs');
+const { Transform } = require('node:stream');
+const { captureLayout, checkDownloadDisclosures } = require('./layout.cjs');
 
 // Serve only this generated fixture. Blocking an acquisition GET after Preview lets
 // the native workflow deterministically exercise a disconnected folder and cancellation.
@@ -37,19 +38,30 @@ async function startProvider(video, ffmpeg, extraAssets = []) {
     const type = request.url.endsWith('.mpd') ? 'application/dash+xml' : request.url.endsWith('.m4a') ? 'audio/mp4' : 'video/mp4';
     const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 };
     if (range) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + bytes;
-    const send = () => {
-      if (response.destroyed) return;
-      response.writeHead(range ? 206 : 200, headers);
-      if (request.method === 'HEAD') { response.end(); return; }
-      const stream = fs.createReadStream(file, { start, end });
-      response.once('close', () => stream.destroy());
-      stream.on('error', () => response.destroy()).pipe(response);
-    };
-    if (request.method === 'GET') gets++;
-    if (request.method === 'GET' && hold) {
-      waiting.add(send);
-      response.once('close', () => waiting.delete(send));
-    } else send();
+    response.writeHead(range ? 206 : 200, headers);
+    if (request.method === 'HEAD') { response.end(); return; }
+    gets++;
+    const stream = fs.createReadStream(file, { start, end });
+    response.once('close', () => stream.destroy());
+    stream.on('error', () => response.destroy());
+    if (!hold) { stream.pipe(response); return; }
+
+    // Let yt-dlp report actual received bytes during its 250ms progress sampling
+    // interval, then pause this transfer halfway for progress and cancellation QA.
+    let sent = 0;
+    const paced = new Transform({ transform(chunk, encoding, next) {
+      if (hold && sent >= (end - start + 1) / 2) {
+        const resume = () => next(null, chunk);
+        waiting.add(resume);
+        response.once('close', () => waiting.delete(resume));
+      } else {
+        sent += chunk.length;
+        if (hold) setTimeout(next, 15, null, chunk);
+        else next(null, chunk);
+      }
+    } });
+    response.once('close', () => paced.destroy());
+    stream.pipe(paced).pipe(response);
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   return {
@@ -82,13 +94,14 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
         'download-choose-folder', 'dl-content-av', 'dl-content-extras', 'dl-profile-compatible', 'dl-profile-maximum', 'download-start']);
     // The default, collapsed short-name fixture should show the entire primary action.
     const initial = await browser.execute(() => {
-      const pane = document.getElementById('desktop-download');
+      const pane = document.querySelector('main');
       const button = document.getElementById('download-start').getBoundingClientRect();
       const { top, bottom } = pane.getBoundingClientRect();
       return { scrollTop: pane.scrollTop, above: top - button.top, below: button.bottom - bottom };
     });
     assert.ok(initial.scrollTop === 0 && initial.above <= 1 && initial.below <= 1,
       'Download Video is clipped before scrolling at ' + width + '×' + height + ': ' + JSON.stringify(initial));
+    await checkDownloadDisclosures(browser);
   }
   async function moveRadio(from, arrow, to) {
     // The embedded driver clicks and focuses the card face itself. Model keyboard
@@ -124,6 +137,18 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   provider.hold();
   await browser.$('#download-start').click();
   await wait(() => provider.held() > 0, 'The queued acquisition never read the fixture');
+  assert.equal(await browser.$('#download-preview').isDisplayed(), true, 'Preview remains available during acquisition');
+  assert.equal(await browser.$('#download-url').getValue(), provider.url);
+  const active = '#download-jobs li[data-status="downloading"] [role="progressbar"]';
+  await wait(async () => {
+    const percent = Number(await browser.$(active).getAttribute('aria-valuenow'));
+    return percent > 0 && percent < 100;
+  }, 'The paused fixture should report measured progress during the download');
+  for (const [width, height] of [[1280,720], [960,640]]) {
+    await browser.setWindowSize(width, height);
+    await browser.execute(() => document.getElementById('download-queue').scrollIntoView({block:'center'}));
+    await browser.saveScreenshot(path.join(evidence, 'download-active-' + width + '-' + process.platform + '.png'));
+  }
   const disconnected = destination + '-disconnected';
   fs.renameSync(destination, disconnected);
   provider.release();

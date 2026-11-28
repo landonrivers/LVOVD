@@ -84,9 +84,7 @@
     try {
       const snapshot = await native.call('start_download', { request: { previewId: preview.previewId, destinationId: destination.id, ...(preview.choices ? {options:options.read()} : {}) } });
       render(snapshot);
-      if (generation === previewGeneration) {
-        resetPreview(); url.value = ''; message.textContent = 'Added to the download queue.'; url.focus();
-      }
+      if (generation === previewGeneration) message.textContent = 'Added to the download queue.';
     } catch (error) { if (generation === previewGeneration) message.textContent = error.message; }
     finally { submitting = false; controls(); }
   });
@@ -97,10 +95,14 @@
   }
   function createRow(id) {
     const li = child(el('download-jobs'), 'li');
-    const row = { li, title: child(li, 'strong'), status: child(li, 'p'), path: child(li, 'p'),
-      failure: child(li, 'p'), note: child(li, 'p'), pending: false };
+    const row = { li, title: child(li, 'strong'), status: child(li, 'p'), meter: child(li, 'div'),
+      path: child(li, 'p'), failure: child(li, 'p'), note: child(li, 'p'), pending: false };
     li.dataset.jobId = id;
     row.status.className = 'download-job-status';
+    row.meter.className = 'progress-track';
+    row.meter.setAttribute('role', 'progressbar');
+    row.fill = child(row.meter, 'div');
+    row.fill.className = 'progress-bar';
     row.note.setAttribute('role', 'status');
     const actions = child(li, 'div');
     actions.className = 'download-job-actions';
@@ -139,9 +141,14 @@
       row.title.textContent = job.title;
       row.li.dataset.status = job.status;
       const progress = job.progress;
-      const details = [states[job.status] || job.status];
+      const stage = states[job.status] || job.status;
+      const details = [stage];
+      const percent = job.status === 'saved' ? 100 : job.status === 'downloading' ? progress?.percent : null;
+      row.meter.hidden = !['downloading', 'processing', 'saving', 'cancelling', 'saved'].includes(job.status);
+      row.meter.setAttribute('aria-label', stage + ' · ' + job.title);
+      globalThis.LVOVDProgress(row.fill, percent);
       if (job.status === 'downloading' && progress) {
-        if (Number.isFinite(progress.percent)) details.push(Math.round(progress.percent) + '%');
+        if (Number.isFinite(percent)) details.push(Math.floor(percent) + '%');
         if (Number.isFinite(progress.speed)) details.push((progress.speed / 1048576).toFixed(1) + ' MiB/s');
         if (Number.isFinite(progress.eta)) details.push(time(progress.eta) + ' remaining');
       }

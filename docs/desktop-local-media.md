@@ -36,7 +36,9 @@ Native `review_render` and `review_conversion` retain the released legacy conver
 
 Save and Save All capture validated output leases before opening a native destination dialog. Writes use a temporary destination file, flush/sync and close it, then publish without overwriting an existing file; collisions receive numbered names. Missing/unwritable destinations return an actionable failure and leave the prepared result available for retry. A bulk save reports each captured result independently. Removal or replacement stops pending saves; the copy rechecks current ownership while reading and before publication. Late receipts cannot label a replacement result as saved. Removing sources does not delete successful exports.
 
-Automatic saving to a remembered destination, export receipts/catalog, Open/Show in Folder and saved-file persistence belong to 8D. The present explicit Save/Save All workflow preserves access to Local Media results while that shared delivery layer is built.
+Local Media sits below Download on the main screen. The files and conversion controls, aspect-ratio-preserving player, timeline, processing controls and results scroll together. Preview Result starts playback when opened. Closing it stops playback. Edit Source selects the result's original file and returns focus to the editor with that file's draft.
+
+Save All reports the number saved, the chosen folder and each file's outcome, including collision-adjusted names. Open Folder uses a session receipt issued by Rust for that save. Automatic saving to a remembered destination and the persistent export catalog remain part of 8D.
 
 ## Acceptance evidence
 

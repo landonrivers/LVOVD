@@ -42,9 +42,9 @@ struct AppState {
     downloads: Arc<Downloads>,
     destinations: Arc<download_destination::Destinations>,
     download_subscription: Mutex<DownloadSubscription>,
+    saved_folder: Mutex<Option<SavedFolder>>,
     subscriptions: Mutex<Subscriptions>,
     closing: AtomicBool,
-    local_drop_target: AtomicBool,
     media_admission: lvovd_core::media_admission::MediaAdmission,
     health_admission: tokio::sync::Mutex<()>,
     picker_admission: tokio::sync::Mutex<()>,
@@ -86,7 +86,6 @@ struct Handshake {
 
 #[tauri::command]
 fn desktop_handshake(state: State<'_, AppState>) -> Handshake {
-    state.local_drop_target.store(false, Ordering::Release);
     Handshake {
         protocol_version: lvovd_core::PROTOCOL_VERSION,
         app_version: env!("CARGO_PKG_VERSION"),
@@ -96,10 +95,6 @@ fn desktop_handshake(state: State<'_, AppState>) -> Handshake {
         connection_generation: state.subscriptions.lock().unwrap().generation(),
         download_generation: state.download_subscription.lock().unwrap().generation,
     }
-}
-#[tauri::command]
-fn set_local_drop_target(state: State<'_, AppState>, enabled: bool) {
-    state.local_drop_target.store(enabled, Ordering::Release);
 }
 #[tauri::command]
 async fn runtime_health(state: State<'_, AppState>) -> Result<lvovd_core::tools::Health> {
@@ -170,6 +165,72 @@ fn tools(app: &tauri::AppHandle) -> std::result::Result<Tools, Box<dyn std::erro
     #[cfg(debug_assertions)]
     let tools = development::tools(tools)?;
     Ok(tools)
+}
+
+fn handle_local_drop(
+    window: &tauri::Window,
+    paths: &[PathBuf],
+    position: tauri::PhysicalPosition<f64>,
+) {
+    if window.label() != "main" || paths.is_empty() {
+        return;
+    }
+    let app = window.app_handle().clone();
+    let (id, generation) = {
+        let state = app.state::<AppState>();
+        let subscription = state.subscriptions.lock().unwrap();
+        let Some(id) = subscription.workbench() else {
+            return;
+        };
+        (id, subscription.generation())
+    };
+    let Some(webview) = window.get_webview_window("main") else {
+        return;
+    };
+    // The pinned Wry WebView2 backend reports device pixels. GTK and
+    // AppKit report logical widget coordinates in the same event.
+    let scale = if cfg!(windows) {
+        1.0
+    } else {
+        let Ok(scale) = window.scale_factor() else {
+            return;
+        };
+        scale
+    };
+    let x = position.x * scale;
+    let y = position.y * scale;
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    if webview
+        .eval_with_callback(
+            format!("globalThis.LVOVDLocalDropAt?.({x},{y}) === true"),
+            move |answer| {
+                let _ = send.try_send(answer == "true");
+            },
+        )
+        .is_err()
+    {
+        return;
+    }
+    let paths = paths.to_vec();
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<AppState>();
+        let still_selected = || {
+            let subscription = state.subscriptions.lock().unwrap();
+            subscription.workbench() == Some(id) && subscription.generation() == generation
+        };
+        let hit = tokio::time::timeout(std::time::Duration::from_secs(2), receive.recv()).await;
+        if !matches!(hit, Ok(Some(true))) || !still_selected() {
+            return;
+        }
+        let error = state.workbenches.import(id, paths).await.err();
+        if let Some(error) = error.filter(|_| still_selected()) {
+            app.dialog()
+                .message(error.message)
+                .title("Could not import media")
+                .show(|_| {});
+        }
+        state.publish();
+    });
 }
 
 fn main() {
@@ -249,9 +310,9 @@ fn main() {
                 downloads,
                 destinations,
                 download_subscription: Mutex::new(DownloadSubscription::default()),
+                saved_folder: Mutex::new(None),
                 subscriptions: Mutex::new(Subscriptions::default()),
                 closing: AtomicBool::new(false),
-                local_drop_target: AtomicBool::new(false),
                 health_admission: tokio::sync::Mutex::new(()),
                 picker_admission: tokio::sync::Mutex::new(()),
             });
@@ -377,37 +438,8 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
-                let paths = paths.clone();
-                let app = window.app_handle().clone();
-                let (workbench, generation) = {
-                    let state = app.state::<AppState>();
-                    if !state.local_drop_target.load(Ordering::Acquire) {
-                        return;
-                    }
-                    let subscription = state.subscriptions.lock().unwrap();
-                    (subscription.workbench(), subscription.generation())
-                };
-                tauri::async_runtime::spawn(async move {
-                    let state = app.state::<AppState>();
-                    if let Some(id) = workbench {
-                        // Admitted failures belong to the workbench snapshot,
-                        // including after switching away and reopening it.
-                        let error = state.workbenches.import(id, paths).await.err();
-                        let still_selected = {
-                            let subscription = state.subscriptions.lock().unwrap();
-                            subscription.workbench() == Some(id)
-                                && subscription.generation() == generation
-                        };
-                        if let Some(error) = error.filter(|_| still_selected) {
-                            app.dialog()
-                                .message(error.message)
-                                .title("Could not import media")
-                                .show(|_| {});
-                        }
-                        state.publish();
-                    }
-                });
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, position }) = event {
+                handle_local_drop(window, paths, *position);
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -461,12 +493,12 @@ fn main() {
             prepare_editor,
             save_result,
             save_results,
+            open_result_folder,
             prepare_waveform,
             cancel_editor,
             cancel_waveform,
             waveform_window,
             desktop_handshake,
-            set_local_drop_target,
             runtime_health,
             create_workbench,
             list_workbenches,

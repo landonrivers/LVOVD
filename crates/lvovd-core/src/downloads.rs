@@ -5,6 +5,7 @@ mod fixture_tests;
 mod options;
 mod outputs;
 mod provider;
+use crate::export::destination_id;
 pub use options::DownloadOptions;
 use options::{Choices, Plan};
 use outputs::PreparedFile;
@@ -233,20 +234,6 @@ pub(crate) fn provider_error(stderr: &[u8]) -> AppError {
         )
     };
     AppError::new(code, message)
-}
-fn destination_id(path: &Path) -> Result<(u64, u64)> {
-    if !path.is_absolute() || !path.is_dir() {
-        return Err(AppError::new(
-            "DESTINATION_UNAVAILABLE",
-            "Choose an available output folder.",
-        ));
-    }
-    crate::owned_file::directory_identity(path).map_err(|_| {
-        AppError::new(
-            "DESTINATION_UNAVAILABLE",
-            "Choose an available output folder.",
-        )
-    })
 }
 
 impl Downloads {

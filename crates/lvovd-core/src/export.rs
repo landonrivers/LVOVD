@@ -6,6 +6,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Bind a native-picked destination to its filesystem identity across a save or reveal.
+pub fn destination_id(path: &Path) -> Result<(u64, u64)> {
+    if !path.is_absolute() || !path.is_dir() {
+        return Err(AppError::new(
+            "DESTINATION_UNAVAILABLE",
+            "Choose an available output folder.",
+        ));
+    }
+    crate::owned_file::directory_identity(path).map_err(|_| {
+        AppError::new(
+            "DESTINATION_UNAVAILABLE",
+            "Choose an available output folder.",
+        )
+    })
+}
+
 pub fn save_copy(result: OutputLease, destination: &Path) -> Result<PathBuf> {
     save_copy_checked(result, destination, || Ok(()))
 }
@@ -15,7 +31,18 @@ pub(crate) fn save_copy_checked(
     destination: &Path,
     mut current: impl FnMut() -> Result<()>,
 ) -> Result<PathBuf> {
+    let folder = destination.parent().ok_or_else(save_error)?;
     current()?;
+    let identity = destination_id(folder).map_err(|_| save_error())?;
+    let check_current = || {
+        if destination_id(folder)? != identity {
+            return Err(AppError::new(
+                "FOLDER_CHANGED",
+                "The selected folder was replaced while saving.",
+            ));
+        }
+        current()
+    };
     publish(
         destination,
         None,
@@ -30,7 +57,7 @@ pub(crate) fn save_copy_checked(
             }
             current()
         },
-        current,
+        check_current,
     )
     .map(|(path, _)| path)
 }
@@ -73,11 +100,11 @@ pub(crate) fn save_download(
     )
 }
 
-fn publish<C: FnMut() -> Result<()>>(
+fn publish(
     destination: &Path,
     suffix: Option<&str>,
-    write_bytes: impl FnOnce(&mut File, &mut C) -> Result<()>,
-    mut current: C,
+    write_bytes: impl FnOnce(&mut File, &mut dyn FnMut() -> Result<()>) -> Result<()>,
+    mut current: impl FnMut() -> Result<()>,
 ) -> Result<(PathBuf, crate::owned_file::Seal)> {
     let error = save_error;
     let parent = destination
