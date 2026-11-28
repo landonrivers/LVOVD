@@ -34,12 +34,10 @@ try {
     $before = @(Get-ChildItem -LiteralPath $Destination -File | ForEach-Object FullName)
     $window = [Windows.Automation.AutomationElement]::FromHandle((Get-Process -Id $AppPid).MainWindowHandle)
     $url = (Get-Content -Raw -LiteralPath $ready | ConvertFrom-Json).url
-    $input = Wait-Element $window 'Video URL' ([Windows.Automation.ControlType]::Edit) 40
-    $input.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($url)
-    foreach ($action in 'Preview','Download Video') {
-        $button = Wait-Element $window $action ([Windows.Automation.ControlType]::Button) 90
-        $button.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
-    }
+    $layout = @(& "$PSScriptRoot/windows-portable-layout.ps1" -AppPid $AppPid -FixtureUrl $url)
+    $layout | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $Working 'layout-receipt.json')
+    $download = Wait-Element $window 'Download Video' ([Windows.Automation.ControlType]::Button) 10
+    $download.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
     [void](Wait-Element $window 'Open File' ([Windows.Automation.ControlType]::Button) 90)
     $saved = @(Get-ChildItem -LiteralPath $Destination -File -Filter '*.mp4' | Where-Object { $before -notcontains $_.FullName })
     if ($saved.Count -ne 1) { throw 'Expected one new video in the captured output folder.' }

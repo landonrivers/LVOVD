@@ -3,7 +3,9 @@
 (function exposeNative(root) {
   const allowed = new Set(['desktop_handshake', 'prepare_editor', 'save_result', 'save_results', 'prepare_waveform', 'cancel_editor', 'cancel_waveform', 'waveform_window', 'runtime_health', 'create_workbench', 'list_workbenches', 'subscribe_workbench', 'acknowledge_workbench', 'review_render', 'review_conversion', 'review_processing', 'queue_processing', 'cancel_processing', 'discard_workbench', 'cleanup_workbench', 'cancel_intake', 'pick_source', 'remove_source', 'shutdown_desktop']);
   let connectionGeneration = 0, disposeCurrent = () => {};
-  allowed.add('set_local_drop_target');
+  allowed.add('open_result_folder');
+  allowed.add('edit_download_source');
+  allowed.add('cancel_edit_download_source');
   for (const name of ['download_destination', 'choose_download_destination', 'preview_download', 'start_download', 'cancel_download', 'retry_download_save', 'open_download', 'reveal_download', 'subscribe_downloads', 'acknowledge_downloads']) allowed.add(name);
   root.LVOVDNative = Object.freeze({
     async call(command, args = {}) {

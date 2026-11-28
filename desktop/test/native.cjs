@@ -6,6 +6,8 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { environment } = require('../../scripts/desktop.cjs');
 const { downloadScenario, startProvider } = require('./download.cjs');
+const { captureLayout, checkEditorFlow } = require('./layout.cjs');
+const replay = require('./provider-replay.cjs');
 const root = path.resolve(__dirname, '../..');
 const resultDir = path.join(root, 'desktop/test-results');
 fs.mkdirSync(resultDir, { recursive: true });
@@ -42,19 +44,26 @@ async function waitForDriver(port, child) {
   }
   throw new Error('Native driver did not become ready');
 }
-async function scenario(file, index, provider) {
+async function scenario(file, index, provider, providerReplay) {
   const port = 4455 + index, log = fs.openSync(path.join(resultDir, `native-${index}.log`), 'w');
   // Exercise the same tool discovery as a direct executable launch, without the
   // Node development wrapper's LVOVD_DESKTOP_* tool-path overrides.
   const directEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port), LVOVD_DESKTOP_TEST_FILE: file,
-    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1', LVOVD_DESKTOP_TEST_SAVE_FOLDER: resultDir };
+    LVOVD_DESKTOP_TEST_MEDIA_CONTENTION: '1' };
   const config = fs.mkdtempSync(path.join(resultDir, 'native-config-'));
+  const processedFolder = path.join(config, 'Saved results');
+  fs.mkdirSync(processedFolder);
+  directEnv.LVOVD_DESKTOP_TEST_SAVE_FOLDER = processedFolder;
   directEnv.LVOVD_DESKTOP_TEST_CONFIG = config;
   const destination = path.join(config, 'Downloads');
   fs.mkdirSync(destination);
   directEnv.LVOVD_DESKTOP_TEST_DOWNLOAD_FOLDER = destination;
   if (index === 3) directEnv.LVOVD_DESKTOP_TEST_INTERRUPT_PROXY = '1';
   for (const key of ['FFPROBE', 'FFMPEG', 'NODE', 'YTDLP']) delete directEnv['LVOVD_DESKTOP_' + key];
+  if (providerReplay) {
+    fs.writeFileSync(path.join(config, 'source.info.json'), JSON.stringify(providerReplay.info));
+    directEnv.LVOVD_DESKTOP_TEST_PROVIDER_PORT = String(providerReplay.port);
+  }
   const child = spawn(path.join(root, 'target/debug/lvovd' + (process.platform === 'win32' ? '.exe' : '')), [], {
     cwd: resultDir, env: directEnv, windowsHide: true, stdio: ['ignore', log, log]
   });
@@ -67,8 +76,9 @@ async function scenario(file, index, provider) {
     await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Desktop ·'), { timeout: 15000 });
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
     assert.equal(await browser.$('#desktop-download').isDisplayed(), true, 'Download must be the initial application view');
-    if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir);
-    await browser.$('#nav-local').click();
+    if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir, ffmpeg, processedFolder);
+    if (providerReplay) await replay.verify(browser, providerReplay, destination, env.LVOVD_DESKTOP_FFPROBE, ffmpeg);
+    await browser.$('#nav-download').click();
     await browser.execute(() => { window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(e.message)); window.addEventListener('unhandledrejection',e=>window.__errors.push(String(e.reason))); });
     await browser.$('#media-choose-button').click();
     if (index === 3) {
@@ -92,14 +102,11 @@ async function scenario(file, index, provider) {
     await browser.execute(() => { const p = document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])'); p.muted = true; p.play(); });
     const before = await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime);
     await browser.waitUntil(async () => (await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime)) > before + 0.15, { timeout: 10000 });
-    await browser.setWindowSize(1280, 720);
-    await browser.waitUntil(async () => browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), {timeout:2000}).catch(async error => { console.error(await browser.execute(() => ({width:innerWidth,height:innerHeight,scrollW:document.documentElement.scrollWidth,scrollH:document.documentElement.scrollHeight,outside:[...document.querySelectorAll("body *")].filter(e=>getComputedStyle(e).position==="absolute" && e.getBoundingClientRect().bottom>innerHeight).map(e=>({id:e.id,cls:e.className,rect:e.getBoundingClientRect().toJSON()})).slice(0,15)}))); throw error; });
-    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'desktop workflow must fit without outer-page scrolling');
-    await browser.saveScreenshot(path.join(resultDir, `desktop-${process.platform}-${index}.png`));
-    await browser.setWindowSize(960, 640);
-    await browser.waitUntil(async () => browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), {timeout:2000}).catch(async error => { console.error(await browser.execute(() => ({width:innerWidth,height:innerHeight,scrollW:document.documentElement.scrollWidth,scrollH:document.documentElement.scrollHeight}))); throw error; });
-    assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true, 'narrow workflow must fit without outer-page scrolling');
-    await browser.saveScreenshot(path.join(resultDir, `narrow-${process.platform}-${index}.png`));
+    for (const [size, width, height] of [['desktop', 1280, 720], ['narrow', 960, 640]]) {
+      await captureLayout(browser, width, height, path.join(resultDir, `${size}-${process.platform}-${index}.png`),
+        'desktop-local', ['nav-download', 'nav-settings', 'processing-add-files', 'processing-file-list', 'editor-end-time', 'conversion-start']);
+      await checkEditorFlow(browser);
+    }
     // A second owned copy exercises selection changes while the first decoder
     // may still have queued reads. Removing it must preserve the other entry.
     // The test build holds these eight small reads for 1.5 seconds per batch.
@@ -153,7 +160,7 @@ async function scenario(file, index, provider) {
     await browser.$('#conversion-download').click();
     await browser.waitUntil(async () => (await browser.$('[data-result="status"]').getText()).startsWith('Saved '), {timeout:15000});
     const saved = (await browser.$('[data-result="status"]').getText()).slice(6);
-    assert.deepEqual(fs.readFileSync(path.join(resultDir,saved)),fs.readFileSync(file),'native no-op saving preserves bytes');
+    assert.deepEqual(fs.readFileSync(path.join(processedFolder,saved)),fs.readFileSync(file),'native no-op saving preserves bytes');
     await browser.$('[data-result="edit"]').click();
     const owner = await browser.execute(() => window.LVOVDWorkspaceTransport.owner());
     const deniedSource = await browser.execute(async id => {
@@ -222,11 +229,113 @@ async function scenario(file, index, provider) {
       assert.ok(Math.abs(outputs[0].inspection.durationSeconds-1.5)<0.15);
       assert.ok(Math.abs(outputs[1].inspection.durationSeconds-1.25)<0.15);
       await (await browser.$$('[data-result="preview"]'))[0].click();
-      await browser.waitUntil(async () => browser.execute(()=>document.getElementById('result-player').readyState>=1),{timeout:15000});
+      await browser.waitUntil(async () => browser.execute(()=>document.getElementById('result-player').currentTime > 0.02),
+        {timeout:15000, timeoutMsg:'Preview result must start playing after one click'});
       await browser.$('#close-result').click();
+      await browser.waitUntil(async () => browser.execute(() => {
+        const player = document.getElementById('result-player');
+        return !document.getElementById('result-preview').open && player.paused && !player.hasAttribute('src');
+      }), {timeout:5000});
+      const editResult = async (row, end) => {
+        await (await browser.$$('[data-result="edit"]'))[row].click();
+        assert.equal(await browser.$('#editor-end-time').getValue(), end);
+        await browser.waitUntil(() => browser.execute(() => {
+          const heading = document.getElementById('editor-media-name');
+          const rect = heading.getBoundingClientRect();
+          return document.activeElement === heading && rect.top >= 0 && rect.bottom <= innerHeight;
+        }), {timeout:5000, timeoutMsg:'Edit source must bring the selected editor into view and focus its title'});
+      };
+      await editResult(1, '00:00:01.750');
+      await editResult(0, '00:00:01.000');
+      if (index === 0) {
+        await browser.execute(() => {
+          document.querySelector('[data-result="edit"]').click();
+          document.getElementById('editor-start-time').focus();
+        });
+        assert.equal(await browser.execute(() => document.activeElement.id), 'editor-start-time');
+        await browser.execute(() => {
+          document.querySelector('[data-result="edit"]').click();
+          document.getElementById('nav-settings').click();
+        });
+        assert.equal(await browser.execute(() => document.activeElement.id), 'desktop-settings');
+        await browser.$('#nav-download').click();
+      }
+      const visibleText = id => browser.execute(id => {
+        const node = document.getElementById(id);
+        return node.getClientRects().length ? node.innerText : '';
+      }, id);
+      const saveSummary = () => visibleText('processing-save-summary');
+      const saveNote = () => visibleText('processing-download-note');
       await browser.$('#processing-download-all').click();
-      await browser.waitUntil(async () => (await browser.$('#processing-download-note').getText()).startsWith('Saved '),{timeout:15000});
-      assert.equal((await browser.$('#processing-download-note').getText()).match(/Saved /g).length,2);
+      await browser.waitUntil(async () => (await saveSummary()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
+      const receipts = () => browser.execute(() => Array.from(document.querySelectorAll('#processing-saved-files li'), item => item.textContent));
+      const full = (await receipts()).map(description => {
+        assert.match(description, /^Saved /);
+        return fs.readFileSync(path.join(processedFolder, description.slice(6)));
+      });
+      assert.deepEqual(full.map(buffer => buffer.length), outputs.map(output => output.size));
+      assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
+      if (index === 0) {
+        const cancelPicker = path.join(config, 'cancel-save-picker');
+        fs.writeFileSync(cancelPicker, '', {flag:'wx'});
+        try {
+          await browser.$('#processing-download-all').click();
+          await browser.waitUntil(async () => (await saveNote()).startsWith('Save cancelled.'), {timeout:5000});
+          assert.equal(await saveSummary(), `Saved 2 of 2 files to ${processedFolder}.`);
+          assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
+        } finally { fs.unlinkSync(cancelPicker); }
+        const beforePartial = fs.readdirSync(processedFolder);
+        const holdPicker = path.join(config, 'hold-save-picker');
+        fs.writeFileSync(holdPicker, '', {flag:'wx'});
+        try {
+          await browser.$('#processing-download-all').click();
+          await browser.waitUntil(() => fs.existsSync(path.join(config, 'save-picker-open')), {timeout:5000});
+          // Change the second output after the dialog captured both results.
+          await editResult(1, '00:00:01.750');
+          await browser.waitUntil(() => browser.$('#conversion-start').isEnabled(), {timeout:15000});
+          await browser.$('#conversion-start').click();
+          await browser.waitUntil(async () => browser.execute(previous => {
+            const current = window.LVOVDLocalWorkspace.collectionState().entries[1].workspace.conversion.output?.assetId;
+            return Boolean(current && current !== previous);
+          }, outputs[1].assetId), {timeout:25000});
+        } finally { fs.unlinkSync(holdPicker); }
+        await browser.waitUntil(async () => (await saveSummary()) === `Saved 1 of 2 files to ${processedFolder}.`, {timeout:15000});
+        const partial = await receipts(), added = fs.readdirSync(processedFolder).filter(name => !beforePartial.includes(name));
+        assert.deepEqual(added, [partial[0].slice(6)]);
+        assert.deepEqual(fs.readFileSync(path.join(processedFolder, added[0])), full[0]);
+        assert.ok(partial[1].startsWith(outputs[1].filename + ' — '));
+        assert.equal(await browser.$('#processing-save-details').getAttribute('open') !== null, true);
+        assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
+        // Replace the selected directory temporarily. A receipt must never open the replacement.
+        const moved = processedFolder + '-moved';
+        fs.renameSync(processedFolder, moved);
+        try {
+          await browser.$('#processing-download-all').click();
+          await browser.waitUntil(async () => (await saveNote()).startsWith('Save failed.'), {timeout:5000});
+          assert.equal(await saveSummary(), `Saved 1 of 2 files to ${processedFolder}.`);
+          assert.deepEqual(await receipts(), partial);
+          fs.mkdirSync(processedFolder);
+          await browser.$('#processing-open-folder').click();
+          await browser.waitUntil(async () => (await browser.$('#processing-folder-error').getText()).includes('replaced'), {timeout:5000});
+          assert.deepEqual(fs.readdirSync(processedFolder), []);
+        } finally {
+          if (fs.existsSync(processedFolder)) fs.rmdirSync(processedFolder);
+          fs.renameSync(moved, processedFolder);
+        }
+        if (process.platform === 'win32') {
+          await browser.$('#processing-open-folder').click();
+          await browser.waitUntil(async () => (await browser.$('#processing-folder-error').getText()) === 'Opened folder.', {timeout:10000});
+        }
+        // Retry only the current second file. The first export remains intact.
+        const beforeRetry = fs.readdirSync(processedFolder);
+        const second = (await browser.$$('#processing-results-list [data-processing-result]'))[1];
+        await second.$('[data-result="download"]').click();
+        await browser.waitUntil(async () => (await second.$('[data-result="status"]').getText()).startsWith('Saved '), {timeout:15000});
+        const retryName = (await second.$('[data-result="status"]').getText()).slice(6);
+        assert.deepEqual(fs.readdirSync(processedFolder).filter(name => !beforeRetry.includes(name)), [retryName]);
+        assert.deepEqual(fs.readFileSync(path.join(processedFolder, added[0])), full[0]);
+        await editResult(0, '00:00:01.000');
+      }
       if (index === 3) {
         for (const [container,codec] of [['opus','opus'],['flac','flac'],['wav','pcm_s24le']]) {
           const previous=await browser.execute(()=>window.LVOVDLocalWorkspace.collectionState().entries[0].workspace.conversion.output.assetId);
@@ -302,8 +411,13 @@ async function expectEmptyFiles(browser) {
   await browser.waitUntil(async () => (await browser.$$('#processing-file-list option')).length === 0, { timeout: 10000 });
 }
 (async () => {
-  const provider = await startProvider(video);
-  try { await scenario(video, 0, provider); }
+  const provider = await startProvider(video, ffmpeg);
+  try {
+    await scenario(video, 0, provider);
+    const fixture = await replay.start(provider, ffmpeg);
+    try { await scenario(audio, 1, undefined, fixture); }
+    finally { await fixture.close(); }
+  }
   finally { await provider.close(); }
-  await scenario(audio, 1); await scenario(tailIndex, 2); await scenario(wave, 3);
+  await scenario(tailIndex, 2); await scenario(wave, 3);
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -4,16 +4,26 @@
   const el = id => document.getElementById(id);
   const url = el('download-url'), message = el('download-message');
   const previewButton = el('download-preview-button'), start = el('download-start');
+  const edit = el('download-edit-source'), editNote = el('download-edit-note');
   const folders = [el('download-choose-folder'), el('settings-choose-folder')];
   const rows = new Map();
   const states = { queued: 'Queued', downloading: 'Downloading', processing: 'Processing',
     saving: 'Saving', saved: 'Saved', saveFailed: 'Save failed', failed: 'Failed', cancelling: 'Cancelling', cancelled: 'Cancelled' };
   let ready = false, choosing = false, submitting = false, previewing = false;
+  let openingEditor = false, intakeBusy = false;
   let destination = null, preview = null, previewGeneration = 0, revision = -1;
 
+  const options = globalThis.LVOVDDownloadOptions(controls);
   function controls() {
     previewButton.disabled = !ready || previewing || !url.value.trim();
-    start.disabled = !ready || choosing || submitting || !destination || !preview?.canDownload;
+    start.disabled = !ready || choosing || submitting || !destination || !(preview && (preview.choices ? options.valid() : preview.canDownload));
+    const choices = preview?.choices;
+    const content = choices?.available ? options.editorSource().content : null;
+    const video = content === 'av' || content === 'video';
+    edit.disabled = !ready || openingEditor || intakeBusy || !video || !choices[content];
+    editNote.textContent = !choices?.available ? '' : openingEditor || intakeBusy ? 'Local Media is adding files.' :
+      video ? 'Edit opens the full source. Ranges, extras and SponsorBlock apply to Download.' :
+      choices.av || choices.video ? 'Choose Video + Audio or Video Only to edit the source.' : 'This source has no editable video.';
     for (const button of folders) button.disabled = !ready || choosing;
     for (const id of ['settings-folder', 'download-folder']) el(id).textContent = destination?.path || 'Choose a folder';
     for (const row of rows.values()) row.retry.disabled = !destination || choosing || row.pending;
@@ -37,14 +47,15 @@
     el('download-preview').hidden = false;
     el('download-title').textContent = value.title;
     el('download-facts').textContent = [value.source, Number.isFinite(value.duration) ? time(value.duration) : 'Duration unknown',
-      value.profile === 'compatible' ? 'Compatible MP4' : 'Maximum Quality'].filter(Boolean).join(' · ');
+      value.choices ? '' : value.profile === 'compatible' ? 'Compatible MP4' : 'Maximum Quality'].filter(Boolean).join(' · ');
     el('download-filename').textContent = value.canDownload ? value.filename : '';
+    options.reset(value);
     const artwork = el('download-artwork');
     const hasArt = typeof value.artwork === 'string' && /^data:image\/(?:jpeg|png|webp);base64,/.test(value.artwork);
     artwork.hidden = !hasArt;
     if (hasArt) artwork.src = value.artwork;
     else artwork.removeAttribute('src');
-    message.textContent = value.message || (destination ? '' : 'Choose an output folder to download this video.');
+    message.textContent = (value.choices?.available ? '' : value.message) || (destination ? '' : 'Choose an output folder to download this video.');
   }
   url.addEventListener('input', resetPreview);
   el('download-form').addEventListener('submit', async event => {
@@ -75,16 +86,35 @@
     finally { choosing = false; controls(); }
   }
   for (const button of folders) button.addEventListener('click', choose);
+  document.addEventListener('lvovd:workspace-state', event => {
+    intakeBusy = Boolean(event.detail.nativeImporting);
+    controls();
+  });
+  edit.addEventListener('click', async () => {
+    if (edit.disabled) return;
+    const generation = previewGeneration, previewId = preview.previewId;
+    const selection = options.editorSource();
+    openingEditor = true; controls();
+    try {
+      // Let button activation finish before moving keyboard focus to Local Media.
+      await Promise.resolve();
+      if (generation !== previewGeneration) return;
+      const local = el('desktop-local');
+      local.focus({ preventScroll: true });
+      local.scrollIntoView({ block: 'start' });
+      await globalThis.LVOVDLocalWorkspace.openDownloadSource(previewId, selection, () => generation === previewGeneration);
+    } catch (error) {
+      if (generation === previewGeneration) message.textContent = error.message;
+    } finally { openingEditor = false; controls(); }
+  });
   start.addEventListener('click', async () => {
     if (start.disabled) return;
     const generation = previewGeneration;
     submitting = true; controls();
     try {
-      const snapshot = await native.call('start_download', { request: { previewId: preview.previewId, destinationId: destination.id } });
+      const snapshot = await native.call('start_download', { request: { previewId: preview.previewId, destinationId: destination.id, ...(preview.choices ? {options:options.read()} : {}) } });
       render(snapshot);
-      if (generation === previewGeneration) {
-        resetPreview(); url.value = ''; message.textContent = 'Added to the download queue.'; url.focus();
-      }
+      if (generation === previewGeneration) message.textContent = 'Added to the download queue.';
     } catch (error) { if (generation === previewGeneration) message.textContent = error.message; }
     finally { submitting = false; controls(); }
   });
@@ -95,10 +125,14 @@
   }
   function createRow(id) {
     const li = child(el('download-jobs'), 'li');
-    const row = { li, title: child(li, 'strong'), status: child(li, 'p'), path: child(li, 'p'),
-      failure: child(li, 'p'), note: child(li, 'p'), pending: false };
+    const row = { li, title: child(li, 'strong'), status: child(li, 'p'), meter: child(li, 'div'),
+      path: child(li, 'p'), failure: child(li, 'p'), note: child(li, 'p'), pending: false };
     li.dataset.jobId = id;
     row.status.className = 'download-job-status';
+    row.meter.className = 'progress-track';
+    row.meter.setAttribute('role', 'progressbar');
+    row.fill = child(row.meter, 'div');
+    row.fill.className = 'progress-bar';
     row.note.setAttribute('role', 'status');
     const actions = child(li, 'div');
     actions.className = 'download-job-actions';
@@ -114,6 +148,7 @@
         row.pending = true; button.disabled = true; row.note.textContent = '';
         try {
           const request = { jobId: id };
+          if (['open','reveal'].includes(key) && row.files.options.length>1) request.index=row.files.selectedIndex;
           if (key === 'retry') request.destinationId = destination.id;
           const result = await native.call(command, { request });
           if (result) render(result);
@@ -121,6 +156,9 @@
         finally { row.pending = false; button.disabled = false; controls(); }
       });
     }
+    row.files = child(actions,'select');
+    row.files.setAttribute('aria-label','Saved output');
+    row.files.addEventListener('change',()=>{ row.path.textContent=row.files.selectedOptions[0]?.dataset.path || ''; });
     return row;
   }
   function render(snapshot) {
@@ -133,9 +171,14 @@
       row.title.textContent = job.title;
       row.li.dataset.status = job.status;
       const progress = job.progress;
-      const details = [states[job.status] || job.status];
+      const stage = states[job.status] || job.status;
+      const details = [stage];
+      const percent = job.status === 'saved' ? 100 : job.status === 'downloading' ? progress?.percent : null;
+      row.meter.hidden = !['downloading', 'processing', 'saving', 'cancelling', 'saved'].includes(job.status);
+      row.meter.setAttribute('aria-label', stage + ' · ' + job.title);
+      globalThis.LVOVDProgress(row.fill, percent);
       if (job.status === 'downloading' && progress) {
-        if (Number.isFinite(progress.percent)) details.push(Math.round(progress.percent) + '%');
+        if (Number.isFinite(percent)) details.push(Math.floor(percent) + '%');
         if (Number.isFinite(progress.speed)) details.push((progress.speed / 1048576).toFixed(1) + ' MiB/s');
         if (Number.isFinite(progress.eta)) details.push(time(progress.eta) + ' remaining');
       }
@@ -144,7 +187,16 @@
       row.failure.textContent = typeof job.error === 'string' ? job.error : job.error?.message || '';
       row.cancel.hidden = !['queued', 'downloading', 'processing'].includes(job.status);
       row.retry.hidden = job.status !== 'saveFailed';
-      row.open.hidden = row.reveal.hidden = job.status !== 'saved';
+      const files = job.savedFiles || [];
+      while(row.files.options.length<files.length) {
+        const index=row.files.options.length;
+        const file=files[index], option=new Option(file.name,String(index));
+        option.dataset.path=file.name+' · '+file.folder;
+        row.files.add(option);
+      }
+      if (files.length) row.path.textContent=row.files.selectedOptions[0]?.dataset.path || '';
+      row.files.hidden=files.length<2;
+      row.open.hidden = row.reveal.hidden = job.status !== 'saved' && !files.length;
       row.retry.disabled = !destination || choosing || row.pending;
     }
     for (const [id, row] of rows) if (!seen.has(id)) { row.li.remove(); rows.delete(id); }

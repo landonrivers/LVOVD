@@ -1,6 +1,49 @@
-//! Only the Rust download owner can resolve a saved result to this path.
+//! Native open/reveal actions receive paths resolved by the Rust owner.
 use lvovd_core::{AppError, Result};
 use std::path::Path;
+
+pub(crate) fn open_folder(path: &Path) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    let opened = {
+        use std::{os::windows::ffi::OsStrExt, ptr};
+        use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
+        let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        let explore: Vec<u16> = "explore\0".encode_utf16().collect();
+        unsafe {
+            (ShellExecuteW(
+                ptr::null_mut(),
+                explore.as_ptr(),
+                path.as_ptr(),
+                ptr::null(),
+                ptr::null(),
+                SW_SHOWNORMAL,
+            ) as isize)
+                > 32
+        }
+    };
+    #[cfg(target_os = "macos")]
+    let opened = std::process::Command::new("/usr/bin/open")
+        .args(["-a", "/System/Library/CoreServices/Finder.app"])
+        .arg(path)
+        .status()
+        .is_ok_and(|s| s.success());
+    #[cfg(target_os = "linux")]
+    let opened = {
+        use gio::prelude::*;
+        gio::AppInfo::default_for_type("inode/directory", false).is_some_and(|app| {
+            app.launch(&[gio::File::for_path(path)], None::<&gio::AppLaunchContext>)
+                .is_ok()
+        })
+    };
+    if opened {
+        Ok(())
+    } else {
+        Err(AppError::new(
+            "EXPORT_OPEN",
+            "Could not open the folder. Use the displayed path in your file manager.",
+        ))
+    }
+}
 
 pub(crate) fn show(path: &Path, reveal: bool) -> Result<()> {
     if platform_show(path, reveal) {
@@ -11,7 +54,7 @@ pub(crate) fn show(path: &Path, reveal: bool) -> Result<()> {
             if reveal {
                 "Could not show the saved file in its folder."
             } else {
-                "Could not open this video. Use Show in Folder to choose a player."
+                "Could not open this file. Use Show in Folder to choose an application."
             },
         ))
     }

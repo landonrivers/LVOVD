@@ -5,6 +5,7 @@ use crate::{
     analysis::{Analysis, Kind},
     assets::{Asset, Assets, Source},
     capabilities::CapabilityDiscovery,
+    downloads::{Downloads, EditorAcquisition},
     media::{Library, Reader},
     process::CancellationToken,
     processing_operation::{Admission, Processing, Published, ReviewRequest},
@@ -39,9 +40,9 @@ struct Workbench {
     revision: u64,
     sources: Vec<Source>,
     retired: Vec<Retired>,
-    intake_slots: usize,
     intake_failure: Option<AppError>,
     intake_cancel: Option<CancellationToken>,
+    editor_acquisition_id: Option<Uuid>,
     discarded: bool,
     cancel: CancellationToken,
     touched: Instant,
@@ -76,6 +77,7 @@ pub struct Snapshot {
     pub queue_revision: u64,
     pub discarded: bool,
     pub importing: bool,
+    pub editor_acquisition_id: Option<Uuid>,
     pub intake_failure: Option<AppError>,
     pub sources: Vec<Source>,
     pub cleanup: Vec<Uuid>,
@@ -92,6 +94,11 @@ pub struct Snapshot {
 pub struct Intake {
     pub sources: Vec<Source>,
     pub failure: Option<AppError>,
+}
+
+enum IntakeFile {
+    Local(PathBuf),
+    Download(Arc<Downloads>, Box<EditorAcquisition>),
 }
 
 impl Workbenches {
@@ -139,11 +146,11 @@ impl Workbenches {
                 revision: 1,
                 sources: Vec::new(),
                 retired: Vec::new(),
-                intake_slots: 0,
                 intake_failure: None,
                 intake_cancel: None,
+                editor_acquisition_id: None,
                 discarded: false,
-                cancel: CancellationToken::new(),
+                cancel: self.0.assets.cancellation().child_token(),
                 touched: Instant::now(),
                 admission_epoch: Arc::new(AtomicU64::new(0)),
             });
@@ -175,7 +182,8 @@ impl Workbenches {
             revision: entry.revision + self.0.analysis.revision(),
             queue_revision: queue.revision,
             discarded: entry.discarded,
-            importing: entry.intake_slots > 0,
+            importing: entry.intake_cancel.is_some(),
+            editor_acquisition_id: entry.editor_acquisition_id,
             intake_failure: entry.intake_failure.clone(),
             sources: entry.sources.clone(),
             cleanup: entry.retired.iter().map(|entry| entry.id).collect(),
@@ -237,29 +245,69 @@ impl Workbenches {
     /// Only native picker/drop code supplies paths. A disconnected caller does
     /// not abandon the batch: its collection receives the eventual owned state.
     pub async fn import(&self, id: Uuid, paths: Vec<PathBuf>) -> Result<Intake> {
+        self.start_intake(id, paths.into_iter().map(IntakeFile::Local).collect(), None)
+            .await
+    }
+
+    pub async fn edit_download_source(
+        &self,
+        id: Uuid,
+        operation_id: Uuid,
+        downloads: Arc<Downloads>,
+        acquisition: EditorAcquisition,
+    ) -> Result<(Uuid, Snapshot)> {
+        let intake = self
+            .start_intake(
+                id,
+                vec![IntakeFile::Download(downloads, Box::new(acquisition))],
+                Some(operation_id),
+            )
+            .await?;
+        if let Some(error) = intake.failure {
+            return Err(error);
+        }
+        let source_id = intake.sources.first().ok_or_else(gone)?.asset_id;
+        let snapshot = self.snapshot(id)?;
+        if snapshot.discarded
+            || !snapshot
+                .sources
+                .iter()
+                .any(|source| source.asset_id == source_id)
+        {
+            return Err(gone());
+        }
+        Ok((source_id, snapshot))
+    }
+
+    async fn start_intake(
+        &self,
+        id: Uuid,
+        files: Vec<IntakeFile>,
+        operation_id: Option<Uuid>,
+    ) -> Result<Intake> {
         let (send, receive) = tokio::sync::oneshot::channel();
         {
             let mut registry = self.0.registry.lock().unwrap();
             let entry = active(&mut registry, id)?;
-            if paths.is_empty() || paths.len() > MAX_FILES {
+            if files.is_empty() || files.len() > MAX_FILES {
                 return Err(AppError::new(
                     "INTAKE_LIMIT",
                     "Choose between one and twenty files.",
                 ));
             }
-            if entry.intake_slots != 0 {
+            if entry.intake_cancel.is_some() {
                 return Err(AppError::new(
                     "INTAKE_BUSY",
                     "Wait for this workbench's import to finish.",
                 ));
             }
-            if entry.sources.len() + entry.retired.len() + paths.len() > MAX_FILES {
+            if entry.sources.len() + entry.retired.len() + files.len() > MAX_FILES {
                 return Err(AppError::new(
                     "WORKBENCH_FULL",
                     "Remove files and finish cleanup before adding more. A workbench holds twenty files.",
                 ));
             }
-            entry.intake_slots = paths.len();
+            entry.editor_acquisition_id = operation_id;
             entry.intake_failure = None;
             entry.revision += 1;
             entry.touched = Instant::now();
@@ -267,7 +315,7 @@ impl Workbenches {
             entry.intake_cancel = Some(cancel.clone());
             let owner = self.clone();
             self.0.tasks.spawn(async move {
-                let result = owner.import_owned(id, paths, cancel).await;
+                let result = owner.import_owned(id, files, cancel).await;
                 let _ = send.send(result);
             });
         }
@@ -281,7 +329,7 @@ impl Workbenches {
     async fn import_owned(
         &self,
         id: Uuid,
-        paths: Vec<PathBuf>,
+        files: Vec<IntakeFile>,
         cancel: CancellationToken,
     ) -> Result<Intake> {
         let mut result = Intake {
@@ -296,15 +344,24 @@ impl Workbenches {
         if admission.is_none() {
             result.failure = Some(cancelled());
         }
-        for path in paths {
+        for file in files {
             if result.failure.is_some() {
                 break;
             }
-            let imported = self
-                .0
-                .assets
-                .import_cancellable(&path, &self.0.ffprobe, &cancel)
-                .await;
+            let imported = match file {
+                IntakeFile::Local(path) => {
+                    self.0
+                        .assets
+                        .import_cancellable(&path, &self.0.ffprobe, &cancel)
+                        .await
+                }
+                IntakeFile::Download(downloads, acquisition) => {
+                    self.0
+                        .assets
+                        .acquire_source(&downloads, &acquisition, &self.0.ffprobe, &cancel)
+                        .await
+                }
+            };
             let mut registry = self.0.registry.lock().unwrap();
             // An importing collection is retained even after discard.
             let entry = registry.entries.iter_mut().find(|e| e.id == id).unwrap();
@@ -333,21 +390,28 @@ impl Workbenches {
                     result.failure = Some(error);
                 }
             }
-            entry.intake_slots -= 1;
             entry.revision += 1;
         }
         let mut registry = self.0.registry.lock().unwrap();
         let entry = registry.entries.iter_mut().find(|e| e.id == id).unwrap();
-        entry.intake_slots = 0;
         entry.intake_cancel = None;
+        entry.editor_acquisition_id = None;
         entry.intake_failure = result.failure.clone();
         entry.revision += 1;
         Ok(result)
     }
     pub fn cancel_intake(&self, id: Uuid) -> Result<()> {
+        self.cancel_intake_operation(id, None)
+    }
+    pub fn cancel_edit_download_source(&self, id: Uuid, operation_id: Uuid) -> Result<()> {
+        self.cancel_intake_operation(id, Some(operation_id))
+    }
+    fn cancel_intake_operation(&self, id: Uuid, operation: Option<Uuid>) -> Result<()> {
         let mut registry = self.0.registry.lock().unwrap();
         let entry = active(&mut registry, id)?;
-        if let Some(cancel) = &entry.intake_cancel {
+        if entry.editor_acquisition_id == operation
+            && let Some(cancel) = &entry.intake_cancel
+        {
             cancel.cancel();
         }
         Ok(())
@@ -549,14 +613,14 @@ impl Workbenches {
         }
         registry
             .entries
-            .retain(|e| !(e.discarded && e.intake_slots == 0 && e.retired.is_empty()));
+            .retain(|e| !(e.discarded && e.intake_cancel.is_none() && e.retired.is_empty()));
         result.and(analysis_result)
     }
     pub fn expire(&self) {
         let mut registry = self.0.registry.lock().unwrap();
         let jobs = self.0.queue.snapshot().jobs;
         for entry in &mut registry.entries {
-            let busy = entry.intake_slots > 0
+            let busy = entry.intake_cancel.is_some()
                 || jobs.iter().any(|j| {
                     matches!(
                         j.status,
@@ -706,6 +770,17 @@ impl Workbenches {
         self.member(id, lease.descriptor().source_id)?;
         Ok(lease)
     }
+    pub fn batch_result(
+        &self,
+        id: Uuid,
+        result: Uuid,
+    ) -> Result<crate::processing_operation::OutputLease> {
+        let lease = self.result(id, result)?;
+        self.0
+            .queue
+            .check_batch_result(lease.descriptor().source_id, result)?;
+        Ok(lease)
+    }
     /// The dialog and file copy may outlive selection or publication. A held
     /// lease preserves bytes, but only current membership authorizes saving.
     pub fn save_result(
@@ -714,10 +789,32 @@ impl Workbenches {
         result: crate::processing_operation::OutputLease,
         destination: &std::path::Path,
     ) -> Result<PathBuf> {
+        self.save_current_result(id, result, destination, None)
+    }
+    pub fn save_batch_result(
+        &self,
+        id: Uuid,
+        result: crate::processing_operation::OutputLease,
+        folder: &std::path::Path,
+        identity: (u64, u64),
+    ) -> Result<PathBuf> {
+        let destination = folder.join(&result.descriptor().filename);
+        self.save_current_result(id, result, &destination, Some(identity))
+    }
+    fn save_current_result(
+        &self,
+        id: Uuid,
+        result: crate::processing_operation::OutputLease,
+        destination: &std::path::Path,
+        bulk_folder: Option<(u64, u64)>,
+    ) -> Result<PathBuf> {
         let result_id = result.descriptor().result_id;
         let source_id = result.descriptor().source_id;
-        crate::export::save_copy_checked(result, destination, || {
+        crate::export::save_copy_checked(result, destination, bulk_folder, || {
             self.result(id, result_id)?;
+            if bulk_folder.is_some() {
+                self.0.queue.check_batch_result(source_id, result_id)?;
+            }
             if self
                 .0
                 .processing

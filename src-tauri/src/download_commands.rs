@@ -19,6 +19,28 @@ pub(crate) struct PreviewRequest {
 pub(crate) struct StartRequest {
     preview_id: Uuid,
     destination_id: Uuid,
+    #[serde(default)]
+    options: lvovd_core::downloads::DownloadOptions,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct EditSourceRequest {
+    workbench_id: Uuid,
+    operation_id: Uuid,
+    preview_id: Uuid,
+    options: lvovd_core::downloads::EditorSourceOptions,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CancelEditSource {
+    workbench_id: Uuid,
+    operation_id: Uuid,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditSourceReply {
+    source_id: Uuid,
+    snapshot: lvovd_core::workbenches::Snapshot,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -185,6 +207,39 @@ pub(crate) async fn preview_download(
 ) -> Result<DownloadPreview> {
     state.downloads.preview(request.url).await
 }
+
+#[tauri::command]
+pub(crate) async fn edit_download_source(
+    state: State<'_, AppState>,
+    request: EditSourceRequest,
+) -> Result<EditSourceReply> {
+    let acquisition = state
+        .downloads
+        .review_editor(request.preview_id, request.options)?;
+    let result = state
+        .workbenches
+        .edit_download_source(
+            request.workbench_id,
+            request.operation_id,
+            state.downloads.clone(),
+            acquisition,
+        )
+        .await;
+    state.publish();
+    result.map(|(source_id, snapshot)| EditSourceReply {
+        source_id,
+        snapshot,
+    })
+}
+#[tauri::command]
+pub(crate) fn cancel_edit_download_source(
+    state: State<'_, AppState>,
+    request: CancelEditSource,
+) -> Result<()> {
+    state
+        .workbenches
+        .cancel_edit_download_source(request.workbench_id, request.operation_id)
+}
 #[tauri::command]
 pub(crate) async fn start_download(
     state: State<'_, AppState>,
@@ -192,9 +247,11 @@ pub(crate) async fn start_download(
 ) -> Result<DownloadSnapshot> {
     let folder = state.destinations.capture(request.destination_id)?;
     let owner = state.downloads.clone();
-    tauri::async_runtime::spawn_blocking(move || owner.enqueue(request.preview_id, folder))
-        .await
-        .map_err(|_| AppError::new("DOWNLOAD_START", "Could not add the download. Try again."))?
+    tauri::async_runtime::spawn_blocking(move || {
+        owner.enqueue_options(request.preview_id, folder, request.options)
+    })
+    .await
+    .map_err(|_| AppError::new("DOWNLOAD_START", "Could not add the download. Try again."))?
 }
 #[tauri::command]
 pub(crate) async fn cancel_download(
@@ -214,24 +271,31 @@ pub(crate) async fn retry_download_save(
         .await
         .map_err(|_| AppError::new("SAVE_FAILED", "Could not restart saving. Try again."))?
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ExportRequest {
+    job_id: Uuid,
+    #[serde(default)]
+    index: usize,
+}
 #[tauri::command]
 pub(crate) async fn open_download(
     state: State<'_, AppState>,
-    request: DownloadJobRequest,
+    request: ExportRequest,
 ) -> Result<()> {
-    export_action(&state, request.job_id, false).await
+    export_action(&state, request.job_id, request.index, false).await
 }
 #[tauri::command]
 pub(crate) async fn reveal_download(
     state: State<'_, AppState>,
-    request: DownloadJobRequest,
+    request: ExportRequest,
 ) -> Result<()> {
-    export_action(&state, request.job_id, true).await
+    export_action(&state, request.job_id, request.index, true).await
 }
-async fn export_action(state: &AppState, job: Uuid, reveal: bool) -> Result<()> {
+async fn export_action(state: &AppState, job: Uuid, index: usize, reveal: bool) -> Result<()> {
     let owner = state.downloads.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        crate::export_actions::show(&owner.exported_path(job)?, reveal)
+        crate::export_actions::show(&owner.exported_file(job, index)?, reveal)
     })
     .await
     .map_err(|_| AppError::new("EXPORT_OPEN", "Could not open the saved file."))?
@@ -255,6 +319,20 @@ mod tests {
                 serde_json::json!({"jobId":id,"path":"/untrusted"})
             )
             .is_err()
+        );
+        let editor = serde_json::json!({
+            "workbenchId": id, "operationId": id, "previewId": id,
+            "options": {"content":"av", "profile":"compatible", "maxHeight":null, "formatIds":[]}
+        });
+        serde_json::from_value::<EditSourceRequest>(editor.clone()).expect("reviewed editor input");
+        for field in ["url", "path", "filename", "destinationId"] {
+            let mut excess = editor.clone();
+            excess[field] = "/untrusted".into();
+            assert!(serde_json::from_value::<EditSourceRequest>(excess).is_err());
+        }
+        assert!(
+            serde_json::from_value::<CancelEditSource>(serde_json::json!({"workbenchId":id}))
+                .is_err()
         );
     }
 }

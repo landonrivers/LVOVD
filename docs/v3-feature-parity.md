@@ -15,7 +15,7 @@ The only approved access-mode exception is **standalone access**: the applicatio
 
 Each receipt records platform, full commit, `native-workflow` kind, passed result, repository Actions run/job URL, mapped test files and a description of the actual scenario. A reviewer must inspect those receipts and determine whether tests cover the behavior. The validator checks completeness and references; it cannot prove that a linked test exercises the claim or that a remote run passed. Reopen a capability's status when relevant behavior changes; historical evidence is not permission to skip current CI or packaged acceptance.
 
-Ported entries describe core policies with linked Rust tests. Integrated entries identify workflows connected to the native interface; their remaining platform acceptance is explicit. Download remains missing until 8D. [8A's native playback evidence](desktop-foundation.md) and [8B's accepted checkpoint](desktop-media-policies.md) remain useful supporting evidence, not substitutes for complete workflows.
+Ported entries describe core policies with linked Rust tests. Integrated entries identify workflows connected to the native interface and list their remaining acceptance cases. Stage 8D verifies Download one capability at a time. Its [single-video evidence](desktop-first-download.md#packaged-download-checks) covers the packaged Windows live checks and the scope of the generated provider tests.
 
 ## Maintaining the register
 
@@ -30,34 +30,34 @@ Normal migration CI allows honest Missing/Ported/Integrated entries. The strict 
 
 Download is the initial application view. Preserve the existing JavaScript controls and defaults in Download, Local Media, History and Settings. Compact layout changes cannot remove options. Download audio conversion and strict Local Media FLAC remain distinct contracts. Extras, subtitles/languages, chapter outputs, SponsorBlock, advanced source formats, native save recovery and custom tools/plugins are explicit 8D work, not optional post-release enhancements.
 
-[8B](desktop-media-policies.md) and [8C](desktop-local-media.md) merged into staging. [8D.1](desktop-first-download.md) adds the first single-URL Download workflow. Further 8D stages cover single-source options, playlists, both acquisition handoffs, History, multi-output saving and provider management. 8E completes navigation, settings, lifecycle and cutover. 8F validates packages, updates and maintenance. Stage PRs target `staging/v3-desktop`. Stable release requires the complete register and packaged acceptance. Roadmap #7 remains incomplete.
+[8B](desktop-media-policies.md) and [8C](desktop-local-media.md) merged into staging. [8D.1](desktop-first-download.md) adds the first single-URL Download workflow. Draft PR #56 connects single-video options and Edit Source Video to the workbench. Further 8D stages cover playlists and playlist intake, History, multi-output saving and provider management. 8E completes navigation, settings, lifecycle and cutover. 8F validates packages, updates and maintenance. Stage PRs target `staging/v3-desktop`. Stable release requires the complete register and packaged acceptance. Roadmap #7 remains incomplete.
 
 <!-- parity-table:start -->
 
-87 required entries: 49 Missing, 0 Ported, 8 Integrated, 30 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 32 Missing, 0 Ported, 17 Integrated, 38 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
 | `download.preview` | URL Preview | Download | 8D | Integrated |
-| `download.capabilities` | Source capabilities | Download | 8D | Missing |
+| `download.capabilities` | Source capabilities | Download | 8D | Integrated |
 | `download.artwork` | Preview artwork | Download / queue | 8D | Missing |
 | `download.content-av` | Video + Audio | Download | 8D | Integrated |
-| `download.content-video` | Video Only | Download | 8D | Missing |
-| `download.content-audio` | Audio Only | Download | 8D | Missing |
-| `download.content-extras` | Extras Only | Download | 8D | Missing |
-| `download.compatible` | Compatible MP4 | Download | 8D | Integrated |
-| `download.maximum` | Maximum Quality | Download | 8D | Missing |
-| `download.resolution` | Resolution cap | Download | 8D | Missing |
-| `download.format-inspection` | Source Formats details | Download / Source Formats | 8D | Missing |
-| `download.manual-formats` | Manual source selection | Download / Source Formats | 8D | Missing |
-| `download.source-audio` | Source Audio | Download | 8D | Missing |
-| `download.audio-conversion` | Download audio formats | Download | 8D | Missing |
-| `download.custom-range` | Custom time range | Download / Time range & chapters | 8D | Missing |
-| `download.chapters` | Selected chapters | Download / Time range & chapters | 8D | Missing |
-| `download.thumbnail-extra` | Thumbnail extra | Download / Extras | 8D | Missing |
-| `download.metadata-extra` | Metadata JSON extra | Download / Extras | 8D | Missing |
-| `download.subtitles` | Subtitles and captions | Download / Extras | 8D | Missing |
-| `download.sponsorblock` | SponsorBlock | Download / SponsorBlock | 8D | Missing |
+| `download.content-video` | Video Only | Download | 8D | Integrated |
+| `download.content-audio` | Audio Only | Download | 8D | Integrated |
+| `download.content-extras` | Extras Only | Download | 8D | Verified |
+| `download.compatible` | Compatible MP4 | Download | 8D | Verified |
+| `download.maximum` | Maximum Quality | Download | 8D | Verified |
+| `download.resolution` | Resolution cap | Download | 8D | Verified |
+| `download.format-inspection` | Source Formats details | Download / Source Formats | 8D | Integrated |
+| `download.manual-formats` | Manual source selection | Download / Source Formats | 8D | Integrated |
+| `download.source-audio` | Source Audio | Download | 8D | Integrated |
+| `download.audio-conversion` | Download audio formats | Download | 8D | Integrated |
+| `download.custom-range` | Custom time range | Download / Time range & chapters | 8D | Integrated |
+| `download.chapters` | Selected chapters | Download / Time range & chapters | 8D | Integrated |
+| `download.thumbnail-extra` | Thumbnail extra | Download / Extras | 8D | Verified |
+| `download.metadata-extra` | Metadata JSON extra | Download / Extras | 8D | Integrated |
+| `download.subtitles` | Subtitles and captions | Download / Extras | 8D | Verified |
+| `download.sponsorblock` | SponsorBlock | Download / SponsorBlock | 8D | Verified |
 | `download.playlists` | Playlist selection | Download / Playlist | 8D | Missing |
 | `download.coordination` | Source-request coordination | Download / Local Media intake | 8D | Missing |
 | `download.pacing` | Playlist acquisition pauses | Download / Playlist import | 8D | Missing |
@@ -68,7 +68,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.progress` | Download progress | Download / Queue | 8D | Missing |
 | `download.outputs` | Prepared Download outputs | Download / Queue | 8D | Missing |
 | `download.cleanup` | Download expiry and cleanup | Download / Queue | 8D | Missing |
-| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Missing |
+| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Verified |
 | `handoff.playlist-intake` | Add Selected to Local Media | Download → Local Media | 8D | Missing |
 | `media.intake` | Multiple local files | Local Media / Files | 8C | Verified |
 | `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Verified |

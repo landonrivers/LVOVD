@@ -20,9 +20,12 @@
   let collectionId = null, collectionPromise = null, collectionRevision = -1, jobs = [], limits = { maxEntries: 20 }, pendingUploads = [], uploadName = null;
   let batchVersion = 0, batchPlans = [], batchBusy = false;
   let allDownloads = null;
+  let savedFolder = null;
   let uploadGeneration = 0;
   let removedCleanup = new Map(), cleanupBusy = false;
   let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
+  let nativeImporting = false;
+  const acquiredPreviews = new Map();
   let sharedSettings = profiles.defaults();
   let recoveryItems = [], recoveryBusy = false, recoveryVersion = 0;
   let connectionEpoch = 0;
@@ -81,7 +84,7 @@
   function publish() {
     updateRecoveryControls();
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || recoveryBusy || importStarting || intakeBatch?.active), importActive: Boolean(recoveryBusy || importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || recoveryBusy || importStarting || intakeBatch?.active), importActive: Boolean(recoveryBusy || importStarting || intakeBatch?.active), nativeImporting, status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -188,7 +191,23 @@
         row = $('#processing-result-template').content.firstElementChild.cloneNode(true); row.dataset.processingResult = id;
         row.parts = Object.fromEntries([...row.querySelectorAll('[data-result]')].map(element => [element.dataset.result, element]));
         row.parts.edit.addEventListener('click', () => {
+          const previousFocus = document.activeElement;
           selectEntry(id);
+          if (transport) {
+            const owner = collectionId, selected = generation;
+            // Finish restoring the selected draft and let button activation
+            // finish assigning focus before moving it to the destination.
+            queueMicrotask(() => {
+              if (collectionId !== owner || generation !== selected || workspaceId !== id || !row.getClientRects().length) return;
+              const focused = document.activeElement;
+              if (focused !== previousFocus && focused !== row.parts.edit && focused !== document.body) return;
+              const visible = !$('#media-editor').hidden;
+              const target = visible ? $('#editor-media-name') : $('#processing-file-list');
+              target.focus({ preventScroll: true });
+              (visible ? $('#media-editor') : ready).scrollIntoView({ block: 'start', behavior: 'instant' });
+            });
+            return;
+          }
           $('#processing-file-list').focus({ preventScroll: true });
           $('#local-media-ready').scrollIntoView({ block: 'start', behavior: 'instant' });
         });
@@ -238,7 +257,8 @@
     const all = $('#processing-download-all');
     all.hidden = live.size < 2;
     all.disabled = Boolean(allDownloads) || discarding || completed !== live.size || downloads !== completed || queued > 0 || running > 0;
-    all.textContent = allDownloads ? `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…` : `${transport ? 'Save' : 'Download'} All (${downloads})`;
+    if (allDownloads) all.textContent = transport ? 'Saving…' : `Requesting ${allDownloads.index}/${allDownloads.outputs.length}…`;
+    else all.textContent = `${transport ? 'Save' : 'Download'} All (${downloads})`;
   }
   function describeProcessingResult(output, currentRevision) {
     if (!output) return {};
@@ -279,6 +299,27 @@
     $('#processing-results-title').focus({ preventScroll: true });
     $('#processing-results').scrollIntoView({ block: 'start', behavior: 'instant' });
   }
+  function clearSaveReceipt() {
+    savedFolder = null;
+    $('#processing-save-receipt').hidden = true;
+    $('#processing-save-errors').hidden = true;
+    $('#processing-save-errors').replaceChildren();
+    $('#processing-save-summary').textContent = '';
+    $('#processing-saved-files').replaceChildren();
+    $('#processing-folder-error').textContent = '';
+  }
+  $('#processing-open-folder').addEventListener('click', async () => {
+    const folder = savedFolder, button = $('#processing-open-folder');
+    if (!folder || folder.owner !== collectionId || button.disabled) return;
+    button.disabled = true;
+    $('#processing-folder-error').textContent = '';
+    try {
+      await transport.openFolder(folder.owner, folder.id);
+      if (savedFolder === folder) $('#processing-folder-error').textContent = 'Opened folder.';
+    }
+    catch (error) { if (savedFolder === folder) $('#processing-folder-error').textContent = error.message; }
+    finally { if (savedFolder === folder) button.disabled = false; }
+  });
   $('#processing-download-all').addEventListener('click', async () => {
     // Recheck the current authoritative results at the user's click. Never
     // substitute a previous output for a failed/cancelled/latest pending job.
@@ -289,12 +330,39 @@
       return output?.downloadUrl ? [{ id, assetId: output.assetId, planKey: output.planKey, url: output.downloadUrl, filename: output.filename }] : [];
     });
     if (transport) {
-      const owner = collectionId, note = $('#processing-download-note'); note.hidden = false; note.textContent = 'Saving…';
-      allDownloads = { outputs, index: 0 }; renderProcessingResults();
-      try { const result = await transport.saveAll(outputs);
-        if (owner === collectionId) note.textContent = result ? result.files.map(file => file.saved ? `Saved ${file.filename}` : `${file.filename}: ${file.error}`).join(' · ') : 'Save cancelled. Prepared results remain available.';
-      } catch (error) { if (owner === collectionId) note.textContent = error.message; }
-      finally { allDownloads = null; renderProcessingResults(); }
+      const run = { collectionId, outputs }, note = $('#processing-download-note');
+      allDownloads = run; renderProcessingResults();
+      $('#processing-save-errors').hidden = true; $('#processing-save-errors').replaceChildren();
+      note.hidden = false; note.textContent = 'Saving…';
+      try {
+        const result = await transport.saveAll(run.collectionId, outputs);
+        if (allDownloads !== run || collectionId !== run.collectionId) return;
+        if (!result) { note.textContent = 'Save cancelled. Prepared results remain available.'; return; }
+        const saved = result.files.filter(file => file.saved).length;
+        const summary = `Saved ${saved} of ${result.files.length} files to ${result.folder}.`;
+        const items = result.files.map(file => {
+          const item = document.createElement('li');
+          item.textContent = file.saved ? `Saved ${file.filename}` : `${file.filename} — ${file.error}`;
+          return item;
+        });
+        if (!saved) {
+          note.textContent = summary;
+          $('#processing-save-errors').replaceChildren(...items); $('#processing-save-errors').hidden = false;
+          return;
+        }
+        note.hidden = true; note.textContent = '';
+        $('#processing-save-summary').textContent = summary;
+        $('#processing-saved-files').replaceChildren(...items);
+        savedFolder = { owner: run.collectionId, id: result.receiptId };
+        $('#processing-folder-error').textContent = '';
+        $('#processing-open-folder').disabled = false; $('#processing-open-folder').hidden = false;
+        $('#processing-save-details').open = saved !== result.files.length;
+        $('#processing-save-receipt').hidden = false;
+      } catch (error) {
+        if (allDownloads === run && collectionId === run.collectionId) note.textContent = `Save failed. ${error.message}`;
+      } finally {
+        if (allDownloads === run) { allDownloads = null; renderProcessingResults(); }
+      }
       return;
     }
     // Existing protected download endpoints own their readers. No new media
@@ -355,7 +423,16 @@
     removedCleanup = new Map((data.removedCleanup || []).map(item => [item.workspaceId, item])); renderCleanup();
     jobs = data.jobs || []; limits = data.limits || limits; intakeBatch = data.intake || null;
     renderImport();
-    if (transport) { const error = $('#native-intake-status'); error.textContent = data.intakeFailure?.message || (data.importing ? 'Copying selected files…' : ''); error.hidden = !error.textContent; $('#native-intake-cancel').hidden = !data.importing; }
+    if (transport) {
+      nativeImporting = Boolean(data.importing);
+      const note = $('#native-intake-status'), stop = $('#native-intake-cancel');
+      note.textContent = data.editorAcquisitionId ? 'Acquiring source video…' : nativeImporting ? 'Copying selected files…' : data.intakeFailure?.message || '';
+      note.hidden = !note.textContent;
+      stop.dataset.workbenchId = collectionId;
+      stop.dataset.operationId = data.editorAcquisitionId || '';
+      stop.textContent = data.editorAcquisitionId ? 'Cancel acquisition' : 'Cancel adding files';
+      stop.hidden = !nativeImporting;
+    }
     // Descriptors have no source or inspection until the real acquisition starts.
     const workspaces = [...(data.workspaces || [])];
     for (const item of intakeBatch?.items || []) if (!item.workspaceId && !item.removed && item.status === 'waiting') {
@@ -384,6 +461,7 @@
       if (dataWorkspace.playback?.url) { entry.previewRequest = false; entry.previewError = null; }
     }
     for (const [id, entry] of entries) if (entry.seenInCollection && !live.has(id)) { entries.delete(id); removedIds.add(id); invalidateBatch(); }
+    for (const id of acquiredPreviews.keys()) if (!live.has(id)) acquiredPreviews.delete(id);
     if (!entries.has(workspaceId)) { const hadSelection = Boolean(workspaceId); workspaceId = null; profile = null; snapshot = null; editor.reset(); if (entries.size) selectEntry(entries.keys().next().value); else if (hadSelection) reset(); }
     else { const entry = entries.get(workspaceId); profile = entry.profile; accept(entry.snapshot); }
     renderFiles(); processingControls(); publish();
@@ -397,6 +475,39 @@
       connect(); acceptCollection(collection); return collectionId;
     }).catch(error => { refreshRecovery(); throw error; }).finally(() => { collectionPromise = null; });
     return collectionPromise;
+  }
+  async function openDownloadSource(previewId, options, previewIsCurrent) {
+    let owner = collectionId, selection = generation;
+    try {
+      owner = await ensureCollection();
+      if (!previewIsCurrent()) return;
+      selection = generation;
+      // Exact stream IDs override the automatic profile and height.
+      const streams = options.formatIds.length ? { ids: options.formatIds } : { profile: options.profile, height: options.maxHeight };
+      const key = JSON.stringify([previewId, options.content, streams]);
+      let sourceId = [...acquiredPreviews].find(([, value]) => value === key)?.[0];
+      if (!sourceId) {
+        if (nativeImporting) throw new Error('Wait for the current intake to finish.');
+        if (entries.size >= limits.maxEntries) throw new Error('Remove a file from Local Media to make room for this source.');
+        const result = await transport.editDownloadSource({ workbenchId: owner, operationId: root.crypto.randomUUID(), previewId, options });
+        if (collectionId !== owner || !result.collection) return;
+        acceptCollection(result.collection);
+        sourceId = result.sourceId;
+        // A removal may have arrived on the workbench channel before this reply.
+        if (!entries.has(sourceId) || removedIds.has(sourceId)) return;
+        acquiredPreviews.set(sourceId, key);
+      }
+      if (!previewIsCurrent() || (selection !== generation && workspaceId !== sourceId)) return;
+      const section = $('#desktop-local');
+      if (section.hidden || ![section, $('#native-intake-cancel'), document.body].includes(document.activeElement)) return;
+      selectEntry(sourceId);
+      const target = $('#media-editor').hidden ? $('#processing-file-list') : $('#editor-media-name');
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'start' });
+    } catch (error) {
+      if (collectionId === owner && previewIsCurrent() && selection === generation) message(error.message, true);
+      throw error;
+    }
   }
   function updateRecoveryControls() {
     for (const button of panel.querySelectorAll('[data-recovery-action]')) {
@@ -578,6 +689,7 @@
     editor.reset(); ready.hidden = true; intake.hidden = false; choose.disabled = false; input.value = '';
     progress.hidden = !upload; $('#workspace-failure').hidden = true;
     clearTimeout(allDownloads?.timer); allDownloads = null;
+    clearSaveReceipt();
     $('#processing-results-list').replaceChildren(); $('#processing-download-note').hidden = true; $('#conversion-warnings').replaceChildren();
     settingsForm.reset(); message(text); renderFiles(); publish();
   }
@@ -632,15 +744,15 @@
     $('#conversion-cleanup').disabled = busy;
     $('#output-cleanup-status').textContent = snapshot?.outputCleanup?.message || (state.cleanupPending ? 'Temporary output cleanup needs a retry.' : '');
     $('#conversion-progress').hidden = !['running', 'validating', 'cancelling'].includes(state.status);
-    const bar = $('#conversion-progress-bar'); bar.classList.toggle('indeterminate', state.percent == null);
-    bar.style.width = `${state.percent == null ? 36 : Math.max(0, Math.min(100, state.percent))}%`;
+    root.LVOVDProgress($('#conversion-progress-bar'), state.percent);
     const phases = { preparing: 'Preparing', analyzing: 'Analyzing', 'pass-1': 'Pass 1', 'pass-2': 'Pass 2', encoding: 'Encoding', validating: 'Validating', retrying: 'Fitting the size target' };
     const phaseProgress = state.status === 'running' && Number.isFinite(state.phasePercent)
       ? `${Math.floor(state.phasePercent)}% of this phase${Number.isFinite(state.percent) ? ` · about ${Math.floor(state.percent)}% overall` : ' · overall progress indeterminate'}` : null;
     const queueJob = currentJob();
     const queueMessage = queueJob?.status === 'queued' ? `Queued · Draft ${queueJob.draftRevision}` : queueJob?.status === 'starting' ? `Starting · Draft ${queueJob.draftRevision}`
       : queueJob?.status === 'cancelled' ? `Cancelled · Draft ${queueJob.draftRevision}` : queueJob?.status === 'failed' ? queueJob.message : null;
-    $('#conversion-status').textContent = [queueMessage, phases[state.phase], state.message, phaseProgress, state.failure?.explanation, state.failure?.help,
+    const nativePercent = transport && Number.isFinite(state.percent) ? Math.floor(state.percent) + '%' : null;
+    $('#conversion-status').textContent = [queueMessage, phases[state.phase], state.message, phaseProgress || nativePercent, state.failure?.explanation, state.failure?.help,
       state.cleanupPending ? 'Some temporary attempt files remain. Retry cleanup or Remove File.' : null].filter(Boolean).join(' · ');
     const submitted = current?.submitted, newer = submitted && submitted.draftRevision !== current.draftRevision;
     $('#processing-draft-status').textContent = current ? [
@@ -660,8 +772,7 @@
     progress.hidden = data.status === 'ready' && !upload;
     if (!upload) {
       $('#workspace-progress-label').textContent = data.message || 'Preparing local media…';
-      const bar = $('#workspace-progress-bar'); bar.classList.toggle('indeterminate', data.percent == null);
-      bar.style.width = `${data.percent == null ? 36 : Math.max(0, Math.min(100, data.percent))}%`;
+      root.LVOVDProgress($('#workspace-progress-bar'), data.percent);
     }
     $('#workspace-failure').hidden = data.status !== 'error';
     if (data.status === 'error') {
@@ -687,7 +798,13 @@
     if (transport) {
       const owned = { close: () => {} }; source = owned;
       transport.subscribe(collectionId, data => { if (source === owned) acceptCollection(data); }, () => {
-        if (source === owned) { closeSource(); collectionId = null; collectionRevision = -1; message("Local media expired. Add files to begin again."); }
+        if (source === owned) {
+          closeSource(); collectionId = null; collectionRevision = -1; allDownloads = null;
+          acquiredPreviews.clear(); nativeImporting = false;
+          $('#native-intake-cancel').hidden = true; $('#native-intake-status').hidden = true; publish();
+          clearSaveReceipt(); $('#processing-download-note').hidden = true;
+          message("Local media expired. Add files to begin again.");
+        }
       }).then(close => { if (source === owned) owned.close = close; else close(); }).catch(error => message(error.message, true));
       return;
     }
@@ -758,6 +875,7 @@
     if (!file || upload) return;
     const uploadToken = uploadGeneration;
     if (!workspaceId) intake.hidden = true; progress.hidden = false;
+    root.LVOVDProgress($('#workspace-progress-bar'), null);
     try { await ensureCollection(); } catch (error) {
       if (uploadToken !== uploadGeneration) return;
       pendingUploads = []; starting = false; progress.hidden = true; if (!workspaceId) intake.hidden = false;
@@ -772,7 +890,7 @@
     xhr.upload.onprogress = event => {
       if (upload !== xhr) return;
       $('#workspace-progress-label').textContent = `Copying ${file.name.slice(0, 255)} · ${facts.formatBytes(event.loaded)} / ${facts.formatBytes(file.size)}`;
-      $('#workspace-progress-bar').style.width = `${Math.min(100, event.loaded / file.size * 100)}%`;
+      root.LVOVDProgress($('#workspace-progress-bar'), event.loaded / file.size * 100);
     };
     function finish(text) {
       if (upload !== xhr) return;
@@ -1181,7 +1299,7 @@
   });
   document.addEventListener('lvovd:workspace-import-playlist', event => importPlaylist(event.detail));
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
-  root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
+  root.LVOVDLocalWorkspace = { accept, openDownloadSource, profileState() { saveSelected(); return profile?.state() || null; },
     collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
   publish();
   if (transport) transport.ready.then(ensureCollection).then(refreshRecovery).catch(error => message(error.message, true));

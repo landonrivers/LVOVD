@@ -233,7 +233,11 @@ async fn foreground_jobs_preempt_analysis_and_saved_copies_are_collision_safe() 
         loop {
             f.owner.reconcile().await.unwrap();
             let s = f.owner.snapshot(f.workbench).unwrap();
-            if let Some(output) = s.results.first() {
+            if let Some(output) = s.results.first()
+                && s.jobs.first().is_some_and(|job| {
+                    job.status == lvovd_core::processing_queue::Status::Completed
+                })
+            {
                 break output.clone();
             }
             assert!(
@@ -270,6 +274,20 @@ async fn foreground_jobs_preempt_analysis_and_saved_copies_are_collision_safe() 
         "SAVE_FAILED"
     );
     assert!(!unavailable.exists());
+    let picked = f.root.path().join("picked");
+    std::fs::create_dir(&picked).unwrap();
+    let folder_id = lvovd_core::export::destination_id(&picked).unwrap();
+    std::fs::rename(&picked, f.root.path().join("original-folder")).unwrap();
+    std::fs::create_dir(&picked).unwrap();
+    let captured = f.owner.batch_result(f.workbench, output.result_id).unwrap();
+    assert_eq!(
+        f.owner
+            .save_batch_result(f.workbench, captured, &picked, folder_id)
+            .unwrap_err()
+            .code,
+        "FOLDER_CHANGED"
+    );
+    assert_eq!(std::fs::read_dir(&picked).unwrap().count(), 0);
     assert_eq!(
         f.owner
             .result(f.workbench, output.result_id)

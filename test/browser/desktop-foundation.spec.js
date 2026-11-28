@@ -35,9 +35,16 @@ async function setup(page, bridge = true, retired = false) {
           return { connectionId: ++connection, snapshot: state(fixture.active) };
         }
         if (command === 'acknowledge_workbench') return;
-        if (command === 'set_local_drop_target') return;
         if (command === 'runtime_health') return Object.fromEntries(['ffmpeg', 'ffprobe', 'ytdlp', 'providerRuntime'].map(key => [key, { installed: true, version: 'test' }]));
         if (command === 'pick_source') return new Promise(resolve => { fixture.resolvePick = i => resolve({ sources: [fixture.sources[i]], failure: null }); });
+        if (command === 'edit_download_source') return new Promise(resolve => {
+          fixture.acquisitions = (fixture.acquisitions || 0) + 1;
+          fixture.acquisition = args.request;
+          fixture.finishAcquisition = (revision, indices) => resolve({
+            sourceId: ids[1], snapshot: state(args.request.workbenchId, revision, indices)
+          });
+        });
+        if (command === 'cancel_edit_download_source') { fixture.cancelledAcquisition = args.request; return; }
         if (command === 'remove_source') return new Promise((resolve, reject) => {
           fixture.rejectRemoval = () => reject({ message: 'obsolete failure' });
           fixture.resolveRemoval = () => resolve(state(args.request.workbenchId, 2, [1], [fixture.sources[0].assetId]));
@@ -63,13 +70,79 @@ async function setup(page, bridge = true, retired = false) {
   }, {ids,retired});
   await page.addScriptTag({ path: path.join(root, 'native.js') });
   await page.addScriptTag({ path: path.join(root, 'workspace-transport.js') });
-  for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
+  for (const name of ['edit-plan','audio-waveform','media-editor','conversion-inspector','processing-profile','progress-meter','local-workspace']) await page.addScriptTag({ path: path.join(root, '../public/' + name + '.js') });
   await page.addScriptTag({ path: path.join(root, 'app.js') });
-  await page.locator('#nav-local').click();
   if (bridge) await page.waitForFunction(() => window.fixture.channels.length > 0);
   page.on('dialog', dialog => dialog.accept());
 }
 
+test('a retained editor source is reused and a delayed acquisition cannot restore removed media or take focus', async ({ page }) => {
+  await setup(page);
+  await page.evaluate(() => {
+    if (!crypto.randomUUID) crypto.randomUUID = () => '30000000-0000-4000-8000-000000000001';
+    fixture.snapshot(1, [0]);
+    fixture.edit = (preview, profile='maximum') => LVOVDLocalWorkspace.openDownloadSource(preview,
+      {content:'av',profile,maxHeight:null,formatIds:['v','a']}, () => true);
+    fixture.current = fixture.edit('preview-one');
+  });
+  await page.waitForFunction(() => !!fixture.finishAcquisition);
+  await page.evaluate(async () => {
+    document.getElementById('desktop-local').focus();
+    fixture.finishAcquisition(3, [0,1]); await fixture.current;
+    await fixture.edit('preview-one', 'compatible');
+  });
+  await expect(page.locator('#processing-file-list')).toHaveValue(ids[1]);
+  expect(await page.evaluate(() => fixture.acquisitions)).toBe(1);
+  await page.evaluate(() => { fixture.current = fixture.edit('preview-two'); });
+  await page.waitForFunction(() => fixture.acquisitions === 2);
+  await page.evaluate(() => fixture.snapshot(4, [0,1], [], null, {importing:true, editorAcquisitionId:fixture.acquisition.operationId}));
+  await page.getByRole('button', {name:'Cancel acquisition'}).click();
+  expect(await page.evaluate(() => fixture.cancelledAcquisition)).toEqual({
+    workbenchId:'20000000-0000-4000-8000-000000000001', operationId:await page.evaluate(() => fixture.acquisition.operationId)
+  });
+  await page.locator('#nav-settings').click();
+  await page.evaluate(async () => {
+    fixture.snapshot(5, [0]); fixture.finishAcquisition(4, [0,1]); await fixture.current;
+  });
+  await expect(page.locator('#desktop-settings')).toBeFocused();
+  await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+  await expect(page.locator('#processing-file-list')).toHaveValue(ids[0]);
+});
+
+test.describe('native drop targeting', () => {
+  test.use({ deviceScaleFactor: 2, viewport: { width: 960, height: 640 } });
+  test('scales both axes and accepts only visible Local Media in the main workspace', async ({ page }) => {
+    await setup(page);
+    await page.addStyleTag({ path: path.join(root, 'dist/reference.css') });
+    await page.addStyleTag({ path: path.join(root, 'styles.css') });
+    await expect(page.locator('.desktop-header nav button')).toHaveText(['Download & Edit', 'Settings']);
+    const point = selector => page.locator(selector).evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return [(rect.x + rect.width / 2) * devicePixelRatio, (rect.y + rect.height / 2) * devicePixelRatio];
+    });
+    const dropAt = coords => page.evaluate(coords => LVOVDLocalDropAt(...coords), coords);
+    const zone = await point('#media-choose-button');
+    expect(await dropAt(zone)).toBe(true);
+    expect(await dropAt(await point('#download-url'))).toBe(false);
+    expect(await dropAt(await point('#nav-download'))).toBe(false);
+    expect(await dropAt([-1, zone[1]])).toBe(false);
+    expect(await dropAt([zone[0], -1])).toBe(false);
+    await page.evaluate(() => document.querySelector('#result-preview').showModal());
+    expect(await dropAt(zone)).toBe(false);
+    await page.evaluate(() => document.querySelector('#result-preview').close());
+    await page.locator('#nav-settings').click();
+    expect(await dropAt(zone)).toBe(false);
+    await page.evaluate(() => fixture.snapshot(1, [0]));
+    await page.locator('#nav-download').click();
+    await page.locator('#desktop-local').evaluate(section => section.scrollIntoView({ block: 'start' }));
+    expect(await page.locator('#workspace-scroll').evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+    expect(await dropAt(await point('#processing-file-list'))).toBe(true);
+    const main = page.getByRole('button', { name: 'Download & Edit', exact: true });
+    await expect(main).toHaveAttribute('aria-current', 'location');
+    await main.click();
+    await expect(page.locator('#desktop-download')).toBeFocused();
+  });
+});
 
 test('desktop picker acknowledgement waits for authoritative channel membership', async ({ page }) => {
   await setup(page);
@@ -80,6 +153,28 @@ test('desktop picker acknowledgement waits for authoritative channel membership'
   await expect(page.locator('#processing-file-list option')).toHaveCount(2);
   await expect(page.locator('#local-media-name')).toHaveText('Synthetic 1');
   await expect(page.locator('#new-workbench')).toHaveCount(0);
+});
+
+test('processing progress uses the captured two-pass duration and clears the value during validation', async ({ page }) => {
+  await setup(page);
+  await page.addStyleTag({path:path.join(root, 'styles.css')});
+  await page.evaluate(ids => {
+    const f = window.fixture;
+    f.sources[0].inspection.media = {durationSeconds: 20, container: {kind:'mp4'}, video: {codec:'h264', width:320, height:180}};
+    f.job = {id: ids[1], sourceId: ids[0], draftRevision: 1, status: 'running', durationSeconds: 10,
+      progress: {outTimeUs: 5000000, pass: 2, passes: 2, attempt: 1, validating: false}};
+    f.snapshot(1,[0],[],null,{jobs:[f.job]});
+  }, ids);
+  const track = page.getByRole('progressbar', {name:'File processing'});
+  await expect(track).toHaveAttribute('aria-valuenow', '75');
+  await expect(page.locator('#conversion-status')).toContainText('Pass 2 of 2 · Attempt 1 · 75%');
+  await page.evaluate(() => {
+    window.fixture.job.progress.validating = true;
+    window.fixture.snapshot(2,[0],[],null,{jobs:[window.fixture.job]});
+  });
+  await expect(track).toBeVisible();
+  await expect(track).not.toHaveAttribute('aria-valuenow', /.+/);
+  await expect(page.locator('#conversion-status')).toHaveText('Validating output…');
 });
 for (const outcome of ['success','error']) test(`desktop late removal ${outcome} cannot replace selection or restore cleanup`, async ({ page }) => {
   await setup(page);

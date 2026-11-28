@@ -50,12 +50,109 @@ pub(crate) struct ResultsRequest {
     result_ids: Vec<Uuid>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct FolderRequest {
+    workbench_id: Uuid,
+    receipt_id: Uuid,
+}
+
+#[derive(Clone)]
+pub(crate) struct SavedFolder {
+    owner: Uuid,
+    receipt: Uuid,
+    path: std::path::PathBuf,
+    identity: (u64, u64),
+}
+
+impl SavedFolder {
+    fn check(&self) -> Result<()> {
+        if lvovd_core::export::destination_id(&self.path).ok() != Some(self.identity) {
+            return Err(AppError::new(
+                "FOLDER_CHANGED",
+                "The saved folder was moved, replaced or disconnected.",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn open_result_folder(
+    state: State<'_, AppState>,
+    request: FolderRequest,
+) -> Result<()> {
+    let saved = state
+        .saved_folder
+        .lock()
+        .unwrap()
+        .as_ref()
+        .filter(|s| s.owner == request.workbench_id && s.receipt == request.receipt_id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError::new("RECEIPT_GONE", "This save receipt is no longer available.")
+        })?;
+    let workbenches = state.workbenches.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if workbenches.snapshot(request.workbench_id)?.discarded {
+            return Err(AppError::new(
+                "RECEIPT_GONE",
+                "This workbench has been discarded.",
+            ));
+        }
+        saved.check()?;
+        crate::export_actions::open_folder(&saved.path)
+    })
+    .await
+    .map_err(|_| AppError::new("EXPORT_OPEN", "Could not open the saved folder."))?
+}
+
+#[derive(Serialize)]
+pub(crate) struct FileReceipt {
+    filename: String,
+    saved: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BatchReceipt {
+    folder: String,
+    receipt_id: Option<Uuid>,
+    files: Vec<FileReceipt>,
+}
+
+// Emulate a human leaving the native folder dialog open. Only test builds
+// recognize these markers; the results are captured and published normally.
+#[cfg(feature = "test-driver")]
+async fn wait_for_test_folder_picker() -> Result<bool> {
+    let Some(config) = std::env::var_os("LVOVD_DESKTOP_TEST_CONFIG").map(std::path::PathBuf::from)
+    else {
+        return Ok(true);
+    };
+    let hold = config.join("hold-save-picker");
+    if hold.is_file() {
+        tokio::fs::write(config.join("save-picker-open"), b"")
+            .await
+            .map_err(|_| AppError::new("TEST_PICKER", "Could not signal the test picker."))?;
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            while hold.is_file() {
+                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            }
+        })
+        .await
+        .map_err(|_| AppError::new("TEST_PICKER", "Test picker timed out."))?;
+    }
+    Ok(!config.join("cancel-save-picker").is_file())
+}
+
 #[tauri::command]
 pub(crate) async fn save_results(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ResultsRequest,
-) -> Result<Option<Value>> {
+) -> Result<Option<BatchReceipt>> {
     use tauri_plugin_dialog::DialogExt;
     if request.result_ids.is_empty() || request.result_ids.len() > 20 {
         return Err(AppError::new(
@@ -72,12 +169,16 @@ pub(crate) async fn save_results(
                 "A prepared result was selected twice.",
             ));
         }
-        results.push(state.workbenches.result(request.workbench_id, id)?);
+        results.push(state.workbenches.batch_result(request.workbench_id, id)?);
     }
     let _picker = state
         .picker_admission
         .try_lock()
         .map_err(|_| AppError::new("PICKER_BUSY", "Finish the current file dialog first."))?;
+    #[cfg(feature = "test-driver")]
+    if !wait_for_test_folder_picker().await? {
+        return Ok(None);
+    }
     #[cfg(feature = "test-driver")]
     let selected = std::env::var_os("LVOVD_DESKTOP_TEST_SAVE_FOLDER").map(std::path::PathBuf::from);
     #[cfg(not(feature = "test-driver"))]
@@ -104,30 +205,75 @@ pub(crate) async fn save_results(
     };
     let owner = state.workbenches.clone();
     let workbench_id = request.workbench_id;
-    let receipts = tauri::async_runtime::spawn_blocking(move || {
-        let mut revoked = false;
+    let (saved_folder, files) = tauri::async_runtime::spawn_blocking(move || {
+        let destination = SavedFolder {
+            owner: workbench_id,
+            receipt: Uuid::new_v4(),
+            identity: lvovd_core::export::destination_id(&folder)?,
+            path: folder,
+        };
+        let mut stopped: Option<String> = None;
         let mut receipts = Vec::new();
         for result in results {
             let name = result.descriptor().filename.clone();
-            if revoked || owner.result(workbench_id, result.descriptor().result_id).is_err() {
-                revoked = true;
-                receipts.push(serde_json::json!({"filename":name,"saved":false,"error":"Saving stopped because a captured result was removed or replaced."}));
+            if let Some(reason) = &stopped {
+                receipts.push(FileReceipt {
+                    filename: name,
+                    saved: false,
+                    error: Some(reason.clone()),
+                });
                 continue;
             }
-            let receipt = match owner.save_result(workbench_id, result, &folder.join(&name)) {
-                Ok(saved) => serde_json::json!({"filename": saved.file_name().map(|s| s.to_string_lossy().into_owned()), "saved":true}),
+            let receipt = match owner.save_batch_result(
+                workbench_id,
+                result,
+                &destination.path,
+                destination.identity,
+            ) {
+                Ok(saved) => FileReceipt {
+                    filename: saved
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                    saved: true,
+                    error: None,
+                },
                 Err(error) => {
                     if error.code != "SAVE_FAILED" && error.code != "MEDIA_READ" {
-                        revoked = true;
+                        stopped = Some(format!("Saving stopped. {}", error.message));
                     }
-                    serde_json::json!({"filename": name,"saved":false,"error":error.message})
+                    FileReceipt {
+                        filename: name,
+                        saved: false,
+                        error: Some(error.message),
+                    }
                 }
             };
             receipts.push(receipt);
         }
-        receipts
-    }).await.map_err(|_| AppError::new("SAVE_FAILED", "Saving ended unexpectedly. Prepared results remain available."))?;
-    Ok(Some(serde_json::json!({"files":receipts})))
+        Ok::<_, AppError>((destination, receipts))
+    })
+    .await
+    .map_err(|_| {
+        AppError::new(
+            "SAVE_FAILED",
+            "Saving ended unexpectedly. Prepared results remain available.",
+        )
+    })??;
+    let folder = saved_folder.path.to_string_lossy().into_owned();
+    let receipt_id = files
+        .iter()
+        .any(|f| f.saved)
+        .then_some(saved_folder.receipt);
+    if receipt_id.is_some() {
+        *state.saved_folder.lock().unwrap() = Some(saved_folder);
+    }
+    Ok(Some(BatchReceipt {
+        folder,
+        receipt_id,
+        files,
+    }))
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -548,6 +694,12 @@ mod tests {
                 .is_err()
         );
         assert!(serde_json::from_value::<Ack>(serde_json::json!({"connectionId":id,"revision":0,"queueRevision":0,"workbenchId":id})).is_err());
+        assert!(
+            serde_json::from_value::<FolderRequest>(
+                serde_json::json!({"workbenchId":id,"receiptId":id,"path":"untrusted"})
+            )
+            .is_err()
+        );
         assert!(serde_json::from_value::<ConversionRequest>(serde_json::json!({"workbenchId":id,"sourceId":id,"inputAssetId":id,"draftRevision":0,"targetId":"mp3","inputRole":"edited-output"})).is_err());
         assert!(
             serde_json::from_value::<ResultRequest>(

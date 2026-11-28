@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-edit-download-source"
+description = "Enables the cancel_edit_download_source command without any pre-configured scope."
+commands.allow = ["cancel_edit_download_source"]
+
+[[permission]]
+identifier = "deny-cancel-edit-download-source"
+description = "Denies the cancel_edit_download_source command without any pre-configured scope."
+commands.deny = ["cancel_edit_download_source"]

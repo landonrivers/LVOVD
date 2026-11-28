@@ -246,6 +246,75 @@ async fn discarded_workbench_is_not_recreated_by_queued_or_abandoned_intake() {
 }
 
 #[tokio::test]
+async fn cancelling_an_editor_acquisition_only_targets_its_own_intake() {
+    let f = Fixture::new();
+    let id = f.ids[0];
+    let operation = Uuid::new_v4();
+    let gate = f.owner.0.intake.lock().await;
+    let owner = f.owner.clone();
+    let path = f.original.clone();
+    // Hold admission to exercise the same reservation before any provider
+    // process starts. A picker and a URL share that reservation.
+    let first = tokio::spawn(async move {
+        owner
+            .start_intake(id, vec![IntakeFile::Local(path)], Some(operation))
+            .await
+    });
+    while !f.owner.snapshot(id).unwrap().importing {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        f.owner.snapshot(id).unwrap().editor_acquisition_id,
+        Some(operation)
+    );
+    assert_eq!(
+        f.owner
+            .import(id, vec![f.original.clone()])
+            .await
+            .err()
+            .unwrap()
+            .code,
+        "INTAKE_BUSY"
+    );
+    f.owner.cancel_intake(id).unwrap();
+    f.owner
+        .cancel_edit_download_source(f.ids[1], operation)
+        .unwrap();
+    f.owner
+        .cancel_edit_download_source(id, Uuid::new_v4())
+        .unwrap();
+    assert!(
+        !f.owner.0.registry.lock().unwrap().entries[0]
+            .intake_cancel
+            .as_ref()
+            .unwrap()
+            .is_cancelled()
+    );
+    f.owner.cancel_edit_download_source(id, operation).unwrap();
+    assert_eq!(
+        first.await.unwrap().unwrap().failure.unwrap().code,
+        "CANCELLED"
+    );
+    let owner = f.owner.clone();
+    let path = f.original.clone();
+    let next = tokio::spawn(async move { owner.import(id, vec![path]).await });
+    while !f.owner.snapshot(id).unwrap().importing {
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        f.owner
+            .snapshot(id)
+            .unwrap()
+            .editor_acquisition_id
+            .is_none()
+    );
+    f.owner.cancel_edit_download_source(id, operation).unwrap();
+    drop(gate);
+    assert_eq!(next.await.unwrap().unwrap().sources.len(), 1);
+    f.owner.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn disconnected_import_finishes_into_its_original_collection() {
     let f = Fixture::new();
     let gate = f.owner.0.intake.lock().await;

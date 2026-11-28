@@ -1,11 +1,21 @@
 //! Rust owns the reviewed source, worker, temporary result and saved-file receipt.
 mod artwork;
+mod editor;
+pub use editor::{EditorAcquisition, EditorSourceOptions};
+#[cfg(test)]
+mod fixture_tests;
+mod options;
+mod outputs;
 mod provider;
+use crate::export::destination_id;
+pub use options::DownloadOptions;
+use options::{Choices, Plan};
+use outputs::PreparedFile;
 #[cfg(test)]
 mod tests;
 
 use crate::{
-    AppError, Result, export, inspection,
+    AppError, Result, export,
     owned_file::Seal,
     process::{CancellationToken, Request, Supervisor},
     tools::Tools,
@@ -29,7 +39,7 @@ const CACHE_SIZE: usize = 32;
 // failed-save bytes reachable; never evict another job to admit a new one.
 const SNAPSHOT_ROWS: usize = 256;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Profile {
     Compatible,
@@ -46,6 +56,7 @@ pub struct DownloadPreview {
     pub duration: Option<f64>,
     pub profile: Profile,
     pub can_download: bool,
+    pub choices: Choices,
     pub message: Option<String>,
     pub artwork: Option<String>,
 }
@@ -74,6 +85,12 @@ pub enum DownloadStatus {
 use DownloadStatus::*;
 
 #[derive(Clone, Debug, Serialize)]
+pub struct SavedFile {
+    pub name: String,
+    pub folder: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadJob {
     pub job_id: Uuid,
@@ -84,6 +101,7 @@ pub struct DownloadJob {
     pub progress: Option<DownloadProgress>,
     pub error: Option<String>,
     pub saved_name: Option<String>,
+    pub saved_files: Vec<SavedFile>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -100,18 +118,17 @@ struct Reviewed {
 }
 struct Prepared {
     _directory: Arc<TempDir>,
-    path: PathBuf,
-    seal: Seal,
+    files: Vec<PreparedFile>,
 }
 struct Job {
     view: DownloadJob,
     url: Url,
-    profile: Profile,
+    plan: Plan,
     destination: PathBuf,
     directory_id: (u64, u64),
     cancel: CancellationToken,
     prepared: Option<Arc<Prepared>>,
-    exported: Option<(PathBuf, Seal)>,
+    exported: Vec<(PathBuf, Seal)>,
     updated: Instant,
 }
 type PreviewCell = Arc<OnceCell<Result<DownloadPreview>>>;
@@ -141,6 +158,23 @@ struct State {
     pending: HashMap<Url, PreviewCell>,
     worker: bool,
     closing: bool,
+}
+
+impl State {
+    fn reviewed(&self, preview_id: Uuid) -> Result<&Reviewed> {
+        if self.closing {
+            return Err(closed());
+        }
+        self.reviews
+            .iter()
+            .find(|r| r.preview.preview_id == preview_id && r.time.elapsed() < TTL)
+            .ok_or_else(|| {
+                AppError::new(
+                    "PREVIEW_EXPIRED",
+                    "Preview this URL again to use the source.",
+                )
+            })
+    }
 }
 
 pub struct Downloads {
@@ -219,20 +253,6 @@ pub(crate) fn provider_error(stderr: &[u8]) -> AppError {
         )
     };
     AppError::new(code, message)
-}
-fn destination_id(path: &Path) -> Result<(u64, u64)> {
-    if !path.is_absolute() || !path.is_dir() {
-        return Err(AppError::new(
-            "DESTINATION_UNAVAILABLE",
-            "Choose an available output folder.",
-        ));
-    }
-    crate::owned_file::directory_identity(path).map_err(|_| {
-        AppError::new(
-            "DESTINATION_UNAVAILABLE",
-            "Choose an available output folder.",
-        )
-    })
 }
 
 impl Downloads {
@@ -350,27 +370,18 @@ impl Downloads {
         preview_id: Uuid,
         destination: PathBuf,
     ) -> Result<DownloadSnapshot> {
+        self.enqueue_options(preview_id, destination, DownloadOptions::default())
+    }
+    pub fn enqueue_options(
+        self: &Arc<Self>,
+        preview_id: Uuid,
+        destination: PathBuf,
+        options: DownloadOptions,
+    ) -> Result<DownloadSnapshot> {
         let directory_id = destination_id(&destination)?;
         let mut state = self.state.lock().unwrap();
-        if state.closing {
-            return Err(closed());
-        }
-        let review = state
-            .reviews
-            .iter()
-            .find(|r| r.preview.preview_id == preview_id && r.time.elapsed() < TTL)
-            .ok_or_else(|| {
-                AppError::new(
-                    "PREVIEW_EXPIRED",
-                    "Preview this URL again before downloading.",
-                )
-            })?;
-        if !review.preview.can_download {
-            return Err(AppError::new(
-                "DOWNLOAD_UNAVAILABLE",
-                review.preview.message.clone().unwrap_or_default(),
-            ));
-        }
+        let review = state.reviewed(preview_id)?;
+        let plan = options.plan(&review.preview)?;
         if state.jobs.len() >= SNAPSHOT_ROWS {
             return Err(AppError::new(
                 "DOWNLOAD_QUEUE_FULL",
@@ -381,20 +392,21 @@ impl Downloads {
             view: DownloadJob {
                 job_id: Uuid::new_v4(),
                 title: review.preview.title.clone(),
-                filename: review.preview.filename.clone(),
+                filename: plan.review_name(),
                 destination: destination.display().to_string(),
                 status: Queued,
                 progress: None,
                 error: None,
                 saved_name: None,
+                saved_files: Vec::new(),
             },
             url: review.url.clone(),
-            profile: review.preview.profile,
+            plan,
             destination,
             directory_id,
             cancel: self.cancel.child_token(),
             prepared: None,
-            exported: None,
+            exported: Vec::new(),
             updated: Instant::now(),
         };
         state.jobs.push(job);
@@ -414,16 +426,21 @@ impl Downloads {
     }
     async fn work(self: Arc<Self>) {
         loop {
-            let (id, url, profile, cancel) = {
+            let (id, url, plan, cancel) = {
                 let mut state = self.state.lock().unwrap();
                 let next = state.jobs.iter().find(|j| j.view.status == Queued);
                 let Some(j) = next.filter(|_| !state.closing) else {
                     state.worker = false;
                     break;
                 };
-                (j.view.job_id, j.url.clone(), j.profile, j.cancel.clone())
+                (
+                    j.view.job_id,
+                    j.url.clone(),
+                    j.plan.clone(),
+                    j.cancel.clone(),
+                )
             };
-            let prepared = self.acquire(id, url, profile, &cancel).await;
+            let prepared = self.acquire(id, url, plan, &cancel).await;
             match prepared {
                 Ok(result) if !cancel.is_cancelled() => {
                     let to_save = {
@@ -436,11 +453,7 @@ impl Downloads {
                             job.view.status = Saving;
                             let result = Arc::new(result);
                             job.prepared = Some(result.clone());
-                            Some((
-                                result,
-                                job.destination.join(&job.view.filename),
-                                job.directory_id,
-                            ))
+                            Some((result, job.destination.clone(), job.directory_id))
                         };
                         self.publish(&mut state);
                         target
@@ -465,7 +478,7 @@ impl Downloads {
         self: &Arc<Self>,
         id: Uuid,
         url: Url,
-        profile: Profile,
+        plan: Plan,
         cancel: &CancellationToken,
     ) -> Result<Prepared> {
         let permit = tokio::select! {
@@ -487,72 +500,110 @@ impl Downloads {
                 .tempdir_in(self.root.path())
                 .map_err(|_| directory_error())?,
         );
-        let args = provider::acquire_args(&self.tools, &url, profile, dir.path())?;
-        let manager = self.clone();
-        let mut lines = provider::ProgressLines::default();
-        self.supervisor
-            .run_provider_stream_owned(
+        let permit = Arc::new(permit);
+        self.revalidate_selection(
+            &url,
+            &plan,
+            cancel,
+            dir.path(),
+            (permit.clone(), dir.clone()),
+        )
+        .await?;
+        let mut files = Vec::new();
+        for (index, section) in plan.sections.iter().enumerate() {
+            let task = dir.path().join(index.to_string());
+            tokio::fs::create_dir(&task)
+                .await
+                .map_err(|_| directory_error())?;
+            let args = provider::acquire_args(&self.tools, &url, &plan, section, &task)?;
+            let manager = self.clone();
+            let mut lines = provider::ProgressLines::default();
+            self.supervisor
+                .run_provider_stream_owned(
+                    Request {
+                        executable: &self.tools.ytdlp,
+                        args: &args,
+                        deadline: Duration::from_secs(86400),
+                        diagnostic_limit: 256 * 1024,
+                        cancel,
+                    },
+                    dir.path(),
+                    move |bytes| {
+                        lines.feed(bytes, |progress| {
+                            manager.update(id, |j| {
+                                if matches!(j.view.status, Downloading | Processing) {
+                                    j.view.status = if progress.is_some() {
+                                        Downloading
+                                    } else {
+                                        Processing
+                                    };
+                                    if progress.is_some() {
+                                        j.view.progress = progress;
+                                    }
+                                }
+                            });
+                        })
+                    },
+                    (permit.clone(), dir.clone()),
+                )
+                .await?;
+            if cancel.is_cancelled() {
+                return Err(cancelled());
+            }
+            self.update(id, |j| {
+                if j.view.status == Downloading {
+                    j.view.status = Processing;
+                }
+            });
+            files.extend(
+                outputs::collect(
+                    &self.tools,
+                    &self.supervisor,
+                    &plan,
+                    section,
+                    &task,
+                    dir.clone(),
+                    cancel,
+                )
+                .await?,
+            );
+        }
+        Ok(Prepared {
+            _directory: dir,
+            files,
+        })
+    }
+
+    async fn revalidate_selection<G: Send + 'static>(
+        &self,
+        url: &Url,
+        plan: &Plan,
+        cancel: &CancellationToken,
+        temp: &Path,
+        guard: G,
+    ) -> Result<()> {
+        if plan.selected.is_empty()
+            && !matches!(plan.options.range, options::Range::Chapters { .. })
+        {
+            return Ok(());
+        }
+        let args = provider::preview_args(&self.tools, url)?;
+        let output = self
+            .supervisor
+            .run_provider_owned(
                 Request {
                     executable: &self.tools.ytdlp,
                     args: &args,
-                    deadline: Duration::from_secs(86400),
-                    diagnostic_limit: 256 * 1024,
+                    deadline: Duration::from_secs(120),
+                    diagnostic_limit: 20 * 1024 * 1024,
                     cancel,
                 },
-                dir.path(),
-                move |bytes| {
-                    lines.feed(bytes, |progress| {
-                        manager.update(id, |j| {
-                            if matches!(j.view.status, Downloading | Processing) {
-                                j.view.status = if progress.is_some() {
-                                    Downloading
-                                } else {
-                                    Processing
-                                };
-                                if progress.is_some() {
-                                    j.view.progress = progress;
-                                }
-                            }
-                        });
-                    })
-                },
-                (permit, dir.clone()),
+                temp,
+                guard,
             )
             .await?;
-        if cancel.is_cancelled() {
-            return Err(cancelled());
-        }
-        self.update(id, |j| {
-            if j.view.status == Downloading {
-                j.view.status = Processing;
-            }
-        });
-        let path = dir.path().join("media.mp4");
-        let invalid = || {
-            AppError::new(
-                "DOWNLOAD_OUTPUT",
-                "The download did not produce a valid Video + Audio MP4. Preview the source again.",
-            )
-        };
-        let seal = Seal::capture(&path).map_err(|_| invalid())?;
-        let media = inspection::inspect(&self.tools.ffprobe, &path, cancel).await?;
-        let media = media.media.ok_or_else(invalid)?;
-        // An attached cover picture is not the requested video, and the MOV
-        // family demuxer name alone does not identify the MP4 container.
-        let tracks = media.video.zip(media.audio).ok_or_else(invalid)?;
-        if media.container.kind != "mp4"
-            || (profile == Profile::Compatible
-                && (tracks.0.codec.as_deref() != Some("h264")
-                    || tracks.1.codec.as_deref() != Some("aac")))
-        {
-            return Err(invalid());
-        }
-        seal.check(&path)?;
-        Ok(Prepared {
-            _directory: dir,
-            path,
-            seal,
-        })
+        let (fresh, _) = provider::metadata(&output.stdout, url)?;
+        plan.revalidate(&fresh)
     }
     async fn save(
         &self,
@@ -561,34 +612,61 @@ impl Downloads {
         target: PathBuf,
         directory_id: (u64, u64),
     ) {
-        let receipt = tokio::task::spawn_blocking(move || {
-            export::save_download(&result.path, &result.seal, &target, || {
-                if target.parent().and_then(|p| destination_id(p).ok()) != Some(directory_id) {
-                    return Err(AppError::new("DESTINATION_CHANGED", "The output folder changed or disconnected. Choose a folder and retry saving."));
-                }
-                Ok(())
+        let already_saved = self
+            .state
+            .lock()
+            .unwrap()
+            .jobs
+            .iter()
+            .find(|j| j.view.job_id == id)
+            .map_or(0, |j| j.exported.len());
+        for index in already_saved..result.files.len() {
+            let result = result.clone();
+            let target = target.join(&result.files[index].name);
+            let receipt = tokio::task::spawn_blocking(move || {
+                let item = &result.files[index];
+                export::save_download(&item.path, &item.seal, &target, &item.suffix, || {
+                    if target.parent().and_then(|p| destination_id(p).ok()) != Some(directory_id) {
+                        return Err(AppError::new(
+                            "DESTINATION_CHANGED",
+                            "The output folder changed or disconnected. Choose a folder and retry saving.",
+                        ));
+                    }
+                    Ok(())
+                })
             })
-        })
-        .await
-        .map_err(|_| {
-            AppError::new(
-                "SAVE_FAILED",
-                "Saving was interrupted. Retry saving the prepared file.",
-            )
-        })
-        .and_then(|r| r);
-        self.update(id, |j| match receipt {
-            Ok((path, seal)) => {
-                j.view.saved_name = path.file_name().map(|s| s.to_string_lossy().into_owned());
-                j.exported = Some((path, seal));
-                j.prepared = None;
-                j.view.status = Saved;
-                j.view.error = None;
+            .await
+            .map_err(|_| AppError::new("SAVE_FAILED", "Saving was interrupted. Retry saving the remaining files."))
+            .and_then(|receipt| receipt);
+            match receipt {
+                Ok((path, seal)) => self.update(id, |job| {
+                    let name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned();
+                    if job.exported.is_empty() {
+                        job.view.saved_name = Some(name.clone());
+                    }
+                    job.view.saved_files.push(SavedFile {
+                        name,
+                        folder: job.view.destination.clone(),
+                    });
+                    job.exported.push((path, seal));
+                }),
+                Err(err) => {
+                    self.update(id, |job| {
+                        job.view.status = SaveFailed;
+                        job.view.error = Some(err.message);
+                    });
+                    return;
+                }
             }
-            Err(err) => {
-                j.view.status = SaveFailed;
-                j.view.error = Some(err.message);
-            }
+        }
+        self.update(id, |job| {
+            job.view.status = Saved;
+            job.prepared = None;
+            job.view.error = None;
         });
     }
     pub fn retry_save(
@@ -616,7 +694,7 @@ impl Downloads {
         job.view.destination = job.destination.display().to_string();
         job.view.status = Saving;
         job.view.error = None;
-        let target = job.destination.join(&job.view.filename);
+        let target = job.destination.clone();
         let manager = self.clone();
         self.tasks.spawn(async move {
             manager.save(job_id, result, target, directory_id).await;
@@ -652,12 +730,15 @@ impl Downloads {
         Ok(self.publish(&mut state))
     }
     pub fn exported_path(&self, job_id: Uuid) -> Result<PathBuf> {
+        self.exported_file(job_id, 0)
+    }
+    pub fn exported_file(&self, job_id: Uuid, index: usize) -> Result<PathBuf> {
         let state = self.state.lock().unwrap();
         let (path, seal) = state
             .jobs
             .iter()
             .find(|j| j.view.job_id == job_id)
-            .and_then(|j| j.exported.as_ref())
+            .and_then(|j| j.exported.get(index))
             .ok_or_else(missing)?;
         seal.check(path).map_err(|_| {
             AppError::new(

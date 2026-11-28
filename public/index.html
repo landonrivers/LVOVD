@@ -297,7 +297,7 @@
         <button id="workspace-retry-cleanup" class="text-button" type="button" hidden>Retry Removed File Cleanup</button>
         <section id="workspace-progress" class="workspace-progress" hidden>
           <div class="progress-head"><strong id="workspace-progress-label">Copying local media…</strong><button id="workspace-cancel" class="text-button" type="button">Cancel / Discard</button></div>
-          <div class="progress-track" aria-hidden="true"><div id="workspace-progress-bar" class="progress-bar"></div></div>
+          <div class="progress-track" role="progressbar" aria-labelledby="workspace-progress-label"><div id="workspace-progress-bar" class="progress-bar"></div></div>
         </section>
         <section id="workspace-failure" class="preview-error workspace-failure" role="alert" hidden>
           <div><h3 id="workspace-failure-title">Local media preparation failed</h3><p id="workspace-failure-explanation"></p><p id="workspace-failure-help" class="help"></p>
@@ -404,7 +404,7 @@
           <div class="editor-head">
             <div>
               <span class="editor-label">Local editor</span>
-              <h3 id="editor-media-name">Local video</h3>
+              <h3 id="editor-media-name" tabindex="-1">Local video</h3>
               <p id="editor-media-facts" class="help"></p>
               <p id="editor-proxy-note" class="editor-proxy-note"></p>
               <p id="editor-track-warning" class="editor-track-warning" hidden>Processing uses the selected video/audio tracks. Any known omissions are shown in the processing review.</p>
@@ -552,7 +552,7 @@
               <button id="processing-batch-close" class="text-button" type="button">Close review</button>
             </section>
             <p id="conversion-status" class="status" role="status" aria-live="polite"></p>
-            <div id="conversion-progress" class="progress-track" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
+            <div id="conversion-progress" class="progress-track" role="progressbar" aria-label="File processing" aria-describedby="conversion-status" hidden><div id="conversion-progress-bar" class="progress-bar"></div></div>
             <p id="output-cleanup-status" class="help" role="status"></p>
             <button id="conversion-cleanup" class="text-button" type="button" hidden>Retry Temporary Cleanup</button>
           </section>
@@ -562,6 +562,13 @@
               <button id="processing-download-all" class="button primary" type="button" hidden>Download All</button>
             </div>
             <p id="processing-download-note" class="help" role="status" hidden></p>
+            <ul id="processing-save-errors" hidden></ul>
+            <div id="processing-save-receipt" hidden>
+              <p id="processing-save-summary" role="status"></p>
+              <button type="button" id="processing-open-folder" class="text-button" hidden>Open Folder</button>
+              <span id="processing-folder-error" role="status"></span>
+              <details id="processing-save-details"><summary>File details</summary><ul id="processing-saved-files"></ul></details>
+            </div>
             <div id="processing-results-list" tabindex="0" role="region" aria-label="Processed files"></div>
             <template id="processing-result-template">
               <article class="processing-result">
@@ -623,6 +630,7 @@
   <script src="/media-editor.js" defer></script>
   <script src="/conversion-inspector.js" defer></script>
   <script src="/processing-profile.js" defer></script>
+  <script src="/progress-meter.js" defer></script>
   <script src="/local-workspace.js" defer></script>
 </body>
 </html>

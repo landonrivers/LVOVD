@@ -92,15 +92,18 @@
           "preview_source"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -108,7 +111,8 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -118,7 +122,7 @@
         "Capability-driven controls match v2.7 for missing codec fields, unavailable formats and protected sources."
       ],
       "evidence": [],
-      "remaining": "Single-URL Video + Audio eligibility is exposed. Complete all other content modes and capability-dependent controls in 8D.2."
+      "remaining": "Verify mixed, incomplete and restricted provider metadata in packaged applications."
     },
     {
       "id": "download.artwork",
@@ -193,11 +197,14 @@
         "rust": [
           "crates/lvovd-core/src/downloads.rs",
           "crates/lvovd-core/src/downloads/provider.rs",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -205,7 +212,9 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -215,7 +224,7 @@
         "Separate streams merge; combined-only fallback preserves both tracks."
       ],
       "evidence": [],
-      "remaining": "Collect and review all four native receipts, default profile decisions, saved stream validation and the separate permitted live outcome."
+      "remaining": "Exercise combined and separate streams with companions in packaged webviews."
     },
     {
       "id": "download.content-video",
@@ -237,23 +246,34 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Only the selected video stream is returned; unavailable video-only choices remain unavailable."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify actual video-only exports and unavailable source choices on all four targets."
     },
     {
       "id": "download.content-audio",
@@ -275,23 +295,34 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Only audio is acquired/converted; format choice does not change automatic acquisition."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify the complete audio-only workflow through each packaged webview."
     },
     {
       "id": "download.content-extras",
@@ -313,23 +344,81 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "No media is acquired; require an extra and clear inactive range/SponsorBlock/manual-selection semantics."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257444",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257518",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257468",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257506",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window required an extra, then published exactly the selected JPEG and/or JSON with zero media GETs after switching from manual format, custom range and SponsorBlock Mark. Caption-only saves are also covered by this fixture."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.compatible",
@@ -350,15 +439,18 @@
           "start_download"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
-          "crates/lvovd-core/src/downloads.rs"
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -366,17 +458,66 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
         "Test separate and combined formats; never promise a source offers H.264 when it does not."
       ],
-      "evidence": [],
-      "remaining": "Verify compatible combined and separate H.264/AAC formats and the default fallback in packaged and platform workflows."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891605",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "The native Compatible MP4 card saved 360p H.264 and AAC from separate and combined sources. The card was disabled on a VP9/Opus-only source. FFprobe matched the saved codec configuration and ordered packet hashes to the generated streams. The extracted release ZIP repeated the menu checks and validated nine saved outputs."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891608",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "The native Compatible MP4 card saved 360p H.264 and AAC from separate and combined sources. The card was disabled on a VP9/Opus-only source. FFprobe matched the saved codec configuration and ordered packet hashes to the generated streams."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891555",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "The native Compatible MP4 card saved 360p H.264 and AAC from separate and combined sources. The card was disabled on a VP9/Opus-only source. FFprobe matched the saved codec configuration and ordered packet hashes to the generated streams."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891606",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "The native Compatible MP4 card saved 360p H.264 and AAC from separate and combined sources. The card was disabled on a VP9/Opus-only source. FFprobe matched the saved codec configuration and ordered packet hashes to the generated streams."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.maximum",
@@ -397,15 +538,18 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/provider.rs",
-          "crates/lvovd-core/src/downloads.rs"
+          "crates/lvovd-core/src/downloads.rs",
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/download-options.js"
         ]
       },
       "tests": {
@@ -413,17 +557,65 @@
           "test/options.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/tests.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
         ]
       },
       "acceptance": [
         "Preserve VP9/AV1/Opus where source selection yields them; do not silently transcode to match editor defaults."
       ],
-      "evidence": [],
-      "remaining": "Automatic fallback uses the best qualifying streams. Restore explicit user selection and combinations with caps and other content modes."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891605",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "Maximum Quality saved 1080p AV1/Opus without a cap, 720p VP9/Opus at 720p and 360p H.264/Opus at 360p. The combined-only and VP9/Opus-only cases retained the expected streams. FFprobe compared their codec configuration and ordered packet hashes. The extracted release ZIP repeated the menu checks and validated nine saved outputs."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891608",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Maximum Quality saved 1080p AV1/Opus without a cap, 720p VP9/Opus at 720p and 360p H.264/Opus at 360p. The combined-only and VP9/Opus-only cases retained the expected streams. FFprobe compared their codec configuration and ordered packet hashes."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891555",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Maximum Quality saved 1080p AV1/Opus without a cap, 720p VP9/Opus at 720p and 360p H.264/Opus at 360p. The combined-only and VP9/Opus-only cases retained the expected streams. FFprobe compared their codec configuration and ordered packet hashes."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891606",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Maximum Quality saved 1080p AV1/Opus without a cap, 720p VP9/Opus at 720p and 360p H.264/Opus at 360p. The combined-only and VP9/Opus-only cases retained the expected streams. FFprobe compared their codec configuration and ordered packet hashes."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.resolution",
@@ -443,23 +635,82 @@
           "review_download"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1",
+          "desktop/test/profile-fixture.cjs"
+        ]
       },
       "acceptance": [
         "Current supported heights, absent formats and audio/extras mode normalization match the reference."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891605",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "The native menu matched the generated source across eleven heights from 144p to 8640p. Profiles and Video Only filtered the menu and reset unavailable caps. Unknown dimensions disabled the control. After selecting 144p, Source Audio preserved the Opus packets and Extras Only saved a single metadata JSON. Capped video saves matched the generated tracks. The extracted release ZIP repeated the menu checks and validated nine saved outputs."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891608",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "The native menu matched the generated source across eleven heights from 144p to 8640p. Profiles and Video Only filtered the menu and reset unavailable caps. Unknown dimensions disabled the control. After selecting 144p, Source Audio preserved the Opus packets and Extras Only saved a single metadata JSON. Capped video saves matched the generated tracks."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891555",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "The native menu matched the generated source across eleven heights from 144p to 8640p. Profiles and Video Only filtered the menu and reset unavailable caps. Unknown dimensions disabled the control. After selecting 144p, Source Audio preserved the Opus packets and Extras Only saved a single metadata JSON. Capped video saves matched the generated tracks."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "0ceee416bf343f1260d6ee9a378427689a8b9ce9",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/45335550539/job/138246891606",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "The native menu matched the generated source across eleven heights from 144p to 8640p. Profiles and Video Only filtered the menu and reset unavailable caps. Unknown dimensions disabled the control. After selecting 144p, Source Audio preserved the Opus packets and Extras Only saved a single metadata JSON. Capped video saves matched the generated tracks."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.format-inspection",
@@ -479,23 +730,33 @@
           "preview_source"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/format-explorer.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Missing facts remain unknown; oversized or URL-like labels are bounded/scrubbed."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Compare all displayed facts, unknowns and truncation against the released format list."
     },
     {
       "id": "download.manual-formats",
@@ -516,23 +777,34 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/manual-source-format.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Reject stale IDs, invalid roles and selector expressions; never substitute a different format."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Exercise stale and separate-format selections against changing provider metadata on all platforms."
     },
     {
       "id": "download.source-audio",
@@ -552,23 +824,34 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Preserve source bytes where no merge/remux is needed and do not invoke an audio encoder."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Acquire and save original audio via each native webview; generated tests compare prepared bytes."
     },
     {
       "id": "download.audio-conversion",
@@ -588,23 +871,33 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs"
+        ]
       },
       "acceptance": [
         "Compare acquisition arguments across outputs and decoded output properties; compressed-source Download FLAC must not inherit the Local Media rejection."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Verify all five conversions from URL through native saving across platforms."
     },
     {
       "id": "download.custom-range",
@@ -625,23 +918,32 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
         "native": []
       },
       "acceptance": [
         "Reject invalid bounds and playlist ranges; compare section arguments and output naming with v2.7."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Compare actual section boundaries and file naming with released downloads in packaged workflows."
     },
     {
       "id": "download.chapters",
@@ -662,23 +964,80 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Reject missing/stale chapters and playlist chapter selection; save each resulting file."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444483",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444453",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444437",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "9962688ad2147e8d16ec7220cdfe7b26efaf2ac7",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44925774155/job/136911444667",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "Selected chapters 3 and 1 in reverse, then verified source order, filenames, H.264/AAC streams, durations and decoded source intervals. A changed chapter list failed without publishing another file."
+        }
+      ],
+      "remaining": "Confirm chapter selection remains unavailable for playlists when playlist selection is integrated in 8D.3."
     },
     {
       "id": "download.thumbnail-extra",
@@ -698,23 +1057,85 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Test absent artwork, thumbnail acquisition rejection and saving the companion file."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257444",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257518",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257468",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257506",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window disabled unavailable artwork. With offered PNG artwork, the selected JPEG matched the source dimensions and decoded color. Denied artwork ended the thumbnail-only job in Failed, with no new destination file or media read."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.metadata-extra",
@@ -734,23 +1155,81 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Save JSON separately, classify it as metadata and preserve selected extras through queue/history."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257444",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257518",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257468",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "6398c462114d6fd07f81828cfa0e1f13fc5c4ab0",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44954366282/job/136999257506",
+          "tests": [
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "The native window saved the selected source's .info.json alone and alongside the JPEG. Its ID, title and duration matched the reviewed fixture. The saved-file list matched the new destination files."
+        }
+      ],
+      "remaining": "History reuse of the captured metadata selection remains in 8D.4."
     },
     {
       "id": "download.subtitles",
@@ -772,23 +1251,85 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Test all subtitle modes, unavailable languages, automatic fallback and multiple companion outputs."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059609",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059564",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059611",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059586",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "Generic-source selection saved two converted SRTs and rejected an unavailable language without publishing a file. Generated provider metadata exercised language suggestions, creator and automatic selection, creator precedence and automatic fallback. Each exported file was checked for its language, cue text and timing."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.sponsorblock",
@@ -810,23 +1351,85 @@
           "start_download"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/options.rs",
+          "crates/lvovd-core/src/downloads/outputs.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "src-tauri/src/download_commands.rs"
+        ]
       },
       "tests": {
         "reference": [
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/downloads/fixture_tests.rs"
+        ],
+        "native": [
+          "desktop/test/download.cjs",
+          "desktop/test/provider-replay.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Off makes no SponsorBlock request; eligible mark/remove preserve exact category and chapter behavior."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059609",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059564",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059611",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "ebafe089a55c58573ea6233fd6a339573452739f",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/44933999779/job/136937059586",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/provider-replay.cjs"
+          ],
+          "notes": "A generic source and Extras Only hid the SponsorBlock controls. For eligible generated metadata, Off sent zero segment requests, Mark sent the selected categories and saved the matching chapter labels and times, and Remove sent only the selected outro and saved shortened audio/video. The test exercised all nine exposed categories with real yt-dlp and FFmpeg."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "download.playlists",
@@ -860,7 +1463,8 @@
         "native": []
       },
       "acceptance": [
-        "Reject invalid or oversized selections; do not probe every entry merely to display a flat Preview."
+        "Reject invalid or oversized selections; do not probe every entry merely to display a flat Preview.",
+        "With a flat playlist Preview, offer the released 2160p, 1440p, 1080p, 720p, 480p and 360p limits and honor the chosen limit for each selected item."
       ],
       "evidence": [],
       "remaining": "Rust operation and full native workflow are not implemented."
@@ -882,7 +1486,7 @@
         "operations": [
           "preview_source",
           "start_download",
-          "import_url",
+          "edit_download_source",
           "import_playlist"
         ]
       },
@@ -912,7 +1516,7 @@
         "Run overlapping workflow requests and verify only one application-controlled acquisition owns the coordinator."
       ],
       "evidence": [],
-      "remaining": "Preview and single-URL acquisition share one remote slot. Playlist queries and both handoffs must join it in 8D.3."
+      "remaining": "Preview, single-video Download and Edit Source Video share one remote slot. Playlist queries and playlist intake must join it in 8D.3."
     },
     {
       "id": "download.pacing",
@@ -1158,7 +1762,9 @@
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "public/progress-meter.js",
+          "desktop/styles.css"
         ]
       },
       "tests": {
@@ -1167,7 +1773,8 @@
           "test/queue-ui.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -1176,8 +1783,53 @@
       "acceptance": [
         "Reconnect gets a fresh snapshot; stale channels cannot overwrite another job or duplicate completion delivery."
       ],
-      "evidence": [],
-      "remaining": "Single-URL jobs expose live stages, percent, speed and ETA. Restore item/stream detail for all source choices and playlists."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        }
+      ],
+      "remaining": "Single-URL rows show the stage, measured percentage and available speed and ETA. Restore per-stream identity and progress, and playlist item progress. Reconnection and stale-channel acceptance still needs native coverage for these workflows."
     },
     {
       "id": "download.outputs",
@@ -1289,27 +1941,93 @@
         "location": "Download → Local Media",
         "stage": "8D",
         "operations": [
-          "import_url"
+          "edit_download_source",
+          "cancel_edit_download_source"
         ]
       },
-      "status": "Missing",
+      "status": "Verified",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/editor.rs",
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "desktop/downloads.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
+        ]
       },
       "tests": {
         "reference": [
           "test/url-edit-acquisition.test.js",
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/test/edit-source.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Cuts/processes reuse the owned original; cancellation cleans owned intake without another download."
       ],
-      "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976426",
+          "tests": [
+            "desktop/test/edit-source.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft. The release ZIP also verified the native workbench original with bundled FFprobe and prepared a no-op MKV."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976417",
+          "tests": [
+            "desktop/test/edit-source.cjs"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976395",
+          "tests": [
+            "desktop/test/edit-source.cjs"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976399",
+          "tests": [
+            "desktop/test/edit-source.cjs"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "handoff.playlist-intake",
@@ -3895,7 +4613,11 @@
           "src-tauri/src/main.rs",
           "desktop/native.js",
           "desktop/workspace-transport.js",
-          "public/local-workspace.js"
+          "public/local-workspace.js",
+          "desktop/app.js",
+          "desktop/index.html",
+          "desktop/styles.css",
+          "public/index.html"
         ]
       },
       "tests": {
@@ -3912,56 +4634,62 @@
           "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
-          "desktop/test/native.cjs"
+          "desktop/test/native.cjs",
+          "desktop/test/layout.cjs"
         ]
       },
       "acceptance": [
-        "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
+        "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt.",
+        "Preview Result starts playback. Closing it releases the player. Edit Source selects the result's source, restores its draft and returns focus to the visible editor without overriding a later navigation."
       ],
       "evidence": [
         {
           "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
           "tests": [
-            "desktop/test/native.cjs"
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
           ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
         },
         {
           "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
           "tests": [
-            "desktop/test/native.cjs"
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
           ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
         },
         {
           "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
           "tests": [
-            "desktop/test/native.cjs"
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
           ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
         },
         {
           "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
           "tests": [
-            "desktop/test/native.cjs"
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
           ],
-          "notes": "Native revisioned rows expose Edit source, result playback, Save and Save All after sequential work. Shared UI tests cover focus/scroll, previous results and stale responses; native-adapter tests prevent delayed save receipts from relabelling replacements."
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
         }
       ],
       "remaining": ""
@@ -3980,19 +4708,26 @@
         "location": "Local Media / Processing results",
         "stage": "8D",
         "operations": [
-          "save_outputs"
+          "save_outputs",
+          "save_results",
+          "open_result_folder"
         ]
       },
       "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
-          "crates/lvovd-core/src/analysis.rs"
+          "crates/lvovd-core/src/analysis.rs",
+          "crates/lvovd-core/src/export.rs",
+          "crates/lvovd-core/src/processing_queue.rs",
+          "src-tauri/src/workbench_commands.rs"
         ],
         "native": [
           "desktop/workspace-transport.js",
           "public/local-workspace.js",
-          "src-tauri/src/workbench_commands.rs"
+          "src-tauri/src/workbench_commands.rs",
+          "public/index.html",
+          "src-tauri/src/export_actions.rs"
         ]
       },
       "tests": {
@@ -4002,59 +4737,61 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/local_media.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
         ]
       },
       "acceptance": [
-        "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes."
+        "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes.",
+        "Save All shows the chosen folder, successful count, actual filenames and individual failures. A cancelled picker or failed retry preserves the last confirmed receipt. Retrying one file preserves earlier exports."
       ],
       "evidence": [
         {
           "platform": "windows-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054518",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
           "tests": [
             "desktop/test/native.cjs"
           ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. After the original folder was restored, Explorer accepted Open Folder."
         },
         {
           "platform": "linux-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054508",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
           "tests": [
             "desktop/test/native.cjs"
           ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. The successful file-manager handoff remains untested on this platform."
         },
         {
           "platform": "macos-arm64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054585",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
           "tests": [
             "desktop/test/native.cjs"
           ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. The successful file-manager handoff remains untested on this platform."
         },
         {
           "platform": "macos-x64",
-          "commit": "14bb94320233b30fb7eafe663fce100d89d4293f",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
           "kind": "native-workflow",
           "result": "passed",
-          "url": "https://github.com/landonrivers/LVOVD/actions/runs/39535701160/job/119012054629",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
           "tests": [
             "desktop/test/native.cjs"
           ],
-          "notes": "Native Save All saves both captured encoded results through the owned delivery path. Core tests cover collisions, missing destinations and removed/replaced results; delayed-receipt UI tests preserve the current selection. Automatic saving/export catalog is a separate 8D desktop capability."
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. The successful file-manager handoff remains untested on this platform."
         }
       ],
       "remaining": ""
@@ -5202,34 +5939,92 @@
           "open_export",
           "reveal_export",
           "save_copy",
-          "save_outputs"
+          "save_outputs",
+          "open_result_folder"
         ]
       },
       "status": "Missing",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads.rs",
-          "src-tauri/src/export_actions.rs"
+          "src-tauri/src/export_actions.rs",
+          "crates/lvovd-core/src/export.rs"
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "src-tauri/src/workbench_commands.rs",
+          "public/local-workspace.js",
+          "desktop/workspace-transport.js",
+          "public/index.html"
         ]
       },
       "tests": {
         "reference": [],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "src-tauri/src/workbench_commands.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/native.cjs"
         ]
       },
       "acceptance": [
         "Missing/moved exports remain honest; history/workspace deletion never deletes user files."
       ],
-      "evidence": [],
-      "remaining": "Open File and Show in Folder take a saved job identity. Save Copy, a durable catalog and bulk companion-file handling remain."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. After the original folder was restored, Explorer accepted Open Folder."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. The successful file-manager handoff remains untested on this platform."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. The successful file-manager handoff remains untested on this platform."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. The successful file-manager handoff remains untested on this platform."
+        }
+      ],
+      "remaining": "Save Copy, the persistent saved-export catalog and bulk selection of Download companions remain. Successful folder opening in Finder and a Linux file manager still needs native acceptance."
     },
     {
       "id": "desktop.history-import",
@@ -5284,11 +6079,17 @@
       "status": "Missing",
       "implementation": {
         "rust": [
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "src-tauri/src/main.rs"
         ],
         "native": [
+          "desktop/index.html",
+          "desktop/styles.css",
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "desktop/app.js",
+          "public/index.html",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -5297,14 +6098,69 @@
           "crates/lvovd-core/tests/downloads.rs"
         ],
         "native": [
-          "desktop/test/download.cjs"
+          "desktop/test/download.cjs",
+          "desktop/test/native.cjs",
+          "desktop/test/layout.cjs"
         ]
       },
       "acceptance": [
         "Verify 1280x720 and 960x640 plus display scaling in actual webviews; retain concise functional copy, not roadmap/marketing filler."
       ],
-      "evidence": [],
-      "remaining": "Download opens first. Local Media and Settings are accessible. Restore History and complete keyboard, scaling and narrow-layout acceptance for all controls."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        }
+      ],
+      "remaining": "Persistent Download History and Use Again, playlist intake, and whole-application keyboard and display-scaling acceptance remain. The header offers Download & Edit and Settings. Download, its queue and Local Media share a scroll surface. A single-video Preview can open its source in Local Media."
     },
     {
       "id": "desktop.settings",

@@ -107,6 +107,24 @@ impl ProcessingQueue {
     pub fn snapshot(&self) -> Snapshot {
         self.0.snapshots.borrow().clone()
     }
+    /// Only the latest successful job can contribute its output to Save All.
+    pub(crate) fn check_batch_result(&self, source: Uuid, result: Uuid) -> Result<()> {
+        let snapshot = self.0.snapshots.borrow();
+        let job = snapshot.jobs.iter().find(|job| job.source_id == source);
+        if job.is_some_and(|job| {
+            job.status != Status::Completed
+                || job
+                    .result
+                    .as_ref()
+                    .is_none_or(|output| output.result_id != result)
+        }) {
+            return Err(AppError::new(
+                "BATCH_CHANGED",
+                "The latest processing job has changed. Save the current result when it is ready.",
+            ));
+        }
+        Ok(())
+    }
     /// A slow reader retains one current snapshot, never a progress-event log.
     /// Resubscribing always begins with authoritative state.
     pub fn subscribe(&self) -> watch::Receiver<Snapshot> {

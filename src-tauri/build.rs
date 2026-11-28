@@ -20,10 +20,11 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "desktop_handshake",
-            "set_local_drop_target",
             "download_destination",
             "choose_download_destination",
             "preview_download",
+            "edit_download_source",
+            "cancel_edit_download_source",
             "start_download",
             "cancel_download",
             "retry_download_save",
@@ -34,6 +35,7 @@ fn main() {
             "prepare_editor",
             "save_result",
             "save_results",
+            "open_result_folder",
             "prepare_waveform",
             "cancel_editor",
             "cancel_waveform",

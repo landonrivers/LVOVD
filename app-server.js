@@ -1881,6 +1881,7 @@ function serveStatic(reqPath, res) {
     '/audio-waveform.js': ['audio-waveform.js', 'text/javascript; charset=utf-8'],
     '/conversion-inspector.js': ['conversion-inspector.js', 'text/javascript; charset=utf-8'],
     '/local-workspace.js': ['local-workspace.js', 'text/javascript; charset=utf-8'],
+    '/progress-meter.js': ['progress-meter.js', 'text/javascript; charset=utf-8'],
     '/processing-profile.js': ['processing-profile.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8']
   };

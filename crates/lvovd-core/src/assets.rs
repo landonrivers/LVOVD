@@ -28,6 +28,22 @@ pub struct Source {
     pub name: String,
     pub size: u64,
     pub inspection: Inspection,
+    pub origin: SourceOrigin,
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceOrigin {
+    Local,
+    Url,
+}
+
+struct StagedSource {
+    id: Uuid,
+    path: PathBuf,
+    directory: Option<PathBuf>,
+    name: String,
+    size: u64,
 }
 
 pub struct Asset {
@@ -36,6 +52,9 @@ pub struct Asset {
     cancelled: CancellationToken,
     file: Mutex<Option<File>>,
     path: PathBuf,
+    // Provider streams, merge intermediates, and the inspected final media
+    // share this one private directory and one source reservation.
+    directory: Option<PathBuf>,
     // A read/worker lease keeps the session directory alive as well as the file.
     _root: Arc<tempfile::TempDir>,
     seal: Option<crate::owned_file::Seal>,
@@ -306,30 +325,10 @@ impl Assets {
                 "Choose a nonempty media file no larger than 100 GiB.",
             ));
         }
-        {
-            let mut registry = self.registry.lock().unwrap();
-            let bytes: u64 = registry
-                .active
-                .values()
-                .chain(registry.retired.values())
-                .map(|a| a.source.size)
-                .sum();
-            if registry.closing || self.cancel.is_cancelled() {
-                return Err(AppError::new("CLOSING", "The application is closing."));
-            }
-            if registry.active.len() + registry.retired.len() >= MAX_ASSETS
-                || size > MAX_SOURCE_BYTES.saturating_sub(bytes)
-            {
-                return Err(AppError::new(
-                    "STORAGE_LIMIT",
-                    "Remove files and finish cleanup before importing more media.",
-                ));
-            }
-            registry.pending = true;
-        }
+        self.reserve_intake(Some(size))?;
         let id = Uuid::new_v4();
         let owned = self.root.path().join(id.to_string());
-        let mut result = async {
+        let result = async {
             let mut output = tokio::fs::OpenOptions::new().write(true).create_new(true).open(&owned).await.map_err(|_| AppError::new("SOURCE_COPY", "Could not create an owned media copy."))?;
             let mut copied = 0;
             let mut buffer = vec![0u8; 256 * 1024];
@@ -343,27 +342,177 @@ impl Assets {
             if copied != size { return Err(AppError::new("SOURCE_CHANGED", "The selected file changed while importing.")); }
             output.flush().await.map_err(|_| AppError::new("SOURCE_COPY", "Could not finish copying media."))?;
             drop(output);
-            let seal = crate::owned_file::Seal::capture(&owned)?;
-            #[cfg(test)]
-            if self.pause_probe.0.load(Ordering::Acquire) { self.pause_probe.1.notify_one(); self.pause_probe.2.notified().await; }
-            let inspection = inspection::inspect(ffprobe, &owned, cancel).await?;
-            seal.check(&owned)?;
             let name = selected.file_name().unwrap_or_default().to_string_lossy().chars().filter(|c| !c.is_control()).take(240).collect();
-            let source = Source { asset_id: id, name, size, inspection };
-            let file = File::open(&owned).map_err(|_| AppError::new("SOURCE_READ", "Could not reopen owned media."))?;
-            let asset = Arc::new(Asset { source: source.clone(), revoked: AtomicBool::new(false), cancelled: CancellationToken::new(), file: Mutex::new(Some(file)), path: owned.clone(), _root: self.root.clone(), seal: Some(seal) });
-            let mut registry = self.registry.lock().unwrap();
-            if registry.closing || cancel.is_cancelled() { return Err(AppError::new("CANCELLED", "Import cancelled.")); }
-            registry.active.insert(id, asset);
-            Ok(source)
+            self.inspect_and_publish(StagedSource { id, path: owned.clone(), directory: None, name, size }, ffprobe, cancel, None).await
         }.await;
+        self.finish_intake(result, id, owned, None, size).await
+    }
+
+    // All source intake holds the same exclusive intake guard through
+    // publication or cleanup. For a URL with unknown size, reserve the entire
+    // remaining allowance until its intermediates are gone.
+    fn reserve_intake(&self, size: Option<u64>) -> Result<u64> {
+        let mut registry = self.registry.lock().unwrap();
+        if registry.closing || self.cancel.is_cancelled() {
+            return Err(AppError::new("CLOSING", "The application is closing."));
+        }
+        let used = registry
+            .active
+            .values()
+            .chain(registry.retired.values())
+            .map(|a| a.source.size)
+            .sum();
+        let remaining = MAX_SOURCE_BYTES.saturating_sub(used);
+        if registry.active.len() + registry.retired.len() >= MAX_ASSETS
+            || remaining == 0
+            || size.is_some_and(|size| size > remaining)
+        {
+            return Err(AppError::new(
+                "STORAGE_LIMIT",
+                "Remove files and finish cleanup before importing more media.",
+            ));
+        }
+        registry.pending = true;
+        Ok(size.unwrap_or(remaining))
+    }
+
+    /// The workbench owns this future in its task tracker even if the window disconnects.
+    pub(crate) async fn acquire_source(
+        &self,
+        downloads: &crate::downloads::Downloads,
+        acquisition: &crate::downloads::EditorAcquisition,
+        ffprobe: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<Source> {
+        let _intake = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err(AppError::new("CANCELLED", "Source acquisition cancelled.")),
+            guard = self.intake.lock() => guard,
+        };
+        let maximum = self.reserve_intake(None)?;
+        let id = Uuid::new_v4();
+        let directory = self.root.path().join(id.to_string());
+        if tokio::fs::create_dir(&directory).await.is_err() {
+            self.registry.lock().unwrap().pending = false;
+            return Err(AppError::new(
+                "DOWNLOAD_STORAGE",
+                "Could not create the temporary source folder.",
+            ));
+        }
+        let result = async {
+            let (path, name) = downloads
+                .acquire_editor(acquisition, &directory, maximum, cancel)
+                .await?;
+            if path.parent() != Some(directory.as_path()) {
+                return Err(AppError::new(
+                    "SOURCE_CHANGED",
+                    "The acquired source is unavailable.",
+                ));
+            }
+            let size = tokio::fs::symlink_metadata(&path)
+                .await
+                .map_err(|_| {
+                    AppError::new("SOURCE_READ", "Could not inspect the acquired source.")
+                })?
+                .len();
+            if size == 0 || size > maximum {
+                return Err(AppError::new(
+                    "STORAGE_LIMIT",
+                    "The acquired file is empty or exceeds the remaining source allowance.",
+                ));
+            }
+            self.inspect_and_publish(
+                StagedSource {
+                    id,
+                    path,
+                    directory: Some(directory.clone()),
+                    name,
+                    size,
+                },
+                ffprobe,
+                cancel,
+                Some(acquisition),
+            )
+            .await
+        }
+        .await;
+        self.finish_intake(result, id, directory.clone(), Some(directory), maximum)
+            .await
+    }
+
+    async fn inspect_and_publish(
+        &self,
+        staged: StagedSource,
+        ffprobe: &Path,
+        cancel: &CancellationToken,
+        editor: Option<&crate::downloads::EditorAcquisition>,
+    ) -> Result<Source> {
+        let seal = crate::owned_file::Seal::capture(&staged.path)?;
+        #[cfg(test)]
+        if self.pause_probe.0.load(Ordering::Acquire) {
+            self.pause_probe.1.notify_one();
+            self.pause_probe.2.notified().await;
+        }
+        let inspection = inspection::inspect(ffprobe, &staged.path, cancel).await?;
+        if let Some(editor) = editor {
+            editor.validate_source(&inspection)?;
+        }
+        seal.check(&staged.path)?;
+        let file = File::open(&staged.path)
+            .map_err(|_| AppError::new("SOURCE_READ", "Could not reopen owned media."))?;
+        let origin = if editor.is_some() {
+            SourceOrigin::Url
+        } else {
+            SourceOrigin::Local
+        };
+        let source = Source {
+            asset_id: staged.id,
+            name: staged.name,
+            size: staged.size,
+            inspection,
+            origin,
+        };
+        let asset = Arc::new(Asset {
+            source: source.clone(),
+            revoked: AtomicBool::new(false),
+            cancelled: CancellationToken::new(),
+            file: Mutex::new(Some(file)),
+            path: staged.path,
+            directory: staged.directory,
+            _root: self.root.clone(),
+            seal: Some(seal),
+        });
+        let mut registry = self.registry.lock().unwrap();
+        if registry.closing || cancel.is_cancelled() {
+            return Err(AppError::new("CANCELLED", "Import cancelled."));
+        }
+        registry.active.insert(staged.id, asset);
+        Ok(source)
+    }
+
+    async fn finish_intake(
+        &self,
+        mut result: Result<Source>,
+        id: Uuid,
+        owned: PathBuf,
+        directory: Option<PathBuf>,
+        size: u64,
+    ) -> Result<Source> {
         if result.is_err()
-            && let Err(error) = tokio::fs::remove_file(&owned).await
+            && let Err(error) = match &directory {
+                Some(dir) => tokio::fs::remove_dir_all(dir).await,
+                None => tokio::fs::remove_file(&owned).await,
+            }
             && error.kind() != std::io::ErrorKind::NotFound
         {
             let source = Source {
                 asset_id: id,
                 name: "Incomplete import".into(),
+                origin: if directory.is_some() {
+                    SourceOrigin::Url
+                } else {
+                    SourceOrigin::Local
+                },
                 size,
                 inspection: Inspection {
                     format: String::new(),
@@ -381,6 +530,7 @@ impl Assets {
                     cancelled: CancellationToken::new(),
                     file: Mutex::new(None),
                     path: owned,
+                    directory,
                     _root: self.root.clone(),
                     seal: None,
                 }),
@@ -405,7 +555,11 @@ impl Assets {
                 false
             } else {
                 asset.file.lock().unwrap().take();
-                match std::fs::remove_file(&asset.path) {
+                let removal = match &asset.directory {
+                    Some(dir) => std::fs::remove_dir_all(dir),
+                    None => std::fs::remove_file(&asset.path),
+                };
+                match removal {
                     Ok(()) => true,
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
                     Err(_) => false,
@@ -471,6 +625,7 @@ mod ownership_tests {
             source: Source {
                 asset_id: id,
                 name: "Retained source".into(),
+                origin: SourceOrigin::Local,
                 size: MAX_SOURCE_BYTES,
                 inspection: Inspection {
                     format: String::new(),
@@ -484,6 +639,7 @@ mod ownership_tests {
             cancelled: CancellationToken::new(),
             file: Mutex::new(None),
             path: assets.root.path().join(id.to_string()),
+            directory: None,
             _root: assets.root.clone(),
             seal: None,
         });
@@ -510,6 +666,43 @@ mod ownership_tests {
         assets.shutdown().await.unwrap();
         assert_eq!(std::fs::read(original).unwrap(), b"unchanged original");
     }
+    #[tokio::test]
+    async fn failed_acquisition_cleanup_keeps_its_reserved_allowance_until_retry() {
+        let parent = tempfile::tempdir().unwrap();
+        let assets = Assets::new(parent.path()).unwrap();
+        let id = Uuid::new_v4();
+        let directory = assets.root.path().join(id.to_string());
+        let original = parent.path().join("user-original");
+        std::fs::write(&original, b"keep").unwrap();
+        // The private directory's expected type is unavailable. Do not
+        // discard its reservation or erase a path of an unexpected type.
+        std::fs::write(&directory, b"replacement").unwrap();
+        let bytes = assets.reserve_intake(None).unwrap();
+        let error = assets
+            .finish_intake(
+                Err(AppError::new("CANCELLED", "Cancelled.")),
+                id,
+                directory.clone(),
+                Some(directory.clone()),
+                bytes,
+            )
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.cleanup_asset_id, Some(id));
+        assert!(assets.list().is_empty());
+        assert_eq!(assets.pending_cleanup(), vec![id]);
+        assert_eq!(
+            assets.reserve_intake(None).unwrap_err().code,
+            "STORAGE_LIMIT"
+        );
+        std::fs::remove_file(&directory).unwrap();
+        assert!(assets.remove(id).unwrap().cleanup_complete);
+        assert_eq!(assets.reserve_intake(None).unwrap(), MAX_SOURCE_BYTES);
+        assets.shutdown().await.unwrap();
+        assert_eq!(std::fs::read(original).unwrap(), b"keep");
+    }
+
     #[tokio::test]
     async fn abandoned_import_keeps_intake_owned_until_cleanup_finishes() {
         let parent = tempfile::tempdir().unwrap();

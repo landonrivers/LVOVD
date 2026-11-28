@@ -29,8 +29,8 @@ function environment() {
 }
 function prepare() {
   const dist = path.join(root, 'desktop', 'dist'); fs.mkdirSync(dist, { recursive: true });
-  for (const name of ['index.html', 'app.js', 'native.js', 'downloads.js', 'workspace-transport.js', 'styles.css']) fs.copyFileSync(path.join(root, 'desktop', name), path.join(dist, name));
-  for (const name of ['edit-plan.js', 'audio-waveform.js', 'media-editor.js', 'conversion-inspector.js', 'processing-profile.js', 'local-workspace.js']) fs.copyFileSync(path.join(root, 'public', name), path.join(dist, name));
+  for (const name of ['index.html', 'app.js', 'native.js', 'download-options.js', 'downloads.js', 'workspace-transport.js', 'styles.css', 'manuscript-corner.webp']) fs.copyFileSync(path.join(root, 'desktop', name), path.join(dist, name));
+  for (const name of ['edit-plan.js', 'audio-waveform.js', 'media-editor.js', 'conversion-inspector.js', 'processing-profile.js', 'progress-meter.js', 'local-workspace.js']) fs.copyFileSync(path.join(root, 'public', name), path.join(dist, name));
   fs.copyFileSync(path.join(root, 'public', 'styles.css'), path.join(dist, 'reference.css'));
   const reference = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
   if (!reference.includes('<section id="media-workspace-panel"') || !reference.includes('<section id="history-panel"')) throw new Error('Local Media template boundaries are missing.');

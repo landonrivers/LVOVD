@@ -14,7 +14,8 @@
     else { current = value; revision++; }
     const jobs = value.jobs.map(job => { const failure = job.failure?.workspaceFailure || job.failure; return { ...job, workspaceId: job.sourceId, message: job.failure?.message, failure: failure && { ...failure, explanation: failure.explanation || job.failure.message } }; });
     return { id: value.workbenchId, revision, connectionEpoch: connection, limits: { maxEntries: 20 }, jobs,
-      intakeFailure: value.intakeFailure, importing: value.importing, removedCleanup: value.cleanup.map(id => ({ workspaceId: id, name: 'Removed file', status: value.failedCleanup.includes(id) ? 'failed' : 'pending', message: value.failedCleanup.includes(id) ? 'Retry temporary-file cleanup.' : 'Waiting for active resources to close.' })),
+      intakeFailure: value.intakeFailure, importing: value.importing, editorAcquisitionId: value.editorAcquisitionId,
+      removedCleanup: value.cleanup.map(id => ({ workspaceId: id, name: 'Removed file', status: value.failedCleanup.includes(id) ? 'failed' : 'pending', message: value.failedCleanup.includes(id) ? 'Retry temporary-file cleanup.' : 'Waiting for active resources to close.' })),
       workspaces: value.sources.map(source => {
         const id = source.assetId, preview = value.previews.find(p => p.sourceAssetId === id), waveform = value.waveforms.find(p => p.sourceAssetId === id);
         const editor = value.editors.find(p => p.sourceId === id) || { eligible: false };
@@ -22,13 +23,24 @@
         const output = result && { ...result, assetId: result.resultId, planKey: result.review.key, processingSnapshot: result.review,
           downloadUrl: native.mediaUrl(result.resultId), playbackUrl: result.mime ? native.mediaUrl(result.resultId) : null };
         const duration = job?.durationSeconds || job?.result?.review?.output?.durationSeconds || result?.review?.output?.durationSeconds || editor.durationSeconds;
-        return { id, sourceAssetId: id, purpose: 'local', source: { name: source.name, size: source.size, origin: 'local' }, inspection: source.inspection.media,
+        const progress = job?.progress;
+        const encoding = job?.status === 'running' && !progress?.validating;
+        let percent = null, message = job?.message;
+        if (encoding && Number.isFinite(progress?.outTimeUs) && duration > 0) {
+          const completedPasses = Math.max(0, progress.pass - 1);
+          percent = Math.min(99, (completedPasses * 100 + progress.outTimeUs / (duration * 10000)) / Math.max(1, progress.passes));
+        }
+        if (job?.status === 'running') {
+          message = progress?.validating ? 'Validating output…' : progress?.passes === 2
+            ? `Pass ${progress.pass} of 2 · Attempt ${progress.attempt}` : 'Processing…';
+        } else if (job?.status === 'cancelling') message = 'Cancelling…';
+        return { id, sourceAssetId: id, purpose: 'local', source: { name: source.name, size: source.size, origin: source.origin || 'local' }, inspection: source.inspection.media,
           status: 'ready', activeOperation: preview?.status === 'preparing' ? 'proxying' : null,
           processingRevision: value.processingRevisions.find(([sourceId]) => sourceId === id)?.[1] ?? null,
           editor: { ...editor, operationId: preview?.operationId, status: preview?.status || 'idle', message: preview?.message }, waveform: waveform || { status: 'idle' },
           playback: preview?.status === 'ready' && preview.assetId ? { assetId: preview.assetId, role: preview.proxy ? 'playback-proxy' : 'original', proxy: preview.proxy, mime: source.inspection.media?.video ? 'video/mp4' : 'audio/mp4', url: native.mediaUrl(preview.assetId) } : null,
-          conversion: { status: job?.status || (result ? 'ready' : 'idle'), percent: job?.progress?.outTimeUs != null && duration > 0 ? Math.min(99, ((Math.max(1, job.progress.pass) - 1) * 100 + job.progress.outTimeUs / (duration * 10000)) / Math.max(1, job.progress.passes)) : null,
-            message: job?.message || (job?.status === 'running' ? (job?.progress?.validating ? 'Validating output…' : job?.progress?.passes === 2 ? `Pass ${job.progress.pass} of 2 · Attempt ${job.progress.attempt}` : null) : null), failure: job?.failure, output, cleanupPending: value.failedCleanup.includes(id) },
+          conversion: { status: job?.status || (result ? 'ready' : 'idle'), percent, message,
+            failure: job?.failure, output, cleanupPending: value.failedCleanup.includes(id) },
           outputCleanup: { blocked: value.failedCleanup.includes(id) } };
       }) };
   }
@@ -122,10 +134,16 @@
       });
     },
     async pick(id) { return native.call('pick_source', { request: { workbenchId: id } }); },
+    async editDownloadSource(request) {
+      const epoch = connection;
+      const result = await native.call('edit_download_source', { request });
+      return { sourceId: result.sourceId, collection: projection(result.snapshot, epoch) };
+    },
     async save(output) {
       return native.call('save_result', { request: { workbenchId: active, resultId: output.assetId } });
     },
-    async saveAll(outputs) { return native.call('save_results', { request: { workbenchId: active, resultIds: outputs.map(o => o.assetId) } }); },
+    saveAll(workbenchId, outputs) { return native.call('save_results', { request: { workbenchId, resultIds: outputs.map(o => o.assetId) } }); },
+    openFolder(workbenchId, receiptId) { return native.call('open_result_folder', { request: { workbenchId, receiptId } }); },
     preview(output) {
       root.document.dispatchEvent(new CustomEvent('lvovd:preview-result', { detail: { url: output.playbackUrl, name: output.filename, audio: !output.inspection?.video } }));
     },
