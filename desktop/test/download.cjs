@@ -27,6 +27,13 @@ async function startProvider(video, ffmpeg, extraAssets = []) {
   const mediaReads = new Map();
   const waiting = new Set();
   const server = http.createServer((request, response) => {
+    // Read the same observed track counts from a separate packaged-app test
+    // process. This fixture listens on loopback and serves generated media only.
+    if (request.method === 'GET' && request.url === '/fixture-media-reads.json') {
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      response.end(JSON.stringify(Object.fromEntries(mediaReads)));
+      return;
+    }
     const file = assets.get(request.url);
     if (!file || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(404).end(); return;

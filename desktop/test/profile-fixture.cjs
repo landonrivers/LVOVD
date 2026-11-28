@@ -116,11 +116,8 @@ if (require.main === module) {
     start(tool).then(fixture => {
       const { cases, resolutions, unknownResolution } = fixture;
       process.stdout.write(JSON.stringify({ cases, resolutions, unknownResolution }) + '\n');
-      const commands = require('node:readline').createInterface({ input: process.stdin });
-      commands.on('line', command => {
-        if (command === 'media-reads') process.stdout.write(JSON.stringify(fixture.mediaReads()) + '\n');
-      });
-      commands.once('close', () => fixture.close());
+      process.stdin.resume();
+      process.stdin.once('end', () => fixture.close());
     }).catch(error => { console.error(error); process.exitCode = 1; });
   } else if (action === 'verify') verify(tool, file, cases[Number(index)]);
   else if (action === 'verify-editor') verify(tool, file, cases[Number(index)], true);

@@ -128,12 +128,10 @@ function Probe($File) {
 function Record-File($Mode,$File) {
     $evidence.outputs+=@{mode=$Mode;extension=[IO.Path]::GetExtension($File);bytes=(Get-Item -LiteralPath $File).Length}
 }
-function Get-MediaReads {
-    $server.StandardInput.WriteLine('media-reads')
-    $server.StandardInput.Flush()
-    $line = $server.StandardOutput.ReadLineAsync()
-    if (!$line.Wait(5000) -or !$line.Result) {throw 'Fixture request accounting did not respond.'}
-    $line.Result | ConvertFrom-Json
+function Get-MediaReads([uri]$Source) {
+    $url = [uri]::new($Source,'/fixture-media-reads.json')
+    if ($url.Host -ne '127.0.0.1' -or $url.Scheme -ne 'http') {throw 'Expected the local generated fixture.'}
+    Invoke-RestMethod -Uri $url -TimeoutSec 10 -MaximumRedirection 0
 }
 function Save-EditorResult($Directory) {
     Invoke-Control (ById 'conversion-download')
@@ -284,7 +282,7 @@ try {
         Set-Text 'dl-end' '0.50'
         Open-Panel 'Extras'
         Check-Choice $ae::AutomationIdProperty 'dl-metadata'
-        if (@((Get-MediaReads).PSObject.Properties).Count) {throw 'Preview unexpectedly transferred fixture tracks.'}
+        if (@((Get-MediaReads $case[0].url).PSObject.Properties).Count) {throw 'Preview unexpectedly transferred fixture tracks.'}
         Invoke-Control (ById 'download-edit-source')
         [void](ById 'conversion-start')
         $endTime = (ById 'editor-end-time').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
@@ -298,7 +296,7 @@ try {
         & node.exe $fixtureScript verify-editor $ffprobe $chosen $result
         if ($LASTEXITCODE) {throw 'The editor result did not preserve the selected full-length video and audio packets.'}
         Record-File 'Edit Source Video, Maximum Quality, 720p' $result
-        $reads = Get-MediaReads
+        $reads = Get-MediaReads $case[0].url
         if ($reads.'/vp9.mp4' -ne 1 -or $reads.'/opus.mp4' -ne 1 -or @($reads.PSObject.Properties).Count -ne 2) {
             throw "Expected exactly one GET for each selected track, observed $($reads | ConvertTo-Json -Compress)."
         }
