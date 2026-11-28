@@ -23,6 +23,8 @@ fn main() {
             "download_destination",
             "choose_download_destination",
             "preview_download",
+            "edit_download_source",
+            "cancel_edit_download_source",
             "start_download",
             "cancel_download",
             "retry_download_save",

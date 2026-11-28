@@ -4,17 +4,26 @@
   const el = id => document.getElementById(id);
   const url = el('download-url'), message = el('download-message');
   const previewButton = el('download-preview-button'), start = el('download-start');
+  const edit = el('download-edit-source'), editNote = el('download-edit-note');
   const folders = [el('download-choose-folder'), el('settings-choose-folder')];
   const rows = new Map();
   const states = { queued: 'Queued', downloading: 'Downloading', processing: 'Processing',
     saving: 'Saving', saved: 'Saved', saveFailed: 'Save failed', failed: 'Failed', cancelling: 'Cancelling', cancelled: 'Cancelled' };
   let ready = false, choosing = false, submitting = false, previewing = false;
+  let openingEditor = false, intakeBusy = false;
   let destination = null, preview = null, previewGeneration = 0, revision = -1;
 
   const options = globalThis.LVOVDDownloadOptions(controls);
   function controls() {
     previewButton.disabled = !ready || previewing || !url.value.trim();
     start.disabled = !ready || choosing || submitting || !destination || !(preview && (preview.choices ? options.valid() : preview.canDownload));
+    const choices = preview?.choices;
+    const content = choices?.available ? options.editorSource().content : null;
+    const video = content === 'av' || content === 'video';
+    edit.disabled = !ready || openingEditor || intakeBusy || !video || !choices[content];
+    editNote.textContent = !choices?.available ? '' : openingEditor || intakeBusy ? 'Local Media is adding files.' :
+      video ? 'Edit opens the full source. Ranges, extras and SponsorBlock apply to Download.' :
+      choices.av || choices.video ? 'Choose Video + Audio or Video Only to edit the source.' : 'This source has no editable video.';
     for (const button of folders) button.disabled = !ready || choosing;
     for (const id of ['settings-folder', 'download-folder']) el(id).textContent = destination?.path || 'Choose a folder';
     for (const row of rows.values()) row.retry.disabled = !destination || choosing || row.pending;
@@ -77,6 +86,25 @@
     finally { choosing = false; controls(); }
   }
   for (const button of folders) button.addEventListener('click', choose);
+  document.addEventListener('lvovd:workspace-state', event => {
+    intakeBusy = Boolean(event.detail.nativeImporting);
+    controls();
+  });
+  edit.addEventListener('click', async () => {
+    if (edit.disabled) return;
+    const generation = previewGeneration, previewId = preview.previewId;
+    const selection = options.editorSource();
+    openingEditor = true; controls();
+    try {
+      // Let button activation finish before moving keyboard focus to Local Media.
+      await Promise.resolve();
+      if (generation !== previewGeneration) return;
+      el('nav-local').click();
+      await globalThis.LVOVDLocalWorkspace.openDownloadSource(previewId, selection, () => generation === previewGeneration);
+    } catch (error) {
+      if (generation === previewGeneration) message.textContent = error.message;
+    } finally { openingEditor = false; controls(); }
+  });
   start.addEventListener('click', async () => {
     if (start.disabled) return;
     const generation = previewGeneration;

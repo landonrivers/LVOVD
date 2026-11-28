@@ -48,8 +48,16 @@
   }
   byId('recheck').onclick = health;
   byId('native-intake-cancel').onclick = async () => {
-    try { await native.call('cancel_intake', { request: { workbenchId: globalThis.LVOVDWorkspaceTransport.owner() } }); }
-    catch(error) { byId('native-intake-status').textContent = error.message; }
+    const button = byId('native-intake-cancel'), { workbenchId, operationId } = button.dataset;
+    if (button.hidden || !workbenchId) return;
+    try {
+      if (operationId) await native.call('cancel_edit_download_source', { request: { workbenchId, operationId } });
+      else await native.call('cancel_intake', { request: { workbenchId } });
+    } catch(error) {
+      if (!button.hidden && button.dataset.workbenchId === workbenchId && button.dataset.operationId === operationId) {
+        byId('native-intake-status').textContent = error.message;
+      }
+    }
   };
   const preview = byId('result-preview'), player = byId('result-player');
   let previewGeneration = 0;

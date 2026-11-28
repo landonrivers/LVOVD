@@ -540,6 +540,49 @@ impl DownloadOptions {
     }
 }
 impl Plan {
+    /// Media facts common to Download video outputs and editor originals.
+    pub(super) fn matches_video(&self, media: &crate::media_inspection::MediaInspection) -> bool {
+        let Some(video) = &media.video else {
+            return false;
+        };
+        if (self.options.content == Content::Av) != media.audio.is_some() {
+            return false;
+        }
+        if !self.selected.is_empty() {
+            return true;
+        }
+        let compatible = self.profile != Profile::Compatible
+            || (video.codec.as_deref() == Some("h264")
+                && media
+                    .audio
+                    .as_ref()
+                    .is_none_or(|a| a.codec.as_deref() == Some("aac")));
+        compatible
+            && self
+                .options
+                .max_height
+                .is_none_or(|height| video.height <= u64::from(height))
+    }
+
+    pub(super) fn revalidate(&self, fresh: &DownloadPreview) -> Result<()> {
+        let reviewed = self.options.clone().plan(fresh)?;
+        if reviewed.sections != self.sections
+            || reviewed.selector != self.selector
+            || reviewed.selected.len() != self.selected.len()
+            || !reviewed
+                .selected
+                .iter()
+                .zip(&self.selected)
+                .all(|(a, b)| a.same_stream(b))
+        {
+            return Err(AppError::new(
+                "PREVIEW_CHANGED",
+                "The selected chapters or source formats changed. Preview the source again.",
+            ));
+        }
+        Ok(())
+    }
+
     pub(super) fn provider_args(&self, section: &Section) -> Vec<OsString> {
         let mut args: Vec<OsString> = Vec::new();
         let mut add = |flags: &[&str]| args.extend(flags.iter().map(OsString::from));

@@ -23,7 +23,8 @@ async function startProvider(video, ffmpeg, extraAssets = []) {
     }
     for (const name of fs.readdirSync(dash)) assets.set('/dash/'+name,path.join(dash,name));
   }
-  let hold = false, gets = 0;
+  let hold = false, holdMedia = false, gets = 0;
+  const mediaReads = new Map();
   const waiting = new Set();
   const server = http.createServer((request, response) => {
     const file = assets.get(request.url);
@@ -44,6 +45,15 @@ async function startProvider(video, ffmpeg, extraAssets = []) {
     const stream = fs.createReadStream(file, { start, end });
     response.once('close', () => stream.destroy());
     stream.on('error', () => response.destroy());
+    if (!request.url.endsWith('.mpd')) {
+      mediaReads.set(request.url, (mediaReads.get(request.url) || 0) + 1);
+      if (holdMedia) {
+        const resume = () => stream.pipe(response);
+        waiting.add(resume);
+        response.once('close', () => waiting.delete(resume));
+        return;
+      }
+    }
     if (!hold) { stream.pipe(response); return; }
 
     // Let yt-dlp report actual received bytes during its 250ms progress sampling
@@ -68,9 +78,11 @@ async function startProvider(video, ffmpeg, extraAssets = []) {
     url: 'http://127.0.0.1:' + server.address().port + '/fixture.mp4',
     dash: dash && 'http://127.0.0.1:' + server.address().port + '/dash/fixture.mpd',
     hold() { hold = true; },
+    holdMedia() { holdMedia = true; },
     held() { return waiting.size; },
     gets() { return gets; },
-    release() { hold = false; for (const send of waiting) send(); waiting.clear(); },
+    mediaReads() { return Object.fromEntries(mediaReads); },
+    release() { hold = false; holdMedia = false; for (const send of waiting) send(); waiting.clear(); },
     async close() {
       this.release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
       if (dash) fs.rmSync(dash,{recursive:true,force:true});
@@ -78,7 +90,7 @@ async function startProvider(video, ffmpeg, extraAssets = []) {
   };
 }
 
-async function downloadScenario(browser, provider, destination, ffprobe, evidence, ffmpeg) {
+async function downloadScenario(browser, provider, destination, ffprobe, evidence, ffmpeg, localExports) {
   const wait = (test, message) => browser.waitUntil(test, { timeout: 60000, timeoutMsg: message });
   async function preview(url=provider.url) {
     await browser.$('#download-url').setValue(url);
@@ -338,6 +350,7 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
       }
     }
     console.log('PASS native resolution menus from 144p to 8640p, capped video to source audio and metadata-only saves');
+    await require('./edit-source.cjs').verifyHandoff(browser, competition, preview, choose, ffprobe, destination, localExports);
   } finally { await competition.close(); }
 }
 

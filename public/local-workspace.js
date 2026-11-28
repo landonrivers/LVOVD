@@ -24,6 +24,8 @@
   let uploadGeneration = 0;
   let removedCleanup = new Map(), cleanupBusy = false;
   let acquiring = false, importStarting = false, importRequest = null, intakeBatch = null;
+  let nativeImporting = false;
+  const acquiredPreviews = new Map();
   let sharedSettings = profiles.defaults();
   let recoveryItems = [], recoveryBusy = false, recoveryVersion = 0;
   let connectionEpoch = 0;
@@ -82,7 +84,7 @@
   function publish() {
     updateRecoveryControls();
     document.dispatchEvent(new root.CustomEvent('lvovd:workspace-state', { detail: {
-      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || recoveryBusy || importStarting || intakeBatch?.active), importActive: Boolean(recoveryBusy || importStarting || intakeBatch?.active), status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
+      active: Boolean(entries.size || upload || starting || cleanupIds.size || removedCleanup.size || recoveryBusy || importStarting || intakeBatch?.active), importActive: Boolean(recoveryBusy || importStarting || intakeBatch?.active), nativeImporting, status: snapshot?.status || (upload ? 'uploading' : starting ? 'starting' : 'idle'),
       origin: snapshot?.source?.origin || (upload ? 'local' : starting ? 'url' : null)
     } }));
   }
@@ -421,7 +423,16 @@
     removedCleanup = new Map((data.removedCleanup || []).map(item => [item.workspaceId, item])); renderCleanup();
     jobs = data.jobs || []; limits = data.limits || limits; intakeBatch = data.intake || null;
     renderImport();
-    if (transport) { const error = $('#native-intake-status'); error.textContent = data.intakeFailure?.message || (data.importing ? 'Copying selected files…' : ''); error.hidden = !error.textContent; $('#native-intake-cancel').hidden = !data.importing; }
+    if (transport) {
+      nativeImporting = Boolean(data.importing);
+      const note = $('#native-intake-status'), stop = $('#native-intake-cancel');
+      note.textContent = data.editorAcquisitionId ? 'Acquiring source video…' : nativeImporting ? 'Copying selected files…' : data.intakeFailure?.message || '';
+      note.hidden = !note.textContent;
+      stop.dataset.workbenchId = collectionId;
+      stop.dataset.operationId = data.editorAcquisitionId || '';
+      stop.textContent = data.editorAcquisitionId ? 'Cancel acquisition' : 'Cancel adding files';
+      stop.hidden = !nativeImporting;
+    }
     // Descriptors have no source or inspection until the real acquisition starts.
     const workspaces = [...(data.workspaces || [])];
     for (const item of intakeBatch?.items || []) if (!item.workspaceId && !item.removed && item.status === 'waiting') {
@@ -450,6 +461,7 @@
       if (dataWorkspace.playback?.url) { entry.previewRequest = false; entry.previewError = null; }
     }
     for (const [id, entry] of entries) if (entry.seenInCollection && !live.has(id)) { entries.delete(id); removedIds.add(id); invalidateBatch(); }
+    for (const id of acquiredPreviews.keys()) if (!live.has(id)) acquiredPreviews.delete(id);
     if (!entries.has(workspaceId)) { const hadSelection = Boolean(workspaceId); workspaceId = null; profile = null; snapshot = null; editor.reset(); if (entries.size) selectEntry(entries.keys().next().value); else if (hadSelection) reset(); }
     else { const entry = entries.get(workspaceId); profile = entry.profile; accept(entry.snapshot); }
     renderFiles(); processingControls(); publish();
@@ -463,6 +475,37 @@
       connect(); acceptCollection(collection); return collectionId;
     }).catch(error => { refreshRecovery(); throw error; }).finally(() => { collectionPromise = null; });
     return collectionPromise;
+  }
+  async function openDownloadSource(previewId, options, previewIsCurrent) {
+    const owner = await ensureCollection();
+    if (!previewIsCurrent()) return;
+    const selection = generation;
+    const key = JSON.stringify([previewId, options.content, options.profile, options.maxHeight, options.formatIds]);
+    let sourceId = [...acquiredPreviews].find(([, value]) => value === key)?.[0];
+    try {
+      if (!sourceId) {
+        if (nativeImporting) throw new Error('Wait for the current intake to finish.');
+        if (entries.size >= limits.maxEntries) throw new Error('Remove a file from Local Media to make room for this source.');
+        const result = await transport.editDownloadSource({ workbenchId: owner, operationId: root.crypto.randomUUID(), previewId, options });
+        if (collectionId !== owner || !result.collection) return;
+        acceptCollection(result.collection);
+        sourceId = result.sourceId;
+        // A removal may have arrived on the workbench channel before this reply.
+        if (!entries.has(sourceId) || removedIds.has(sourceId)) return;
+        acquiredPreviews.set(sourceId, key);
+      }
+      if (!previewIsCurrent() || (selection !== generation && workspaceId !== sourceId)) return;
+      const section = $('#desktop-local');
+      if (section.hidden || ![section, $('#native-intake-cancel'), document.body].includes(document.activeElement) ||
+          $('#nav-local').getAttribute('aria-current') !== 'location') return;
+      selectEntry(sourceId);
+      const target = $('#media-editor').hidden ? $('#processing-file-list') : $('#editor-media-name');
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'start' });
+    } catch (error) {
+      if (collectionId === owner && previewIsCurrent() && selection === generation) message(error.message, true);
+      throw error;
+    }
   }
   function updateRecoveryControls() {
     for (const button of panel.querySelectorAll('[data-recovery-action]')) {
@@ -755,6 +798,8 @@
       transport.subscribe(collectionId, data => { if (source === owned) acceptCollection(data); }, () => {
         if (source === owned) {
           closeSource(); collectionId = null; collectionRevision = -1; allDownloads = null;
+          acquiredPreviews.clear(); nativeImporting = false;
+          $('#native-intake-cancel').hidden = true; $('#native-intake-status').hidden = true; publish();
           clearSaveReceipt(); $('#processing-download-note').hidden = true;
           message("Local media expired. Add files to begin again.");
         }
@@ -1252,7 +1297,7 @@
   });
   document.addEventListener('lvovd:workspace-import-playlist', event => importPlaylist(event.detail));
   document.addEventListener('lvovd:workspace-acquire-url', event => acquire(event.detail));
-  root.LVOVDLocalWorkspace = { accept, profileState() { saveSelected(); return profile?.state() || null; },
+  root.LVOVDLocalWorkspace = { accept, openDownloadSource, profileState() { saveSelected(); return profile?.state() || null; },
     collectionState() { saveSelected(); return { collectionId, selectedId: workspaceId, entries: [...entries.values()].map(entry => ({ ...entry.profile?.state(), workspace: structuredClone(entry.snapshot) })), jobs: structuredClone(jobs), limits: structuredClone(limits), intake: structuredClone(intakeBatch) }; } };
   publish();
   if (transport) transport.ready.then(ensureCollection).then(refreshRecovery).catch(error => message(error.message, true));

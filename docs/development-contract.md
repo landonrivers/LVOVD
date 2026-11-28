@@ -4,6 +4,8 @@ This contract records the accepted product and engineering commitments. It appli
 
 ## Local Media workbench decision (2026-10-20)
 
+**Edit Source Video** adds one full reviewed video to the active workbench. Preserve existing files and drafts, apply the selected source profile, resolution or exact stream IDs, and reuse the retained original for playback, cuts and processing. Invoking Edit again on the same Preview and choices selects that file while it remains in the workbench. Only the ordinary Download action applies its range, companions, SponsorBlock and export settings.
+
 The user explicitly approved simplifying PR #54 to **one active workbench with multiple files**. Native launch/reconnection reuses that workbench; there is no New Workbench or workbench switcher. Keep twenty files, per-file cuts/drafts, shared output settings, immutable jobs and aggregate storage accounting. Removed/expired records may remain internally until workers/readers and failed cleanup release them; these are cleanup obligations, not additional editing workbenches. Same-session reconnection restores the active workbench. This replaces the earlier two-workbench presentation requirement without removing media processing options.
 
 ## Product purpose and interface

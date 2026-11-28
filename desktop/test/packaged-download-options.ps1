@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory)][string]$Tools,
     [Parameter(Mandatory)][string]$Destination,
     [Parameter(Mandatory)][string]$Receipt,
-    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock','Extras','Profiles')][string]$Scenario='Fixture'
+    [ValidateSet('Fixture','Captions','AutomaticCaptions','SponsorBlock','Extras','Profiles','EditSource')][string]$Scenario='Fixture'
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -128,6 +128,40 @@ function Probe($File) {
 function Record-File($Mode,$File) {
     $evidence.outputs+=@{mode=$Mode;extension=[IO.Path]::GetExtension($File);bytes=(Get-Item -LiteralPath $File).Length}
 }
+function Get-MediaReads {
+    $server.StandardInput.WriteLine('media-reads')
+    $server.StandardInput.Flush()
+    $line = $server.StandardOutput.ReadLineAsync()
+    if (!$line.Wait(5000) -or !$line.Result) {throw 'Fixture request accounting did not respond.'}
+    $line.Result | ConvertFrom-Json
+}
+function Save-EditorResult($Directory) {
+    Invoke-Control (ById 'conversion-download')
+    $condition = [Windows.Automation.AndCondition]::new(
+        [Windows.Automation.PropertyCondition]::new($ae::NameProperty,'Save processed file'),
+        [Windows.Automation.PropertyCondition]::new($ae::ProcessIdProperty,$AppPid))
+    $end = [DateTime]::UtcNow.AddSeconds(30)
+    do {
+        $dialog = [Windows.Automation.AutomationElement]::RootElement.FindFirst([Windows.Automation.TreeScope]::Children,$condition)
+        if ($dialog) {break}
+        Start-Sleep -Milliseconds 200
+    } while ([DateTime]::UtcNow -lt $end)
+    if (!$dialog) {throw 'LVOVD did not open its Save processed file dialog.'}
+    $edit = Find-Control $dialog $ae::AutomationIdProperty '1001'
+    if (!$edit) {$edit = Find-Control $dialog $ae::NameProperty 'File name:'}
+    $value = $edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+    $extension = [IO.Path]::GetExtension($value.Current.Value)
+    if ($extension -notin '.mp4','.mkv','.webm') {throw "Unexpected editor result extension: $extension"}
+    $target = Join-Path $Directory ('editor-source-' + [guid]::NewGuid() + $extension)
+    $value.SetValue($target)
+    Invoke-Control (Find-Control $dialog $ae::AutomationIdProperty '1')
+    $end = [DateTime]::UtcNow.AddSeconds(30)
+    while (!(Test-Path -LiteralPath $target -PathType Leaf)) {
+        if ([DateTime]::UtcNow -gt $end) {throw 'Local Media did not publish the selected original-file result.'}
+        Start-Sleep -Milliseconds 200
+    }
+    return $target
+}
 function Read-Caption($File) {
     if ($File -notmatch '\.srt$') {throw 'Expected an SRT companion.'}
     $facts=Probe $File
@@ -139,8 +173,8 @@ function Read-Caption($File) {
 if (!(Test-Path -LiteralPath $Destination -PathType Container)) {throw 'A known existing output folder is required.'}
 $server=$null
 try {
-    if ($Scenario -in 'Profiles','Fixture') {
-        if ($Scenario -eq 'Profiles') {$fixtureScript=Join-Path $PSScriptRoot 'profile-fixture.cjs'}
+    if ($Scenario -in 'Profiles','Fixture','EditSource') {
+        if ($Scenario -in 'Profiles','EditSource') {$fixtureScript=Join-Path $PSScriptRoot 'profile-fixture.cjs'}
         $start=New-Object Diagnostics.ProcessStartInfo
         $start.FileName=(Get-Command node.exe).Source
         $start.Arguments='"{0}" serve "{1}"' -f $fixtureScript,$ffmpeg
@@ -203,6 +237,45 @@ try {
             }
             Record-File "144p to $content" $file
         }
+    } elseif ($Scenario -eq 'EditSource') {
+        $case = @($urls.cases | Where-Object { $_.source -eq 'separate' -and $_.cap -eq 720 })
+        if ($case.Count -ne 1) {throw 'Missing competing 720p edit-source fixture.'}
+        $beforeExports = @(Get-ChildItem -LiteralPath $Destination -File | ForEach-Object FullName)
+        $beforeJobs = Count-Named 'Open File'
+        Preview $case[0].url
+        Select-Choice 'dl-profile' 'Maximum Quality'
+        Select-Choice 'dl-height' 'Up to 720p'
+        Open-Panel 'Time range and chapters'
+        Select-Choice 'dl-range' 'Custom range'
+        Set-Text 'dl-start' '0.25'
+        Set-Text 'dl-end' '0.50'
+        Open-Panel 'Extras'
+        Check-Choice $ae::AutomationIdProperty 'dl-metadata'
+        if (@((Get-MediaReads).PSObject.Properties).Count) {throw 'Preview unexpectedly transferred fixture tracks.'}
+        Invoke-Control (ById 'download-edit-source')
+        [void](ById 'conversion-start')
+        $endTime = (ById 'editor-end-time').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
+        if ($endTime -notmatch '^00:00:01\.\d{3}$') {throw "Editor did not receive the full source duration: $endTime"}
+        Open-Panel 'Media Details'
+        $dimensions = '1280 ' + [char]0x00d7 + ' 720'
+        foreach ($fact in 'VP9','Opus',$dimensions) {[void](Wait-Control $ae::NameProperty $fact)}
+        Invoke-Control (ById 'conversion-start')
+        $result = Save-EditorResult (Split-Path -Parent $Receipt)
+        $chosen = [array]::IndexOf($urls.cases,$case[0])
+        & node.exe $fixtureScript verify-editor $ffprobe $chosen $result
+        if ($LASTEXITCODE) {throw 'The editor result did not preserve the selected full-length video and audio packets.'}
+        Record-File 'Edit Source Video, Maximum Quality, 720p' $result
+        $reads = Get-MediaReads
+        if ($reads.'/vp9.mp4' -ne 1 -or $reads.'/opus.mp4' -ne 1 -or @($reads.PSObject.Properties).Count -ne 2) {
+            throw "Expected exactly one GET for each selected track, observed $($reads | ConvertTo-Json -Compress)."
+        }
+        $afterExports = @(Get-ChildItem -LiteralPath $Destination -File | ForEach-Object FullName)
+        if (($beforeExports -join '|') -cne ($afterExports -join '|') -or (Count-Named 'Open File') -ne $beforeJobs) {
+            throw 'Edit Source Video published a Download output or created a saved Download job.'
+        }
+        $evidence.mediaReads = $reads
+        $evidence.editorEnd = $endTime
+        $evidence.dimensions = $dimensions
     } elseif ($Scenario -eq 'Fixture') {
         Preview $urls.chapters
         Open-Panel 'Time range and chapters'

@@ -125,22 +125,9 @@ pub(super) async fn collect(
         .await?
         .media
         .ok_or_else(invalid)?;
-    let compatible = plan.profile == super::Profile::Compatible && options.format_ids.is_empty();
     match options.content {
         Content::Av | Content::Video => {
-            let video = facts.video.ok_or_else(invalid)?;
-            if facts.container.kind != "mp4"
-                || (options.content == Content::Av) != facts.audio.is_some()
-                || compatible
-                    && (video.codec.as_deref() != Some("h264")
-                        || facts
-                            .audio
-                            .is_some_and(|a| a.codec.as_deref() != Some("aac")))
-                || options.format_ids.is_empty()
-                    && options
-                        .max_height
-                        .is_some_and(|h| video.height > u64::from(h))
-            {
+            if facts.container.kind != "mp4" || !plan.matches_video(&facts) {
                 return Err(invalid());
             }
         }

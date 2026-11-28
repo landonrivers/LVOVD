@@ -24,6 +24,26 @@ pub(crate) struct StartRequest {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct EditSourceRequest {
+    workbench_id: Uuid,
+    operation_id: Uuid,
+    preview_id: Uuid,
+    options: lvovd_core::downloads::EditorSourceOptions,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CancelEditSource {
+    workbench_id: Uuid,
+    operation_id: Uuid,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditSourceReply {
+    source_id: Uuid,
+    snapshot: lvovd_core::workbenches::Snapshot,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct DownloadJobRequest {
     job_id: Uuid,
 }
@@ -187,6 +207,39 @@ pub(crate) async fn preview_download(
 ) -> Result<DownloadPreview> {
     state.downloads.preview(request.url).await
 }
+
+#[tauri::command]
+pub(crate) async fn edit_download_source(
+    state: State<'_, AppState>,
+    request: EditSourceRequest,
+) -> Result<EditSourceReply> {
+    let acquisition = state
+        .downloads
+        .review_editor(request.preview_id, request.options)?;
+    let result = state
+        .workbenches
+        .edit_download_source(
+            request.workbench_id,
+            request.operation_id,
+            state.downloads.clone(),
+            acquisition,
+        )
+        .await;
+    state.publish();
+    result.map(|(source_id, snapshot)| EditSourceReply {
+        source_id,
+        snapshot,
+    })
+}
+#[tauri::command]
+pub(crate) fn cancel_edit_download_source(
+    state: State<'_, AppState>,
+    request: CancelEditSource,
+) -> Result<()> {
+    state
+        .workbenches
+        .cancel_edit_download_source(request.workbench_id, request.operation_id)
+}
 #[tauri::command]
 pub(crate) async fn start_download(
     state: State<'_, AppState>,
@@ -266,6 +319,20 @@ mod tests {
                 serde_json::json!({"jobId":id,"path":"/untrusted"})
             )
             .is_err()
+        );
+        let editor = serde_json::json!({
+            "workbenchId": id, "operationId": id, "previewId": id,
+            "options": {"content":"av", "profile":"compatible", "maxHeight":null, "formatIds":[]}
+        });
+        serde_json::from_value::<EditSourceRequest>(editor.clone()).expect("reviewed editor input");
+        for field in ["url", "path", "filename", "destinationId"] {
+            let mut excess = editor.clone();
+            excess[field] = "/untrusted".into();
+            assert!(serde_json::from_value::<EditSourceRequest>(excess).is_err());
+        }
+        assert!(
+            serde_json::from_value::<CancelEditSource>(serde_json::json!({"workbenchId":id}))
+                .is_err()
         );
     }
 }

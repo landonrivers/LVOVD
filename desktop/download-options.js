@@ -22,15 +22,19 @@ globalThis.LVOVDDownloadOptions = function (notify) {
     if (!/^\d+(?::\d+){0,2}(?:\.\d+)?$/.test(text.trim())) return null;
     return text.trim().split(':').reduce((n, part) => n * 60 + Number(part), 0);
   }
-  function read() {
+  function editorSource() {
     const content = value('content'), mode = value('selection');
     const video = content === 'av' || content === 'video';
     const ids = {combined:['combined'],separate:['video','stream'],video:['video'],audio:['stream']};
+    return {content, profile:value('profile'), maxHeight:video && mode==='automatic' && value('height') ? Number(value('height')) : null,
+      formatIds:(ids[mode] || []).map(value)};
+  }
+  function read() {
+    const source = editorSource(), content = source.content;
     const type = content === 'extras' ? 'full' : value('range');
     const range = type === 'custom' ? {type,start:seconds(value('start')),end:seconds(value('end'))} :
       type === 'chapters' ? {type,indexes:selected('chapters').map(Number)} : {type};
-    return {content, profile:value('profile'), audioFormat:value('audio'), maxHeight:video && mode==='automatic' && value('height') ? Number(value('height')) : null,
-      formatIds:(ids[mode] || []).map(value), range, metadata:checked('metadata'), thumbnail:checked('thumbnail'),
+    return {...source, audioFormat:value('audio'), range, metadata:checked('metadata'), thumbnail:checked('thumbnail'),
       subtitles:checked('subs') ? {mode:value('submode'),languages:value('langs').trim()} : null,
       sponsor:content!=='extras' && value('sponsor')!=='off' ? {mode:value('sponsor'),categories:selected('categories')} : null};
   }
@@ -124,5 +128,5 @@ globalThis.LVOVDDownloadOptions = function (notify) {
   }
   form.addEventListener('change',changed);
   form.addEventListener('input',event=>{ if(event.target.type==='text') changed(event); });
-  return {read,valid,reset};
+  return {read,editorSource,valid,reset};
 };

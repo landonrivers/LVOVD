@@ -107,6 +107,10 @@ try {
         & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario Profiles -Receipt $profileReceipt
         if ($LASTEXITCODE) { throw 'Packaged download profile comparison failed.' }
         $details.profileOutputs = Get-Content -Raw -LiteralPath $profileReceipt | ConvertFrom-Json
+        $editReceipt = Join-Path $out 'edit-source-receipt.json'
+        & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario EditSource -Receipt $editReceipt
+        if ($LASTEXITCODE) { throw 'Packaged Edit Source Video acceptance failed.' }
+        $details.editSource = Get-Content -Raw -LiteralPath $editReceipt | ConvertFrom-Json
         Assert-NoApplicationListener $viewer.Id
         $details.fixtureDownload = $true
     }

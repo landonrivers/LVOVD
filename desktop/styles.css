@@ -124,6 +124,11 @@ input[type=checkbox], input[type=radio], .processing-rate-choice input { accent-
 .download-delivery { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
 .download-delivery #download-filename { min-width: 0; flex: 1 1 12em; margin: 0; }
 #download-start { min-width: 136px; }
+#download-edit-source { color: var(--leaf); border: 1px solid var(--leaf); background: var(--sheet); }
+#download-edit-source:enabled:hover { background: var(--wash); }
+#download-edit-source:disabled { color: var(--muted); border-color: var(--rule); }
+#download-edit-note { margin: 4px 0 0; color: var(--muted); }
+#download-edit-note:empty { display: none; }
 #download-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; margin: 8px 0; }
 .download-disclosures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 5px 7px; }
 .disclosure-column { min-width: 0; display: grid; gap: 5px; }

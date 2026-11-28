@@ -93,6 +93,24 @@ pub(super) fn preview_args(tools: &Tools, url: &Url) -> Result<Vec<OsString>> {
     Ok(args)
 }
 
+fn acquisition_base(tools: &Tools) -> Result<Vec<OsString>> {
+    let mut args = args(tools)?;
+    args.extend(["--no-playlist", "--playlist-end", "1", "--match-filter", "!is_live & !has_drm",
+        "--newline", "--progress", "--progress-delta", "0.25", "--no-simulate", "--quiet",
+        "--progress-template", "download:LVOVD|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
+        "--progress-template", "postprocess:LVOVD_POST",
+    ].map(Into::into));
+    Ok(args)
+}
+
+fn acquisition_output(args: &mut Vec<OsString>, directory: &Path, url: &Url) {
+    args.push("--paths".into());
+    // Provider metadata never decides the path to write or publish.
+    args.push(directory.as_os_str().into());
+    args.extend(["--output", "media.%(ext)s"].map(OsString::from));
+    append_source(args, url);
+}
+
 pub(super) fn acquire_args(
     tools: &Tools,
     url: &Url,
@@ -100,18 +118,51 @@ pub(super) fn acquire_args(
     section: &super::options::Section,
     directory: &Path,
 ) -> Result<Vec<OsString>> {
-    let mut args = args(tools)?;
-    args.extend(["--no-playlist", "--playlist-end", "1", "--match-filter", "!is_live & !has_drm",
-        "--newline", "--progress", "--progress-delta", "0.25", "--no-simulate", "--quiet",
-        "--progress-template", "download:LVOVD|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
-        "--progress-template", "postprocess:LVOVD_POST",
-    ].map(Into::into));
+    let mut args = acquisition_base(tools)?;
     args.extend(plan.provider_args(section));
-    args.push("--paths".into());
-    // Provider metadata never decides the path to write or publish.
-    args.push(directory.as_os_str().into());
-    args.extend(["--output", "media.%(ext)s"].map(OsString::from));
-    append_source(&mut args, url);
+    acquisition_output(&mut args, directory, url);
+    Ok(args)
+}
+
+pub(super) fn editor_args(
+    tools: &Tools,
+    acquisition: &super::EditorAcquisition,
+    directory: &Path,
+    maximum_bytes: u64,
+) -> Result<Vec<OsString>> {
+    let mut args = acquisition_base(tools)?;
+    let plan = &acquisition.plan;
+    args.extend(
+        [
+            "--retries",
+            "0",
+            "--fragment-retries",
+            "0",
+            "--extractor-retries",
+            "0",
+            "--file-access-retries",
+            "0",
+            "--max-filesize",
+        ]
+        .map(Into::into),
+    );
+    args.push(maximum_bytes.to_string().into());
+    args.push("--format".into());
+    args.push(
+        plan.selector
+            .as_deref()
+            .expect("editor plans select video")
+            .into(),
+    );
+    if plan.options.content == super::options::Content::Av && plan.selected.len() != 1 {
+        let container = if plan.selected.is_empty() && plan.profile == Profile::Compatible {
+            "mp4"
+        } else {
+            "mkv"
+        };
+        args.extend(["--merge-output-format", container].map(Into::into));
+    }
+    acquisition_output(&mut args, directory, &acquisition.url);
     Ok(args)
 }
 
@@ -150,7 +201,7 @@ pub(super) fn visual_evidence(format: &Value) -> bool {
         .any(|key| number(&format[*key]).is_some_and(|v| v > 0.0))
 }
 
-fn filename(title: &str, id: Option<&str>) -> String {
+pub(super) fn filename_stem(title: &str, id: Option<&str>) -> String {
     // Bound UTF-8 bytes, including on filesystems with a 255-byte component limit.
     fn component(value: &str, max: usize) -> String {
         let mut out = String::new();
@@ -177,7 +228,11 @@ fn filename(title: &str, id: Option<&str>) -> String {
     if pattern!(r"(?i)^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])([. ]|$)").is_match(&stem) {
         stem.insert(0, '_');
     }
-    format!("{stem}.mp4")
+    stem
+}
+
+fn filename(title: &str, id: Option<&str>) -> String {
+    format!("{}.mp4", filename_stem(title, id))
 }
 
 pub(super) fn metadata(bytes: &[u8], url: &Url) -> Result<(DownloadPreview, Option<String>)> {
@@ -340,8 +395,17 @@ pub(super) fn metadata(bytes: &[u8], url: &Url) -> Result<(DownloadPreview, Opti
 }
 
 #[derive(Default)]
-pub(super) struct ProgressLines(Vec<u8>);
+pub(super) struct ProgressLines {
+    line: Vec<u8>,
+    maximum_bytes: Option<u64>,
+}
 impl ProgressLines {
+    pub(super) fn editor(maximum_bytes: u64) -> Self {
+        Self {
+            line: Vec::new(),
+            maximum_bytes: Some(maximum_bytes),
+        }
+    }
     pub(super) fn feed(
         &mut self,
         bytes: &[u8],
@@ -349,7 +413,7 @@ impl ProgressLines {
     ) -> Result<()> {
         for &byte in bytes {
             if byte == b'\n' {
-                let line = String::from_utf8_lossy(&self.0);
+                let line = String::from_utf8_lossy(&self.line);
                 if let Some(values) = line.trim().strip_prefix("LVOVD|") {
                     let mut values = values
                         .split('|')
@@ -357,6 +421,14 @@ impl ProgressLines {
                     let downloaded = values.next().flatten();
                     let total = values.next().flatten();
                     let estimated = values.next().flatten();
+                    if let Some(maximum) = self.maximum_bytes
+                        && [downloaded, total.or(estimated)]
+                            .into_iter()
+                            .flatten()
+                            .any(|size| size > maximum as f64)
+                    {
+                        return Err(super::editor::too_large());
+                    }
                     report(Some(DownloadProgress {
                         percent: downloaded
                             .zip(total.or(estimated))
@@ -368,9 +440,9 @@ impl ProgressLines {
                 } else if line.trim() == "LVOVD_POST" {
                     report(None);
                 }
-                self.0.clear();
-            } else if self.0.len() < 8192 {
-                self.0.push(byte);
+                self.line.clear();
+            } else if self.line.len() < 8192 {
+                self.line.push(byte);
             } else {
                 return Err(AppError::new(
                     "TOOL_OUTPUT",

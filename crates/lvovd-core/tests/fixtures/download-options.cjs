@@ -11,7 +11,15 @@ function compare(native, released, section) {
   const expected = {};
   for(const flag of flags) if(args.includes(flag)) expected[flag]=args[args.indexOf(flag)+1];
   for(const flag of ['--skip-download','--write-info-json','--write-thumbnail','--write-subs','--write-auto-subs']) if(args.includes(flag)) expected[flag]=true;
-  cases.push({native,expected});
+  const entry = {native, expected};
+  if (['av','video'].includes(native.content) && !section) {
+    const profile = native.profile || 'compatible';
+    const sourceFormat = released.sourceFormat || {mode:'auto'};
+    const source = ref.normalizeWorkspaceAcquisition({content:native.content,profile,maxHeight:native.maxHeight,sourceFormat});
+    const editor = ref.buildWorkspaceAcquisitionArgs('https://example.invalid/video',source,'media.%(ext)s',8192);
+    entry.editor = {format:editor[editor.indexOf('--format')+1], merge:editor.includes('--merge-output-format') ? editor[editor.indexOf('--merge-output-format')+1] : null};
+  }
+  cases.push(entry);
 }
 for(const content of ['av','video']) for(const profile of ['compatible','maximum']) for(const maxHeight of [null,144,540,720,8640]) {
   const choice={content,profile,maxHeight}; compare(choice,choice);

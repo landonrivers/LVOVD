@@ -37,6 +37,14 @@ async function setup(page, bridge = true, retired = false) {
         if (command === 'acknowledge_workbench') return;
         if (command === 'runtime_health') return Object.fromEntries(['ffmpeg', 'ffprobe', 'ytdlp', 'providerRuntime'].map(key => [key, { installed: true, version: 'test' }]));
         if (command === 'pick_source') return new Promise(resolve => { fixture.resolvePick = i => resolve({ sources: [fixture.sources[i]], failure: null }); });
+        if (command === 'edit_download_source') return new Promise(resolve => {
+          fixture.acquisitions = (fixture.acquisitions || 0) + 1;
+          fixture.acquisition = args.request;
+          fixture.finishAcquisition = (revision, indices) => resolve({
+            sourceId: ids[1], snapshot: state(args.request.workbenchId, revision, indices)
+          });
+        });
+        if (command === 'cancel_edit_download_source') { fixture.cancelledAcquisition = args.request; return; }
         if (command === 'remove_source') return new Promise((resolve, reject) => {
           fixture.rejectRemoval = () => reject({ message: 'obsolete failure' });
           fixture.resolveRemoval = () => resolve(state(args.request.workbenchId, 2, [1], [fixture.sources[0].assetId]));
@@ -69,6 +77,38 @@ async function setup(page, bridge = true, retired = false) {
   page.on('dialog', dialog => dialog.accept());
 }
 
+test('a retained editor source is reused and a delayed acquisition cannot restore removed media or take focus', async ({ page }) => {
+  await setup(page);
+  await page.evaluate(() => {
+    if (!crypto.randomUUID) crypto.randomUUID = () => '30000000-0000-4000-8000-000000000001';
+    fixture.snapshot(1, [0]);
+    fixture.edit = preview => LVOVDLocalWorkspace.openDownloadSource(preview,
+      {content:'av',profile:'maximum',maxHeight:720,formatIds:[]}, () => true);
+    fixture.current = fixture.edit('preview-one');
+  });
+  await page.waitForFunction(() => !!fixture.finishAcquisition);
+  await page.evaluate(async () => {
+    document.getElementById('nav-local').click();
+    fixture.finishAcquisition(3, [0,1]); await fixture.current;
+    await fixture.edit('preview-one');
+  });
+  await expect(page.locator('#processing-file-list')).toHaveValue(ids[1]);
+  expect(await page.evaluate(() => fixture.acquisitions)).toBe(1);
+  await page.evaluate(() => { fixture.current = fixture.edit('preview-two'); });
+  await page.waitForFunction(() => fixture.acquisitions === 2);
+  await page.evaluate(() => fixture.snapshot(4, [0,1], [], null, {importing:true, editorAcquisitionId:fixture.acquisition.operationId}));
+  await page.getByRole('button', {name:'Cancel acquisition'}).click();
+  expect(await page.evaluate(() => fixture.cancelledAcquisition)).toEqual({
+    workbenchId:'20000000-0000-4000-8000-000000000001', operationId:await page.evaluate(() => fixture.acquisition.operationId)
+  });
+  await page.locator('#nav-settings').click();
+  await page.evaluate(async () => {
+    fixture.snapshot(5, [0]); fixture.finishAcquisition(4, [0,1]); await fixture.current;
+  });
+  await expect(page.locator('#desktop-settings')).toBeFocused();
+  await expect(page.locator('#processing-file-list option')).toHaveCount(1);
+  await expect(page.locator('#processing-file-list')).toHaveValue(ids[0]);
+});
 
 test.describe('native drop targeting', () => {
   test.use({ deviceScaleFactor: 2, viewport: { width: 960, height: 640 } });

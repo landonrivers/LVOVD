@@ -124,6 +124,12 @@ async fn single_video_arguments_match_released_options() {
     .unwrap();
     let cases: Vec<serde_json::Value> = serde_json::from_slice(&run.stdout).unwrap();
     let preview = reviewed_options_fixture();
+    let manager = Downloads::new(dir.path(), Tools::bundled(dir.path())).unwrap();
+    manager.state.lock().unwrap().reviews.push_back(Reviewed {
+        url: provider::validate_url("https://example.invalid/video").unwrap(),
+        preview: preview.clone(),
+        time: Instant::now(),
+    });
     for case in cases {
         let opts: DownloadOptions = serde_json::from_value(case["native"].clone()).unwrap();
         let plan = opts.plan(&preview).unwrap();
@@ -154,6 +160,57 @@ async fn single_video_arguments_match_released_options() {
             "{}",
             case["native"]
         );
+        if let Some(expected) = case.get("editor") {
+            let native = &case["native"];
+            let source: EditorSourceOptions = serde_json::from_value(serde_json::json!({
+                "content":native["content"], "profile":native["profile"].as_str().unwrap_or("compatible"),
+                "maxHeight":native["maxHeight"],"formatIds":native.get("formatIds").cloned().unwrap_or_else(|| serde_json::json!([]))
+            })).unwrap();
+            let acquisition = manager.review_editor(preview.preview_id, source).unwrap();
+            let args =
+                provider::editor_args(&manager.tools, &acquisition, dir.path(), 8192).unwrap();
+            let flags: Vec<_> = args.iter().map(|flag| flag.to_str().unwrap()).collect();
+            let value = |flag: &str| {
+                flags
+                    .windows(2)
+                    .find(|pair| pair[0] == flag)
+                    .map(|pair| pair[1])
+            };
+            let selected = expected["format"].as_str().unwrap();
+            let selector = if acquisition.plan.selected.is_empty() {
+                selected.into()
+            } else {
+                selected
+                    .split('+')
+                    .map(|id| format!("all[format_id='{id}']"))
+                    .collect::<Vec<_>>()
+                    .join("+")
+            };
+            assert_eq!(value("--format"), Some(selector.as_str()));
+            assert_eq!(value("--merge-output-format"), expected["merge"].as_str());
+            for flag in [
+                "--retries",
+                "--fragment-retries",
+                "--extractor-retries",
+                "--file-access-retries",
+            ] {
+                assert_eq!(value(flag), Some("0"));
+            }
+            assert_eq!(value("--max-filesize"), Some("8192"));
+            for flag in [
+                "--download-sections",
+                "--remux-video",
+                "--extract-audio",
+                "--write-info-json",
+                "--write-thumbnail",
+                "--write-subs",
+                "--write-auto-subs",
+                "--sponsorblock-mark",
+                "--sponsorblock-remove",
+            ] {
+                assert!(!flags.contains(&flag));
+            }
+        }
     }
     for invalid in [
         serde_json::json!({"maxHeight":143}),
@@ -183,6 +240,137 @@ fn video_only_with_unknown_height_keeps_the_released_maximum_profile() {
     assert!(choices.video);
     assert!(!choices.compatible_video);
     assert!(choices.video_heights.is_empty());
+}
+
+#[tokio::test]
+async fn editor_source_requires_current_video_choices_and_waits_for_the_shared_source_slot() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = Downloads::new(root.path(), Tools::bundled(root.path())).unwrap();
+    let preview = reviewed_options_fixture();
+    let id = preview.preview_id;
+    let json = serde_json::json!({"content":"av","profile":"maximum","maxHeight":144,"formatIds":["v","a"]});
+    let options = || serde_json::from_value::<EditorSourceOptions>(json.clone()).unwrap();
+    assert!(matches!(
+        manager.review_editor(id, options()),
+        Err(AppError {
+            code: "PREVIEW_EXPIRED",
+            ..
+        })
+    ));
+    manager.state.lock().unwrap().reviews.push_back(Reviewed {
+        url: provider::validate_url("https://example.invalid/editor").unwrap(),
+        preview: preview.clone(),
+        time: Instant::now(),
+    });
+    let acquisition = manager.review_editor(id, options()).unwrap();
+    let mut changed = preview.clone();
+    changed
+        .choices
+        .formats
+        .iter_mut()
+        .find(|s| s.id == "v")
+        .unwrap()
+        .height = Some(1080);
+    assert_eq!(
+        acquisition.plan.revalidate(&changed).unwrap_err().code,
+        "PREVIEW_CHANGED"
+    );
+    changed.choices.formats.retain(|s| s.id != "v");
+    assert!(acquisition.plan.revalidate(&changed).is_err());
+    for changes in [
+        serde_json::json!({"content":"audio"}),
+        serde_json::json!({"content":"extras"}),
+        serde_json::json!({"formatIds":["missing"]}),
+        serde_json::json!({"maxHeight":99}),
+    ] {
+        let mut invalid = json.clone();
+        invalid
+            .as_object_mut()
+            .unwrap()
+            .extend(changes.as_object().unwrap().clone());
+        assert!(
+            manager
+                .review_editor(id, serde_json::from_value(invalid).unwrap())
+                .is_err()
+        );
+    }
+    for key in ["profile", "maxHeight", "formatIds", "content"] {
+        let mut missing = json.clone();
+        missing.as_object_mut().unwrap().remove(key);
+        assert!(serde_json::from_value::<EditorSourceOptions>(missing).is_err());
+    }
+    for key in [
+        "range",
+        "sponsor",
+        "thumbnail",
+        "metadata",
+        "subtitles",
+        "url",
+    ] {
+        let mut invalid = json.clone();
+        invalid[key] = true.into();
+        assert!(serde_json::from_value::<EditorSourceOptions>(invalid).is_err());
+    }
+    let slot = manager.source.clone().acquire_owned().await.unwrap();
+    let cancel = CancellationToken::new();
+    let staging = tempfile::tempdir().unwrap();
+    let import = manager.acquire_editor(&acquisition, staging.path(), 4096, &cancel);
+    tokio::pin!(import);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(25), &mut import)
+            .await
+            .is_err()
+    );
+    cancel.cancel();
+    assert_eq!(import.await.unwrap_err().code, "CANCELLED");
+    assert_eq!(std::fs::read_dir(staging.path()).unwrap().count(), 0);
+    assert!(manager.snapshot().jobs.is_empty());
+    drop(slot);
+    manager.shutdown().await.unwrap();
+}
+
+#[test]
+fn editor_inspection_accepts_full_timed_video_and_rejects_missing_or_incompatible_streams() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = Downloads::new(root.path(), Tools::bundled(root.path())).unwrap();
+    let preview = reviewed_options_fixture();
+    let id = preview.preview_id;
+    manager.state.lock().unwrap().reviews.push_back(Reviewed {
+        url: provider::validate_url("https://example.invalid/editor").unwrap(),
+        preview,
+        time: Instant::now(),
+    });
+    let review = |mode: &str, profile: &str| {
+        manager.review_editor(id,
+        serde_json::from_value(serde_json::json!({"content":mode,"profile":profile,"maxHeight":720,"formatIds":[]})).unwrap()).unwrap()
+    };
+    let av = review("av", "compatible");
+    let video = review("video", "maximum");
+    let raw = serde_json::json!({"format":{"format_name":"mov,mp4","duration":"17"},"streams":[
+        {"index":0,"codec_type":"video","codec_name":"h264","height":720,"width":1280},
+        {"index":1,"codec_type":"audio","codec_name":"aac","channels":2,"sample_rate":48000}]});
+    let inspect = |raw: &serde_json::Value| {
+        crate::inspection::normalize(&serde_json::to_vec(raw).unwrap()).unwrap()
+    };
+    assert!(av.validate_source(&inspect(&raw)).is_ok());
+    assert!(video.validate_source(&inspect(&raw)).is_err());
+    let mut silent = raw.clone();
+    silent["streams"].as_array_mut().unwrap().pop();
+    assert!(video.validate_source(&inspect(&silent)).is_ok());
+    assert!(av.validate_source(&inspect(&silent)).is_err());
+    for (field, invalid) in [
+        ("codec_name", serde_json::json!("vp9")),
+        ("height", serde_json::json!(1080)),
+    ] {
+        let mut changed = raw.clone();
+        changed["streams"][0][field] = invalid;
+        assert!(av.validate_source(&inspect(&changed)).is_err());
+    }
+    let mut missing = raw.clone();
+    missing["format"]["duration"] = serde_json::Value::Null;
+    assert!(av.validate_source(&inspect(&missing)).is_err());
+    missing["streams"].as_array_mut().unwrap().remove(0);
+    assert!(av.validate_source(&inspect(&missing)).is_err());
 }
 
 #[tokio::test]

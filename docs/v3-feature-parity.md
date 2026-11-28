@@ -30,11 +30,11 @@ Normal migration CI allows honest Missing/Ported/Integrated entries. The strict 
 
 Download is the initial application view. Preserve the existing JavaScript controls and defaults in Download, Local Media, History and Settings. Compact layout changes cannot remove options. Download audio conversion and strict Local Media FLAC remain distinct contracts. Extras, subtitles/languages, chapter outputs, SponsorBlock, advanced source formats, native save recovery and custom tools/plugins are explicit 8D work, not optional post-release enhancements.
 
-[8B](desktop-media-policies.md) and [8C](desktop-local-media.md) merged into staging. [8D.1](desktop-first-download.md) adds the first single-URL Download workflow. Further 8D stages cover single-source options, playlists, both acquisition handoffs, History, multi-output saving and provider management. 8E completes navigation, settings, lifecycle and cutover. 8F validates packages, updates and maintenance. Stage PRs target `staging/v3-desktop`. Stable release requires the complete register and packaged acceptance. Roadmap #7 remains incomplete.
+[8B](desktop-media-policies.md) and [8C](desktop-local-media.md) merged into staging. [8D.1](desktop-first-download.md) adds the first single-URL Download workflow. Draft PR #56 connects single-video options and Edit Source Video to the workbench. Further 8D stages cover playlists and playlist intake, History, multi-output saving and provider management. 8E completes navigation, settings, lifecycle and cutover. 8F validates packages, updates and maintenance. Stage PRs target `staging/v3-desktop`. Stable release requires the complete register and packaged acceptance. Roadmap #7 remains incomplete.
 
 <!-- parity-table:start -->
 
-87 required entries: 33 Missing, 0 Ported, 17 Integrated, 37 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 32 Missing, 0 Ported, 18 Integrated, 37 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -68,7 +68,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.progress` | Download progress | Download / Queue | 8D | Missing |
 | `download.outputs` | Prepared Download outputs | Download / Queue | 8D | Missing |
 | `download.cleanup` | Download expiry and cleanup | Download / Queue | 8D | Missing |
-| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Missing |
+| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Integrated |
 | `handoff.playlist-intake` | Add Selected to Local Media | Download → Local Media | 8D | Missing |
 | `media.intake` | Multiple local files | Local Media / Files | 8C | Verified |
 | `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Verified |

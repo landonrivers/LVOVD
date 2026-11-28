@@ -1486,7 +1486,7 @@
         "operations": [
           "preview_source",
           "start_download",
-          "import_url",
+          "edit_download_source",
           "import_playlist"
         ]
       },
@@ -1516,7 +1516,7 @@
         "Run overlapping workflow requests and verify only one application-controlled acquisition owns the coordinator."
       ],
       "evidence": [],
-      "remaining": "Preview and single-URL acquisition share one remote slot. Playlist queries and both handoffs must join it in 8D.3."
+      "remaining": "Preview, single-video Download and Edit Source Video share one remote slot. Playlist queries and playlist intake must join it in 8D.3."
     },
     {
       "id": "download.pacing",
@@ -1941,27 +1941,47 @@
         "location": "Download → Local Media",
         "stage": "8D",
         "operations": [
-          "import_url"
+          "edit_download_source",
+          "cancel_edit_download_source"
         ]
       },
-      "status": "Missing",
+      "status": "Integrated",
       "implementation": {
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/editor.rs",
+          "crates/lvovd-core/src/downloads/provider.rs",
+          "crates/lvovd-core/src/workbenches.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/download-options.js",
+          "desktop/downloads.js",
+          "desktop/workspace-transport.js",
+          "public/local-workspace.js"
+        ]
       },
       "tests": {
         "reference": [
           "test/url-edit-acquisition.test.js",
           "test/options.test.js"
         ],
-        "rust": [],
-        "native": []
+        "rust": [
+          "crates/lvovd-core/src/downloads/tests.rs",
+          "crates/lvovd-core/src/assets.rs",
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "src-tauri/src/download_commands.rs"
+        ],
+        "native": [
+          "desktop/test/edit-source.cjs",
+          "desktop/test/packaged-download-options.ps1"
+        ]
       },
       "acceptance": [
         "Cuts/processes reuse the owned original; cancellation cleans owned intake without another download."
       ],
       "evidence": [],
-      "remaining": "Rust operation and full native workflow are not implemented."
+      "remaining": "Record the native acquisition, reuse and cancellation receipts on all four architectures and the packet comparison from the extracted Windows package."
     },
     {
       "id": "handoff.playlist-intake",
@@ -6094,7 +6114,7 @@
           "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
         }
       ],
-      "remaining": "Persistent Download History and Use Again, both acquisition-to-editor handoffs, and whole-application keyboard and display-scaling acceptance remain. Download, its queue and Local Media share a scroll surface. Settings opens separately."
+      "remaining": "Persistent Download History and Use Again, playlist intake, and whole-application keyboard and display-scaling acceptance remain. Download, its queue and Local Media share a scroll surface. A single-video Preview can open its source in Local Media. Settings opens separately."
     },
     {
       "id": "desktop.settings",

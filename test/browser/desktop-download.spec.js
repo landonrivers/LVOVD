@@ -31,6 +31,9 @@ test('single-media options follow the reviewed formats, chapter selection and co
   await field('range').selectOption('chapters');
   await page.getByLabel('2. Second').check();
   await expect(page.locator('#download-filename')).toHaveText('Fixture - Chapter 2.mp4');
+  expect(await page.evaluate(() => optionsForm.editorSource())).toEqual({
+    content:'av', profile:'maximum', maxHeight:null, formatIds:['v','a']
+  });
   await page.locator('#dl-sponsors summary').click();
   await field('sponsor').selectOption('remove');
   await page.getByLabel('Intro',{exact:true}).check();
@@ -129,4 +132,28 @@ test('Download keeps the latest preview and job revision across navigation', asy
   expect(commands).toHaveLength(2);
   expect(commands[0]).toMatchObject({ name:'start_download', request:{ previewId:'<img src=x>', destinationId:'first', options:{ content:'video', maxHeight:360 } } });
   expect(commands[1]).toEqual({ name:'reveal_download', request:{ jobId:'job-one' } });
+  const edit = page.getByRole('button', {name:'Edit Source Video'});
+  await page.locator('#dl-content-audio').check();
+  await expect(edit).toBeDisabled();
+  await page.locator('#dl-content-extras').check();
+  await expect(edit).toBeDisabled();
+  await page.locator('#dl-content-video').check();
+  await page.locator('#dl-height').selectOption('360');
+  await page.locator('#dl-times summary').click();
+  await page.locator('#dl-range').selectOption('custom');
+  await page.locator('#dl-end').fill('');
+  await expect(page.locator('#download-start')).toBeDisabled();
+  await expect(edit).toBeEnabled();
+  await page.evaluate(() => {
+    fixture.edits = [];
+    window.LVOVDLocalWorkspace = { openDownloadSource(previewId, options) {
+      fixture.edits.push({previewId, options});
+      return new Promise(resolve => { fixture.finishEdit = resolve; });
+    } };
+  });
+  await edit.click();
+  await expect(edit).toBeDisabled();
+  await page.evaluate(() => { document.getElementById('download-edit-source').click(); fixture.finishEdit(); });
+  expect(await page.evaluate(() => fixture.edits)).toEqual([{previewId:'<img src=x>',
+    options:{content:'video', profile:'compatible', maxHeight:360, formatIds:[]}}]);
 });

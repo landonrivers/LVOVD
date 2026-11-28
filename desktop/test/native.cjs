@@ -76,7 +76,7 @@ async function scenario(file, index, provider, providerReplay) {
     await browser.waitUntil(async () => (await browser.$('#connection').getText()).startsWith('Desktop ·'), { timeout: 15000 });
     await browser.waitUntil(async () => (await browser.$$('#runtime span')).length === 4, { timeout: 10000, timeoutMsg: 'Bounded runtime health did not finish' });
     assert.equal(await browser.$('#desktop-download').isDisplayed(), true, 'Download must be the initial application view');
-    if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir, ffmpeg);
+    if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir, ffmpeg, processedFolder);
     if (providerReplay) await replay.verify(browser, providerReplay, destination, env.LVOVD_DESKTOP_FFPROBE, ffmpeg);
     await browser.$('#nav-local').click();
     await browser.execute(() => { window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(e.message)); window.addEventListener('unhandledrejection',e=>window.__errors.push(String(e.reason))); });

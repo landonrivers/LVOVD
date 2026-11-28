@@ -75,17 +75,19 @@ async function start(ffmpeg) {
       unknownResolution: provider.url,
       resolutions: new URL('resolutions.mpd', provider.url).href,
       cases: cases.map(c => ({ ...c, url: new URL(c.source + '.mpd', provider.url).href })),
+      mediaReads: provider.mediaReads, holdMedia: provider.holdMedia, held: provider.held, release: provider.release,
       async close() { await provider.close(); fs.rmSync(dir, { recursive: true, force: true }); },
     };
   } catch (error) { fs.rmSync(dir, { recursive: true, force: true }); throw error; }
 }
 
-function probe(ffprobe, file) {
+function probe(ffprobe, file, editorSource = false) {
   const data = execFileSync(ffprobe, ['-v', 'error', '-show_entries',
     'format=format_name:stream=index,codec_name,codec_type,width,height,extradata_hash:packet=stream_index,data_hash',
     '-show_data_hash', 'sha256', '-of', 'json', file], { encoding: 'utf8', timeout: 15000, windowsHide: true });
   const { format, streams, packets } = JSON.parse(data);
-  assert.ok(format.format_name.split(',').includes('mp4'));
+  const containers = format.format_name.split(',');
+  assert.ok(containers.includes('mp4') || (editorSource && containers.includes('matroska')));
   return streams.map(({index, ...stream}) => {
     const hashes = packets.filter(p => p.stream_index === index).map(p => p.data_hash);
     assert.ok(hashes.length && hashes.every(hash => /^SHA256:[0-9a-f]{64}$/i.test(hash)));
@@ -93,9 +95,9 @@ function probe(ffprobe, file) {
   });
 }
 
-function verify(ffprobe, file, scenario) {
-  assert.equal(path.extname(file), '.mp4');
-  const actual = probe(ffprobe, file);
+function verify(ffprobe, file, scenario, editorSource = false) {
+  if (!editorSource) assert.equal(path.extname(file), '.mp4');
+  const actual = probe(ffprobe, file, editorSource);
   assert.equal(actual.length, 2);
   for (const kind of ['video', 'audio']) {
     const expected = probe(ffprobe, path.join(inputs, tracks[scenario[kind]].file));
@@ -114,10 +116,14 @@ if (require.main === module) {
     start(tool).then(fixture => {
       const { cases, resolutions, unknownResolution } = fixture;
       process.stdout.write(JSON.stringify({ cases, resolutions, unknownResolution }) + '\n');
-      process.stdin.resume();
-      process.stdin.once('end', () => fixture.close());
+      const commands = require('node:readline').createInterface({ input: process.stdin });
+      commands.on('line', command => {
+        if (command === 'media-reads') process.stdout.write(JSON.stringify(fixture.mediaReads()) + '\n');
+      });
+      commands.once('close', () => fixture.close());
     }).catch(error => { console.error(error); process.exitCode = 1; });
   } else if (action === 'verify') verify(tool, file, cases[Number(index)]);
+  else if (action === 'verify-editor') verify(tool, file, cases[Number(index)], true);
   else if (action === 'verify-audio') verifySourceAudio(tool, index);
   else throw new Error('Unknown fixture operation');
 }

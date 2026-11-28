@@ -14,7 +14,8 @@
     else { current = value; revision++; }
     const jobs = value.jobs.map(job => { const failure = job.failure?.workspaceFailure || job.failure; return { ...job, workspaceId: job.sourceId, message: job.failure?.message, failure: failure && { ...failure, explanation: failure.explanation || job.failure.message } }; });
     return { id: value.workbenchId, revision, connectionEpoch: connection, limits: { maxEntries: 20 }, jobs,
-      intakeFailure: value.intakeFailure, importing: value.importing, removedCleanup: value.cleanup.map(id => ({ workspaceId: id, name: 'Removed file', status: value.failedCleanup.includes(id) ? 'failed' : 'pending', message: value.failedCleanup.includes(id) ? 'Retry temporary-file cleanup.' : 'Waiting for active resources to close.' })),
+      intakeFailure: value.intakeFailure, importing: value.importing, editorAcquisitionId: value.editorAcquisitionId,
+      removedCleanup: value.cleanup.map(id => ({ workspaceId: id, name: 'Removed file', status: value.failedCleanup.includes(id) ? 'failed' : 'pending', message: value.failedCleanup.includes(id) ? 'Retry temporary-file cleanup.' : 'Waiting for active resources to close.' })),
       workspaces: value.sources.map(source => {
         const id = source.assetId, preview = value.previews.find(p => p.sourceAssetId === id), waveform = value.waveforms.find(p => p.sourceAssetId === id);
         const editor = value.editors.find(p => p.sourceId === id) || { eligible: false };
@@ -33,7 +34,7 @@
           message = progress?.validating ? 'Validating output…' : progress?.passes === 2
             ? `Pass ${progress.pass} of 2 · Attempt ${progress.attempt}` : 'Processing…';
         } else if (job?.status === 'cancelling') message = 'Cancelling…';
-        return { id, sourceAssetId: id, purpose: 'local', source: { name: source.name, size: source.size, origin: 'local' }, inspection: source.inspection.media,
+        return { id, sourceAssetId: id, purpose: 'local', source: { name: source.name, size: source.size, origin: source.origin || 'local' }, inspection: source.inspection.media,
           status: 'ready', activeOperation: preview?.status === 'preparing' ? 'proxying' : null,
           processingRevision: value.processingRevisions.find(([sourceId]) => sourceId === id)?.[1] ?? null,
           editor: { ...editor, operationId: preview?.operationId, status: preview?.status || 'idle', message: preview?.message }, waveform: waveform || { status: 'idle' },
@@ -133,6 +134,11 @@
       });
     },
     async pick(id) { return native.call('pick_source', { request: { workbenchId: id } }); },
+    async editDownloadSource(request) {
+      const epoch = connection;
+      const result = await native.call('edit_download_source', { request });
+      return { sourceId: result.sourceId, collection: projection(result.snapshot, epoch) };
+    },
     async save(output) {
       return native.call('save_result', { request: { workbenchId: active, resultId: output.assetId } });
     },

@@ -1,5 +1,7 @@
 //! Rust owns the reviewed source, worker, temporary result and saved-file receipt.
 mod artwork;
+mod editor;
+pub use editor::{EditorAcquisition, EditorSourceOptions};
 #[cfg(test)]
 mod fixture_tests;
 mod options;
@@ -156,6 +158,23 @@ struct State {
     pending: HashMap<Url, PreviewCell>,
     worker: bool,
     closing: bool,
+}
+
+impl State {
+    fn reviewed(&self, preview_id: Uuid) -> Result<&Reviewed> {
+        if self.closing {
+            return Err(closed());
+        }
+        self.reviews
+            .iter()
+            .find(|r| r.preview.preview_id == preview_id && r.time.elapsed() < TTL)
+            .ok_or_else(|| {
+                AppError::new(
+                    "PREVIEW_EXPIRED",
+                    "Preview this URL again to use the source.",
+                )
+            })
+    }
 }
 
 pub struct Downloads {
@@ -361,19 +380,7 @@ impl Downloads {
     ) -> Result<DownloadSnapshot> {
         let directory_id = destination_id(&destination)?;
         let mut state = self.state.lock().unwrap();
-        if state.closing {
-            return Err(closed());
-        }
-        let review = state
-            .reviews
-            .iter()
-            .find(|r| r.preview.preview_id == preview_id && r.time.elapsed() < TTL)
-            .ok_or_else(|| {
-                AppError::new(
-                    "PREVIEW_EXPIRED",
-                    "Preview this URL again before downloading.",
-                )
-            })?;
+        let review = state.reviewed(preview_id)?;
         let plan = options.plan(&review.preview)?;
         if state.jobs.len() >= SNAPSHOT_ROWS {
             return Err(AppError::new(
@@ -494,40 +501,14 @@ impl Downloads {
                 .map_err(|_| directory_error())?,
         );
         let permit = Arc::new(permit);
-        if !plan.options.format_ids.is_empty()
-            || matches!(plan.options.range, options::Range::Chapters { .. })
-        {
-            let args = provider::preview_args(&self.tools, &url)?;
-            let output = self
-                .supervisor
-                .run_provider_owned(
-                    Request {
-                        executable: &self.tools.ytdlp,
-                        args: &args,
-                        deadline: Duration::from_secs(120),
-                        diagnostic_limit: 20 * 1024 * 1024,
-                        cancel,
-                    },
-                    dir.path(),
-                    (permit.clone(), dir.clone()),
-                )
-                .await?;
-            let (fresh, _) = provider::metadata(&output.stdout, &url)?;
-            let reviewed = plan.options.clone().plan(&fresh)?;
-            if reviewed.sections != plan.sections
-                || reviewed.selector != plan.selector
-                || !reviewed
-                    .selected
-                    .iter()
-                    .zip(&plan.selected)
-                    .all(|(a, b)| a.same_stream(b))
-            {
-                return Err(AppError::new(
-                    "PREVIEW_CHANGED",
-                    "The selected chapters or source formats changed. Preview the source again.",
-                ));
-            }
-        }
+        self.revalidate_selection(
+            &url,
+            &plan,
+            cancel,
+            dir.path(),
+            (permit.clone(), dir.clone()),
+        )
+        .await?;
         let mut files = Vec::new();
         for (index, section) in plan.sections.iter().enumerate() {
             let task = dir.path().join(index.to_string());
@@ -591,6 +572,38 @@ impl Downloads {
             _directory: dir,
             files,
         })
+    }
+
+    async fn revalidate_selection<G: Send + 'static>(
+        &self,
+        url: &Url,
+        plan: &Plan,
+        cancel: &CancellationToken,
+        temp: &Path,
+        guard: G,
+    ) -> Result<()> {
+        if plan.selected.is_empty()
+            && !matches!(plan.options.range, options::Range::Chapters { .. })
+        {
+            return Ok(());
+        }
+        let args = provider::preview_args(&self.tools, url)?;
+        let output = self
+            .supervisor
+            .run_provider_owned(
+                Request {
+                    executable: &self.tools.ytdlp,
+                    args: &args,
+                    deadline: Duration::from_secs(120),
+                    diagnostic_limit: 20 * 1024 * 1024,
+                    cancel,
+                },
+                temp,
+                guard,
+            )
+            .await?;
+        let (fresh, _) = provider::metadata(&output.stdout, url)?;
+        plan.revalidate(&fresh)
     }
     async fn save(
         &self,
