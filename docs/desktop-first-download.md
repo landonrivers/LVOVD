@@ -37,6 +37,14 @@ The Rust tests compare provider flags against the released JavaScript policy and
 
 Edit Source Video uses the same reviewed source choices and acquisition slot as Download. Rust reserves space in the active workbench, acquires the selected streams into owned storage, and inspects the result before adding it to Files. Download ranges, chapters, extras and SponsorBlock settings stay on the Download form. Editing needs no output folder. Cancelling the acquisition releases its temporary files and preserves earlier sources and their drafts.
 
+### Edit Source Video acceptance
+
+At `0b1559f`, Windows, Linux, Intel macOS and Apple Silicon passed the native handoff. A generated source offered competing streams. Maximum Quality at 720p acquired VP9 and Opus exactly once each. A 0.25–0.50 s Download range and a JSON extra stayed on the form while the editor received the full video. An unchanged processing result matched the source video and audio packet hashes. Returning to the same choices reused the file and its cut. Cancelling another acquisition preserved that draft, and selecting exact H.264 video and Opus audio added a second file. The Download queue and destination stayed unchanged. [Native platform receipts](https://github.com/landonrivers/LVOVD/actions/runs/46114748713)
+
+The Windows package test launched the extracted release executable, selected the format in the native Preview, and read the resulting Media Details and full editor endpoint. Bundled FFprobe compared both packet sequences in the inspected workbench original with the generated inputs. Processing that source unchanged prepared a Matroska result. [Windows package test](https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976426) · [Tested ZIP and receipt](https://github.com/landonrivers/LVOVD/actions/runs/46114748713/artifacts/15251378326)
+
+The inner Windows ZIP had SHA-256 `716a5ab5a412fecec458c8b79c17fd410cb949bde826b0cfe383da21de33eae1`. All 573 manifest entries matched after extraction. On a Windows 10 workstation, the same executable opened the full 1.008 s fixture and saved an unchanged 17,778-byte MKV through the native dialog. The owned original and saved copy had identical bytes. Bundled FFprobe also matched every video and audio packet with the selected fixture tracks.
+
 ### Packaged Download checks
 
 On Windows 10 x64 (build 19045), the [review ZIP from PR head `b7ed452`](https://github.com/landonrivers/LVOVD/actions/runs/44875649464/artifacts/14695684777) had SHA-256 `c18a5fe382f754a9bfb0f1142d2503e3281c575ae95950e072a31ac29e49d48d`. After verifying the ZIP and its file manifest, the test launched the extracted `lvovd.exe` and selected the options in its native window. The bundled FFmpeg and FFprobe independently inspected the files saved in the selected destination.

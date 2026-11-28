@@ -1945,7 +1945,7 @@
           "cancel_edit_download_source"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads/editor.rs",
@@ -1980,8 +1980,54 @@
       "acceptance": [
         "Cuts/processes reuse the owned original; cancellation cleans owned intake without another download."
       ],
-      "evidence": [],
-      "remaining": "Record the native acquisition, reuse and cancellation receipts on all four architectures and the packet comparison from the extracted Windows package."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976426",
+          "tests": [
+            "desktop/test/edit-source.cjs",
+            "desktop/test/packaged-download-options.ps1"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft. The release ZIP also verified the native workbench original with bundled FFprobe and prepared a no-op MKV."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976417",
+          "tests": [
+            "desktop/test/edit-source.cjs"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976395",
+          "tests": [
+            "desktop/test/edit-source.cjs"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "0b1559fc62eaecd6e167ea4cae0cacb2b3809fab",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46114748713/job/140885976399",
+          "tests": [
+            "desktop/test/edit-source.cjs"
+          ],
+          "notes": "The capped VP9/Opus and exact AVC/Opus selections each transferred one copy of each chosen track. Processing preserved the full source packets despite a Download range. Reopening used the retained file and cancelling a different acquisition preserved its draft."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "handoff.playlist-intake",

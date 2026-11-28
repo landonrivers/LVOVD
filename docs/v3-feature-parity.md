@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 32 Missing, 0 Ported, 18 Integrated, 37 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 32 Missing, 0 Ported, 17 Integrated, 38 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -68,7 +68,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `download.progress` | Download progress | Download / Queue | 8D | Missing |
 | `download.outputs` | Prepared Download outputs | Download / Queue | 8D | Missing |
 | `download.cleanup` | Download expiry and cleanup | Download / Queue | 8D | Missing |
-| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Integrated |
+| `handoff.url-edit` | Edit Source Video | Download → Local Media | 8D | Verified |
 | `handoff.playlist-intake` | Add Selected to Local Media | Download → Local Media | 8D | Missing |
 | `media.intake` | Multiple local files | Local Media / Files | 8C | Verified |
 | `media.inspection` | Normalized inspection | Local Media / Media Details | 8B | Verified |
