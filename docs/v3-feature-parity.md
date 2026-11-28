@@ -34,7 +34,7 @@ Download is the initial application view. Preserve the existing JavaScript contr
 
 <!-- parity-table:start -->
 
-87 required entries: 33 Missing, 0 Ported, 19 Integrated, 35 Verified. These counts describe migration work, not a completion percentage.
+87 required entries: 33 Missing, 0 Ported, 17 Integrated, 37 Verified. These counts describe migration work, not a completion percentage.
 
 | Stable ID | Capability | Native location | Stage | Status |
 |---|---|---|---|---|
@@ -96,8 +96,8 @@ Download is the initial application view. Preserve the existing JavaScript contr
 | `media.shared-settings` | Shared output settings | Local Media / Output settings | 8C | Verified |
 | `media.batch-review` | Review All Files | Local Media / Batch review | 8C | Verified |
 | `media.processing-queue` | Sequential processing queue | Local Media / Processing results | 8C | Integrated |
-| `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Integrated |
-| `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Integrated |
+| `media.results` | Individual results and revisions | Local Media / Processing results | 8C | Verified |
+| `media.bulk-save` | Download All equivalent | Local Media / Processing results | 8D | Verified |
 | `media.reset` | Reset File | Local Media / Files | 8C | Verified |
 | `media.remove` | Remove File and Discard | Local Media / Files | 8C | Integrated |
 | `media.cleanup` | Reachable cleanup recovery | Local Media / Cleanup recovery | 8C | Verified |

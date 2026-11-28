@@ -98,6 +98,7 @@ try {
         # the real accessibility tree. No debugger or test controls enter LVOVD.
         & powershell.exe -NoProfile -NonInteractive -File "$PSScriptRoot/windows-portable-download.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Working "$out" -Destination $downloadDirectory
         if ($LASTEXITCODE) { throw 'Packaged Download acceptance failed.' }
+        $details.layout = Get-Content -Raw -LiteralPath "$out/layout-receipt.json" | ConvertFrom-Json
         $optionReceipt = Join-Path $out 'chapter-caption-receipt.json'
         & powershell.exe -NoProfile -NonInteractive -File "$root/desktop/test/packaged-download-options.ps1" -AppPid $viewer.Id -Tools "$scratch/tools" -Destination $downloadDirectory -Scenario Fixture -Receipt $optionReceipt
         if ($LASTEXITCODE) { throw 'Packaged chapter and caption acceptance failed.' }

@@ -1762,7 +1762,9 @@
         ],
         "native": [
           "desktop/downloads.js",
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "public/progress-meter.js",
+          "desktop/styles.css"
         ]
       },
       "tests": {
@@ -1771,7 +1773,8 @@
           "test/queue-ui.test.js"
         ],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/src/downloads/provider.rs"
         ],
         "native": [
           "desktop/test/download.cjs"
@@ -1780,8 +1783,53 @@
       "acceptance": [
         "Reconnect gets a fresh snapshot; stale channels cannot overwrite another job or duplicate completion delivery."
       ],
-      "evidence": [],
-      "remaining": "Single-URL queue rows show the current stage, measured percentage and available speed/ETA. An unknown amount has no numeric percentage. Restore per-stream detail and playlist progress."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/download.cjs"
+          ],
+          "notes": "During a throttled single-URL fixture transfer the native queue reported a measured value between 0% and 100%. The source Preview remained available. Active rows were captured at 1280×720 and 960×640. The test observed Save failed and Saved after retry without reacquisition, and Cancelled during a separate active transfer."
+        }
+      ],
+      "remaining": "Single-URL rows show the stage, measured percentage and available speed and ETA. Restore per-stream identity and progress, and playlist item progress. Reconnection and stale-channel acceptance still needs native coverage for these workflows."
     },
     {
       "id": "download.outputs",
@@ -4484,7 +4532,7 @@
           "save_output"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/processing_operation.rs",
@@ -4500,7 +4548,10 @@
           "desktop/native.js",
           "desktop/workspace-transport.js",
           "public/local-workspace.js",
-          "desktop/app.js"
+          "desktop/app.js",
+          "desktop/index.html",
+          "desktop/styles.css",
+          "public/index.html"
         ]
       },
       "tests": {
@@ -4517,14 +4568,65 @@
           "crates/lvovd-core/tests/local_media.rs"
         ],
         "native": [
-          "desktop/test/native.cjs"
+          "desktop/test/native.cjs",
+          "desktop/test/layout.cjs"
         ]
       },
       "acceptance": [
-        "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt."
+        "Sequential updates preserve focus/scroll; failed attempts do not mislabel earlier successes as the latest attempt.",
+        "Preview Result starts playback. Closing it releases the player. Edit Source selects the result's source, restores its draft and returns focus to the visible editor without overriding a later navigation."
       ],
-      "evidence": [],
-      "remaining": "Repeat native result playback, return-to-editor and scroll-position acceptance on the single-scroll main screen."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "Processed separate per-file drafts in the MP4 and WAV scenarios. The generated results kept the captured names and trim durations. One click advanced result playback, and closing paused and detached the player. Edit Source restored each source's retained end and focused its visible title. A later choice of a field or Settings kept focus. The editor used one scroll surface at 1280×720 and 960×640."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.bulk-save",
@@ -4540,19 +4642,26 @@
         "location": "Local Media / Processing results",
         "stage": "8D",
         "operations": [
-          "save_outputs"
+          "save_outputs",
+          "save_results",
+          "open_result_folder"
         ]
       },
-      "status": "Integrated",
+      "status": "Verified",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/workbenches.rs",
-          "crates/lvovd-core/src/analysis.rs"
+          "crates/lvovd-core/src/analysis.rs",
+          "crates/lvovd-core/src/export.rs",
+          "crates/lvovd-core/src/processing_queue.rs",
+          "src-tauri/src/workbench_commands.rs"
         ],
         "native": [
           "desktop/workspace-transport.js",
           "public/local-workspace.js",
-          "src-tauri/src/workbench_commands.rs"
+          "src-tauri/src/workbench_commands.rs",
+          "public/index.html",
+          "src-tauri/src/export_actions.rs"
         ]
       },
       "tests": {
@@ -4562,17 +4671,64 @@
         ],
         "rust": [
           "crates/lvovd-core/tests/local_media.rs",
-          "crates/lvovd-core/src/workbenches/tests.rs"
+          "crates/lvovd-core/src/workbenches/tests.rs",
+          "crates/lvovd-core/src/processing_queue/tests.rs"
         ],
         "native": [
           "desktop/test/native.cjs"
         ]
       },
       "acceptance": [
-        "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes."
+        "No failed/cancelled attempt is substituted with an older result; replacement/removal stops pending saves and reports actual save outcomes.",
+        "Save All shows the chosen folder, successful count, actual filenames and individual failures. A cancelled picker or failed retry preserves the last confirmed receipt. Retrying one file preserves earlier exports."
       ],
-      "evidence": [],
-      "remaining": "Verify full and partial folder receipts, the selected destination and preservation of earlier exports in the native workflow."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. After the original folder was restored, Explorer accepted Open Folder."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. The successful file-manager handoff remains untested on this platform."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. The successful file-manager handoff remains untested on this platform."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/native.cjs"
+          ],
+          "notes": "Save All reported 2 of 2 with matching on-disk sizes. Cancelling the next picker preserved that receipt. Replacing one result during a held picker yielded 1 of 2 with the saved filename and a per-file error. A missing destination on retry preserved the partial receipt. Retrying the second file alone added one export and preserved the first file's bytes. Open Folder rejected a replacement directory. The successful file-manager handoff remains untested on this platform."
+        }
+      ],
+      "remaining": ""
     },
     {
       "id": "media.reset",
@@ -5717,26 +5873,32 @@
           "open_export",
           "reveal_export",
           "save_copy",
-          "save_outputs"
+          "save_outputs",
+          "open_result_folder"
         ]
       },
       "status": "Missing",
       "implementation": {
         "rust": [
           "crates/lvovd-core/src/downloads.rs",
-          "src-tauri/src/export_actions.rs"
+          "src-tauri/src/export_actions.rs",
+          "crates/lvovd-core/src/export.rs"
         ],
         "native": [
           "desktop/downloads.js",
           "src-tauri/src/download_commands.rs",
           "src-tauri/src/workbench_commands.rs",
-          "public/local-workspace.js"
+          "public/local-workspace.js",
+          "desktop/workspace-transport.js",
+          "public/index.html"
         ]
       },
       "tests": {
         "reference": [],
         "rust": [
-          "crates/lvovd-core/tests/downloads.rs"
+          "crates/lvovd-core/tests/downloads.rs",
+          "crates/lvovd-core/tests/local_media.rs",
+          "src-tauri/src/workbench_commands.rs"
         ],
         "native": [
           "desktop/test/download.cjs",
@@ -5746,8 +5908,57 @@
       "acceptance": [
         "Missing/moved exports remain honest; history/workspace deletion never deletes user files."
       ],
-      "evidence": [],
-      "remaining": "Download opens or reveals a saved job output. Local Media can open the destination from the latest successful or partial bulk save. Save Copy, a durable export catalog and bulk companion-file handling remain."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. After the original folder was restored, Explorer accepted Open Folder."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. The successful file-manager handoff remains untested on this platform."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. The successful file-manager handoff remains untested on this platform."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs"
+          ],
+          "notes": "The saved Download row exposed Open File and Show in Folder. Moving its export produced a visible error on reveal. Local Media exposed Open Folder after a full or partial Save All. Cancelling or failing a later save preserved the last confirmed folder. Requesting Open Folder after replacing that directory was rejected. The successful file-manager handoff remains untested on this platform."
+        }
+      ],
+      "remaining": "Save Copy, the persistent saved-export catalog and bulk selection of Download companions remain. Successful folder opening in Finder and a Linux file manager still needs native acceptance."
     },
     {
       "id": "desktop.history-import",
@@ -5802,14 +6013,17 @@
       "status": "Missing",
       "implementation": {
         "rust": [
-          "src-tauri/src/download_commands.rs"
+          "src-tauri/src/download_commands.rs",
+          "src-tauri/src/main.rs"
         ],
         "native": [
           "desktop/index.html",
           "desktop/styles.css",
           "desktop/downloads.js",
           "src-tauri/src/download_commands.rs",
-          "desktop/app.js"
+          "desktop/app.js",
+          "public/index.html",
+          "public/local-workspace.js"
         ]
       },
       "tests": {
@@ -5826,8 +6040,61 @@
       "acceptance": [
         "Verify 1280x720 and 960x640 plus display scaling in actual webviews; retain concise functional copy, not roadmap/marketing filler."
       ],
-      "evidence": [],
-      "remaining": "Download, its active queue and the Local Media editor share one scroll surface. Settings is separate. Integrate persistent History in 8D.4 and finish whole-application keyboard and scaling acceptance in 8E."
+      "evidence": [
+        {
+          "platform": "windows-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329932",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        },
+        {
+          "platform": "linux-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329906",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        },
+        {
+          "platform": "macos-arm64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329922",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        },
+        {
+          "platform": "macos-x64",
+          "commit": "a6ed56f8215c15bcadbeca0d3978622ba88efab3",
+          "kind": "native-workflow",
+          "result": "passed",
+          "url": "https://github.com/landonrivers/LVOVD/actions/runs/46102607904/job/140848329915",
+          "tests": [
+            "desktop/test/download.cjs",
+            "desktop/test/native.cjs",
+            "desktop/test/layout.cjs"
+          ],
+          "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
+        }
+      ],
+      "remaining": "Persistent Download History and Use Again, both acquisition-to-editor handoffs, and whole-application keyboard and display-scaling acceptance remain. Download, its queue and Local Media share a scroll surface. Settings opens separately."
     },
     {
       "id": "desktop.settings",

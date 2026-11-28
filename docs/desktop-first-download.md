@@ -62,6 +62,8 @@ At `ebafe08`, the [four native platform gates](https://github.com/landonrivers/L
 
 Download opens above the active queue and Local Media. The header shortcuts move to sections of the same scrolling screen. Settings is separate. Enter a URL, preview the source, then choose content, video format and resolution. Opening a disclosure leaves its heading in its column. The content and profile cards support clickable labels and arrow-key navigation. Starting a download keeps its preview available. Queue rows show the current stage, available speed and ETA, and a berry-red progress bar with a small berry at its leading edge. An unknown amount is shown without a percentage.
 
+The native webview tests exercise the editor and Download at 1280×720 and 960×640. The separate Windows ZIP check measures its window against the runner’s available display area. When the hosted display is too small for 1280×720, the full-size package check runs on a workstation with sufficient space. Record the actual measured sizes with the package receipt.
+
 The corner [artwork](../desktop/manuscript-corner.webp) was generated with ImageGen and scaled to a transparent 320-pixel WebP with FFmpeg. The four corners reuse this one asset.
 
 <details>
