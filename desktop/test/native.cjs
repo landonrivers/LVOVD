@@ -247,9 +247,9 @@ async function scenario(file, index, provider, providerReplay) {
       };
       await editResult(1, '00:00:01.750');
       await editResult(0, '00:00:01.000');
-      const saveNote = browser.$('#processing-download-note');
+      const saveSummary = browser.$('#processing-save-summary'), saveNote = browser.$('#processing-download-note');
       await browser.$('#processing-download-all').click();
-      await browser.waitUntil(async () => (await saveNote.getText()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
+      await browser.waitUntil(async () => (await saveSummary.getText()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
       const receipts = () => browser.execute(() => Array.from(document.querySelectorAll('#processing-saved-files li'), item => item.textContent));
       const full = (await receipts()).map(description => {
         assert.match(description, /^Saved /);
@@ -263,7 +263,8 @@ async function scenario(file, index, provider, providerReplay) {
         try {
           await browser.$('#processing-download-all').click();
           await browser.waitUntil(async () => (await saveNote.getText()).startsWith('Save cancelled.'), {timeout:5000});
-          assert.equal(await browser.$('#processing-open-folder').isDisplayed(), false);
+          assert.equal(await saveSummary.getText(), `Saved 2 of 2 files to ${processedFolder}.`);
+          assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
         } finally { fs.unlinkSync(cancelPicker); }
         const beforePartial = fs.readdirSync(processedFolder);
         const holdPicker = path.join(config, 'hold-save-picker');
@@ -280,7 +281,7 @@ async function scenario(file, index, provider, providerReplay) {
             return Boolean(current && current !== previous);
           }, outputs[1].assetId), {timeout:25000});
         } finally { fs.unlinkSync(holdPicker); }
-        await browser.waitUntil(async () => (await saveNote.getText()) === `Saved 1 of 2 files to ${processedFolder}.`, {timeout:15000});
+        await browser.waitUntil(async () => (await saveSummary.getText()) === `Saved 1 of 2 files to ${processedFolder}.`, {timeout:15000});
         const partial = await receipts(), added = fs.readdirSync(processedFolder).filter(name => !beforePartial.includes(name));
         assert.deepEqual(added, [partial[0].slice(6)]);
         assert.deepEqual(fs.readFileSync(path.join(processedFolder, added[0])), full[0]);
@@ -291,18 +292,30 @@ async function scenario(file, index, provider, providerReplay) {
         const moved = processedFolder + '-moved';
         fs.renameSync(processedFolder, moved);
         try {
+          await browser.$('#processing-download-all').click();
+          await browser.waitUntil(async () => (await saveNote.getText()).startsWith('Save failed.'), {timeout:5000});
+          assert.equal(await saveSummary.getText(), `Saved 1 of 2 files to ${processedFolder}.`);
+          assert.deepEqual(await receipts(), partial);
           fs.mkdirSync(processedFolder);
           await browser.$('#processing-open-folder').click();
           await browser.waitUntil(async () => (await browser.$('#processing-folder-error').getText()).includes('replaced'), {timeout:5000});
           assert.deepEqual(fs.readdirSync(processedFolder), []);
         } finally {
-          fs.rmdirSync(processedFolder);
+          if (fs.existsSync(processedFolder)) fs.rmdirSync(processedFolder);
           fs.renameSync(moved, processedFolder);
         }
         if (process.platform === 'win32') {
           await browser.$('#processing-open-folder').click();
           await browser.waitUntil(async () => (await browser.$('#processing-folder-error').getText()) === 'Opened folder.', {timeout:10000});
         }
+        // Retry only the current second file. The first export remains intact.
+        const beforeRetry = fs.readdirSync(processedFolder);
+        const second = (await browser.$$('#processing-results-list [data-processing-result]'))[1];
+        await second.$('[data-result="download"]').click();
+        await browser.waitUntil(async () => (await second.$('[data-result="status"]').getText()).startsWith('Saved '), {timeout:15000});
+        const retryName = (await second.$('[data-result="status"]').getText()).slice(6);
+        assert.deepEqual(fs.readdirSync(processedFolder).filter(name => !beforeRetry.includes(name)), [retryName]);
+        assert.deepEqual(fs.readFileSync(path.join(processedFolder, added[0])), full[0]);
         await editResult(0, '00:00:01.000');
       }
       if (index === 3) {

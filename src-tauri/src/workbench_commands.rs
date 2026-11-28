@@ -169,7 +169,7 @@ pub(crate) async fn save_results(
                 "A prepared result was selected twice.",
             ));
         }
-        results.push(state.workbenches.result(request.workbench_id, id)?);
+        results.push(state.workbenches.batch_result(request.workbench_id, id)?);
     }
     let _picker = state
         .picker_admission
@@ -224,9 +224,12 @@ pub(crate) async fn save_results(
                 });
                 continue;
             }
-            let receipt = match destination.check().and_then(|()| {
-                owner.save_result(workbench_id, result, &destination.path.join(&name))
-            }) {
+            let receipt = match owner.save_batch_result(
+                workbench_id,
+                result,
+                &destination.path,
+                destination.identity,
+            ) {
                 Ok(saved) => FileReceipt {
                     filename: saved
                         .file_name()
@@ -263,7 +266,9 @@ pub(crate) async fn save_results(
         .iter()
         .any(|f| f.saved)
         .then_some(saved_folder.receipt);
-    *state.saved_folder.lock().unwrap() = receipt_id.map(|_| saved_folder);
+    if receipt_id.is_some() {
+        *state.saved_folder.lock().unwrap() = Some(saved_folder);
+    }
     Ok(Some(BatchReceipt {
         folder,
         receipt_id,

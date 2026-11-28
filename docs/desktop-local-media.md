@@ -38,7 +38,7 @@ Save and Save All capture validated output leases before opening a native destin
 
 Local Media sits below Download on the main screen. The files and conversion controls, aspect-ratio-preserving player, timeline, processing controls and results scroll together. Preview Result starts playback when opened. Closing it stops playback. Edit Source selects the result's original file and returns focus to the editor with that file's draft.
 
-Save All reports the number saved, the chosen folder and each file's outcome, including collision-adjusted names. Open Folder uses a session receipt issued by Rust for that save. Automatic saving to a remembered destination and the persistent export catalog remain part of 8D.
+Save All reports the number saved, the chosen folder and each file's outcome, including collision-adjusted names. Open Folder uses a session receipt issued by Rust for that save. Cancelling a later picker or failing to save any more files keeps the last successful destination available. After a partial save, a file's own Save action can retry just that file. Automatic saving to a remembered destination and the persistent export catalog remain part of 8D.
 
 ## Acceptance evidence
 

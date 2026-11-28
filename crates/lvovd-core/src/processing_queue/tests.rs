@@ -417,6 +417,9 @@ async fn failed_attempt_preserves_prior_success_without_presenting_it_as_the_new
         .unwrap();
     let first = f.finished().await.jobs[0].result.clone().unwrap();
     f.queue
+        .check_batch_result(f.ids[0], first.result_id)
+        .unwrap();
+    f.queue
         .enqueue(vec![
             f.review(0, 2, true).await,
             f.review(1, 1, false).await,
@@ -428,6 +431,13 @@ async fn failed_attempt_preserves_prior_success_without_presenting_it_as_the_new
     assert_eq!(final_state.jobs[0].status, Status::Failed);
     assert!(final_state.jobs[0].failure.is_some());
     assert!(final_state.jobs[0].result.is_none());
+    assert_eq!(
+        f.queue
+            .check_batch_result(f.ids[0], first.result_id)
+            .unwrap_err()
+            .code,
+        "BATCH_CHANGED"
+    );
     assert_eq!(
         f.processing.latest(f.ids[0]).unwrap().result_id,
         first.result_id

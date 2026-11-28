@@ -23,26 +23,31 @@ pub fn destination_id(path: &Path) -> Result<(u64, u64)> {
 }
 
 pub fn save_copy(result: OutputLease, destination: &Path) -> Result<PathBuf> {
-    save_copy_checked(result, destination, || Ok(()))
+    save_copy_checked(result, destination, None, || Ok(()))
 }
 
 pub(crate) fn save_copy_checked(
     result: OutputLease,
     destination: &Path,
+    selected_folder: Option<(u64, u64)>,
     mut current: impl FnMut() -> Result<()>,
 ) -> Result<PathBuf> {
     let folder = destination.parent().ok_or_else(save_error)?;
-    current()?;
-    let identity = destination_id(folder).map_err(|_| save_error())?;
-    let check_current = || {
-        if destination_id(folder)? != identity {
+    let identity = match selected_folder {
+        Some(identity) => identity,
+        None => destination_id(folder).map_err(|_| save_error())?,
+    };
+    let mut check_current = || {
+        current()?;
+        if destination_id(folder).ok() != Some(identity) {
             return Err(AppError::new(
                 "FOLDER_CHANGED",
-                "The selected folder was replaced while saving.",
+                "The selected folder was moved, replaced or disconnected while saving.",
             ));
         }
-        current()
+        Ok(())
     };
+    check_current()?;
     publish(
         destination,
         None,

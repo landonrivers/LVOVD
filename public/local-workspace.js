@@ -289,18 +289,23 @@
   function clearSaveReceipt() {
     savedFolder = null;
     $('#processing-save-receipt').hidden = true;
+    $('#processing-save-errors').hidden = true;
+    $('#processing-save-errors').replaceChildren();
+    $('#processing-save-summary').textContent = '';
     $('#processing-saved-files').replaceChildren();
     $('#processing-folder-error').textContent = '';
   }
   $('#processing-open-folder').addEventListener('click', async () => {
-    const folder = savedFolder;
-    if (!folder || folder.owner !== collectionId) return;
+    const folder = savedFolder, button = $('#processing-open-folder');
+    if (!folder || folder.owner !== collectionId || button.disabled) return;
+    button.disabled = true;
     $('#processing-folder-error').textContent = '';
     try {
       await transport.openFolder(folder.owner, folder.id);
       if (savedFolder === folder) $('#processing-folder-error').textContent = 'Opened folder.';
     }
     catch (error) { if (savedFolder === folder) $('#processing-folder-error').textContent = error.message; }
+    finally { if (savedFolder === folder) button.disabled = false; }
   });
   $('#processing-download-all').addEventListener('click', async () => {
     // Recheck the current authoritative results at the user's click. Never
@@ -313,25 +318,35 @@
     });
     if (transport) {
       const run = { collectionId, outputs }, note = $('#processing-download-note');
-      allDownloads = run; clearSaveReceipt(); renderProcessingResults();
+      allDownloads = run; renderProcessingResults();
+      $('#processing-save-errors').hidden = true; $('#processing-save-errors').replaceChildren();
       note.hidden = false; note.textContent = 'Saving…';
       try {
-        const result = await transport.saveAll(outputs);
+        const result = await transport.saveAll(run.collectionId, outputs);
         if (allDownloads !== run || collectionId !== run.collectionId) return;
         if (!result) { note.textContent = 'Save cancelled. Prepared results remain available.'; return; }
         const saved = result.files.filter(file => file.saved).length;
-        note.textContent = `Saved ${saved} of ${result.files.length} files to ${result.folder}.`;
-        $('#processing-saved-files').replaceChildren(...result.files.map(file => {
+        const summary = `Saved ${saved} of ${result.files.length} files to ${result.folder}.`;
+        const items = result.files.map(file => {
           const item = document.createElement('li');
           item.textContent = file.saved ? `Saved ${file.filename}` : `${file.filename} — ${file.error}`;
           return item;
-        }));
-        savedFolder = result.receiptId ? { owner: run.collectionId, id: result.receiptId } : null;
-        $('#processing-open-folder').hidden = !savedFolder;
+        });
+        if (!saved) {
+          note.textContent = summary;
+          $('#processing-save-errors').replaceChildren(...items); $('#processing-save-errors').hidden = false;
+          return;
+        }
+        note.hidden = true; note.textContent = '';
+        $('#processing-save-summary').textContent = summary;
+        $('#processing-saved-files').replaceChildren(...items);
+        savedFolder = { owner: run.collectionId, id: result.receiptId };
+        $('#processing-folder-error').textContent = '';
+        $('#processing-open-folder').disabled = false; $('#processing-open-folder').hidden = false;
         $('#processing-save-details').open = saved !== result.files.length;
         $('#processing-save-receipt').hidden = false;
       } catch (error) {
-        if (allDownloads === run) note.textContent = `Save failed. ${error.message}`;
+        if (allDownloads === run && collectionId === run.collectionId) note.textContent = `Save failed. ${error.message}`;
       } finally {
         if (allDownloads === run) { allDownloads = null; renderProcessingResults(); }
       }
@@ -727,7 +742,11 @@
     if (transport) {
       const owned = { close: () => {} }; source = owned;
       transport.subscribe(collectionId, data => { if (source === owned) acceptCollection(data); }, () => {
-        if (source === owned) { closeSource(); collectionId = null; collectionRevision = -1; message("Local media expired. Add files to begin again."); }
+        if (source === owned) {
+          closeSource(); collectionId = null; collectionRevision = -1; allDownloads = null;
+          clearSaveReceipt(); $('#processing-download-note').hidden = true;
+          message("Local media expired. Add files to begin again.");
+        }
       }).then(close => { if (source === owned) owned.close = close; else close(); }).catch(error => message(error.message, true));
       return;
     }

@@ -136,7 +136,7 @@
     async save(output) {
       return native.call('save_result', { request: { workbenchId: active, resultId: output.assetId } });
     },
-    async saveAll(outputs) { return native.call('save_results', { request: { workbenchId: active, resultIds: outputs.map(o => o.assetId) } }); },
+    saveAll(workbenchId, outputs) { return native.call('save_results', { request: { workbenchId, resultIds: outputs.map(o => o.assetId) } }); },
     openFolder(workbenchId, receiptId) { return native.call('open_result_folder', { request: { workbenchId, receiptId } }); },
     preview(output) {
       root.document.dispatchEvent(new CustomEvent('lvovd:preview-result', { detail: { url: output.playbackUrl, name: output.filename, audio: !output.inspection?.video } }));

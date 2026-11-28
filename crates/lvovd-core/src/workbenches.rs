@@ -706,6 +706,17 @@ impl Workbenches {
         self.member(id, lease.descriptor().source_id)?;
         Ok(lease)
     }
+    pub fn batch_result(
+        &self,
+        id: Uuid,
+        result: Uuid,
+    ) -> Result<crate::processing_operation::OutputLease> {
+        let lease = self.result(id, result)?;
+        self.0
+            .queue
+            .check_batch_result(lease.descriptor().source_id, result)?;
+        Ok(lease)
+    }
     /// The dialog and file copy may outlive selection or publication. A held
     /// lease preserves bytes, but only current membership authorizes saving.
     pub fn save_result(
@@ -714,10 +725,32 @@ impl Workbenches {
         result: crate::processing_operation::OutputLease,
         destination: &std::path::Path,
     ) -> Result<PathBuf> {
+        self.save_current_result(id, result, destination, None)
+    }
+    pub fn save_batch_result(
+        &self,
+        id: Uuid,
+        result: crate::processing_operation::OutputLease,
+        folder: &std::path::Path,
+        identity: (u64, u64),
+    ) -> Result<PathBuf> {
+        let destination = folder.join(&result.descriptor().filename);
+        self.save_current_result(id, result, &destination, Some(identity))
+    }
+    fn save_current_result(
+        &self,
+        id: Uuid,
+        result: crate::processing_operation::OutputLease,
+        destination: &std::path::Path,
+        bulk_folder: Option<(u64, u64)>,
+    ) -> Result<PathBuf> {
         let result_id = result.descriptor().result_id;
         let source_id = result.descriptor().source_id;
-        crate::export::save_copy_checked(result, destination, || {
+        crate::export::save_copy_checked(result, destination, bulk_folder, || {
             self.result(id, result_id)?;
+            if bulk_folder.is_some() {
+                self.0.queue.check_batch_result(source_id, result_id)?;
+            }
             if self
                 .0
                 .processing

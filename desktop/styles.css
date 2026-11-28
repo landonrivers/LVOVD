@@ -244,9 +244,9 @@ input[type=checkbox], input[type=radio], .processing-rate-choice input { accent-
 .processing-finish > .local-media-actions { margin: 8px 0 0; }
 .processing-primary.button.primary { min-height: 38px; font-size: 15px; width: auto; }
 .processing-results { margin: 0; padding: 10px; }
-#processing-download-note, #processing-save-receipt { overflow-wrap: anywhere; }
+#processing-download-note, #processing-save-receipt, #processing-save-errors { overflow-wrap: anywhere; }
 #processing-save-details summary { width: fit-content; color: var(--berry); cursor: pointer; }
-#processing-saved-files { padding-left: 1.5em; }
+#processing-saved-files, #processing-save-errors { padding-left: 1.5em; }
 .processing-results h3:focus, #processing-results-list:focus-visible { outline-color: var(--berry); }
 #processing-results-list { max-height: none; overflow: visible; }
 .processing-result-format, .processing-result details summary { color: var(--berry); }
