@@ -78,7 +78,7 @@ async function scenario(file, index, provider, providerReplay) {
     assert.equal(await browser.$('#desktop-download').isDisplayed(), true, 'Download must be the initial application view');
     if (index === 0) await downloadScenario(browser, provider, destination, env.LVOVD_DESKTOP_FFPROBE, resultDir, ffmpeg, processedFolder);
     if (providerReplay) await replay.verify(browser, providerReplay, destination, env.LVOVD_DESKTOP_FFPROBE, ffmpeg);
-    await browser.$('#nav-local').click();
+    await browser.$('#nav-download').click();
     await browser.execute(() => { window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(e.message)); window.addEventListener('unhandledrejection',e=>window.__errors.push(String(e.reason))); });
     await browser.$('#media-choose-button').click();
     if (index === 3) {
@@ -104,7 +104,7 @@ async function scenario(file, index, provider, providerReplay) {
     await browser.waitUntil(async () => (await browser.execute(() => document.querySelector('#editor-video:not([hidden]), #editor-audio:not([hidden])').currentTime)) > before + 0.15, { timeout: 10000 });
     for (const [size, width, height] of [['desktop', 1280, 720], ['narrow', 960, 640]]) {
       await captureLayout(browser, width, height, path.join(resultDir, `${size}-${process.platform}-${index}.png`),
-        'desktop-local', ['nav-download', 'nav-local', 'nav-settings', 'processing-add-files', 'processing-file-list', 'editor-end-time', 'conversion-start']);
+        'desktop-local', ['nav-download', 'nav-settings', 'processing-add-files', 'processing-file-list', 'editor-end-time', 'conversion-start']);
       await checkEditorFlow(browser);
     }
     // A second owned copy exercises selection changes while the first decoder
@@ -258,7 +258,7 @@ async function scenario(file, index, provider, providerReplay) {
           document.getElementById('nav-settings').click();
         });
         assert.equal(await browser.execute(() => document.activeElement.id), 'desktop-settings');
-        await browser.$('#nav-local').click();
+        await browser.$('#nav-download').click();
       }
       const visibleText = id => browser.execute(id => {
         const node = document.getElementById(id);

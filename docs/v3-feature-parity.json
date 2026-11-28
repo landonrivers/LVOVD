@@ -6160,7 +6160,7 @@
           "notes": "At 1280×720 and 960×640 the native test hit the Download and editor controls, checked the initial Download action and opened each eligible disclosure without shifting its heading or the opposite column. The editor had one scroll surface and a video player of the required height above the timeline. Keyboard arrows selected content and format cards. Edit Source returned focus to the visible editor."
         }
       ],
-      "remaining": "Persistent Download History and Use Again, playlist intake, and whole-application keyboard and display-scaling acceptance remain. Download, its queue and Local Media share a scroll surface. A single-video Preview can open its source in Local Media. Settings opens separately."
+      "remaining": "Persistent Download History and Use Again, playlist intake, and whole-application keyboard and display-scaling acceptance remain. The header offers Download & Edit and Settings. Download, its queue and Local Media share a scroll surface. A single-video Preview can open its source in Local Media."
     },
     {
       "id": "desktop.settings",

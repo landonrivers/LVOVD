@@ -51,7 +51,7 @@ async function verifyHandoff(browser, fixture, preview, choose, ffprobe, destina
   assert.equal(await browser.$('#dl-range').getValue(), 'custom');
   assert.equal(await browser.$('#dl-metadata').isSelected(), true);
   await (await button()).click();
-  await wait(async () => (await browser.$('#nav-local').getAttribute('aria-current')) === 'location',
+  await wait(() => browser.execute(() => ['desktop-local', 'editor-media-name', 'processing-file-list'].includes(document.activeElement.id)),
     'Reopening the source did not reveal Local Media');
   assert.equal((await state()).selectedId, first.selectedId);
   assert.equal(await browser.$('#editor-start-time').getValue(), '00:00:00.250');

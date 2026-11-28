@@ -51,6 +51,7 @@ test('single-media options follow the reviewed formats, chapter selection and co
 });
 
 test('Download keeps the latest preview and job revision across navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   const html = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '');
   await page.setContent(html);
   await page.addStyleTag({path:path.join(root, 'styles.css')});
@@ -88,6 +89,7 @@ test('Download keeps the latest preview and job revision across navigation', asy
   await page.addScriptTag({ path: path.join(root, '../public/progress-meter.js') });
   await page.addScriptTag({ path: path.join(root, 'download-options.js') });
   await page.addScriptTag({ path: path.join(root, 'downloads.js') });
+  await expect(page.locator('.desktop-header nav button')).toHaveText(['Download & Edit', 'Settings']);
   const first = 'https://example.invalid/first', second = 'https://example.invalid/second';
   const preview = page.locator('#download-preview-button');
   await page.locator('#download-url').fill(first); await preview.click();
@@ -153,6 +155,7 @@ test('Download keeps the latest preview and job revision across navigation', asy
   });
   await edit.click();
   await expect(edit).toBeDisabled();
+  await expect(page.locator('#desktop-local')).toBeFocused();
   await page.evaluate(() => { document.getElementById('download-edit-source').click(); fixture.finishEdit(); });
   expect(await page.evaluate(() => fixture.edits)).toEqual([{previewId:'<img src=x>',
     options:{content:'video', profile:'compatible', maxHeight:360, formatIds:[]}}]);

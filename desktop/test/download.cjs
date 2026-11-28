@@ -109,7 +109,7 @@ async function downloadScenario(browser, provider, destination, ffprobe, evidenc
   await preview(provider.dash);
   for (const [width, height] of [[1280, 720], [960, 640]]) {
     await captureLayout(browser, width, height, path.join(evidence, 'download-preview-' + width + '-' + process.platform + '.png'),
-      'desktop-download', ['nav-download', 'nav-local', 'nav-settings', 'download-url', 'download-preview-button',
+      'desktop-download', ['nav-download', 'nav-settings', 'download-url', 'download-preview-button',
         'download-choose-folder', 'dl-content-av', 'dl-content-extras', 'dl-profile-compatible', 'dl-profile-maximum', 'download-start']);
     // The default, collapsed short-name fixture should show the entire primary action.
     const initial = await browser.execute(() => {

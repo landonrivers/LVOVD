@@ -99,7 +99,9 @@
       // Let button activation finish before moving keyboard focus to Local Media.
       await Promise.resolve();
       if (generation !== previewGeneration) return;
-      el('nav-local').click();
+      const local = el('desktop-local');
+      local.focus({ preventScroll: true });
+      local.scrollIntoView({ block: 'start' });
       await globalThis.LVOVDLocalWorkspace.openDownloadSource(previewId, selection, () => generation === previewGeneration);
     } catch (error) {
       if (generation === previewGeneration) message.textContent = error.message;

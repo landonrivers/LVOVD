@@ -1,32 +1,19 @@
 'use strict';
 (async function() {
   const native = globalThis.LVOVDNative, byId = id => document.getElementById(id);
-  const viewport = byId('workspace-scroll'), download = byId('desktop-download');
+  const download = byId('desktop-download'), downloadButton = byId('nav-download');
   const local = byId('desktop-local'), settings = byId('desktop-settings');
-  const nav = document.querySelectorAll('.desktop-header nav button');
-  function markSection(id) {
-    for (const button of nav) {
-      if (button.getAttribute('aria-controls') === id) button.setAttribute('aria-current', 'location');
-      else button.removeAttribute('aria-current');
-    }
+  const settingsButton = byId('nav-settings');
+  function showSection(section, current, previous) {
+    download.hidden = local.hidden = section === settings;
+    settings.hidden = section !== settings;
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+    previous.removeAttribute('aria-current');
+    current.setAttribute('aria-current', 'location');
   }
-  for (const button of nav) {
-    button.addEventListener('click', () => {
-      const section = byId(button.getAttribute('aria-controls'));
-      download.hidden = local.hidden = section === settings;
-      settings.hidden = section !== settings;
-      section.focus({ preventScroll: true });
-      section.scrollIntoView({ block: 'start' });
-      markSection(section.id);
-    });
-  }
-  viewport.addEventListener('scroll', () => {
-    if (settings.hidden) {
-      const atLocal = local.getBoundingClientRect().top <= viewport.getBoundingClientRect().top + 1
-        || (viewport.scrollTop > 0 && viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 1);
-      markSection(atLocal ? local.id : download.id);
-    }
-  }, { passive: true });
+  downloadButton.addEventListener('click', () => showSection(download, downloadButton, settingsButton));
+  settingsButton.addEventListener('click', () => showSection(settings, settingsButton, downloadButton));
   // Called for an OS drop. Rust owns the paths and sends only the physical point.
   globalThis.LVOVDLocalDropAt = (x, y) => {
     if (local.hidden || !Number.isFinite(x) || !Number.isFinite(y) || document.querySelector('dialog[open]')) return false;

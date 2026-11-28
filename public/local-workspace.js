@@ -499,8 +499,7 @@
       }
       if (!previewIsCurrent() || (selection !== generation && workspaceId !== sourceId)) return;
       const section = $('#desktop-local');
-      if (section.hidden || ![section, $('#native-intake-cancel'), document.body].includes(document.activeElement) ||
-          $('#nav-local').getAttribute('aria-current') !== 'location') return;
+      if (section.hidden || ![section, $('#native-intake-cancel'), document.body].includes(document.activeElement)) return;
       selectEntry(sourceId);
       const target = $('#media-editor').hidden ? $('#processing-file-list') : $('#editor-media-name');
       target.focus({ preventScroll: true });
