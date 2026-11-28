@@ -260,9 +260,14 @@ async function scenario(file, index, provider, providerReplay) {
         assert.equal(await browser.execute(() => document.activeElement.id), 'desktop-settings');
         await browser.$('#nav-local').click();
       }
-      const saveSummary = browser.$('#processing-save-summary'), saveNote = browser.$('#processing-download-note');
+      const visibleText = id => browser.execute(id => {
+        const node = document.getElementById(id);
+        return node.getClientRects().length ? node.innerText : '';
+      }, id);
+      const saveSummary = () => visibleText('processing-save-summary');
+      const saveNote = () => visibleText('processing-download-note');
       await browser.$('#processing-download-all').click();
-      await browser.waitUntil(async () => (await saveSummary.getText()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
+      await browser.waitUntil(async () => (await saveSummary()) === `Saved 2 of 2 files to ${processedFolder}.`, {timeout:15000});
       const receipts = () => browser.execute(() => Array.from(document.querySelectorAll('#processing-saved-files li'), item => item.textContent));
       const full = (await receipts()).map(description => {
         assert.match(description, /^Saved /);
@@ -275,8 +280,8 @@ async function scenario(file, index, provider, providerReplay) {
         fs.writeFileSync(cancelPicker, '', {flag:'wx'});
         try {
           await browser.$('#processing-download-all').click();
-          await browser.waitUntil(async () => (await saveNote.getText()).startsWith('Save cancelled.'), {timeout:5000});
-          assert.equal(await saveSummary.getText(), `Saved 2 of 2 files to ${processedFolder}.`);
+          await browser.waitUntil(async () => (await saveNote()).startsWith('Save cancelled.'), {timeout:5000});
+          assert.equal(await saveSummary(), `Saved 2 of 2 files to ${processedFolder}.`);
           assert.equal(await browser.$('#processing-open-folder').isDisplayed(), true);
         } finally { fs.unlinkSync(cancelPicker); }
         const beforePartial = fs.readdirSync(processedFolder);
@@ -294,7 +299,7 @@ async function scenario(file, index, provider, providerReplay) {
             return Boolean(current && current !== previous);
           }, outputs[1].assetId), {timeout:25000});
         } finally { fs.unlinkSync(holdPicker); }
-        await browser.waitUntil(async () => (await saveSummary.getText()) === `Saved 1 of 2 files to ${processedFolder}.`, {timeout:15000});
+        await browser.waitUntil(async () => (await saveSummary()) === `Saved 1 of 2 files to ${processedFolder}.`, {timeout:15000});
         const partial = await receipts(), added = fs.readdirSync(processedFolder).filter(name => !beforePartial.includes(name));
         assert.deepEqual(added, [partial[0].slice(6)]);
         assert.deepEqual(fs.readFileSync(path.join(processedFolder, added[0])), full[0]);
@@ -306,8 +311,8 @@ async function scenario(file, index, provider, providerReplay) {
         fs.renameSync(processedFolder, moved);
         try {
           await browser.$('#processing-download-all').click();
-          await browser.waitUntil(async () => (await saveNote.getText()).startsWith('Save failed.'), {timeout:5000});
-          assert.equal(await saveSummary.getText(), `Saved 1 of 2 files to ${processedFolder}.`);
+          await browser.waitUntil(async () => (await saveNote()).startsWith('Save failed.'), {timeout:5000});
+          assert.equal(await saveSummary(), `Saved 1 of 2 files to ${processedFolder}.`);
           assert.deepEqual(await receipts(), partial);
           fs.mkdirSync(processedFolder);
           await browser.$('#processing-open-folder').click();
