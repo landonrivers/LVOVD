@@ -477,12 +477,15 @@
     return collectionPromise;
   }
   async function openDownloadSource(previewId, options, previewIsCurrent) {
-    const owner = await ensureCollection();
-    if (!previewIsCurrent()) return;
-    const selection = generation;
-    const key = JSON.stringify([previewId, options.content, options.profile, options.maxHeight, options.formatIds]);
-    let sourceId = [...acquiredPreviews].find(([, value]) => value === key)?.[0];
+    let owner = collectionId, selection = generation;
     try {
+      owner = await ensureCollection();
+      if (!previewIsCurrent()) return;
+      selection = generation;
+      // Exact stream IDs override the automatic profile and height.
+      const streams = options.formatIds.length ? { ids: options.formatIds } : { profile: options.profile, height: options.maxHeight };
+      const key = JSON.stringify([previewId, options.content, streams]);
+      let sourceId = [...acquiredPreviews].find(([, value]) => value === key)?.[0];
       if (!sourceId) {
         if (nativeImporting) throw new Error('Wait for the current intake to finish.');
         if (entries.size >= limits.maxEntries) throw new Error('Remove a file from Local Media to make room for this source.');

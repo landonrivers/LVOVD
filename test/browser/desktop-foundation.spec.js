@@ -82,15 +82,15 @@ test('a retained editor source is reused and a delayed acquisition cannot restor
   await page.evaluate(() => {
     if (!crypto.randomUUID) crypto.randomUUID = () => '30000000-0000-4000-8000-000000000001';
     fixture.snapshot(1, [0]);
-    fixture.edit = preview => LVOVDLocalWorkspace.openDownloadSource(preview,
-      {content:'av',profile:'maximum',maxHeight:720,formatIds:[]}, () => true);
+    fixture.edit = (preview, profile='maximum') => LVOVDLocalWorkspace.openDownloadSource(preview,
+      {content:'av',profile,maxHeight:null,formatIds:['v','a']}, () => true);
     fixture.current = fixture.edit('preview-one');
   });
   await page.waitForFunction(() => !!fixture.finishAcquisition);
   await page.evaluate(async () => {
     document.getElementById('nav-local').click();
     fixture.finishAcquisition(3, [0,1]); await fixture.current;
-    await fixture.edit('preview-one');
+    await fixture.edit('preview-one', 'compatible');
   });
   await expect(page.locator('#processing-file-list')).toHaveValue(ids[1]);
   expect(await page.evaluate(() => fixture.acquisitions)).toBe(1);

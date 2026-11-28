@@ -147,14 +147,47 @@ function Save-EditorResult($Directory) {
         Start-Sleep -Milliseconds 200
     } while ([DateTime]::UtcNow -lt $end)
     if (!$dialog) {throw 'LVOVD did not open its Save processed file dialog.'}
-    $edit = Find-Control $dialog $ae::AutomationIdProperty '1001'
-    if (!$edit) {$edit = Find-Control $dialog $ae::NameProperty 'File name:'}
-    $value = $edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
-    $extension = [IO.Path]::GetExtension($value.Current.Value)
+    # The system file picker can expose its Win32 edit as a UIA pane without a
+    # ValuePattern. Address only the filename field in our own identified dialog.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class ReviewSaveDialog {
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr count, StringBuilder text, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr count, string text, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll")]
+    static extern bool PostMessage(IntPtr window, uint message, IntPtr id, IntPtr parameter);
+    public static string FileName(IntPtr edit) {
+        var text = new StringBuilder(512);
+        IntPtr result;
+        if (SendMessageTimeout(edit, 0x000D, (IntPtr)text.Capacity, text, 2, 2000, out result) == IntPtr.Zero) return "";
+        return text.ToString();
+    }
+    public static void Save(IntPtr dialog, IntPtr edit, string file) {
+        IntPtr result;
+        if (SendMessageTimeout(edit, 0x000C, IntPtr.Zero, file, 2, 2000, out result) == IntPtr.Zero || FileName(edit) != file)
+            throw new InvalidOperationException("The file picker did not accept the requested path.");
+        if (!PostMessage(dialog, 0x0111, (IntPtr)1, IntPtr.Zero)) throw new InvalidOperationException("Could not confirm the Save dialog.");
+    }
+}
+'@
+    $end = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $nameHost = Find-Control $dialog $ae::AutomationIdProperty 'FileNameControlHost'
+        if ($nameHost) {
+            $edit = Find-Control $nameHost $ae::ClassNameProperty 'Edit'
+            if ($edit -and $edit.Current.NativeWindowHandle) {$suggested = [ReviewSaveDialog]::FileName($edit.Current.NativeWindowHandle)}
+        }
+        if (!$suggested) {Start-Sleep -Milliseconds 200}
+    } while (!$suggested -and [DateTime]::UtcNow -lt $end)
+    if (!$suggested) {throw 'Could not read the proposed filename in the native Save dialog.'}
+    $extension = [IO.Path]::GetExtension($suggested)
     if ($extension -notin '.mp4','.mkv','.webm') {throw "Unexpected editor result extension: $extension"}
     $target = Join-Path $Directory ('editor-source-' + [guid]::NewGuid() + $extension)
-    $value.SetValue($target)
-    Invoke-Control (Find-Control $dialog $ae::AutomationIdProperty '1')
+    [ReviewSaveDialog]::Save($dialog.Current.NativeWindowHandle,$edit.Current.NativeWindowHandle,$target)
     $end = [DateTime]::UtcNow.AddSeconds(30)
     while (!(Test-Path -LiteralPath $target -PathType Leaf)) {
         if ([DateTime]::UtcNow -gt $end) {throw 'Local Media did not publish the selected original-file result.'}
